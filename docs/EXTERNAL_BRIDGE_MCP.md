@@ -1,0 +1,115 @@
+# External Bridge And MCP
+
+## Goal
+
+Claude for Blender can now expose the live Blender scene to external agents through a localhost bridge and a stdio MCP server. This is the Codex/Claude Code style path: Blender keeps direct `bpy` access, while external clients discover tools/resources and call them over a standard protocol.
+
+## Architecture
+
+```text
+MCP client
+  -> stdio JSON-RPC
+  -> addon/claude_blender/mcp_server.py
+  -> HTTP JSON on 127.0.0.1
+  -> bridge_server.py inside Blender
+  -> tool_dispatcher.py / context_bundle.py / bpy
+```
+
+The add-on owns all Blender reads/writes. The MCP server is a small stdlib Python process that forwards requests to Blender's local bridge.
+
+## Start The Bridge
+
+1. Install and enable the latest `claude_blender-0.1.0.zip`.
+2. Open the `Claude` sidebar.
+3. In `External Bridge`, press `Start`.
+4. Optional: set `Bridge Token` in add-on preferences before starting.
+5. Press `Copy MCP Config` and paste it into a client that supports local MCP servers.
+
+The bridge binds only to `127.0.0.1`. It does not listen on your LAN.
+
+## MCP Config Shape
+
+The copied config looks like this:
+
+```json
+{
+  "mcpServers": {
+    "blender": {
+      "command": "python",
+      "args": [
+        "C:/path/to/claude_blender/mcp_server.py",
+        "--bridge-url",
+        "http://127.0.0.1:8765"
+      ]
+    }
+  }
+}
+```
+
+If you set a bridge token, the copied config includes:
+
+```json
+{
+  "env": {
+    "BLENDER_BRIDGE_TOKEN": "your-token"
+  }
+}
+```
+
+## Bridge HTTP Endpoints
+
+These are implementation details used by the MCP server:
+
+- `GET /health`
+- `GET /tools`
+- `POST /tool`
+- `GET /resources`
+- `GET /resource?uri=...`
+- `GET /contracts`
+
+Example direct bridge call:
+
+```powershell
+Invoke-RestMethod -Uri http://127.0.0.1:8765/tool -Method Post -ContentType application/json -Body '{"name":"list_scene_objects","arguments":{"max_objects":10}}'
+```
+
+## MCP Surface
+
+The stdio MCP server implements:
+
+- `initialize`
+- `tools/list`
+- `tools/call`
+- `resources/list`
+- `resources/read`
+- `resources/templates/list`
+- `ping`
+
+It exposes a local-only status tool named `blender_bridge_status` plus the Blender tool catalog forwarded from the running add-on.
+
+## Resources
+
+Current resources:
+
+- `blender://bridge/status`
+- `blender://scene/status`
+- `blender://scene/context`
+- `blender://tools/contracts`
+- `blender://transcript/latest`
+
+## Safety
+
+MCP tools are model-controlled, so the external client must make tool use visible to the user. The Blender bridge preserves the existing safety model:
+
+- Read-only tools inspect scene context and docs.
+- Live helper tools mutate the scene through preview rollback.
+- Generated arbitrary Python is still staged with `draft_script` and requires approval inside Blender.
+- The bridge is off until started and binds to localhost only.
+- Optional bearer token auth is available through add-on preferences.
+
+## Limitations
+
+- The first MCP server uses stdio only, because it is the most widely supported local MCP transport.
+- The localhost bridge is HTTP JSON, not MCP streamable HTTP. MCP clients should launch `mcp_server.py`.
+- Tool schemas are currently listed as the full Blender tool catalog over MCP. The in-Blender Anthropic loop still uses dynamic request-specific tool selection.
+- External clients cannot bypass Blender's approval gate for generated Python.

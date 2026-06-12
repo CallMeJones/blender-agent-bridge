@@ -1,0 +1,1127 @@
+"""Reversible live preview transactions for low-risk helper changes."""
+
+from __future__ import annotations
+
+import math
+import time
+import uuid
+
+import bpy
+
+_current_transaction = None
+
+
+def _serialize_vector(value):
+    return tuple(float(component) for component in value)
+
+
+def _set_vector(target, value):
+    target[0] = value[0]
+    target[1] = value[1]
+    target[2] = value[2]
+
+
+def _coerce_vector(value, fallback):
+    if value is None:
+        return tuple(float(component) for component in fallback)
+    result = list(value)[:3]
+    while len(result) < 3:
+        result.append(fallback[len(result)])
+    return tuple(float(component) for component in result)
+
+
+def _record_created_id(kind, name):
+    transaction = begin()
+    key = f"created:{kind}:{name}"
+    if key not in transaction["before_state"]:
+        transaction["before_state"][key] = {
+            "kind": kind,
+            "name": name,
+            "created": True,
+        }
+        transaction["changed_data_blocks"].append(name)
+
+
+def _record_created_modifier(obj, modifier):
+    transaction = begin()
+    key = f"object:{obj.name}:modifier:{modifier.name}"
+    if key not in transaction["before_state"]:
+        transaction["before_state"][key] = {
+            "kind": "object_modifier",
+            "object_name": obj.name,
+            "name": modifier.name,
+            "created": True,
+        }
+        transaction["changed_data_blocks"].append(obj.name)
+
+
+def _record_created_constraint(obj, constraint):
+    transaction = begin()
+    key = f"object:{obj.name}:constraint:{constraint.name}"
+    if key not in transaction["before_state"]:
+        transaction["before_state"][key] = {
+            "kind": "object_constraint",
+            "object_name": obj.name,
+            "name": constraint.name,
+            "created": True,
+        }
+        transaction["changed_data_blocks"].append(obj.name)
+
+
+def _mark_pending(context, label):
+    scene = getattr(context, "scene", None)
+    if scene and hasattr(scene, "claude_blender"):
+        scene.claude_blender.pending_preview = True
+        scene.claude_blender.pending_preview_label = label
+        scene.claude_blender.status = label
+
+
+def current_transaction():
+    return _current_transaction
+
+
+def begin(user_request=""):
+    global _current_transaction
+    if _current_transaction and _current_transaction["status"] == "pending":
+        return _current_transaction
+    _current_transaction = {
+        "id": str(uuid.uuid4()),
+        "user_request": user_request,
+        "started_at": time.time(),
+        "changed_data_blocks": [],
+        "before_state": {},
+        "applied_steps": [],
+        "status": "pending",
+    }
+    return _current_transaction
+
+
+def _record_object_transform(obj):
+    transaction = begin()
+    key = f"object:{obj.name}:transform"
+    if key not in transaction["before_state"]:
+        transaction["before_state"][key] = {
+            "object_name": obj.name,
+            "location": _serialize_vector(obj.location),
+            "rotation_euler": _serialize_vector(obj.rotation_euler),
+            "scale": _serialize_vector(obj.scale),
+        }
+        transaction["changed_data_blocks"].append(obj.name)
+
+
+def _record_object_materials(obj):
+    transaction = begin()
+    key = f"object:{obj.name}:materials"
+    if key not in transaction["before_state"]:
+        transaction["before_state"][key] = {
+            "object_name": obj.name,
+            "materials": [slot.material.name if slot.material else None for slot in obj.material_slots],
+        }
+        transaction["changed_data_blocks"].append(obj.name)
+
+
+def _record_object_collections(obj):
+    transaction = begin()
+    key = f"object:{obj.name}:collections"
+    if key not in transaction["before_state"]:
+        transaction["before_state"][key] = {
+            "object_name": obj.name,
+            "collections": [collection.name for collection in obj.users_collection],
+        }
+        transaction["changed_data_blocks"].append(obj.name)
+
+
+def _record_material(material):
+    transaction = begin()
+    key = f"material:{material.name}:diffuse"
+    if key not in transaction["before_state"]:
+        transaction["before_state"][key] = {
+            "material_name": material.name,
+            "diffuse_color": tuple(float(component) for component in material.diffuse_color),
+        }
+        transaction["changed_data_blocks"].append(material.name)
+
+
+def _record_scene_camera(scene):
+    transaction = begin()
+    key = f"scene:{scene.name}:camera"
+    if key not in transaction["before_state"]:
+        transaction["before_state"][key] = {
+            "scene_name": scene.name,
+            "camera_name": scene.camera.name if scene.camera else None,
+        }
+
+
+def _record_scene_timeline(scene):
+    transaction = begin()
+    key = f"scene:{scene.name}:timeline"
+    if key not in transaction["before_state"]:
+        transaction["before_state"][key] = {
+            "scene_name": scene.name,
+            "frame_start": int(scene.frame_start),
+            "frame_end": int(scene.frame_end),
+            "frame_current": int(scene.frame_current),
+            "fps": int(scene.render.fps),
+        }
+
+
+def _record_object_animation(obj):
+    transaction = begin()
+    key = f"object:{obj.name}:animation"
+    if key not in transaction["before_state"]:
+        animation_data = obj.animation_data
+        action = animation_data.action if animation_data else None
+        transaction["before_state"][key] = {
+            "object_name": obj.name,
+            "had_animation_data": animation_data is not None,
+            "action_name": action.name if action else None,
+        }
+        transaction["changed_data_blocks"].append(obj.name)
+
+
+def _assign_preview_action(obj):
+    _record_object_animation(obj)
+    action = bpy.data.actions.new(name=f"{obj.name} Claude Preview Action")
+    obj.animation_data_create().action = action
+    _record_created_id("action", action.name)
+    return action
+
+
+def _iter_action_fcurves(action):
+    fcurves = getattr(action, "fcurves", None)
+    if fcurves is not None:
+        return list(fcurves)
+    result = []
+    for layer in getattr(action, "layers", []):
+        for strip in getattr(layer, "strips", []):
+            for channelbag in getattr(strip, "channelbags", []):
+                result.extend(list(getattr(channelbag, "fcurves", [])))
+    return result
+
+
+def _set_linear_interpolation(action):
+    if not action:
+        return
+    for fcurve in _iter_action_fcurves(action):
+        for point in fcurve.keyframe_points:
+            point.interpolation = "LINEAR"
+
+
+def apply_location_delta(context, delta, *, label="Move selected objects"):
+    selected = list(context.selected_objects)
+    if not selected:
+        return {
+            "ok": False,
+            "message": "No selected objects to move",
+        }
+    transaction = begin(label)
+    for obj in selected:
+        _record_object_transform(obj)
+        obj.location.x += float(delta[0])
+        obj.location.y += float(delta[1])
+        obj.location.z += float(delta[2])
+    transaction["applied_steps"].append(
+        {
+            "type": "set_transform_delta",
+            "label": label,
+            "objects": [obj.name for obj in selected],
+            "delta": [float(delta[0]), float(delta[1]), float(delta[2])],
+        }
+    )
+    redraw(context)
+    _mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Moved {len(selected)} selected object(s)",
+        "transaction_id": transaction["id"],
+    }
+
+
+def set_selected_transform(context, *, location=None, rotation=None, scale=None, label="Set selected transform"):
+    selected = list(context.selected_objects)
+    if not selected:
+        return {"ok": False, "message": "No selected objects to transform"}
+    if location is None and rotation is None and scale is None:
+        return {"ok": False, "message": "No transform values were provided"}
+
+    transaction = begin(label)
+    changed = []
+    for obj in selected:
+        _record_object_transform(obj)
+        if location is not None:
+            _set_vector(obj.location, _coerce_vector(location, obj.location))
+        if rotation is not None:
+            _set_vector(obj.rotation_euler, _coerce_vector(rotation, obj.rotation_euler))
+        if scale is not None:
+            _set_vector(obj.scale, _coerce_vector(scale, obj.scale))
+        changed.append(obj.name)
+
+    transaction["applied_steps"].append(
+        {
+            "type": "set_selected_transform",
+            "label": label,
+            "objects": changed,
+            "location": list(location) if location is not None else None,
+            "rotation": list(rotation) if rotation is not None else None,
+            "scale": list(scale) if scale is not None else None,
+        }
+    )
+    redraw(context)
+    _mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Set transform on {len(selected)} selected object(s)",
+        "transaction_id": transaction["id"],
+    }
+
+
+def create_primitive(
+    context,
+    *,
+    primitive_type,
+    name,
+    location,
+    rotation,
+    scale,
+    label="Create primitive",
+):
+    primitive_type = str(primitive_type or "CUBE").upper()
+    if primitive_type not in {"CUBE", "UV_SPHERE", "ICO_SPHERE", "CYLINDER", "CONE", "PLANE", "TORUS"}:
+        return {"ok": False, "message": f"Unsupported primitive type: {primitive_type}"}
+
+    transaction = begin(label)
+    loc = _coerce_vector(location, (0.0, 0.0, 0.0))
+    rot = _coerce_vector(rotation, (0.0, 0.0, 0.0))
+
+    if primitive_type == "CUBE":
+        bpy.ops.mesh.primitive_cube_add(size=2.0, location=loc, rotation=rot)
+    elif primitive_type == "UV_SPHERE":
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, radius=1.0, location=loc, rotation=rot)
+    elif primitive_type == "ICO_SPHERE":
+        bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=1.0, location=loc, rotation=rot)
+    elif primitive_type == "CYLINDER":
+        bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=1.0, depth=2.0, location=loc, rotation=rot)
+    elif primitive_type == "CONE":
+        bpy.ops.mesh.primitive_cone_add(vertices=32, radius1=1.0, depth=2.0, location=loc, rotation=rot)
+    elif primitive_type == "PLANE":
+        bpy.ops.mesh.primitive_plane_add(size=2.0, location=loc, rotation=rot)
+    elif primitive_type == "TORUS":
+        bpy.ops.mesh.primitive_torus_add(major_radius=0.75, minor_radius=0.25, location=loc, rotation=rot)
+
+    obj = context.object
+    if obj is None:
+        return {"ok": False, "message": "Primitive was not created"}
+    if name:
+        obj.name = str(name)
+        if obj.data:
+            obj.data.name = f"{obj.name} Mesh"
+    obj.scale = _coerce_vector(scale, (1.0, 1.0, 1.0))
+    _record_created_id("object", obj.name)
+    if obj.data:
+        _record_created_id("mesh", obj.data.name)
+
+    transaction["applied_steps"].append(
+        {
+            "type": "create_primitive",
+            "label": label,
+            "object": obj.name,
+            "primitive_type": primitive_type,
+        }
+    )
+    redraw(context)
+    _mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Created {primitive_type} object {obj.name}",
+        "object": obj.name,
+        "transaction_id": transaction["id"],
+    }
+
+
+def assign_material_to_selected(context, *, name, color, label="Assign material"):
+    selected = [obj for obj in context.selected_objects if obj.type == "MESH"]
+    if not selected:
+        return {"ok": False, "message": "No selected mesh objects for material assignment"}
+
+    transaction = begin(label)
+    material = bpy.data.materials.get(name)
+    if material is None:
+        material = bpy.data.materials.new(name)
+        _record_created_id("material", material.name)
+    else:
+        _record_material(material)
+    material.diffuse_color = (
+        float(color[0]),
+        float(color[1]),
+        float(color[2]),
+        float(color[3]) if len(color) > 3 else 1.0,
+    )
+    for obj in selected:
+        _record_object_materials(obj)
+        if obj.material_slots:
+            obj.material_slots[0].material = material
+        else:
+            obj.data.materials.append(material)
+    transaction["applied_steps"].append(
+        {
+            "type": "assign_material",
+            "label": label,
+            "objects": [obj.name for obj in selected],
+            "material": material.name,
+            "color": list(material.diffuse_color),
+        }
+    )
+    redraw(context)
+    _mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Assigned material {material.name} to {len(selected)} mesh object(s)",
+        "transaction_id": transaction["id"],
+    }
+
+
+def assign_emission_material_to_selected(context, *, name, color, strength, label="Assign emission material"):
+    selected = [obj for obj in context.selected_objects if obj.type == "MESH"]
+    if not selected:
+        return {"ok": False, "message": "No selected mesh objects for emission material assignment"}
+
+    transaction = begin(label)
+    material = bpy.data.materials.new(name=name or "Claude Emission Material")
+    _record_created_id("material", material.name)
+    material.diffuse_color = (
+        float(color[0]),
+        float(color[1]),
+        float(color[2]),
+        float(color[3]) if len(color) > 3 else 1.0,
+    )
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    for node in list(nodes):
+        nodes.remove(node)
+    output = nodes.new(type="ShaderNodeOutputMaterial")
+    output.location = (260, 0)
+    emission = nodes.new(type="ShaderNodeEmission")
+    emission.location = (0, 0)
+    emission.inputs["Color"].default_value = material.diffuse_color
+    emission.inputs["Strength"].default_value = max(0.0, float(strength))
+    material.node_tree.links.new(emission.outputs["Emission"], output.inputs["Surface"])
+
+    for obj in selected:
+        _record_object_materials(obj)
+        if obj.material_slots:
+            obj.material_slots[0].material = material
+        else:
+            obj.data.materials.append(material)
+    transaction["applied_steps"].append(
+        {
+            "type": "assign_emission_material",
+            "label": label,
+            "objects": [obj.name for obj in selected],
+            "material": material.name,
+            "strength": float(strength),
+        }
+    )
+    redraw(context)
+    _mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Assigned emission material {material.name} to {len(selected)} mesh object(s)",
+        "transaction_id": transaction["id"],
+    }
+
+
+def create_collection(context, *, name, label="Create collection"):
+    name = str(name or "Claude Collection")
+    transaction = begin(label)
+    collection = bpy.data.collections.get(name)
+    created = collection is None
+    if collection is None:
+        collection = bpy.data.collections.new(name)
+        context.scene.collection.children.link(collection)
+        _record_created_id("collection", collection.name)
+    transaction["applied_steps"].append(
+        {
+            "type": "create_collection",
+            "label": label,
+            "collection": collection.name,
+            "created": created,
+        }
+    )
+    redraw(context)
+    _mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"{'Created' if created else 'Found'} collection {collection.name}",
+        "collection": collection.name,
+        "transaction_id": transaction["id"],
+    }
+
+
+def link_selected_to_collection(context, *, collection_name, label="Link selected to collection"):
+    selected = list(context.selected_objects)
+    if not selected:
+        return {"ok": False, "message": "No selected objects to link to a collection"}
+    transaction = begin(label)
+    collection = bpy.data.collections.get(collection_name)
+    created = collection is None
+    if collection is None:
+        collection = bpy.data.collections.new(collection_name or "Claude Collection")
+        context.scene.collection.children.link(collection)
+        _record_created_id("collection", collection.name)
+    linked = []
+    for obj in selected:
+        _record_object_collections(obj)
+        if collection.objects.get(obj.name) is None:
+            collection.objects.link(obj)
+        linked.append(obj.name)
+    transaction["applied_steps"].append(
+        {
+            "type": "link_selected_to_collection",
+            "label": label,
+            "collection": collection.name,
+            "objects": linked,
+            "collection_created": created,
+        }
+    )
+    redraw(context)
+    _mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Linked {len(linked)} selected object(s) to {collection.name}",
+        "collection": collection.name,
+        "transaction_id": transaction["id"],
+    }
+
+
+def add_modifier_to_selected(
+    context,
+    *,
+    modifier_type,
+    name,
+    amount=0.1,
+    segments=2,
+    levels=1,
+    count=3,
+    relative_offset=(1.2, 0.0, 0.0),
+    label="Add modifier",
+):
+    modifier_type = str(modifier_type or "").upper()
+    if modifier_type not in {"BEVEL", "SUBSURF", "SOLIDIFY", "ARRAY"}:
+        return {"ok": False, "message": f"Unsupported modifier type: {modifier_type}"}
+    selected = [obj for obj in context.selected_objects if obj.type == "MESH"]
+    if not selected:
+        return {"ok": False, "message": "No selected mesh objects for modifier"}
+
+    transaction = begin(label)
+    changed = []
+    for obj in selected:
+        modifier = obj.modifiers.new(name=name or f"Claude {modifier_type.title()}", type=modifier_type)
+        _record_created_modifier(obj, modifier)
+        if modifier_type == "BEVEL":
+            modifier.width = max(0.0, float(amount))
+            modifier.segments = max(1, int(segments))
+        elif modifier_type == "SUBSURF":
+            modifier.levels = max(0, int(levels))
+            modifier.render_levels = max(0, int(levels))
+        elif modifier_type == "SOLIDIFY":
+            modifier.thickness = float(amount)
+        elif modifier_type == "ARRAY":
+            modifier.count = max(1, int(count))
+            modifier.relative_offset_displace = _coerce_vector(relative_offset, (1.2, 0.0, 0.0))
+        changed.append(obj.name)
+
+    transaction["applied_steps"].append(
+        {
+            "type": "add_modifier",
+            "label": label,
+            "modifier_type": modifier_type,
+            "objects": changed,
+        }
+    )
+    redraw(context)
+    _mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Added {modifier_type} modifier to {len(changed)} mesh object(s)",
+        "transaction_id": transaction["id"],
+    }
+
+
+def add_track_to_constraint(
+    context,
+    *,
+    target_name,
+    name="Claude Track To",
+    track_axis="TRACK_NEGATIVE_Z",
+    up_axis="UP_Y",
+    influence=1.0,
+    label="Add Track To constraint",
+):
+    target = bpy.data.objects.get(str(target_name or ""))
+    if target is None:
+        return {"ok": False, "message": f"Target object not found: {target_name}"}
+    selected = [obj for obj in context.selected_objects if obj.name != target.name]
+    if not selected:
+        return {"ok": False, "message": "Select at least one constrained object other than the target"}
+    valid_track = {"TRACK_X", "TRACK_Y", "TRACK_Z", "TRACK_NEGATIVE_X", "TRACK_NEGATIVE_Y", "TRACK_NEGATIVE_Z"}
+    valid_up = {"UP_X", "UP_Y", "UP_Z"}
+    track_axis = track_axis if track_axis in valid_track else "TRACK_NEGATIVE_Z"
+    up_axis = up_axis if up_axis in valid_up else "UP_Y"
+
+    transaction = begin(label)
+    changed = []
+    for obj in selected:
+        constraint = obj.constraints.new(type="TRACK_TO")
+        constraint.name = name or "Claude Track To"
+        constraint.target = target
+        constraint.track_axis = track_axis
+        constraint.up_axis = up_axis
+        constraint.influence = max(0.0, min(1.0, float(influence)))
+        _record_created_constraint(obj, constraint)
+        changed.append(obj.name)
+    transaction["applied_steps"].append(
+        {
+            "type": "add_track_to_constraint",
+            "label": label,
+            "target": target.name,
+            "objects": changed,
+        }
+    )
+    redraw(context)
+    _mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Added Track To constraint to {len(changed)} object(s)",
+        "transaction_id": transaction["id"],
+    }
+
+
+def add_light(context, *, light_type, name, location, energy, color, label="Add light"):
+    transaction = begin(label)
+    data = bpy.data.lights.new(name=name, type=light_type)
+    data.energy = float(energy)
+    data.color = (float(color[0]), float(color[1]), float(color[2]))
+    obj = bpy.data.objects.new(name=name, object_data=data)
+    obj.location = (float(location[0]), float(location[1]), float(location[2]))
+    context.scene.collection.objects.link(obj)
+    _record_created_id("object", obj.name)
+    _record_created_id("light", data.name)
+    transaction["applied_steps"].append(
+        {
+            "type": "add_light",
+            "label": label,
+            "object": obj.name,
+            "light_type": light_type,
+        }
+    )
+    redraw(context)
+    _mark_pending(context, label)
+    return {"ok": True, "message": f"Added {light_type} light {obj.name}", "transaction_id": transaction["id"]}
+
+
+def add_camera(context, *, name, location, rotation, lens, label="Add camera"):
+    transaction = begin(label)
+    _record_scene_camera(context.scene)
+    data = bpy.data.cameras.new(name=name)
+    data.lens = float(lens)
+    obj = bpy.data.objects.new(name=name, object_data=data)
+    obj.location = (float(location[0]), float(location[1]), float(location[2]))
+    obj.rotation_euler = (float(rotation[0]), float(rotation[1]), float(rotation[2]))
+    context.scene.collection.objects.link(obj)
+    context.scene.camera = obj
+    _record_created_id("object", obj.name)
+    _record_created_id("camera", data.name)
+    transaction["applied_steps"].append(
+        {
+            "type": "add_camera",
+            "label": label,
+            "object": obj.name,
+        }
+    )
+    redraw(context)
+    _mark_pending(context, label)
+    return {"ok": True, "message": f"Added camera {obj.name}", "transaction_id": transaction["id"]}
+
+
+def set_scene_frame_range(context, *, frame_start, frame_end, current_frame=None, fps=None, label="Set timeline"):
+    frame_start = int(frame_start)
+    frame_end = int(frame_end)
+    if frame_start > frame_end:
+        return {"ok": False, "message": "frame_start must be less than or equal to frame_end"}
+    transaction = begin(label)
+    scene = context.scene
+    _record_scene_timeline(scene)
+    scene.frame_start = frame_start
+    scene.frame_end = frame_end
+    if current_frame is not None:
+        scene.frame_set(int(current_frame))
+    if fps is not None:
+        scene.render.fps = max(1, int(fps))
+    transaction["applied_steps"].append(
+        {
+            "type": "set_scene_frame_range",
+            "label": label,
+            "frame_start": scene.frame_start,
+            "frame_end": scene.frame_end,
+            "frame_current": scene.frame_current,
+            "fps": scene.render.fps,
+        }
+    )
+    redraw(context)
+    _mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Set timeline to frames {scene.frame_start}-{scene.frame_end}",
+        "transaction_id": transaction["id"],
+    }
+
+
+def set_active_camera(context, *, camera_name, label="Set active camera"):
+    camera = bpy.data.objects.get(str(camera_name or ""))
+    if camera is None:
+        return {"ok": False, "message": f"Camera object not found: {camera_name}"}
+    if camera.type != "CAMERA":
+        return {"ok": False, "message": f"Object is not a camera: {camera.name}"}
+    transaction = begin(label)
+    _record_scene_camera(context.scene)
+    context.scene.camera = camera
+    transaction["applied_steps"].append(
+        {
+            "type": "set_active_camera",
+            "label": label,
+            "camera": camera.name,
+        }
+    )
+    redraw(context)
+    _mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Set active camera to {camera.name}",
+        "camera": camera.name,
+        "transaction_id": transaction["id"],
+    }
+
+
+def animate_selected_transform(
+    context,
+    *,
+    frame_start,
+    frame_end,
+    location_start=None,
+    location_end=None,
+    rotation_start=None,
+    rotation_end=None,
+    scale_start=None,
+    scale_end=None,
+    label="Animate selected transform",
+):
+    selected = list(context.selected_objects)
+    if not selected:
+        return {"ok": False, "message": "No selected objects to animate"}
+    frame_start = int(frame_start)
+    frame_end = int(frame_end)
+    if frame_start == frame_end:
+        return {"ok": False, "message": "Animation needs two different frames"}
+    if frame_start > frame_end:
+        frame_start, frame_end = frame_end, frame_start
+    animated_paths = []
+    if location_start is not None or location_end is not None:
+        animated_paths.append("location")
+    if rotation_start is not None or rotation_end is not None:
+        animated_paths.append("rotation_euler")
+    if scale_start is not None or scale_end is not None:
+        animated_paths.append("scale")
+    if not animated_paths:
+        return {"ok": False, "message": "No animated transform values were provided"}
+
+    transaction = begin(label)
+    scene = context.scene
+    _record_scene_timeline(scene)
+    scene.frame_start = min(scene.frame_start, frame_start)
+    scene.frame_end = max(scene.frame_end, frame_end)
+
+    for obj in selected:
+        _record_object_transform(obj)
+        action = _assign_preview_action(obj)
+
+        if "location" in animated_paths:
+            start = _coerce_vector(location_start, obj.location)
+            end = _coerce_vector(location_end, start)
+            _set_vector(obj.location, start)
+            obj.keyframe_insert(data_path="location", frame=frame_start)
+            _set_vector(obj.location, end)
+            obj.keyframe_insert(data_path="location", frame=frame_end)
+
+        if "rotation_euler" in animated_paths:
+            start = _coerce_vector(rotation_start, obj.rotation_euler)
+            end = _coerce_vector(rotation_end, start)
+            _set_vector(obj.rotation_euler, start)
+            obj.keyframe_insert(data_path="rotation_euler", frame=frame_start)
+            _set_vector(obj.rotation_euler, end)
+            obj.keyframe_insert(data_path="rotation_euler", frame=frame_end)
+
+        if "scale" in animated_paths:
+            start = _coerce_vector(scale_start, obj.scale)
+            end = _coerce_vector(scale_end, start)
+            _set_vector(obj.scale, start)
+            obj.keyframe_insert(data_path="scale", frame=frame_start)
+            _set_vector(obj.scale, end)
+            obj.keyframe_insert(data_path="scale", frame=frame_end)
+
+        _set_linear_interpolation(action)
+
+    scene.frame_set(frame_start)
+    transaction["applied_steps"].append(
+        {
+            "type": "animate_selected_transform",
+            "label": label,
+            "objects": [obj.name for obj in selected],
+            "frame_start": frame_start,
+            "frame_end": frame_end,
+            "paths": animated_paths,
+        }
+    )
+    redraw(context)
+    _mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Animated {len(selected)} selected object(s) from frame {frame_start} to {frame_end}",
+        "transaction_id": transaction["id"],
+    }
+
+
+def create_camera_orbit(
+    context,
+    *,
+    target_name,
+    frame_start,
+    frame_end,
+    radius,
+    height,
+    name,
+    lens=35.0,
+    label="Create camera orbit",
+):
+    target = bpy.data.objects.get(str(target_name)) if target_name else context.active_object
+    if target is None:
+        return {"ok": False, "message": "Target object not found for camera orbit"}
+    frame_start = int(frame_start)
+    frame_end = int(frame_end)
+    if frame_start == frame_end:
+        return {"ok": False, "message": "Camera orbit needs two different frames"}
+    if frame_start > frame_end:
+        frame_start, frame_end = frame_end, frame_start
+
+    transaction = begin(label)
+    scene = context.scene
+    _record_scene_camera(scene)
+    _record_scene_timeline(scene)
+    scene.frame_start = min(scene.frame_start, frame_start)
+    scene.frame_end = max(scene.frame_end, frame_end)
+
+    target_empty = bpy.data.objects.new(name=f"{name} Look Target", object_data=None)
+    target_empty.empty_display_type = "PLAIN_AXES"
+    target_empty.empty_display_size = 0.75
+    target_empty.location = _serialize_vector(target.location)
+    scene.collection.objects.link(target_empty)
+    _record_created_id("object", target_empty.name)
+
+    orbit_root = bpy.data.objects.new(name=f"{name} Orbit Root", object_data=None)
+    orbit_root.empty_display_type = "PLAIN_AXES"
+    orbit_root.empty_display_size = 1.0
+    orbit_root.location = _serialize_vector(target.location)
+    scene.collection.objects.link(orbit_root)
+    _record_created_id("object", orbit_root.name)
+
+    camera_data = bpy.data.cameras.new(name=name)
+    camera_data.lens = float(lens)
+    camera = bpy.data.objects.new(name=name, object_data=camera_data)
+    camera.parent = orbit_root
+    camera.location = (float(radius), 0.0, float(height))
+    camera.rotation_euler = (0.0, 0.0, 0.0)
+    track = camera.constraints.new(type="TRACK_TO")
+    track.track_axis = "TRACK_NEGATIVE_Z"
+    track.up_axis = "UP_Y"
+    track.target = target_empty
+    scene.collection.objects.link(camera)
+    scene.camera = camera
+    _record_created_id("object", camera.name)
+    _record_created_id("camera", camera_data.name)
+
+    _record_object_animation(orbit_root)
+    orbit_root.rotation_euler = (0.0, 0.0, 0.0)
+    orbit_root.keyframe_insert(data_path="rotation_euler", frame=frame_start)
+    orbit_root.rotation_euler = (0.0, 0.0, math.tau)
+    orbit_root.keyframe_insert(data_path="rotation_euler", frame=frame_end)
+    if orbit_root.animation_data and orbit_root.animation_data.action:
+        _record_created_id("action", orbit_root.animation_data.action.name)
+        _set_linear_interpolation(orbit_root.animation_data.action)
+
+    scene.frame_set(frame_start)
+    transaction["applied_steps"].append(
+        {
+            "type": "create_camera_orbit",
+            "label": label,
+            "target": target.name,
+            "camera": camera.name,
+            "frame_start": frame_start,
+            "frame_end": frame_end,
+        }
+    )
+    redraw(context)
+    _mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Created camera orbit {camera.name} around {target.name}",
+        "camera": camera.name,
+        "target": target.name,
+        "transaction_id": transaction["id"],
+    }
+
+
+def commit(context):
+    transaction = current_transaction()
+    if not transaction or transaction["status"] != "pending":
+        return {"ok": False, "message": "No pending preview transaction"}
+    transaction["status"] = "committed"
+    if hasattr(context.scene, "claude_blender"):
+        context.scene.claude_blender.pending_preview = False
+        context.scene.claude_blender.pending_preview_label = ""
+    redraw(context)
+    return {"ok": True, "message": "Preview committed"}
+
+
+def revert(context):
+    transaction = current_transaction()
+    if not transaction or transaction["status"] != "pending":
+        return {"ok": False, "message": "No pending preview transaction"}
+    for before in list(transaction["before_state"].values()):
+        if before.get("object_name") and "location" in before:
+            obj = bpy.data.objects.get(before["object_name"])
+            if obj is None:
+                continue
+            _set_vector(obj.location, before["location"])
+            _set_vector(obj.rotation_euler, before["rotation_euler"])
+            _set_vector(obj.scale, before["scale"])
+        elif before.get("object_name") and "materials" in before:
+            obj = bpy.data.objects.get(before["object_name"])
+            if obj is None or obj.type != "MESH":
+                continue
+            obj.data.materials.clear()
+            for material_name in before["materials"]:
+                if material_name:
+                    material = bpy.data.materials.get(material_name)
+                    if material:
+                        obj.data.materials.append(material)
+        elif before.get("object_name") and "collections" in before:
+            obj = bpy.data.objects.get(before["object_name"])
+            if obj is None:
+                continue
+            original_names = set(before["collections"])
+            for collection_name in original_names:
+                collection = bpy.data.collections.get(collection_name)
+                if collection and collection.objects.get(obj.name) is None:
+                    collection.objects.link(obj)
+            for collection in list(obj.users_collection):
+                if collection.name not in original_names and len(obj.users_collection) > 1:
+                    collection.objects.unlink(obj)
+        elif before.get("kind") == "object_modifier":
+            obj = bpy.data.objects.get(before["object_name"])
+            if obj:
+                modifier = obj.modifiers.get(before["name"])
+                if modifier:
+                    obj.modifiers.remove(modifier)
+        elif before.get("kind") == "object_constraint":
+            obj = bpy.data.objects.get(before["object_name"])
+            if obj:
+                constraint = obj.constraints.get(before["name"])
+                if constraint:
+                    obj.constraints.remove(constraint)
+        elif before.get("material_name") and "diffuse_color" in before:
+            material = bpy.data.materials.get(before["material_name"])
+            if material:
+                material.diffuse_color = before["diffuse_color"]
+        elif before.get("scene_name") and "camera_name" in before:
+            scene = bpy.data.scenes.get(before["scene_name"])
+            if scene:
+                scene.camera = bpy.data.objects.get(before["camera_name"]) if before["camera_name"] else None
+        elif before.get("kind") == "scene_render_settings":
+            scene = bpy.data.scenes.get(before["scene_name"])
+            if scene:
+                scene.render.engine = before["engine"]
+                scene.render.resolution_x = before["resolution_x"]
+                scene.render.resolution_y = before["resolution_y"]
+                scene.render.fps = before["fps"]
+                scene.frame_start = before["frame_start"]
+                scene.frame_end = before["frame_end"]
+                scene.render.film_transparent = before["film_transparent"]
+                scene.frame_set(before["frame_current"])
+        elif before.get("scene_name") and "frame_start" in before:
+            scene = bpy.data.scenes.get(before["scene_name"])
+            if scene:
+                scene.frame_start = before["frame_start"]
+                scene.frame_end = before["frame_end"]
+                scene.render.fps = before["fps"]
+                scene.frame_set(before["frame_current"])
+        elif before.get("kind") == "scene_world":
+            scene = bpy.data.scenes.get(before["scene_name"])
+            if scene:
+                scene.world = bpy.data.worlds.get(before["world_name"]) if before["world_name"] else None
+        elif before.get("kind") == "world_background":
+            world = bpy.data.worlds.get(before["world_name"])
+            if world:
+                world.color = before["color"]
+        elif before.get("kind") == "camera_settings":
+            camera = bpy.data.cameras.get(before["camera_name"])
+            if camera:
+                camera.lens = before["lens"]
+                camera.sensor_width = before["sensor_width"]
+                camera.dof.use_dof = before["use_dof"]
+                camera.dof.focus_object = bpy.data.objects.get(before["focus_object"]) if before["focus_object"] else None
+                camera.dof.aperture_fstop = before["aperture_fstop"]
+        elif before.get("kind") == "mesh_smoothing":
+            mesh = bpy.data.meshes.get(before["mesh_name"])
+            if mesh:
+                for polygon, use_smooth in zip(mesh.polygons, before["polygon_smooth"]):
+                    polygon.use_smooth = bool(use_smooth)
+        elif before.get("kind") == "shader_material":
+            material = bpy.data.materials.get(before["material_name"])
+            if material:
+                material.use_nodes = before["use_nodes"]
+                material.diffuse_color = before["diffuse_color"]
+                if before["blend_method"] is not None and hasattr(material, "blend_method"):
+                    material.blend_method = before["blend_method"]
+                if before["surface_render_method"] is not None and hasattr(material, "surface_render_method"):
+                    material.surface_render_method = before["surface_render_method"]
+                if material.use_nodes and material.node_tree:
+                    principled = next((node for node in material.node_tree.nodes if node.type == "BSDF_PRINCIPLED"), None)
+                    if principled:
+                        for socket_name, value in before["principled_socket_values"].items():
+                            socket = principled.inputs.get(socket_name)
+                            if not socket or not hasattr(socket, "default_value"):
+                                continue
+                            current = socket.default_value
+                            if hasattr(current, "__len__") and not isinstance(current, str):
+                                for index in range(min(len(current), len(value))):
+                                    current[index] = value[index]
+                            else:
+                                socket.default_value = value
+        elif before.get("kind") == "shape_keys":
+            obj = bpy.data.objects.get(before["object_name"])
+            if obj is None or obj.type != "MESH" or obj.data is None:
+                continue
+            keys = obj.data.shape_keys
+            if keys:
+                original_names = [item["name"] for item in before["key_blocks"]]
+                for key in list(keys.key_blocks):
+                    if key.name not in original_names:
+                        obj.shape_key_remove(key)
+                if before["had_shape_keys"]:
+                    for item in before["key_blocks"]:
+                        key = keys.key_blocks.get(item["name"]) if obj.data.shape_keys else None
+                        if key:
+                            key.value = item["value"]
+                            key.slider_min = item["slider_min"]
+                            key.slider_max = item["slider_max"]
+                else:
+                    for key in list(obj.data.shape_keys.key_blocks) if obj.data.shape_keys else []:
+                        obj.shape_key_remove(key)
+            keys = obj.data.shape_keys
+            if keys:
+                if before["had_animation_data"]:
+                    animation_data = keys.animation_data_create()
+                    animation_data.action = bpy.data.actions.get(before["action_name"]) if before["action_name"] else None
+                elif keys.animation_data:
+                    keys.animation_data_clear()
+        elif before.get("object_name") and "had_animation_data" in before:
+            obj = bpy.data.objects.get(before["object_name"])
+            if obj is None:
+                continue
+            if before["had_animation_data"]:
+                animation_data = obj.animation_data_create()
+                animation_data.action = bpy.data.actions.get(before["action_name"]) if before["action_name"] else None
+            else:
+                obj.animation_data_clear()
+        elif before.get("created") and before.get("kind") == "object":
+            obj = bpy.data.objects.get(before["name"])
+            if obj:
+                bpy.data.objects.remove(obj, do_unlink=True)
+    for before in list(transaction["before_state"].values()):
+        if not before.get("created"):
+            continue
+        if before.get("kind") == "material":
+            material = bpy.data.materials.get(before["name"])
+            if material:
+                bpy.data.materials.remove(material, do_unlink=True)
+        elif before.get("kind") == "light":
+            light = bpy.data.lights.get(before["name"])
+            if light and light.users == 0:
+                bpy.data.lights.remove(light)
+        elif before.get("kind") == "camera":
+            camera = bpy.data.cameras.get(before["name"])
+            if camera and camera.users == 0:
+                bpy.data.cameras.remove(camera)
+        elif before.get("kind") == "mesh":
+            mesh = bpy.data.meshes.get(before["name"])
+            if mesh and mesh.users == 0:
+                bpy.data.meshes.remove(mesh)
+        elif before.get("kind") == "action":
+            action = bpy.data.actions.get(before["name"])
+            if action and action.users == 0:
+                bpy.data.actions.remove(action)
+        elif before.get("kind") == "curve":
+            curve = bpy.data.curves.get(before["name"])
+            if curve and curve.users == 0:
+                bpy.data.curves.remove(curve)
+        elif before.get("kind") == "armature":
+            armature = bpy.data.armatures.get(before["name"])
+            if armature and armature.users == 0:
+                bpy.data.armatures.remove(armature)
+        elif before.get("kind") == "node_group":
+            group = bpy.data.node_groups.get(before["name"])
+            if group and group.users == 0:
+                bpy.data.node_groups.remove(group)
+        elif before.get("kind") == "particle_settings":
+            settings = bpy.data.particles.get(before["name"])
+            if settings and settings.users == 0:
+                bpy.data.particles.remove(settings)
+        elif before.get("kind") == "world":
+            world = bpy.data.worlds.get(before["name"])
+            if world and world.users == 0:
+                bpy.data.worlds.remove(world)
+        elif before.get("kind") == "collection":
+            collection = bpy.data.collections.get(before["name"])
+            if collection:
+                for parent in list(bpy.data.collections):
+                    if parent.children.get(collection.name):
+                        parent.children.unlink(collection)
+                for scene in bpy.data.scenes:
+                    if scene.collection.children.get(collection.name):
+                        scene.collection.children.unlink(collection)
+                bpy.data.collections.remove(collection)
+    transaction["status"] = "reverted"
+    if hasattr(context.scene, "claude_blender"):
+        context.scene.claude_blender.pending_preview = False
+        context.scene.claude_blender.pending_preview_label = ""
+    redraw(context)
+    return {"ok": True, "message": "Preview reverted"}
+
+
+def redraw(context):
+    view_layer = getattr(context, "view_layer", None)
+    if view_layer:
+        view_layer.update()
+    screen = getattr(context, "screen", None)
+    if screen:
+        for area in screen.areas:
+            if area.type in {"VIEW_3D", "DOPESHEET_EDITOR", "GRAPH_EDITOR", "TIMELINE", "PROPERTIES"}:
+                area.tag_redraw()
+
+
+def register():
+    pass
+
+
+def unregister():
+    global _current_transaction
+    _current_transaction = None

@@ -1,0 +1,180 @@
+"""Smoke tests for deep Blender world-model inspection tools."""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+
+import bpy
+
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(ROOT, "addon"))
+
+import claude_blender  # noqa: E402
+from claude_blender import anthropic_client, context_bundle, tool_dispatcher  # noqa: E402
+
+
+def _execute(context, name, args=None):
+    result = json.loads(tool_dispatcher.execute_tool(context, name, args or {}))
+    assert result.get("ok"), f"{name} failed: {result}"
+    return result
+
+
+def _select(context, obj):
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    context.view_layer.objects.active = obj
+
+
+def _make_curve_object(scene):
+    curve = bpy.data.curves.new("Claude World Curve Data", "CURVE")
+    curve.dimensions = "3D"
+    curve.bevel_depth = 0.03
+    spline = curve.splines.new("POLY")
+    spline.points.add(1)
+    spline.points[0].co = (0.0, 0.0, 0.0, 1.0)
+    spline.points[1].co = (1.0, 0.0, 1.0, 1.0)
+    obj = bpy.data.objects.new("Claude World Curve", curve)
+    scene.collection.objects.link(obj)
+    return obj
+
+
+def _make_text_object(scene):
+    text = bpy.data.curves.new("Claude World Text Data", "FONT")
+    text.body = "World model"
+    text.align_x = "CENTER"
+    obj = bpy.data.objects.new("Claude World Text", text)
+    scene.collection.objects.link(obj)
+    return obj
+
+
+def main():
+    claude_blender.register()
+    created_objects = []
+    created_node_groups = []
+    try:
+        context = bpy.context
+        scene = context.scene
+        cube = bpy.data.objects["Cube"]
+        _select(context, cube)
+
+        material = bpy.data.materials.new("Claude World Shader")
+        material.use_nodes = True
+        cube.data.materials.clear()
+        cube.data.materials.append(material)
+
+        shape_basis = cube.shape_key_add(name="Basis")
+        shape_lift = cube.shape_key_add(name="Lift")
+        shape_lift.value = 0.4
+        assert shape_basis.name == "Basis"
+
+        gn_group = bpy.data.node_groups.new("Claude World Geometry Nodes", "GeometryNodeTree")
+        gn_modifier = cube.modifiers.new("Claude World GN", "NODES")
+        gn_modifier.node_group = gn_group
+
+        cube["custom_driver_source"] = 1.0
+        cube.driver_add('["custom_driver_source"]')
+
+        try:
+            bpy.ops.object.particle_system_add()
+        except Exception:
+            pass
+
+        bpy.ops.object.armature_add(location=(2.0, 0.0, 0.0))
+        armature = context.object
+        armature.name = "Claude World Armature"
+        created_objects.append(armature)
+
+        curve_obj = _make_curve_object(scene)
+        text_obj = _make_text_object(scene)
+        created_objects.extend([curve_obj, text_obj])
+
+        collection = bpy.data.collections.new("Claude World Collection")
+        scene.collection.children.link(collection)
+        collection.objects.link(cube)
+
+        scene.use_nodes = True
+        if hasattr(scene, "node_tree") and scene.node_tree:
+            scene.node_tree.nodes.new(type="CompositorNodeBlur")
+        elif hasattr(scene, "compositing_node_group"):
+            compositor_group = bpy.data.node_groups.new("Claude World Compositor", "CompositorNodeTree")
+            created_node_groups.append(compositor_group)
+            compositor_group.nodes.new(type="CompositorNodeBlur")
+            scene.compositing_node_group = compositor_group
+
+        bundle = context_bundle.build_context_bundle(context)
+        assert "world_model_summary" in bundle
+        assert bundle["world_model_summary"]["shape_key_mesh_count"] >= 1
+        assert "get_geometry_nodes_details" in bundle["available_tools"]
+
+        tool_names = {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
+        for expected in {
+            "get_geometry_nodes_details",
+            "get_shader_nodes_details",
+            "get_rigging_details",
+            "get_shape_key_details",
+            "get_curve_text_details",
+            "get_simulation_details",
+            "get_collection_layer_details",
+            "get_render_camera_compositor_details",
+        }:
+            assert expected in tool_names, expected
+
+        geometry = _execute(context, "get_geometry_nodes_details", {"object_names": ["Cube"]})
+        assert geometry["objects"], geometry
+        assert geometry["objects"][0]["geometry_node_modifiers"], geometry
+
+        shader = _execute(context, "get_shader_nodes_details", {"material_names": ["Claude World Shader"]})
+        assert shader["materials"][0]["node_tree"], shader
+
+        rigging = _execute(context, "get_rigging_details", {"object_names": ["Claude World Armature", "Cube"]})
+        assert any(item["type"] == "ARMATURE" for item in rigging["objects"]), rigging
+
+        shape_keys = _execute(context, "get_shape_key_details", {"object_names": ["Cube"]})
+        assert shape_keys["objects"], shape_keys
+        assert any(key["name"] == "Lift" for key in shape_keys["objects"][0]["key_blocks"]), shape_keys
+
+        curves = _execute(context, "get_curve_text_details", {"object_names": ["Claude World Curve", "Claude World Text"]})
+        assert len(curves["objects"]) == 2, curves
+
+        simulations = _execute(context, "get_simulation_details", {"object_names": ["Cube"]})
+        assert "objects" in simulations, simulations
+
+        collections = _execute(context, "get_collection_layer_details", {"max_depth": 3})
+        assert collections["scene_collection"], collections
+        assert any(item["name"] == "Claude World Collection" for item in collections["collections"]), collections
+
+        render = _execute(context, "get_render_camera_compositor_details", {})
+        assert render["render"]["engine"], render
+        assert render["compositor"]["use_nodes"] is True, render
+
+        print("smoke_world_model: ok")
+    finally:
+        for obj in created_objects:
+            if obj.name in bpy.data.objects:
+                bpy.data.objects.remove(obj, do_unlink=True)
+        for name in ["Claude World Curve Data", "Claude World Text Data"]:
+            data = bpy.data.curves.get(name)
+            if data:
+                bpy.data.curves.remove(data)
+        for name in ["Claude World Shader"]:
+            material = bpy.data.materials.get(name)
+            if material:
+                bpy.data.materials.remove(material)
+        for group in created_node_groups:
+            if group.name in bpy.data.node_groups:
+                bpy.data.node_groups.remove(group)
+        for name in ["Claude World Geometry Nodes"]:
+            group = bpy.data.node_groups.get(name)
+            if group:
+                bpy.data.node_groups.remove(group)
+        collection = bpy.data.collections.get("Claude World Collection")
+        if collection:
+            bpy.data.collections.remove(collection)
+        claude_blender.unregister()
+
+
+if __name__ == "__main__":
+    main()

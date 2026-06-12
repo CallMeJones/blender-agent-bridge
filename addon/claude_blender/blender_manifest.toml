@@ -1,0 +1,16 @@
+schema_version = "1.0.0"
+
+id = "claude_blender"
+version = "0.1.0"
+name = "Claude for Blender"
+tagline = "Scene-aware Claude assistant for Blender"
+maintainer = "Michael"
+type = "add-on"
+blender_version_min = "5.1.0"
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+
+[permissions]
+network = "Call Anthropic/docs; optional localhost MCP bridge"
+files = "Use local docs cache and save blend checkpoints"

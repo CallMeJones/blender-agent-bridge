@@ -1,0 +1,941 @@
+"""Execute Claude-requested Blender tools on the main Blender thread."""
+
+from __future__ import annotations
+
+import json
+import re
+
+import bpy
+
+from . import advanced_helpers, context_bundle, docs_index, live_preview, preferences, script_runner, world_model
+
+
+def _float_list(values, length, default):
+    if values is None:
+        return list(default)
+    result = list(values)[:length]
+    while len(result) < length:
+        result.append(default[len(result)])
+    return [float(value) for value in result]
+
+
+def _optional_float_list(values, length, default):
+    if values is None:
+        return None
+    return _float_list(values, length, default)
+
+
+def _json_result(result):
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+_PYTHON_FENCE_RE = re.compile(r"```(?:python|py)?\s*(.*?)```", re.IGNORECASE | re.DOTALL)
+
+
+def _name_list(value):
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    return [str(item) for item in value if str(item).strip()]
+
+
+def _bounded_int(value, default, *, minimum=1, maximum=100):
+    try:
+        result = int(value)
+    except (TypeError, ValueError):
+        result = int(default)
+    return max(int(minimum), min(int(maximum), result))
+
+
+def _extract_script_code(args):
+    for key in ("code", "script", "source", "python", "body"):
+        value = args.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    for key in ("expected_changes", "intent"):
+        value = args.get(key)
+        if not isinstance(value, str):
+            continue
+        match = _PYTHON_FENCE_RE.search(value)
+        if match and match.group(1).strip():
+            return match.group(1)
+    return ""
+
+
+def _resolve_objects(context, args, *, default_to_scene=False):
+    names = _name_list(args.get("object_names"))
+    max_objects = _bounded_int(args.get("max_objects"), 12, maximum=50)
+    missing = []
+    if names:
+        objects = []
+        for name in names:
+            obj = bpy.data.objects.get(name)
+            if obj:
+                objects.append(obj)
+            else:
+                missing.append(name)
+        return objects[:max_objects], missing
+    if args.get("selected_only"):
+        return list(context.selected_objects)[:max_objects], missing
+    if context.active_object:
+        return [context.active_object], missing
+    if default_to_scene:
+        return list(context.scene.objects)[:max_objects], missing
+    return [], missing
+
+
+def _idprops_summary(data_block):
+    result = {}
+    for key in list(data_block.keys())[:20]:
+        value = data_block.get(key)
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            result[str(key)] = value
+        else:
+            result[str(key)] = repr(value)[:160]
+    return result
+
+
+def _mesh_data_layers(mesh):
+    if mesh is None:
+        return {}
+    return {
+        "uv_layers": [layer.name for layer in list(mesh.uv_layers)[:12]],
+        "color_attributes": [attribute.name for attribute in list(mesh.color_attributes)[:12]],
+        "shape_keys": [block.name for block in list(mesh.shape_keys.key_blocks)[:12]] if mesh.shape_keys else [],
+    }
+
+
+def _socket_value(value):
+    if isinstance(value, (int, float, bool, str)) or value is None:
+        return value
+    try:
+        return [round(float(item), 5) for item in value]
+    except (TypeError, ValueError):
+        return repr(value)[:160]
+
+
+def _socket_summary(socket):
+    result = {
+        "name": socket.name,
+        "type": socket.type,
+        "is_linked": bool(socket.is_linked),
+    }
+    try:
+        result["default_value"] = _socket_value(socket.default_value)
+    except AttributeError:
+        pass
+    return result
+
+
+def _keyframe_summary(point):
+    co = getattr(point, "co", (0.0, 0.0))
+    return {
+        "frame": round(float(co[0]), 4),
+        "value": round(float(co[1]), 5),
+        "interpolation": getattr(point, "interpolation", None),
+    }
+
+
+def _action_summary(action, *, max_keyframes_per_curve=8):
+    fcurves = context_bundle._iter_action_fcurves(action)
+    frame_range = list(getattr(action, "frame_range", (0, 0)))
+    return {
+        "name": action.name,
+        "frame_range": [round(float(value), 4) for value in frame_range],
+        "fcurve_count": len(fcurves),
+        "fcurves": [
+            {
+                "data_path": fcurve.data_path,
+                "array_index": int(fcurve.array_index),
+                "keyframe_count": len(fcurve.keyframe_points),
+                "keyframes": [
+                    _keyframe_summary(point)
+                    for point in list(fcurve.keyframe_points)[:max_keyframes_per_curve]
+                ],
+            }
+            for fcurve in fcurves[:40]
+        ],
+    }
+
+
+def inspect_scene(context, args):
+    bundle = context_bundle.build_context_bundle(
+        context,
+        include_visual=bool(args.get("include_visual", False)),
+    )
+    return context_bundle.public_bundle(bundle)
+
+
+def list_scene_objects(context, args):
+    type_filter = str(args.get("type_filter") or "").upper()
+    max_objects = _bounded_int(args.get("max_objects"), 80, maximum=250)
+    objects = []
+    for obj in context.scene.objects:
+        if type_filter and obj.type != type_filter:
+            continue
+        objects.append(
+            {
+                "name": obj.name,
+                "type": obj.type,
+                "selected": bool(obj.select_get()),
+                "active": context.active_object == obj,
+                "hidden_viewport": bool(obj.hide_viewport),
+                "hidden_render": bool(obj.hide_render),
+                "location": context_bundle._xyz(obj.location),
+                "collection_names": [collection.name for collection in obj.users_collection],
+            }
+        )
+        if len(objects) >= max_objects:
+            break
+    return {
+        "ok": True,
+        "objects": objects,
+        "total_scene_objects": len(context.scene.objects),
+        "truncated": len(objects) < len(context.scene.objects) and not type_filter,
+    }
+
+
+def get_object_details(context, args):
+    objects, missing = _resolve_objects(context, args, default_to_scene=True)
+    details = []
+    for obj in objects:
+        item = context_bundle._object_summary(obj)
+        item.update(
+            {
+                "parent": obj.parent.name if obj.parent else None,
+                "children": [child.name for child in list(obj.children)[:25]],
+                "custom_properties": _idprops_summary(obj),
+            }
+        )
+        if obj.type == "MESH" and obj.data:
+            item["mesh_data_layers"] = _mesh_data_layers(obj.data)
+            item["mesh_custom_properties"] = _idprops_summary(obj.data)
+        details.append(item)
+    return {
+        "ok": True,
+        "objects": details,
+        "missing_object_names": missing,
+        "note": "Raw mesh vertex/edge/polygon arrays are omitted; summaries and layer names are returned.",
+    }
+
+
+def get_animation_details(context, args):
+    max_actions = _bounded_int(args.get("max_actions"), 8, maximum=25)
+    max_keyframes = _bounded_int(args.get("max_keyframes_per_curve"), 8, maximum=32)
+    action_names = _name_list(args.get("action_names"))
+    objects, missing_objects = _resolve_objects(context, args)
+    actions = []
+    missing_actions = []
+    seen = set()
+
+    for obj in objects:
+        animation_data = getattr(obj, "animation_data", None)
+        action = animation_data.action if animation_data else None
+        if action and action.name not in seen:
+            seen.add(action.name)
+            actions.append(action)
+
+    if action_names:
+        for name in action_names:
+            action = bpy.data.actions.get(name)
+            if action:
+                if action.name not in seen:
+                    seen.add(action.name)
+                    actions.append(action)
+            else:
+                missing_actions.append(name)
+    elif not actions:
+        actions.extend(list(bpy.data.actions)[:max_actions])
+
+    return {
+        "ok": True,
+        "scene": {
+            "frame_current": int(context.scene.frame_current),
+            "frame_start": int(context.scene.frame_start),
+            "frame_end": int(context.scene.frame_end),
+            "fps": int(context.scene.render.fps),
+        },
+        "objects": [
+            {
+                "name": obj.name,
+                "type": obj.type,
+                "animation_data": context_bundle._object_summary(obj).get("animation"),
+            }
+            for obj in objects
+        ],
+        "actions": [
+            _action_summary(action, max_keyframes_per_curve=max_keyframes)
+            for action in actions[:max_actions]
+        ],
+        "missing_object_names": missing_objects,
+        "missing_action_names": missing_actions,
+    }
+
+
+def get_material_node_details(context, args):
+    names = _name_list(args.get("material_names"))
+    max_materials = _bounded_int(args.get("max_materials"), 8, maximum=25)
+    max_nodes = _bounded_int(args.get("max_nodes"), 18, maximum=60)
+    materials = []
+    missing = []
+    seen = set()
+
+    if names:
+        for name in names:
+            material = bpy.data.materials.get(name)
+            if material:
+                materials.append(material)
+                seen.add(material.name)
+            else:
+                missing.append(name)
+    else:
+        source_objects = list(context.selected_objects) if args.get("selected_only", True) else list(context.scene.objects)
+        for obj in source_objects:
+            for slot in obj.material_slots:
+                material = slot.material
+                if material and material.name not in seen:
+                    materials.append(material)
+                    seen.add(material.name)
+                if len(materials) >= max_materials:
+                    break
+            if len(materials) >= max_materials:
+                break
+
+    details = []
+    for material in materials[:max_materials]:
+        item = context_bundle._material_summary(material)
+        item["custom_properties"] = _idprops_summary(material)
+        if material.use_nodes and material.node_tree:
+            nodes = list(material.node_tree.nodes)
+            links = list(material.node_tree.links)
+            item["nodes"] = [
+                {
+                    "name": node.name,
+                    "label": node.label,
+                    "type": node.type,
+                    "inputs": [_socket_summary(socket) for socket in list(node.inputs)[:12]],
+                    "outputs": [_socket_summary(socket) for socket in list(node.outputs)[:12]],
+                }
+                for node in nodes[:max_nodes]
+            ]
+            item["links"] = [
+                {
+                    "from_node": link.from_node.name,
+                    "from_socket": link.from_socket.name,
+                    "to_node": link.to_node.name,
+                    "to_socket": link.to_socket.name,
+                }
+                for link in links[:40]
+            ]
+            if len(nodes) > max_nodes:
+                item["truncated_nodes"] = len(nodes) - max_nodes
+            if len(links) > 40:
+                item["truncated_links"] = len(links) - 40
+        details.append(item)
+
+    return {
+        "ok": True,
+        "materials": details,
+        "missing_material_names": missing,
+    }
+
+
+def get_geometry_nodes_details(context, args):
+    return world_model.geometry_nodes_details(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        max_objects=_bounded_int(args.get("max_objects"), 12, maximum=50),
+    )
+
+
+def get_shader_nodes_details(context, args):
+    return world_model.shader_nodes_details(
+        context,
+        material_names=_name_list(args.get("material_names")),
+        selected_only=bool(args.get("selected_only", True)),
+        max_materials=_bounded_int(args.get("max_materials"), 12, maximum=50),
+    )
+
+
+def get_rigging_details(context, args):
+    return world_model.rigging_details(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        max_objects=_bounded_int(args.get("max_objects"), 12, maximum=50),
+    )
+
+
+def get_shape_key_details(context, args):
+    return world_model.shape_key_details(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        max_objects=_bounded_int(args.get("max_objects"), 12, maximum=50),
+    )
+
+
+def get_curve_text_details(context, args):
+    return world_model.curve_text_details(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        max_objects=_bounded_int(args.get("max_objects"), 20, maximum=80),
+    )
+
+
+def get_simulation_details(context, args):
+    return world_model.simulation_details(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        max_objects=_bounded_int(args.get("max_objects"), 20, maximum=80),
+    )
+
+
+def get_collection_layer_details(context, args):
+    return world_model.collection_layer_details(
+        context,
+        max_depth=_bounded_int(args.get("max_depth"), 4, maximum=8),
+    )
+
+
+def get_render_camera_compositor_details(context, args):
+    return world_model.render_camera_compositor_details(context)
+
+
+def select_objects(context, args):
+    names = _name_list(args.get("object_names"))
+    extend = bool(args.get("extend", False))
+    active_name = str(args.get("active_object_name") or "").strip()
+    if not names and active_name:
+        names = [active_name]
+    if not names:
+        return {"ok": False, "message": "No object names were provided"}
+    if not extend:
+        bpy.ops.object.select_all(action="DESELECT")
+    selected = []
+    missing = []
+    for name in names:
+        obj = bpy.data.objects.get(name)
+        if obj is None:
+            missing.append(name)
+            continue
+        obj.select_set(True)
+        selected.append(obj.name)
+    active = bpy.data.objects.get(active_name) if active_name else None
+    if active is None and selected:
+        active = bpy.data.objects.get(selected[0])
+    if active:
+        active.select_set(True)
+        context.view_layer.objects.active = active
+    live_preview.redraw(context)
+    state = getattr(context.scene, "claude_blender", None)
+    if state:
+        state.status = f"Selected {len(selected)} object(s)"
+    return {
+        "ok": bool(selected),
+        "message": f"Selected {len(selected)} object(s)",
+        "selected_objects": selected,
+        "active_object": active.name if active else None,
+        "missing_object_names": missing,
+    }
+
+
+def set_current_frame(context, args):
+    frame = int(args.get("frame", context.scene.frame_current))
+    context.scene.frame_set(frame)
+    live_preview.redraw(context)
+    state = getattr(context.scene, "claude_blender", None)
+    if state:
+        state.status = f"Current frame: {context.scene.frame_current}"
+    return {
+        "ok": True,
+        "message": f"Set current frame to {context.scene.frame_current}",
+        "frame_current": int(context.scene.frame_current),
+    }
+
+
+def set_selected_location_delta(context, args):
+    delta = _float_list(args.get("delta"), 3, (0.0, 0.0, 0.0))
+    return live_preview.apply_location_delta(
+        context,
+        delta,
+        label=args.get("label", "Move selected objects"),
+    )
+
+
+def set_selected_transform(context, args):
+    return live_preview.set_selected_transform(
+        context,
+        location=_optional_float_list(args.get("location"), 3, (0.0, 0.0, 0.0)),
+        rotation=_optional_float_list(args.get("rotation"), 3, (0.0, 0.0, 0.0)),
+        scale=_optional_float_list(args.get("scale"), 3, (1.0, 1.0, 1.0)),
+        label=args.get("label", "Set selected transform"),
+    )
+
+
+def create_primitive(context, args):
+    return live_preview.create_primitive(
+        context,
+        primitive_type=str(args.get("primitive_type") or "CUBE"),
+        name=str(args.get("name") or "Claude Object"),
+        location=_float_list(args.get("location"), 3, (0.0, 0.0, 0.0)),
+        rotation=_float_list(args.get("rotation"), 3, (0.0, 0.0, 0.0)),
+        scale=_float_list(args.get("scale"), 3, (1.0, 1.0, 1.0)),
+        label=args.get("label", "Create primitive"),
+    )
+
+
+def assign_material_to_selected(context, args):
+    name = str(args.get("name") or "Claude Material")
+    color = _float_list(args.get("color"), 4, (0.8, 0.1, 0.1, 1.0))
+    return live_preview.assign_material_to_selected(
+        context,
+        name=name,
+        color=color,
+        label=args.get("label", "Assign material"),
+    )
+
+
+def assign_emission_material_to_selected(context, args):
+    name = str(args.get("name") or "Claude Emission")
+    color = _float_list(args.get("color"), 4, (0.2, 0.6, 1.0, 1.0))
+    return live_preview.assign_emission_material_to_selected(
+        context,
+        name=name,
+        color=color,
+        strength=float(args.get("strength", 1.5)),
+        label=args.get("label", "Assign emission material"),
+    )
+
+
+def create_collection(context, args):
+    return live_preview.create_collection(
+        context,
+        name=str(args.get("name") or "Claude Collection"),
+        label=args.get("label", "Create collection"),
+    )
+
+
+def link_selected_to_collection(context, args):
+    return live_preview.link_selected_to_collection(
+        context,
+        collection_name=str(args.get("collection_name") or "Claude Collection"),
+        label=args.get("label", "Link selected to collection"),
+    )
+
+
+def add_modifier_to_selected(context, args):
+    return live_preview.add_modifier_to_selected(
+        context,
+        modifier_type=str(args.get("modifier_type") or "BEVEL"),
+        name=str(args.get("name") or ""),
+        amount=float(args.get("amount", 0.1)),
+        segments=int(args.get("segments", 2)),
+        levels=int(args.get("levels", 1)),
+        count=int(args.get("count", 3)),
+        relative_offset=_float_list(args.get("relative_offset"), 3, (1.2, 0.0, 0.0)),
+        label=args.get("label", "Add modifier"),
+    )
+
+
+def create_shader_material(context, args):
+    return advanced_helpers.create_shader_material(
+        context,
+        name=str(args.get("name") or "Claude Shader Material"),
+        base_color=_float_list(args.get("base_color"), 4, (0.8, 0.8, 0.8, 1.0)),
+        metallic=float(args.get("metallic", 0.0)),
+        roughness=float(args.get("roughness", 0.5)),
+        alpha=float(args.get("alpha", 1.0)),
+        emission_color=_optional_float_list(args.get("emission_color"), 4, (0.0, 0.0, 0.0, 1.0)),
+        emission_strength=float(args.get("emission_strength", 0.0)),
+        assign_to_selected=bool(args.get("assign_to_selected", True)),
+        label=args.get("label", "Create shader material"),
+    )
+
+
+def add_geometry_nodes_modifier(context, args):
+    return advanced_helpers.add_geometry_nodes_modifier(
+        context,
+        name=str(args.get("name") or "Claude Geometry Nodes"),
+        node_group_name=str(args.get("node_group_name") or "Claude Geometry Nodes"),
+        selected_only=bool(args.get("selected_only", True)),
+        label=args.get("label", "Add Geometry Nodes modifier"),
+    )
+
+
+def create_shape_key(context, args):
+    return advanced_helpers.create_shape_key(
+        context,
+        object_name=str(args.get("object_name") or ""),
+        key_name=str(args.get("key_name") or "Claude Shape"),
+        value=float(args.get("value", 0.0)),
+        label=args.get("label", "Create shape key"),
+    )
+
+
+def animate_shape_key(context, args):
+    return advanced_helpers.animate_shape_key(
+        context,
+        object_name=str(args.get("object_name") or ""),
+        key_name=str(args.get("key_name") or "Claude Shape"),
+        frame_start=int(args.get("frame_start", context.scene.frame_start)),
+        frame_end=int(args.get("frame_end", context.scene.frame_end)),
+        value_start=float(args.get("value_start", 0.0)),
+        value_end=float(args.get("value_end", 1.0)),
+        create_if_missing=bool(args.get("create_if_missing", True)),
+        label=args.get("label", "Animate shape key"),
+    )
+
+
+def create_text_object(context, args):
+    return advanced_helpers.create_text_object(
+        context,
+        name=str(args.get("name") or "Claude Text"),
+        body=str(args.get("body") or "Text"),
+        location=_float_list(args.get("location"), 3, (0.0, 0.0, 0.0)),
+        rotation=_float_list(args.get("rotation"), 3, (0.0, 0.0, 0.0)),
+        scale=_float_list(args.get("scale"), 3, (1.0, 1.0, 1.0)),
+        size=float(args.get("size", 1.0)),
+        align_x=str(args.get("align_x") or "CENTER"),
+        align_y=str(args.get("align_y") or "CENTER"),
+        material_name=str(args.get("material_name") or ""),
+        color=_optional_float_list(args.get("color"), 4, (1.0, 1.0, 1.0, 1.0)),
+        label=args.get("label", "Create text object"),
+    )
+
+
+def create_curve_path(context, args):
+    points = args.get("points") or []
+    return advanced_helpers.create_curve_path(
+        context,
+        name=str(args.get("name") or "Claude Curve"),
+        points=points,
+        bevel_depth=float(args.get("bevel_depth", 0.02)),
+        cyclic=bool(args.get("cyclic", False)),
+        material_name=str(args.get("material_name") or ""),
+        color=_optional_float_list(args.get("color"), 4, (1.0, 1.0, 1.0, 1.0)),
+        label=args.get("label", "Create curve path"),
+    )
+
+
+def add_particle_system_to_selected(context, args):
+    return advanced_helpers.add_particle_system_to_selected(
+        context,
+        name=str(args.get("name") or "Claude Particles"),
+        count=_bounded_int(args.get("count"), 200, maximum=20000),
+        frame_start=int(args.get("frame_start", context.scene.frame_start)),
+        frame_end=int(args.get("frame_end", context.scene.frame_end)),
+        lifetime=float(args.get("lifetime", 80.0)),
+        particle_size=float(args.get("particle_size", 0.05)),
+        label=args.get("label", "Add particle system"),
+    )
+
+
+def create_basic_armature(context, args):
+    return advanced_helpers.create_basic_armature(
+        context,
+        name=str(args.get("name") or "Claude Armature"),
+        location=_float_list(args.get("location"), 3, (0.0, 0.0, 0.0)),
+        rotation=_float_list(args.get("rotation"), 3, (0.0, 0.0, 0.0)),
+        show_in_front=bool(args.get("show_in_front", True)),
+        label=args.get("label", "Create basic armature"),
+    )
+
+
+def add_copy_transform_constraint(context, args):
+    return advanced_helpers.add_copy_transform_constraint(
+        context,
+        target_name=str(args.get("target_name") or ""),
+        constraint_type=str(args.get("constraint_type") or "COPY_LOCATION"),
+        name=str(args.get("name") or "Claude Copy Transform"),
+        influence=float(args.get("influence", 1.0)),
+        label=args.get("label", "Add copy transform constraint"),
+    )
+
+
+def set_render_settings(context, args):
+    return advanced_helpers.set_render_settings(
+        context,
+        engine=str(args.get("engine") or ""),
+        resolution=args.get("resolution"),
+        fps=args.get("fps"),
+        frame_start=args.get("frame_start"),
+        frame_end=args.get("frame_end"),
+        film_transparent=args.get("film_transparent"),
+        label=args.get("label", "Set render settings"),
+    )
+
+
+def set_camera_settings(context, args):
+    return advanced_helpers.set_camera_settings(
+        context,
+        camera_name=str(args.get("camera_name") or ""),
+        lens=args.get("lens"),
+        sensor_width=args.get("sensor_width"),
+        dof_enabled=args.get("dof_enabled"),
+        focus_object_name=str(args.get("focus_object_name") or ""),
+        aperture_fstop=args.get("aperture_fstop"),
+        label=args.get("label", "Set camera settings"),
+    )
+
+
+def set_world_background(context, args):
+    return advanced_helpers.set_world_background(
+        context,
+        color=_float_list(args.get("color"), 3, (0.05, 0.05, 0.07)),
+        label=args.get("label", "Set world background"),
+    )
+
+
+def shade_smooth_selected(context, args):
+    return advanced_helpers.shade_smooth_selected(
+        context,
+        add_weighted_normals=bool(args.get("add_weighted_normals", True)),
+        label=args.get("label", "Shade smooth selected"),
+    )
+
+
+def add_bevel_and_subsurf(context, args):
+    return advanced_helpers.add_bevel_and_subsurf(
+        context,
+        bevel_width=float(args.get("bevel_width", 0.06)),
+        bevel_segments=_bounded_int(args.get("bevel_segments"), 3, maximum=16),
+        subsurf_levels=_bounded_int(args.get("subsurf_levels"), 1, minimum=0, maximum=3),
+        weighted_normals=bool(args.get("weighted_normals", True)),
+        label=args.get("label", "Add bevel and subdivision"),
+    )
+
+
+def create_wheel_assembly(context, args):
+    return advanced_helpers.create_wheel_assembly(
+        context,
+        name=str(args.get("name") or "Claude Wheel"),
+        location=_float_list(args.get("location"), 3, (0.0, 0.0, 0.0)),
+        radius=float(args.get("radius", 0.45)),
+        tire_thickness=float(args.get("tire_thickness", 0.12)),
+        axis=str(args.get("axis") or "Y"),
+        tire_material_name=str(args.get("tire_material_name") or "Claude Tire Rubber"),
+        rim_material_name=str(args.get("rim_material_name") or "Claude Wheel Rim"),
+        label=args.get("label", "Create wheel assembly"),
+    )
+
+
+def add_panel_seams(context, args):
+    return advanced_helpers.add_panel_seams(
+        context,
+        target_name=str(args.get("target_name") or ""),
+        seam_material_name=str(args.get("seam_material_name") or "Claude Panel Seams"),
+        bevel_depth=float(args.get("bevel_depth", 0.015)),
+        label=args.get("label", "Add panel seams"),
+    )
+
+
+def add_window_materials(context, args):
+    return advanced_helpers.add_window_materials(
+        context,
+        target_name=str(args.get("target_name") or ""),
+        material_name=str(args.get("material_name") or "Claude Blue Glass"),
+        color=_float_list(args.get("color"), 4, (0.08, 0.35, 0.65, 0.42)),
+        create_panels=bool(args.get("create_panels", True)),
+        label=args.get("label", "Add window materials"),
+    )
+
+
+def apply_vehicle_refinement_template(context, args):
+    return advanced_helpers.apply_vehicle_refinement_template(
+        context,
+        target_name=str(args.get("target_name") or ""),
+        detail_level=str(args.get("detail_level") or "medium"),
+        label=args.get("label", "Apply vehicle refinement template"),
+    )
+
+
+def add_track_to_constraint(context, args):
+    return live_preview.add_track_to_constraint(
+        context,
+        target_name=str(args.get("target_name") or ""),
+        name=str(args.get("name") or "Claude Track To"),
+        track_axis=str(args.get("track_axis") or "TRACK_NEGATIVE_Z"),
+        up_axis=str(args.get("up_axis") or "UP_Y"),
+        influence=float(args.get("influence", 1.0)),
+        label=args.get("label", "Add Track To constraint"),
+    )
+
+
+def add_light(context, args):
+    light_type = str(args.get("light_type") or "POINT").upper()
+    if light_type not in {"POINT", "SUN", "SPOT", "AREA"}:
+        light_type = "POINT"
+    return live_preview.add_light(
+        context,
+        light_type=light_type,
+        name=str(args.get("name") or "Claude Light"),
+        location=_float_list(args.get("location"), 3, (3.0, -4.0, 4.0)),
+        energy=float(args.get("energy", 500.0)),
+        color=_float_list(args.get("color"), 3, (1.0, 0.92, 0.82)),
+        label=args.get("label", "Add light"),
+    )
+
+
+def add_camera(context, args):
+    return live_preview.add_camera(
+        context,
+        name=str(args.get("name") or "Claude Camera"),
+        location=_float_list(args.get("location"), 3, (4.0, -6.0, 4.0)),
+        rotation=_float_list(args.get("rotation"), 3, (1.1, 0.0, 0.65)),
+        lens=float(args.get("lens", 50.0)),
+        label=args.get("label", "Add camera"),
+    )
+
+
+def set_scene_frame_range(context, args):
+    return live_preview.set_scene_frame_range(
+        context,
+        frame_start=int(args.get("frame_start", context.scene.frame_start)),
+        frame_end=int(args.get("frame_end", context.scene.frame_end)),
+        current_frame=args.get("current_frame"),
+        fps=args.get("fps"),
+        label=args.get("label", "Set timeline"),
+    )
+
+
+def set_active_camera(context, args):
+    return live_preview.set_active_camera(
+        context,
+        camera_name=str(args.get("camera_name") or ""),
+        label=args.get("label", "Set active camera"),
+    )
+
+
+def animate_selected_transform(context, args):
+    return live_preview.animate_selected_transform(
+        context,
+        frame_start=int(args.get("frame_start", context.scene.frame_start)),
+        frame_end=int(args.get("frame_end", context.scene.frame_end)),
+        location_start=_optional_float_list(args.get("location_start"), 3, (0.0, 0.0, 0.0)),
+        location_end=_optional_float_list(args.get("location_end"), 3, (0.0, 0.0, 0.0)),
+        rotation_start=_optional_float_list(args.get("rotation_start"), 3, (0.0, 0.0, 0.0)),
+        rotation_end=_optional_float_list(args.get("rotation_end"), 3, (0.0, 0.0, 0.0)),
+        scale_start=_optional_float_list(args.get("scale_start"), 3, (1.0, 1.0, 1.0)),
+        scale_end=_optional_float_list(args.get("scale_end"), 3, (1.0, 1.0, 1.0)),
+        label=args.get("label", "Animate selected transform"),
+    )
+
+
+def create_camera_orbit(context, args):
+    active = context.active_object.name if context.active_object else ""
+    return live_preview.create_camera_orbit(
+        context,
+        target_name=str(args.get("target_name") or active),
+        frame_start=int(args.get("frame_start", context.scene.frame_start)),
+        frame_end=int(args.get("frame_end", context.scene.frame_end)),
+        radius=float(args.get("radius", 5.0)),
+        height=float(args.get("height", 2.5)),
+        name=str(args.get("name") or "Claude Orbit Camera"),
+        lens=float(args.get("lens", 35.0)),
+        label=args.get("label", "Create camera orbit"),
+    )
+
+
+def search_blender_docs(context, args):
+    prefs = preferences.get_preferences(context)
+    return docs_index.search_blender_docs(
+        str(args.get("query") or ""),
+        cache_dir=getattr(prefs, "docs_cache_dir", None),
+        local_first=bool(getattr(prefs, "local_docs_first", True)),
+    )
+
+
+def draft_script(context, args):
+    return script_runner.stage_script(
+        context,
+        code=_extract_script_code(args),
+        intent=str(args.get("intent") or ""),
+        expected_changes=str(args.get("expected_changes") or ""),
+        risk_level=str(args.get("risk_level") or "medium"),
+        target_objects=args.get("target_objects") or [],
+    )
+
+
+def commit_preview(context, args):
+    return live_preview.commit(context)
+
+
+def revert_preview(context, args):
+    return live_preview.revert(context)
+
+
+TOOL_FUNCTIONS = {
+    "inspect_scene": inspect_scene,
+    "list_scene_objects": list_scene_objects,
+    "get_object_details": get_object_details,
+    "get_animation_details": get_animation_details,
+    "get_material_node_details": get_material_node_details,
+    "get_geometry_nodes_details": get_geometry_nodes_details,
+    "get_shader_nodes_details": get_shader_nodes_details,
+    "get_rigging_details": get_rigging_details,
+    "get_shape_key_details": get_shape_key_details,
+    "get_curve_text_details": get_curve_text_details,
+    "get_simulation_details": get_simulation_details,
+    "get_collection_layer_details": get_collection_layer_details,
+    "get_render_camera_compositor_details": get_render_camera_compositor_details,
+    "select_objects": select_objects,
+    "set_current_frame": set_current_frame,
+    "set_selected_location_delta": set_selected_location_delta,
+    "set_selected_transform": set_selected_transform,
+    "create_primitive": create_primitive,
+    "assign_material_to_selected": assign_material_to_selected,
+    "assign_emission_material_to_selected": assign_emission_material_to_selected,
+    "create_collection": create_collection,
+    "link_selected_to_collection": link_selected_to_collection,
+    "add_modifier_to_selected": add_modifier_to_selected,
+    "create_shader_material": create_shader_material,
+    "add_geometry_nodes_modifier": add_geometry_nodes_modifier,
+    "create_shape_key": create_shape_key,
+    "animate_shape_key": animate_shape_key,
+    "create_text_object": create_text_object,
+    "create_curve_path": create_curve_path,
+    "add_particle_system_to_selected": add_particle_system_to_selected,
+    "create_basic_armature": create_basic_armature,
+    "add_copy_transform_constraint": add_copy_transform_constraint,
+    "set_render_settings": set_render_settings,
+    "set_camera_settings": set_camera_settings,
+    "set_world_background": set_world_background,
+    "shade_smooth_selected": shade_smooth_selected,
+    "add_bevel_and_subsurf": add_bevel_and_subsurf,
+    "create_wheel_assembly": create_wheel_assembly,
+    "add_panel_seams": add_panel_seams,
+    "add_window_materials": add_window_materials,
+    "apply_vehicle_refinement_template": apply_vehicle_refinement_template,
+    "add_track_to_constraint": add_track_to_constraint,
+    "add_light": add_light,
+    "add_camera": add_camera,
+    "set_scene_frame_range": set_scene_frame_range,
+    "set_active_camera": set_active_camera,
+    "animate_selected_transform": animate_selected_transform,
+    "create_camera_orbit": create_camera_orbit,
+    "search_blender_docs": search_blender_docs,
+    "draft_script": draft_script,
+    "commit_preview": commit_preview,
+    "revert_preview": revert_preview,
+}
+
+
+def execute_tool(context, name, args):
+    fn = TOOL_FUNCTIONS.get(name)
+    if fn is None:
+        return _json_result({"ok": False, "message": f"Unknown Blender tool: {name}"})
+    try:
+        result = fn(context, args or {})
+    except Exception as exc:
+        result = {"ok": False, "message": f"{type(exc).__name__}: {exc}"}
+    if isinstance(result, str):
+        return result
+    return _json_result(result)
+
+
+def register():
+    pass
+
+
+def unregister():
+    pass

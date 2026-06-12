@@ -1,0 +1,81 @@
+"""Smoke tests for dynamic tool-schema selection."""
+
+from __future__ import annotations
+
+import os
+import sys
+
+import bpy
+
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(ROOT, "addon"))
+
+import claude_blender  # noqa: E402
+from claude_blender import agent_loop, anthropic_client, context_bundle  # noqa: E402
+
+
+def _names(tools):
+    return {tool["name"] for tool in tools}
+
+
+def main():
+    claude_blender.register()
+    original_create = anthropic_client.create_message_raw
+    try:
+        bundle = context_bundle.build_context_bundle(bpy.context)
+        full_tools = anthropic_client.blender_tool_definitions()
+        full_chars = anthropic_client.estimate_request_chars(messages=[], tools=full_tools)
+
+        simple_tools, simple_meta = anthropic_client.select_blender_tool_definitions(
+            "What objects are in my current scene?",
+            bundle,
+        )
+        simple_names = _names(simple_tools)
+        assert "inspect_scene" in simple_names
+        assert "list_scene_objects" in simple_names
+        assert "apply_vehicle_refinement_template" not in simple_names
+        assert simple_meta["selected_tool_count"] < len(full_tools)
+        assert anthropic_client.estimate_request_chars(messages=[], tools=simple_tools) < full_chars
+
+        vehicle_tools, vehicle_meta = anthropic_client.select_blender_tool_definitions(
+            "Improve this car into a high-poly vehicle with wheels, windows, panel seams, headlights, and smoother bevels.",
+            bundle,
+        )
+        vehicle_names = _names(vehicle_tools)
+        for expected in {
+            "apply_vehicle_refinement_template",
+            "create_wheel_assembly",
+            "add_window_materials",
+            "add_panel_seams",
+            "add_bevel_and_subsurf",
+            "shade_smooth_selected",
+            "draft_script",
+        }:
+            assert expected in vehicle_names, (expected, vehicle_meta)
+        assert vehicle_meta["schema_chars"] <= anthropic_client.TOOL_SCHEMA_CHAR_BUDGET
+
+        captured_tool_names = []
+
+        def fake_create_message_raw(*, messages, model, tools=None, max_tokens=1024):
+            captured_tool_names.extend(tool["name"] for tool in tools or [])
+            return {"content": [{"type": "text", "text": "done"}]}
+
+        anthropic_client.create_message_raw = fake_create_message_raw
+        text = agent_loop._run_tool_loop(
+            scene_name=bpy.context.scene.name,
+            prompt="What objects are in my current scene?",
+            context_bundle=bundle,
+            model="fake-model",
+        )
+        assert text == "done", text
+        assert "apply_vehicle_refinement_template" not in captured_tool_names
+        assert len(captured_tool_names) < len(full_tools)
+        print("smoke_tool_selection: ok")
+    finally:
+        anthropic_client.create_message_raw = original_create
+        claude_blender.unregister()
+
+
+if __name__ == "__main__":
+    main()

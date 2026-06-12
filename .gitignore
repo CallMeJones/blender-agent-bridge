@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.codex/
+.dev-session/
+dist/
+build/
+*.zip
+*.blend1
+*.blend2
+local/
+secrets.*
+.env
