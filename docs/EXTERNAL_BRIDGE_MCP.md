@@ -91,12 +91,20 @@ The stdio MCP server implements:
 By default it exposes a compact, client-friendly tool surface:
 
 - `blender_bridge_status`
+- `blender_tool_catalog`
 - `search_blender_tools`
 - `get_blender_tool_schema`
 - `invoke_blender_tool`
 - `list_scene_objects`
 
-Use `search_blender_tools` to discover the full Blender helper catalog, `get_blender_tool_schema` to inspect one tool's schema and safety annotations, and `invoke_blender_tool` to call that tool by name. `invoke_blender_tool` validates arguments against the target tool schema before forwarding calls to Blender.
+Use `blender_tool_catalog` as the primary entry point for the large helper catalog:
+
+- `{"action":"search","query":"camera","limit":8}` returns compact summaries.
+- `{"action":"categories"}` returns category, risk, and permission facets.
+- `{"action":"schema","name":"add_camera"}` returns one tool's input schema, output schema, and safety annotations.
+- `{"action":"invoke","name":"add_camera","arguments":{...}}` validates arguments against the target tool schema before forwarding the call to Blender.
+
+The older `search_blender_tools`, `get_blender_tool_schema`, and `invoke_blender_tool` tools remain as compatibility wrappers for clients that prefer separate operations.
 
 Set `BLENDER_MCP_FULL_TOOL_LIST=1` in the MCP server environment to expose every Blender helper as a top-level MCP tool for legacy clients or debugging.
 

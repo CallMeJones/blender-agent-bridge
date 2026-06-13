@@ -154,6 +154,7 @@ def _assert_compact_tools_visible(proc):
     names = {tool["name"] for tool in listed["result"]["tools"]}
     assert {
         "blender_bridge_status",
+        "blender_tool_catalog",
         "search_blender_tools",
         "get_blender_tool_schema",
         "invoke_blender_tool",
@@ -163,6 +164,9 @@ def _assert_compact_tools_visible(proc):
     assert "run_approved_script" not in names, listed
     scene_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "list_scene_objects")
     assert scene_tool["outputSchema"]["type"] == "object", scene_tool
+    catalog_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "blender_tool_catalog")
+    assert catalog_tool["annotations"]["riskLevel"] == "dynamic", catalog_tool
+    assert "invoke" in catalog_tool["inputSchema"]["properties"]["action"]["enum"], catalog_tool
     search_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "search_blender_tools")
     assert search_tool["annotations"]["readOnlyHint"] is True, search_tool
     invoke_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "invoke_blender_tool")
@@ -174,7 +178,13 @@ def _assert_compact_tools_visible(proc):
 def _assert_full_tools_visible(proc):
     listed = _send(proc, {"jsonrpc": "2.0", "id": 91, "method": "tools/list"})
     names = {tool["name"] for tool in listed["result"]["tools"]}
-    assert {"blender_bridge_status", "list_scene_objects", "draft_script", "run_approved_script"}.issubset(names), listed
+    assert {
+        "blender_bridge_status",
+        "blender_tool_catalog",
+        "list_scene_objects",
+        "draft_script",
+        "run_approved_script",
+    }.issubset(names), listed
     draft_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "draft_script")
     assert draft_tool["annotations"]["mutatesScene"] is False, draft_tool
     assert draft_tool["annotations"]["hasSideEffects"] is True, draft_tool
@@ -247,6 +257,35 @@ def main():
         )
         offline_found = {tool["name"] for tool in offline_search["result"]["structuredContent"]["tools"]}
         assert {"draft_script", "run_approved_script"}.issubset(offline_found), offline_search
+        offline_catalog_search = _send(
+            offline_proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 94,
+                "method": "tools/call",
+                "params": {
+                    "name": "blender_tool_catalog",
+                    "arguments": {"action": "search", "query": "approved script", "limit": 5},
+                },
+            },
+        )
+        offline_catalog_found = {
+            tool["name"] for tool in offline_catalog_search["result"]["structuredContent"]["tools"]
+        }
+        assert {"draft_script", "run_approved_script"}.issubset(offline_catalog_found), offline_catalog_search
+        offline_catalog_schema = _send(
+            offline_proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 95,
+                "method": "tools/call",
+                "params": {
+                    "name": "blender_tool_catalog",
+                    "arguments": {"action": "schema", "name": "run_approved_script"},
+                },
+            },
+        )
+        assert offline_catalog_schema["result"]["structuredContent"]["tool"]["name"] == "run_approved_script"
         unavailable = _send(
             offline_proc,
             {
@@ -338,6 +377,50 @@ def main():
         )
         searched_names = {tool["name"] for tool in searched["result"]["structuredContent"]["tools"]}
         assert {"draft_script", "run_approved_script"}.issubset(searched_names), searched
+        searched_tools = searched["result"]["structuredContent"]["tools"]
+        assert "input_schema" in searched_tools[0], searched
+        assert "output_schema" in searched_tools[0], searched
+
+        catalog_search = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 24,
+                "method": "tools/call",
+                "params": {
+                    "name": "blender_tool_catalog",
+                    "arguments": {
+                        "action": "search",
+                        "query": "move selected",
+                        "category": "transform",
+                        "permission": "scene:mutate",
+                        "limit": 5,
+                    },
+                },
+            },
+        )
+        catalog_tools = catalog_search["result"]["structuredContent"]["tools"]
+        catalog_names = {tool["name"] for tool in catalog_tools}
+        assert "set_selected_location_delta" in catalog_names, catalog_search
+        assert all(tool["category"] == "transform" for tool in catalog_tools), catalog_search
+        assert "input_schema" not in catalog_tools[0], catalog_search
+
+        catalog_categories = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 25,
+                "method": "tools/call",
+                "params": {
+                    "name": "blender_tool_catalog",
+                    "arguments": {"action": "categories"},
+                },
+            },
+        )
+        category_names = {
+            item["name"] for item in catalog_categories["result"]["structuredContent"]["facets"]["categories"]
+        }
+        assert {"inspect", "script", "transform"}.issubset(category_names), catalog_categories
 
         schema = _send(
             proc,
@@ -351,6 +434,20 @@ def main():
         run_schema = schema["result"]["structuredContent"]["tool"]["inputSchema"]
         assert "approval_token" not in run_schema.get("required", []), schema
         assert "minLength" not in run_schema["properties"]["approval_token"], schema
+
+        catalog_schema = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 26,
+                "method": "tools/call",
+                "params": {
+                    "name": "blender_tool_catalog",
+                    "arguments": {"action": "schema", "name": "run_approved_script"},
+                },
+            },
+        )
+        assert catalog_schema["result"]["structuredContent"]["tool"]["name"] == "run_approved_script", catalog_schema
 
         called = _send(
             proc,
@@ -375,6 +472,21 @@ def main():
         )
         assert invoked["result"]["isError"] is False, invoked
         assert invoked["result"]["structuredContent"]["invoked_tool"] == "list_scene_objects", invoked
+
+        catalog_invoked = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 27,
+                "method": "tools/call",
+                "params": {
+                    "name": "blender_tool_catalog",
+                    "arguments": {"action": "invoke", "name": "list_scene_objects", "arguments": {}},
+                },
+            },
+        )
+        assert catalog_invoked["result"]["isError"] is False, catalog_invoked
+        assert catalog_invoked["result"]["structuredContent"]["invoked_tool"] == "list_scene_objects", catalog_invoked
 
         invalid = _send(
             proc,

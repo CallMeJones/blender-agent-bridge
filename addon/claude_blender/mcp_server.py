@@ -34,12 +34,30 @@ DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 100
 FULL_TOOL_LIST_ENV = "BLENDER_MCP_FULL_TOOL_LIST"
 COMPACT_DIRECT_TOOL_NAMES = ("list_scene_objects",)
-COMPACT_TOOL_NAMES = {
+CATALOG_TOOL_NAME = "blender_tool_catalog"
+WRAPPER_TOOL_NAMES = {
     "blender_bridge_status",
+    CATALOG_TOOL_NAME,
     "search_blender_tools",
     "get_blender_tool_schema",
     "invoke_blender_tool",
-    *COMPACT_DIRECT_TOOL_NAMES,
+}
+
+TOOL_CATEGORY_LABELS = {
+    "inspect": "Scene Inspection",
+    "transform": "Selection And Transform",
+    "creation": "Object Creation",
+    "materials": "Materials And Shading",
+    "animation": "Animation",
+    "camera_render": "Camera, Light, And Render",
+    "geometry": "Geometry And Modifiers",
+    "rigging": "Rigging And Constraints",
+    "simulation": "Simulation",
+    "organization": "Collections And Organization",
+    "preview": "Preview Control",
+    "script": "Approval-Gated Python",
+    "scene": "Scene Settings",
+    "other": "Other",
 }
 
 GENERIC_OUTPUT_SCHEMA = {
@@ -304,6 +322,48 @@ def _read_only_annotations(permissions=None):
 def _compact_tool_definitions():
     return [
         {
+            "name": CATALOG_TOOL_NAME,
+            "title": "Blender Tool Catalog",
+            "description": (
+                "Search, inspect, and invoke tools from the full Blender MCP catalog through one compact entry point."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["search", "schema", "invoke", "categories"],
+                        "description": "Catalog action. Defaults to search.",
+                    },
+                    "query": {"type": "string", "description": "Search text such as material, camera, script, or preview"},
+                    "limit": {"type": "integer", "description": "Maximum matching tools to return"},
+                    "name": {"type": "string", "description": "Tool name for schema or invoke actions"},
+                    "arguments": {"type": "object", "description": "Target tool arguments for invoke", "additionalProperties": True},
+                    "category": {"type": "string", "description": "Filter by catalog category"},
+                    "permission": {"type": "string", "description": "Filter by a required permission such as scene:mutate"},
+                    "mutates_scene": {"type": "boolean", "description": "Filter by whether tools can mutate the scene"},
+                    "requires_approval": {"type": "boolean", "description": "Filter by approval requirement"},
+                    "requires_live_preview": {"type": "boolean", "description": "Filter by live-preview requirement"},
+                    "risk_level": {"type": "string", "description": "Filter by risk level such as read, preview, or approval"},
+                    "include_schemas": {"type": "boolean", "description": "Include input/output schemas in search results"},
+                },
+                "additionalProperties": False,
+            },
+            "outputSchema": GENERIC_OUTPUT_SCHEMA,
+            "annotations": {
+                "mutatesScene": True,
+                "hasSideEffects": True,
+                "requiresApproval": False,
+                "requiresLivePreview": False,
+                "riskLevel": "dynamic",
+                "permissions": ["tools:read", "scene:read", "scene:mutate", "script:stage"],
+                "readOnlyHint": False,
+                "destructiveHint": False,
+                "idempotentHint": False,
+                "openWorldHint": False,
+            },
+        },
+        {
             "name": "search_blender_tools",
             "title": "Search Blender Tools",
             "description": "Search the full Blender MCP tool catalog by name, description, risk, and permissions.",
@@ -312,9 +372,13 @@ def _compact_tool_definitions():
                 "properties": {
                     "query": {"type": "string", "description": "Search text such as material, camera, script, or preview"},
                     "limit": {"type": "integer", "description": "Maximum matching tools to return"},
+                    "category": {"type": "string", "description": "Filter by catalog category"},
+                    "permission": {"type": "string", "description": "Filter by a required permission such as scene:mutate"},
                     "mutates_scene": {"type": "boolean", "description": "Filter by whether tools can mutate the scene"},
                     "requires_approval": {"type": "boolean", "description": "Filter by approval requirement"},
+                    "requires_live_preview": {"type": "boolean", "description": "Filter by live-preview requirement"},
                     "risk_level": {"type": "string", "description": "Filter by risk level such as read, preview, or approval"},
+                    "include_schemas": {"type": "boolean", "description": "Include input/output schemas in search results"},
                 },
                 "additionalProperties": False,
             },
@@ -435,25 +499,74 @@ def _truthy_env(name):
 
 def _tool_search_text(tool):
     annotations = tool.get("annotations") or {}
+    schema = tool.get("inputSchema") or {}
+    properties = schema.get("properties") if isinstance(schema.get("properties"), dict) else {}
+    category = _tool_category(tool)
     parts = [
         tool.get("name", ""),
         tool.get("title", ""),
         tool.get("description", ""),
+        category,
+        TOOL_CATEGORY_LABELS.get(category, ""),
         annotations.get("riskLevel", ""),
         " ".join(str(item) for item in annotations.get("permissions", []) or []),
+        " ".join(str(item) for item in properties),
     ]
     return " ".join(str(part).lower() for part in parts if part)
 
 
-def _tool_summary(tool):
+def _tool_category(tool):
+    name = str((tool or {}).get("name") or "").lower()
+    if name in {"draft_script", "run_approved_script"}:
+        return "script"
+    if name in {"commit_preview", "revert_preview"}:
+        return "preview"
+    if name.startswith("get_") or name.startswith("list_") or name in {"inspect_scene", "search_blender_docs"}:
+        return "inspect"
+    if "material" in name or "shader" in name or name == "set_world_background":
+        return "materials"
+    if "camera" in name or "render" in name or name in {"add_light", "set_active_camera"}:
+        return "camera_render"
+    if "animate" in name or "animation" in name or "frame" in name:
+        return "animation"
+    if "geometry" in name or "modifier" in name or "bevel" in name or "subsurf" in name or "shape_key" in name:
+        return "geometry"
+    if "rigging" in name or "armature" in name or "constraint" in name:
+        return "rigging"
+    if "simulation" in name or "particle" in name:
+        return "simulation"
+    if "collection" in name:
+        return "organization"
+    if name.startswith("create_") or name.startswith("add_") or name.startswith("apply_"):
+        return "creation"
+    if "transform" in name or "selected" in name or name == "select_objects":
+        return "transform"
+    if name.startswith("set_"):
+        return "scene"
+    return "other"
+
+
+def _tool_summary(tool, *, include_schema=True):
     annotations = dict(tool.get("annotations") or {})
-    return {
+    category = _tool_category(tool)
+    summary = {
         "name": tool.get("name", ""),
         "title": tool.get("title", ""),
         "description": tool.get("description", ""),
-        "annotations": annotations,
-        "input_schema": tool.get("inputSchema") or {},
+        "category": category,
+        "category_label": TOOL_CATEGORY_LABELS.get(category, TOOL_CATEGORY_LABELS["other"]),
+        "risk_level": annotations.get("riskLevel", ""),
+        "permissions": list(annotations.get("permissions", []) or []),
+        "mutates_scene": bool(annotations.get("mutatesScene", False)),
+        "has_side_effects": bool(annotations.get("hasSideEffects", False)),
+        "requires_approval": bool(annotations.get("requiresApproval", False)),
+        "requires_live_preview": bool(annotations.get("requiresLivePreview", False)),
     }
+    if include_schema:
+        summary["input_schema"] = tool.get("inputSchema") or {}
+        summary["output_schema"] = tool.get("outputSchema") or GENERIC_OUTPUT_SCHEMA
+        summary["annotations"] = annotations
+    return summary
 
 
 def _bounded_limit(value, default=12, maximum=50):
@@ -472,6 +585,98 @@ def _tool_result(content_text, structured, *, is_error=False):
         "content": [{"type": "text", "text": str(content_text)}],
         "structuredContent": structured,
         "isError": bool(is_error),
+    }
+
+
+def _catalog_filters(arguments):
+    return {
+        "query": str(arguments.get("query") or "").strip(),
+        "category": str(arguments.get("category") or "").strip().lower(),
+        "permission": str(arguments.get("permission") or "").strip().lower(),
+        "risk_level": str(arguments.get("risk_level") or "").strip().lower(),
+        "mutates_scene": arguments.get("mutates_scene") if isinstance(arguments.get("mutates_scene"), bool) else None,
+        "requires_approval": (
+            arguments.get("requires_approval") if isinstance(arguments.get("requires_approval"), bool) else None
+        ),
+        "requires_live_preview": (
+            arguments.get("requires_live_preview") if isinstance(arguments.get("requires_live_preview"), bool) else None
+        ),
+    }
+
+
+def _tool_matches_filters(tool, filters):
+    annotations = tool.get("annotations") or {}
+    category = _tool_category(tool)
+    if filters["category"] and category != filters["category"]:
+        return False
+    if filters["permission"]:
+        permissions = [str(item).lower() for item in annotations.get("permissions", []) or []]
+        if filters["permission"] not in permissions:
+            return False
+    if filters["risk_level"] and str(annotations.get("riskLevel") or "").lower() != filters["risk_level"]:
+        return False
+    if filters["mutates_scene"] is not None and bool(annotations.get("mutatesScene", False)) is not filters["mutates_scene"]:
+        return False
+    if filters["requires_approval"] is not None and bool(annotations.get("requiresApproval", False)) is not filters["requires_approval"]:
+        return False
+    if (
+        filters["requires_live_preview"] is not None
+        and bool(annotations.get("requiresLivePreview", False)) is not filters["requires_live_preview"]
+    ):
+        return False
+    return True
+
+
+def _score_tool_match(tool, query):
+    normalized_query = str(query or "").strip().lower()
+    if not normalized_query:
+        return 0
+    terms = [term for term in normalized_query.split() if term]
+    text = _tool_search_text(tool)
+    matched_terms = [term for term in terms if term in text]
+    if not matched_terms:
+        return None
+    score = sum(text.count(term) for term in terms)
+    score += len(matched_terms) * 5
+    if len(matched_terms) == len(terms):
+        score += 15
+    name = str(tool.get("name") or "").lower()
+    title = str(tool.get("title") or "").lower()
+    if name == normalized_query:
+        score += 1000
+    elif name.startswith(normalized_query):
+        score += 200
+    if title == normalized_query:
+        score += 500
+    elif title.startswith(normalized_query):
+        score += 100
+    return score
+
+
+def _catalog_facets(tools):
+    categories = {}
+    risk_levels = {}
+    permissions = {}
+    for tool in tools:
+        annotations = tool.get("annotations") or {}
+        category = _tool_category(tool)
+        categories[category] = categories.get(category, 0) + 1
+        risk = str(annotations.get("riskLevel") or "unknown")
+        risk_levels[risk] = risk_levels.get(risk, 0) + 1
+        for permission in annotations.get("permissions", []) or []:
+            key = str(permission)
+            permissions[key] = permissions.get(key, 0) + 1
+    return {
+        "categories": [
+            {
+                "name": name,
+                "label": TOOL_CATEGORY_LABELS.get(name, TOOL_CATEGORY_LABELS["other"]),
+                "count": count,
+            }
+            for name, count in sorted(categories.items())
+        ],
+        "risk_levels": [{"name": name, "count": count} for name, count in sorted(risk_levels.items())],
+        "permissions": [{"name": name, "count": count} for name, count in sorted(permissions.items())],
     }
 
 
@@ -621,7 +826,8 @@ class BlenderMCPServer:
 
     def _load_tools(self):
         if self._full_tool_list:
-            tools = [self._bridge_status_tool()]
+            compact = {tool["name"]: tool for tool in _compact_tool_definitions()}
+            tools = [self._bridge_status_tool(), _normalize_tool_definition(compact[CATALOG_TOOL_NAME])]
             tools.extend(self._load_full_tools())
         else:
             tools = [self._bridge_status_tool()]
@@ -630,7 +836,13 @@ class BlenderMCPServer:
                 tool = self._full_tool_definition(name)
                 if tool:
                     compact[name] = tool
-            for name in ("search_blender_tools", "get_blender_tool_schema", "invoke_blender_tool", *COMPACT_DIRECT_TOOL_NAMES):
+            for name in (
+                CATALOG_TOOL_NAME,
+                "search_blender_tools",
+                "get_blender_tool_schema",
+                "invoke_blender_tool",
+                *COMPACT_DIRECT_TOOL_NAMES,
+            ):
                 if name in compact:
                     tools.append(_normalize_tool_definition(compact[name]))
         self._tool_cache = tools
@@ -691,6 +903,10 @@ class BlenderMCPServer:
             result = self._search_blender_tools(arguments)
             _audit_tool_call(name, arguments, result, tool=tool)
             return result
+        if name == CATALOG_TOOL_NAME:
+            result = self._blender_tool_catalog(arguments)
+            _audit_tool_call(name, arguments, result, tool=tool)
+            return result
         if name == "get_blender_tool_schema":
             result = self._get_blender_tool_schema(arguments)
             _audit_tool_call(name, arguments, result, tool=tool)
@@ -712,33 +928,65 @@ class BlenderMCPServer:
         _audit_tool_call(name, arguments, tool_result, tool=tool)
         return tool_result
 
-    def _search_blender_tools(self, arguments):
-        query = str(arguments.get("query") or "").strip().lower()
-        terms = [term for term in query.split() if term]
+    def _search_catalog(self, arguments):
         limit = _bounded_limit(arguments.get("limit"), default=12, maximum=50)
-        has_mutates_filter = isinstance(arguments.get("mutates_scene"), bool)
-        has_approval_filter = isinstance(arguments.get("requires_approval"), bool)
-        risk_filter = str(arguments.get("risk_level") or "").strip().lower()
+        include_schemas = bool(arguments.get("include_schemas", False))
+        filters = _catalog_filters(arguments)
         matches = []
         for tool in self._load_full_tools():
-            annotations = tool.get("annotations") or {}
-            if has_mutates_filter and bool(annotations.get("mutatesScene", False)) is not arguments["mutates_scene"]:
+            if not _tool_matches_filters(tool, filters):
                 continue
-            if has_approval_filter and bool(annotations.get("requiresApproval", False)) is not arguments["requires_approval"]:
+            score = _score_tool_match(tool, filters["query"])
+            if score is None:
                 continue
-            if risk_filter and str(annotations.get("riskLevel") or "").lower() != risk_filter:
-                continue
-            text = _tool_search_text(tool)
-            if terms and not any(term in text for term in terms):
-                continue
-            score = sum(text.count(term) for term in terms) if terms else 0
-            if query and str(tool.get("name") or "").lower() == query:
-                score += 100
             matches.append((score, str(tool.get("name") or ""), tool))
         matches.sort(key=lambda item: (-item[0], item[1]))
-        tools = [_tool_summary(tool) for _, _, tool in matches[:limit]]
-        structured = {"ok": True, "count": len(tools), "tools": tools}
+        tools = [_tool_summary(tool, include_schema=include_schemas) for _, _, tool in matches[:limit]]
+        structured = {
+            "ok": True,
+            "query": filters["query"],
+            "count": len(tools),
+            "total": len(matches),
+            "tools": tools,
+            "filters": {
+                key: value
+                for key, value in filters.items()
+                if value not in ("", None)
+            },
+        }
         return _tool_result(json.dumps(structured, indent=2, sort_keys=True), structured)
+
+    def _search_blender_tools(self, arguments):
+        compatible_arguments = dict(arguments)
+        compatible_arguments.setdefault("include_schemas", True)
+        return self._search_catalog(compatible_arguments)
+
+    def _catalog_categories(self, arguments):
+        filters = _catalog_filters(arguments)
+        tools = [
+            tool
+            for tool in self._load_full_tools()
+            if _tool_matches_filters(tool, filters) and _score_tool_match(tool, filters["query"]) is not None
+        ]
+        structured = {"ok": True, "total": len(tools), "facets": _catalog_facets(tools)}
+        return _tool_result(json.dumps(structured, indent=2, sort_keys=True), structured)
+
+    def _blender_tool_catalog(self, arguments):
+        action = str(arguments.get("action") or "search").strip().lower()
+        if action == "search":
+            return self._search_catalog(arguments)
+        if action == "categories":
+            return self._catalog_categories(arguments)
+        if action == "schema":
+            return self._get_blender_tool_schema({"name": arguments.get("name")})
+        if action == "invoke":
+            return self._invoke_blender_tool(
+                {
+                    "name": arguments.get("name"),
+                    "arguments": arguments.get("arguments") or {},
+                }
+            )
+        return _tool_error(f"Unknown catalog action: {action}", code="invalid_arguments")
 
     def _get_blender_tool_schema(self, arguments):
         name = str(arguments.get("name") or "").strip()
@@ -750,7 +998,7 @@ class BlenderMCPServer:
 
     def _invoke_blender_tool(self, arguments):
         target_name = str(arguments.get("name") or "").strip()
-        if target_name in {"blender_bridge_status", "search_blender_tools", "get_blender_tool_schema", "invoke_blender_tool"}:
+        if target_name in WRAPPER_TOOL_NAMES:
             return _tool_error(f"Cannot invoke MCP wrapper tool through invoke_blender_tool: {target_name}", code="invalid_target")
         target_args = arguments.get("arguments") or {}
         if not isinstance(target_args, dict):

@@ -9,6 +9,7 @@
 - Added pure-Python smoke tests and GitHub Actions coverage for the MCP/audit surface.
 - Added a reproducible extension zip builder with SHA-256 sidecar output.
 - Added Phase 2A safety hardening: transaction rollback manifests, rollback warnings, shader material node-link restoration, and pure static script risk classification.
+- Added a compact `blender_tool_catalog` MCP entry point for search, facets, schema lookup, and validated invocation across the full Blender helper catalog.
 
 ## 0.1.0
 
