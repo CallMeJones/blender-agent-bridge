@@ -153,6 +153,21 @@ TOOL_CONTRACTS = {
         "mutates_scene": True,
         "requires_live_preview": True,
     },
+    "animate_object_bounce": {
+        "description": "Create repeated location keyframes that bounce one object along an axis",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
+    "animate_material_property": {
+        "description": "Keyframe a Principled material socket such as base color, emission strength, roughness, metallic, or alpha",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
+    "create_follow_path_animation": {
+        "description": "Animate an object along an existing curve or a new curve built from path points",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
     "create_text_object": {
         "description": "Create a text object with transform and optional material",
         "mutates_scene": True,
@@ -192,6 +207,30 @@ TOOL_CONTRACTS = {
         "description": "Set scene world background color",
         "mutates_scene": True,
         "requires_live_preview": True,
+    },
+    "duplicate_selected_objects": {
+        "description": "Duplicate selected objects with optional unique data, offset, animation copy, and selecting the duplicates",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+        "requires_selection": True,
+    },
+    "parent_selected_to_empty": {
+        "description": "Create an empty and parent selected objects to it while preserving world transforms",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+        "requires_selection": True,
+    },
+    "align_selected_objects": {
+        "description": "Align selected object locations on one axis using active, min, max, center, or explicit value",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+        "requires_selection": True,
+    },
+    "distribute_selected_objects": {
+        "description": "Evenly distribute selected object locations along one axis",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+        "requires_selection": True,
     },
     "shade_smooth_selected": {
         "description": "Shade selected mesh polygons smooth and optionally add weighted normals",

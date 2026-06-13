@@ -7,12 +7,17 @@ import time
 import uuid
 
 import bpy
+from mathutils import Matrix
 
 _current_transaction = None
 
 
 def _serialize_vector(value):
     return tuple(float(component) for component in value)
+
+
+def _serialize_matrix(value):
+    return tuple(tuple(float(component) for component in row) for row in value)
 
 
 def _set_vector(target, value):
@@ -41,6 +46,8 @@ def _snapshot_kind(before):
         return "object_material_slots"
     if before.get("object_name") and "collections" in before:
         return "object_collections"
+    if before.get("kind") == "object_parent":
+        return "object_parent"
     if before.get("material_name") and "diffuse_color" in before:
         return "material_diffuse"
     if before.get("scene_name") and "camera_name" in before:
@@ -344,6 +351,20 @@ def _record_object_collections(obj):
         transaction["before_state"][key] = {
             "object_name": obj.name,
             "collections": [collection.name for collection in obj.users_collection],
+        }
+        transaction["changed_data_blocks"].append(obj.name)
+
+
+def _record_object_parent(obj):
+    transaction = begin()
+    key = f"object:{obj.name}:parent"
+    if key not in transaction["before_state"]:
+        transaction["before_state"][key] = {
+            "kind": "object_parent",
+            "object_name": obj.name,
+            "parent_name": obj.parent.name if obj.parent else None,
+            "matrix_parent_inverse": _serialize_matrix(obj.matrix_parent_inverse),
+            "matrix_world": _serialize_matrix(obj.matrix_world),
         }
         transaction["changed_data_blocks"].append(obj.name)
 
@@ -1159,6 +1180,14 @@ def revert(context):
             for collection in list(obj.users_collection):
                 if collection.name not in original_names and len(obj.users_collection) > 1:
                     collection.objects.unlink(obj)
+        elif before.get("kind") == "object_parent":
+            obj = bpy.data.objects.get(before["object_name"])
+            if obj is None:
+                rollback_warnings.append(f"Missing object for parent restore: {before['object_name']}")
+                continue
+            obj.parent = bpy.data.objects.get(before["parent_name"]) if before["parent_name"] else None
+            obj.matrix_parent_inverse = Matrix(before["matrix_parent_inverse"])
+            obj.matrix_world = Matrix(before["matrix_world"])
         elif before.get("kind") == "object_modifier":
             obj = bpy.data.objects.get(before["object_name"])
             if obj:
@@ -1244,6 +1273,15 @@ def revert(context):
                                 socket.default_value = value
             else:
                 rollback_warnings.append(f"Missing material for shader restore: {before['material_name']}")
+        elif before.get("kind") == "material_node_tree_animation":
+            material = bpy.data.materials.get(before["material_name"])
+            node_tree = material.node_tree if material and material.use_nodes else None
+            if node_tree:
+                if before["had_animation_data"]:
+                    animation_data = node_tree.animation_data_create()
+                    animation_data.action = bpy.data.actions.get(before["action_name"]) if before["action_name"] else None
+                elif node_tree.animation_data:
+                    node_tree.animation_data_clear()
         elif before.get("kind") == "shape_keys":
             obj = bpy.data.objects.get(before["object_name"])
             if obj is None or obj.type != "MESH" or obj.data is None:

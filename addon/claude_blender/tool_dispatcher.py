@@ -586,6 +586,54 @@ def animate_shape_key(context, args):
     )
 
 
+def animate_object_bounce(context, args):
+    active = context.active_object.name if context.active_object else ""
+    return advanced_helpers.animate_object_bounce(
+        context,
+        object_name=str(args.get("object_name") or active),
+        frame_start=int(args.get("frame_start", context.scene.frame_start)),
+        frame_end=int(args.get("frame_end", context.scene.frame_end)),
+        axis=str(args.get("axis") or "Z"),
+        distance=float(args.get("distance", 2.0)),
+        cycles=_bounded_int(args.get("cycles"), 1, minimum=1, maximum=24),
+        interpolation=str(args.get("interpolation") or "BEZIER"),
+        label=args.get("label", "Animate object bounce"),
+    )
+
+
+def animate_material_property(context, args):
+    active = context.active_object.name if context.active_object else ""
+    return advanced_helpers.animate_material_property(
+        context,
+        material_name=str(args.get("material_name") or ""),
+        object_name=str(args.get("object_name") or active),
+        property_name=str(args.get("property_name") or "base_color"),
+        frame_start=int(args.get("frame_start", context.scene.frame_start)),
+        frame_end=int(args.get("frame_end", context.scene.frame_end)),
+        value_start=args.get("value_start"),
+        value_end=args.get("value_end"),
+        create_if_missing=bool(args.get("create_if_missing", True)),
+        interpolation=str(args.get("interpolation") or "LINEAR"),
+        label=args.get("label", "Animate material property"),
+    )
+
+
+def create_follow_path_animation(context, args):
+    active = context.active_object.name if context.active_object else ""
+    return advanced_helpers.create_follow_path_animation(
+        context,
+        object_name=str(args.get("object_name") or active),
+        path_name=str(args.get("path_name") or ""),
+        path_points=args.get("path_points") or [],
+        frame_start=int(args.get("frame_start", context.scene.frame_start)),
+        frame_end=int(args.get("frame_end", context.scene.frame_end)),
+        constraint_name=str(args.get("constraint_name") or "Claude Follow Path"),
+        follow_curve=bool(args.get("follow_curve", True)),
+        interpolation=str(args.get("interpolation") or "LINEAR"),
+        label=args.get("label", "Create follow path animation"),
+    )
+
+
 def create_text_object(context, args):
     return advanced_helpers.create_text_object(
         context,
@@ -683,6 +731,49 @@ def set_world_background(context, args):
         context,
         color=_float_list(args.get("color"), 3, (0.05, 0.05, 0.07)),
         label=args.get("label", "Set world background"),
+    )
+
+
+def duplicate_selected_objects(context, args):
+    return advanced_helpers.duplicate_selected_objects(
+        context,
+        name_prefix=str(args.get("name_prefix") or "Claude Copy "),
+        offset=_float_list(args.get("offset"), 3, (0.0, 0.0, 0.0)),
+        linked_data=bool(args.get("linked_data", False)),
+        copy_animation=bool(args.get("copy_animation", False)),
+        select_new=bool(args.get("select_new", True)),
+        label=args.get("label", "Duplicate selected objects"),
+    )
+
+
+def parent_selected_to_empty(context, args):
+    return advanced_helpers.parent_selected_to_empty(
+        context,
+        name=str(args.get("name") or "Claude Parent"),
+        location=_optional_float_list(args.get("location"), 3, (0.0, 0.0, 0.0)),
+        empty_display_type=str(args.get("empty_display_type") or "PLAIN_AXES"),
+        keep_transform=bool(args.get("keep_transform", True)),
+        label=args.get("label", "Parent selected to empty"),
+    )
+
+
+def align_selected_objects(context, args):
+    return advanced_helpers.align_selected_objects(
+        context,
+        axis=str(args.get("axis") or "Z"),
+        mode=str(args.get("mode") or "ACTIVE"),
+        value=args.get("value"),
+        label=args.get("label", "Align selected objects"),
+    )
+
+
+def distribute_selected_objects(context, args):
+    return advanced_helpers.distribute_selected_objects(
+        context,
+        axis=str(args.get("axis") or "X"),
+        start=args.get("start"),
+        end=args.get("end"),
+        label=args.get("label", "Distribute selected objects"),
     )
 
 
@@ -902,6 +993,9 @@ TOOL_FUNCTIONS = {
     "add_geometry_nodes_modifier": add_geometry_nodes_modifier,
     "create_shape_key": create_shape_key,
     "animate_shape_key": animate_shape_key,
+    "animate_object_bounce": animate_object_bounce,
+    "animate_material_property": animate_material_property,
+    "create_follow_path_animation": create_follow_path_animation,
     "create_text_object": create_text_object,
     "create_curve_path": create_curve_path,
     "add_particle_system_to_selected": add_particle_system_to_selected,
@@ -910,6 +1004,10 @@ TOOL_FUNCTIONS = {
     "set_render_settings": set_render_settings,
     "set_camera_settings": set_camera_settings,
     "set_world_background": set_world_background,
+    "duplicate_selected_objects": duplicate_selected_objects,
+    "parent_selected_to_empty": parent_selected_to_empty,
+    "align_selected_objects": align_selected_objects,
+    "distribute_selected_objects": distribute_selected_objects,
     "shade_smooth_selected": shade_smooth_selected,
     "add_bevel_and_subsurf": add_bevel_and_subsurf,
     "create_wheel_assembly": create_wheel_assembly,

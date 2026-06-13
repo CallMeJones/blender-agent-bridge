@@ -55,10 +55,10 @@ SYSTEM_PROMPT = (
     "When target objects are unclear, use list_scene_objects and select_objects before applying selected-object tools. "
     "When the user asks to change the scene, use safe helper tools first so Blender changes immediately. "
     "Use direct Blender data concepts: objects, collections, materials, cameras, lights, actions, keyframes. "
-    "For scene building, prefer create_primitive, assign_material_to_selected, assign_emission_material_to_selected, create_shader_material, create_text_object, create_curve_path, create_collection, link_selected_to_collection, add_light, add_camera, add_modifier_to_selected, add_geometry_nodes_modifier, add_track_to_constraint, add_copy_transform_constraint, create_basic_armature, add_particle_system_to_selected, set_render_settings, set_camera_settings, and set_world_background. "
+    "For scene building and layout, prefer create_primitive, duplicate_selected_objects, parent_selected_to_empty, align_selected_objects, distribute_selected_objects, assign_material_to_selected, assign_emission_material_to_selected, create_shader_material, create_text_object, create_curve_path, create_collection, link_selected_to_collection, add_light, add_camera, add_modifier_to_selected, add_geometry_nodes_modifier, add_track_to_constraint, add_copy_transform_constraint, create_basic_armature, add_particle_system_to_selected, set_render_settings, set_camera_settings, and set_world_background. "
     "For model refinement, prefer shade_smooth_selected, add_bevel_and_subsurf, create_wheel_assembly, add_panel_seams, add_window_materials, and apply_vehicle_refinement_template when they fit the task. "
     "For shape-key animation, prefer create_shape_key and animate_shape_key before drafting Python. "
-    "For animation, prefer set_scene_frame_range, animate_selected_transform, and create_camera_orbit. "
+    "For animation, prefer set_scene_frame_range, animate_selected_transform, animate_object_bounce, animate_material_property, create_follow_path_animation, and create_camera_orbit. "
     "For complex scene builds that need many objects or more than about eight helper calls, stage one cohesive Blender Python script with draft_script instead of making a long chain of helper calls. "
     "When helper tools cannot express the requested edit, use draft_script to stage Blender Python for user approval. "
     "When calling draft_script, put the complete Python source in the code field. Do not put script code in final chat text for the user to paste manually. "
@@ -584,6 +584,93 @@ def blender_tool_definitions():
             },
         },
         {
+            "name": "animate_object_bounce",
+            "description": "Create repeated location keyframes that bounce one object along an axis. Applies immediately with preview revert support.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "object_name": {"type": "string"},
+                    "frame_start": {"type": "integer"},
+                    "frame_end": {"type": "integer"},
+                    "axis": {"type": "string", "enum": ["X", "Y", "Z"]},
+                    "distance": {"type": "number"},
+                    "cycles": {"type": "integer", "minimum": 1, "maximum": 24},
+                    "interpolation": {"type": "string", "enum": ["CONSTANT", "LINEAR", "BEZIER"]},
+                    "label": {"type": "string"},
+                },
+                "required": ["frame_start", "frame_end"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "animate_material_property",
+            "description": "Keyframe a Principled material socket such as base color, emission strength, roughness, metallic, or alpha. Applies immediately with preview revert support.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "material_name": {"type": "string"},
+                    "object_name": {"type": "string"},
+                    "property_name": {
+                        "type": "string",
+                        "enum": [
+                            "base_color",
+                            "diffuse_color",
+                            "color",
+                            "emission_color",
+                            "emission",
+                            "emission_strength",
+                            "glow",
+                            "roughness",
+                            "metallic",
+                            "alpha",
+                        ],
+                    },
+                    "frame_start": {"type": "integer"},
+                    "frame_end": {"type": "integer"},
+                    "value_start": {
+                        "oneOf": [
+                            {"type": "number"},
+                            {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 4},
+                        ]
+                    },
+                    "value_end": {
+                        "oneOf": [
+                            {"type": "number"},
+                            {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 4},
+                        ]
+                    },
+                    "create_if_missing": {"type": "boolean"},
+                    "interpolation": {"type": "string", "enum": ["CONSTANT", "LINEAR", "BEZIER"]},
+                    "label": {"type": "string"},
+                },
+                "required": ["property_name", "frame_start", "frame_end"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "create_follow_path_animation",
+            "description": "Animate an object along an existing curve or a new curve built from path points. Applies immediately with preview revert support.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "object_name": {"type": "string"},
+                    "path_name": {"type": "string"},
+                    "path_points": {
+                        "type": "array",
+                        "items": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                    },
+                    "frame_start": {"type": "integer"},
+                    "frame_end": {"type": "integer"},
+                    "constraint_name": {"type": "string"},
+                    "follow_curve": {"type": "boolean"},
+                    "interpolation": {"type": "string", "enum": ["CONSTANT", "LINEAR", "BEZIER"]},
+                    "label": {"type": "string"},
+                },
+                "required": ["frame_start", "frame_end"],
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "create_text_object",
             "description": "Create a text object with transform, alignment, size, and optional simple material. Applies immediately with preview revert support.",
             "input_schema": {
@@ -720,6 +807,65 @@ def blender_tool_definitions():
                     "label": {"type": "string"},
                 },
                 "required": ["color"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "duplicate_selected_objects",
+            "description": "Duplicate selected objects with optional unique data, offset, animation copy, and selecting the new duplicates. Applies immediately with preview revert support.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "name_prefix": {"type": "string"},
+                    "offset": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                    "linked_data": {"type": "boolean"},
+                    "copy_animation": {"type": "boolean"},
+                    "select_new": {"type": "boolean"},
+                    "label": {"type": "string"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "parent_selected_to_empty",
+            "description": "Create an empty at the selected objects' center or a provided location, then parent selected objects to it while preserving world transforms. Applies immediately with preview revert support.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "location": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                    "empty_display_type": {"type": "string", "enum": ["PLAIN_AXES", "ARROWS", "CUBE", "SPHERE"]},
+                    "keep_transform": {"type": "boolean"},
+                    "label": {"type": "string"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "align_selected_objects",
+            "description": "Align selected object locations on one axis using the active object, min, max, center, or an explicit value. Applies immediately with preview revert support.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "axis": {"type": "string", "enum": ["X", "Y", "Z"]},
+                    "mode": {"type": "string", "enum": ["ACTIVE", "MIN", "MAX", "CENTER", "VALUE"]},
+                    "value": {"type": "number"},
+                    "label": {"type": "string"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "distribute_selected_objects",
+            "description": "Evenly distribute selected object locations along one axis between existing or provided start/end positions. Applies immediately with preview revert support.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "axis": {"type": "string", "enum": ["X", "Y", "Z"]},
+                    "start": {"type": "number"},
+                    "end": {"type": "number"},
+                    "label": {"type": "string"},
+                },
                 "additionalProperties": False,
             },
         },
@@ -1032,6 +1178,10 @@ _TOOL_GROUPS = {
         "create_collection",
         "link_selected_to_collection",
         "add_modifier_to_selected",
+        "duplicate_selected_objects",
+        "parent_selected_to_empty",
+        "align_selected_objects",
+        "distribute_selected_objects",
     },
     "materials": {
         "get_material_node_details",
@@ -1039,6 +1189,7 @@ _TOOL_GROUPS = {
         "assign_material_to_selected",
         "assign_emission_material_to_selected",
         "create_shader_material",
+        "animate_material_property",
         "add_window_materials",
     },
     "animation": {
@@ -1046,6 +1197,9 @@ _TOOL_GROUPS = {
         "set_current_frame",
         "set_scene_frame_range",
         "animate_selected_transform",
+        "animate_object_bounce",
+        "animate_material_property",
+        "create_follow_path_animation",
         "create_camera_orbit",
         "animate_shape_key",
     },
@@ -1074,11 +1228,18 @@ _TOOL_GROUPS = {
         "add_geometry_nodes_modifier",
         "create_shape_key",
         "animate_shape_key",
+        "animate_object_bounce",
+        "animate_material_property",
+        "create_follow_path_animation",
         "create_text_object",
         "create_curve_path",
         "add_particle_system_to_selected",
         "create_basic_armature",
         "add_copy_transform_constraint",
+        "duplicate_selected_objects",
+        "parent_selected_to_empty",
+        "align_selected_objects",
+        "distribute_selected_objects",
     },
     "refinement": {
         "shade_smooth_selected",
@@ -1099,7 +1260,7 @@ _TOOL_GROUPS = {
         "set_camera_settings",
     },
     "rigging": {"get_rigging_details", "create_basic_armature", "add_track_to_constraint", "add_copy_transform_constraint"},
-    "curves_text": {"get_curve_text_details", "create_text_object", "create_curve_path"},
+    "curves_text": {"get_curve_text_details", "create_text_object", "create_curve_path", "create_follow_path_animation"},
     "particles": {"get_simulation_details", "add_particle_system_to_selected"},
     "geometry_nodes": {"get_geometry_nodes_details", "add_geometry_nodes_modifier"},
     "preview_control": {"commit_preview", "revert_preview"},
@@ -1107,9 +1268,9 @@ _TOOL_GROUPS = {
 
 _GROUP_KEYWORDS = {
     "selection": {"select", "selected", "active", "frame", "playhead", "inspect"},
-    "basic_edit": {"make", "create", "add", "move", "scale", "rotate", "transform", "object", "primitive", "collection"},
+    "basic_edit": {"make", "create", "add", "move", "scale", "rotate", "transform", "object", "primitive", "collection", "duplicate", "copy", "parent", "align", "distribute", "layout", "arrange"},
     "materials": {"material", "shader", "color", "colour", "red", "blue", "green", "metal", "metallic", "chrome", "glass", "emission", "glow", "window"},
-    "animation": {"animate", "animation", "keyframe", "timeline", "frame", "orbit", "bounce", "driver", "motion"},
+    "animation": {"animate", "animation", "keyframe", "timeline", "frame", "orbit", "bounce", "driver", "motion", "follow path", "path"},
     "camera_render": {"camera", "render", "light", "lighting", "world", "background", "dof", "depth of field", "lens", "compositor", "resolution"},
     "deep_inspect": {"inspect", "analyze", "analyse", "summarize", "summary", "details", "world model", "what", "list"},
     "advanced_create": {"geometry nodes", "shape key", "text", "curve", "particle", "armature", "constraint", "rig", "driver"},
@@ -1223,6 +1384,13 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "assign_material_to_selected",
     "assign_emission_material_to_selected",
     "create_shader_material",
+    "animate_object_bounce",
+    "animate_material_property",
+    "create_follow_path_animation",
+    "duplicate_selected_objects",
+    "parent_selected_to_empty",
+    "align_selected_objects",
+    "distribute_selected_objects",
     "shade_smooth_selected",
     "add_bevel_and_subsurf",
     "apply_vehicle_refinement_template",

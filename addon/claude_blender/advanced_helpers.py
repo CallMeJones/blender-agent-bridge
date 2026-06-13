@@ -187,6 +187,30 @@ def _set_socket_value(socket, value):
     return True
 
 
+def _normalize_frame_range(frame_start, frame_end, label):
+    frame_start = int(frame_start)
+    frame_end = int(frame_end)
+    if frame_start == frame_end:
+        return None, None, {"ok": False, "message": f"{label} needs two different frames"}
+    if frame_start > frame_end:
+        frame_start, frame_end = frame_end, frame_start
+    return frame_start, frame_end, None
+
+
+def _set_action_interpolation(action, interpolation="LINEAR"):
+    interpolation = str(interpolation or "LINEAR").upper()
+    if interpolation not in {"CONSTANT", "LINEAR", "BEZIER"}:
+        interpolation = "LINEAR"
+    for fcurve in live_preview._iter_action_fcurves(action):
+        for point in fcurve.keyframe_points:
+            point.interpolation = interpolation
+
+
+def _axis_index(axis):
+    axis = str(axis or "Z").upper()
+    return {"X": 0, "Y": 1, "Z": 2}.get(axis, 2), axis if axis in {"X", "Y", "Z"} else "Z"
+
+
 def _find_node(material, node_type):
     if not material or not material.use_nodes or not material.node_tree:
         return None
@@ -208,6 +232,33 @@ def _ensure_principled_material(material):
     if principled.outputs and output.inputs.get("Surface") and not output.inputs["Surface"].is_linked:
         links.new(principled.outputs[0], output.inputs["Surface"])
     return principled
+
+
+def _record_material_node_tree_animation(material):
+    node_tree = material.node_tree if material and material.use_nodes else None
+    if node_tree is None:
+        return
+    transaction = live_preview.begin()
+    key = f"material:{material.name}:node_tree_animation"
+    if key in transaction["before_state"]:
+        return
+    animation_data = node_tree.animation_data
+    action = animation_data.action if animation_data else None
+    transaction["before_state"][key] = {
+        "kind": "material_node_tree_animation",
+        "material_name": material.name,
+        "had_animation_data": animation_data is not None,
+        "action_name": action.name if action else None,
+    }
+    transaction["changed_data_blocks"].append(material.name)
+
+
+def _assign_material_node_tree_preview_action(material):
+    _record_material_node_tree_animation(material)
+    action = bpy.data.actions.new(name=f"{material.name} Claude Material Preview Action")
+    material.node_tree.animation_data_create().action = action
+    live_preview._record_created_id("action", action.name)
+    return action
 
 
 def _material_for_color(name, color):
@@ -546,6 +597,269 @@ def animate_shape_key(
     }
 
 
+def animate_object_bounce(
+    context,
+    *,
+    object_name="",
+    frame_start,
+    frame_end,
+    axis="Z",
+    distance=2.0,
+    cycles=1,
+    interpolation="BEZIER",
+    label="Animate object bounce",
+):
+    obj = bpy.data.objects.get(object_name) if object_name else context.active_object
+    if obj is None:
+        return {"ok": False, "message": "Object not found for bounce animation"}
+    frame_start, frame_end, error = _normalize_frame_range(frame_start, frame_end, "Bounce animation")
+    if error:
+        return error
+    cycles = max(1, min(24, int(cycles)))
+    axis_index, axis = _axis_index(axis)
+    distance = float(distance)
+
+    transaction = live_preview.begin(label, context)
+    scene = context.scene
+    live_preview._record_scene_timeline(scene)
+    scene.frame_start = min(scene.frame_start, frame_start)
+    scene.frame_end = max(scene.frame_end, frame_end)
+
+    live_preview._record_object_transform(obj)
+    action = live_preview._assign_preview_action(obj)
+    base_location = [float(value) for value in obj.location]
+    span = frame_end - frame_start
+    keyed_frames = []
+    for step in range(cycles * 2 + 1):
+        frame = round(frame_start + (span * step / (cycles * 2)))
+        location = list(base_location)
+        location[axis_index] += distance if step % 2 else 0.0
+        obj.location = location
+        obj.keyframe_insert(data_path="location", frame=frame)
+        keyed_frames.append(int(frame))
+    _set_action_interpolation(action, interpolation)
+    scene.frame_set(frame_start)
+    transaction["applied_steps"].append(
+        {
+            "type": "animate_object_bounce",
+            "label": label,
+            "object": obj.name,
+            "axis": axis,
+            "distance": distance,
+            "cycles": cycles,
+            "frames": keyed_frames,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Animated bounce on {obj.name} over {cycles} cycle(s)",
+        "object": obj.name,
+        "frame_start": frame_start,
+        "frame_end": frame_end,
+        "frames": keyed_frames,
+        "action": action.name,
+        "transaction_id": transaction["id"],
+    }
+
+
+def _resolve_animation_material(context, material_name="", object_name="", create_if_missing=True):
+    material = bpy.data.materials.get(str(material_name or "")) if material_name else None
+    obj = bpy.data.objects.get(str(object_name or "")) if object_name else context.active_object
+    has_material_slots = obj is not None and getattr(obj, "data", None) is not None and hasattr(obj.data, "materials")
+    if material is None and has_material_slots:
+        material = obj.active_material or (obj.data.materials[0] if len(obj.data.materials) else None)
+    if material is None and create_if_missing:
+        material = bpy.data.materials.new(str(material_name or "Claude Animated Material"))
+        live_preview._record_created_id("material", material.name)
+        if has_material_slots:
+            live_preview._record_object_materials(obj)
+            obj.data.materials.append(material)
+    return material, obj
+
+
+def _socket_animation_value(socket, value, fallback):
+    current = socket.default_value
+    if hasattr(current, "__len__") and not isinstance(current, str):
+        fallback_values = list(fallback) if fallback is not None else list(current)
+        if isinstance(value, (int, float)):
+            values = [float(value)] * len(current)
+        else:
+            values = list(value if value is not None else fallback_values)
+        if len(values) == 3 and len(current) >= 4:
+            values.append(fallback_values[3] if len(fallback_values) > 3 else 1.0)
+        while len(values) < len(current):
+            index = len(values)
+            values.append(fallback_values[index] if index < len(fallback_values) else 0.0)
+        return tuple(float(component) for component in values[: len(current)])
+    if isinstance(value, (list, tuple)):
+        return float(value[0]) if value else float(fallback or 0.0)
+    return float(value if value is not None else fallback)
+
+
+def animate_material_property(
+    context,
+    *,
+    material_name="",
+    object_name="",
+    property_name="base_color",
+    frame_start,
+    frame_end,
+    value_start=None,
+    value_end=None,
+    create_if_missing=True,
+    interpolation="LINEAR",
+    label="Animate material property",
+):
+    frame_start, frame_end, error = _normalize_frame_range(frame_start, frame_end, "Material animation")
+    if error:
+        return error
+    property_key = str(property_name or "base_color").strip().lower().replace(" ", "_")
+    socket_names = {
+        "base_color": "Base Color",
+        "diffuse_color": "Base Color",
+        "color": "Base Color",
+        "emission_color": "Emission Color",
+        "emission": "Emission Color",
+        "emission_strength": "Emission Strength",
+        "glow": "Emission Strength",
+        "roughness": "Roughness",
+        "metallic": "Metallic",
+        "alpha": "Alpha",
+    }
+    socket_name = socket_names.get(property_key)
+    if socket_name is None:
+        return {"ok": False, "message": f"Unsupported material animation property: {property_name}"}
+
+    transaction = live_preview.begin(label, context)
+    material, obj = _resolve_animation_material(context, material_name, object_name, create_if_missing)
+    if material is None:
+        return {"ok": False, "message": "Material not found for animation"}
+    live_preview._record_scene_timeline(context.scene)
+    context.scene.frame_start = min(context.scene.frame_start, frame_start)
+    context.scene.frame_end = max(context.scene.frame_end, frame_end)
+    _record_shader_material(material)
+    principled = _ensure_principled_material(material)
+    socket = principled.inputs.get(socket_name)
+    if socket is None or not hasattr(socket, "default_value"):
+        return {"ok": False, "message": f"Material socket not found: {socket_name}"}
+
+    current_value = _socket_value(socket.default_value)
+    start = _socket_animation_value(socket, value_start, current_value)
+    end = _socket_animation_value(socket, value_end, start)
+    action = _assign_material_node_tree_preview_action(material)
+    _set_socket_value(socket, start)
+    socket.keyframe_insert(data_path="default_value", frame=frame_start)
+    _set_socket_value(socket, end)
+    socket.keyframe_insert(data_path="default_value", frame=frame_end)
+    if socket_name == "Base Color":
+        material.diffuse_color = end
+    elif socket_name == "Alpha":
+        rgba = list(material.diffuse_color)
+        while len(rgba) < 4:
+            rgba.append(1.0)
+        rgba[3] = float(end)
+        material.diffuse_color = tuple(rgba)
+        if hasattr(material, "blend_method"):
+            material.blend_method = "BLEND"
+    _set_action_interpolation(action, interpolation)
+    context.scene.frame_set(frame_start)
+    transaction["applied_steps"].append(
+        {
+            "type": "animate_material_property",
+            "label": label,
+            "material": material.name,
+            "object": obj.name if obj else None,
+            "property": property_key,
+            "frame_start": frame_start,
+            "frame_end": frame_end,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Animated {property_key} on material {material.name}",
+        "material": material.name,
+        "property": property_key,
+        "socket": socket_name,
+        "action": action.name,
+        "transaction_id": transaction["id"],
+    }
+
+
+def create_follow_path_animation(
+    context,
+    *,
+    object_name="",
+    path_name="",
+    path_points=None,
+    frame_start,
+    frame_end,
+    constraint_name="Claude Follow Path",
+    follow_curve=True,
+    interpolation="LINEAR",
+    label="Create follow path animation",
+):
+    obj = bpy.data.objects.get(object_name) if object_name else context.active_object
+    if obj is None:
+        return {"ok": False, "message": "Object not found for follow-path animation"}
+    frame_start, frame_end, error = _normalize_frame_range(frame_start, frame_end, "Follow-path animation")
+    if error:
+        return error
+
+    transaction = live_preview.begin(label, context)
+    path_obj = bpy.data.objects.get(str(path_name or "")) if path_name else None
+    if path_obj is None:
+        if len(path_points or []) < 2:
+            return {"ok": False, "message": "Provide an existing curve path or at least two path points"}
+        path_obj = _create_curve_line(context, path_name or f"{obj.name} Follow Path", path_points, 0.02)
+    if path_obj.type != "CURVE":
+        return {"ok": False, "message": f"Follow path target is not a curve: {path_obj.name}"}
+
+    scene = context.scene
+    live_preview._record_scene_timeline(scene)
+    scene.frame_start = min(scene.frame_start, frame_start)
+    scene.frame_end = max(scene.frame_end, frame_end)
+    live_preview._record_object_transform(obj)
+    action = live_preview._assign_preview_action(obj)
+    constraint = obj.constraints.new(type="FOLLOW_PATH")
+    constraint.name = constraint_name or "Claude Follow Path"
+    constraint.target = path_obj
+    constraint.use_curve_follow = bool(follow_curve)
+    constraint.use_fixed_location = True
+    live_preview._record_created_constraint(obj, constraint)
+    constraint.offset_factor = 0.0
+    constraint.keyframe_insert(data_path="offset_factor", frame=frame_start)
+    constraint.offset_factor = 1.0
+    constraint.keyframe_insert(data_path="offset_factor", frame=frame_end)
+    _set_action_interpolation(action, interpolation)
+    scene.frame_set(frame_start)
+    transaction["applied_steps"].append(
+        {
+            "type": "create_follow_path_animation",
+            "label": label,
+            "object": obj.name,
+            "path": path_obj.name,
+            "constraint": constraint.name,
+            "frame_start": frame_start,
+            "frame_end": frame_end,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Animated {obj.name} along path {path_obj.name}",
+        "object": obj.name,
+        "path": path_obj.name,
+        "constraint": constraint.name,
+        "action": action.name,
+        "transaction_id": transaction["id"],
+    }
+
+
 def create_text_object(
     context,
     *,
@@ -807,6 +1121,238 @@ def set_world_background(context, *, color, label="Set world background"):
     live_preview.redraw(context)
     live_preview._mark_pending(context, label)
     return {"ok": True, "message": f"Updated world background {world.name}", "transaction_id": transaction["id"]}
+
+
+def _created_data_kind(obj):
+    if obj.type == "MESH":
+        return "mesh"
+    if obj.type in {"CURVE", "FONT"}:
+        return "curve"
+    if obj.type == "CAMERA":
+        return "camera"
+    if obj.type == "LIGHT":
+        return "light"
+    if obj.type == "ARMATURE":
+        return "armature"
+    return ""
+
+
+def _link_object_like_source(context, source, duplicate):
+    collections = list(source.users_collection)
+    if not collections:
+        collections = [context.collection or context.scene.collection]
+    for collection in collections:
+        collection.objects.link(duplicate)
+
+
+def duplicate_selected_objects(
+    context,
+    *,
+    name_prefix="Claude Copy ",
+    offset=(0.0, 0.0, 0.0),
+    linked_data=False,
+    copy_animation=False,
+    select_new=True,
+    label="Duplicate selected objects",
+):
+    selected = [obj for obj in context.selected_objects if obj]
+    if not selected:
+        return {"ok": False, "message": "No selected objects to duplicate"}
+    transaction = live_preview.begin(label, context)
+    offset = _coerce_vector(offset, (0.0, 0.0, 0.0))
+    created = []
+    if select_new:
+        bpy.ops.object.select_all(action="DESELECT")
+    for obj in selected:
+        duplicate = obj.copy()
+        duplicate.name = f"{name_prefix}{obj.name}" if name_prefix else f"{obj.name} Copy"
+        if obj.data and not linked_data:
+            duplicate.data = obj.data.copy()
+            duplicate.data.name = f"{duplicate.name} Data"
+        if duplicate.animation_data and not copy_animation:
+            duplicate.animation_data_clear()
+        duplicate.location.x += float(offset[0])
+        duplicate.location.y += float(offset[1])
+        duplicate.location.z += float(offset[2])
+        _link_object_like_source(context, obj, duplicate)
+        live_preview._record_created_id("object", duplicate.name)
+        data_kind = _created_data_kind(duplicate)
+        if data_kind and duplicate.data and duplicate.data is not obj.data:
+            live_preview._record_created_id(data_kind, duplicate.data.name)
+        if select_new:
+            duplicate.select_set(True)
+            context.view_layer.objects.active = duplicate
+        created.append(duplicate.name)
+    transaction["applied_steps"].append(
+        {
+            "type": "duplicate_selected_objects",
+            "label": label,
+            "source_objects": [obj.name for obj in selected],
+            "created_objects": created,
+            "linked_data": bool(linked_data),
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Duplicated {len(created)} object(s)",
+        "objects": created,
+        "transaction_id": transaction["id"],
+    }
+
+
+def parent_selected_to_empty(
+    context,
+    *,
+    name="Claude Parent",
+    location=None,
+    empty_display_type="PLAIN_AXES",
+    keep_transform=True,
+    label="Parent selected to empty",
+):
+    selected = [obj for obj in context.selected_objects if obj]
+    if not selected:
+        return {"ok": False, "message": "No selected objects to parent"}
+    transaction = live_preview.begin(label, context)
+    if location is None:
+        center = Vector((0.0, 0.0, 0.0))
+        for obj in selected:
+            center += obj.matrix_world.translation
+        center /= len(selected)
+        location = center
+    location = _coerce_vector(location, (0.0, 0.0, 0.0))
+    empty = bpy.data.objects.new(name or "Claude Parent", object_data=None)
+    empty.empty_display_type = empty_display_type if empty_display_type in {"PLAIN_AXES", "ARROWS", "CUBE", "SPHERE"} else "PLAIN_AXES"
+    empty.empty_display_size = 1.0
+    empty.location = location
+    context.scene.collection.objects.link(empty)
+    live_preview._record_created_id("object", empty.name)
+    for obj in selected:
+        live_preview._record_object_parent(obj)
+        live_preview._record_object_transform(obj)
+        world_matrix = obj.matrix_world.copy()
+        obj.parent = empty
+        if keep_transform:
+            obj.matrix_parent_inverse = empty.matrix_world.inverted()
+            obj.matrix_world = world_matrix
+    bpy.ops.object.select_all(action="DESELECT")
+    empty.select_set(True)
+    context.view_layer.objects.active = empty
+    transaction["applied_steps"].append(
+        {
+            "type": "parent_selected_to_empty",
+            "label": label,
+            "empty": empty.name,
+            "children": [obj.name for obj in selected],
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Parented {len(selected)} object(s) to {empty.name}",
+        "empty": empty.name,
+        "children": [obj.name for obj in selected],
+        "transaction_id": transaction["id"],
+    }
+
+
+def align_selected_objects(context, *, axis="Z", mode="ACTIVE", value=None, label="Align selected objects"):
+    selected = [obj for obj in context.selected_objects if obj]
+    if len(selected) < 2:
+        return {"ok": False, "message": "Select at least two objects to align"}
+    axis_index, axis = _axis_index(axis)
+    mode = str(mode or "ACTIVE").upper()
+    if mode == "VALUE":
+        if value is None:
+            return {"ok": False, "message": "Alignment mode VALUE requires a numeric value"}
+        target = float(value)
+    elif mode == "MIN":
+        target = min(float(obj.location[axis_index]) for obj in selected)
+    elif mode == "MAX":
+        target = max(float(obj.location[axis_index]) for obj in selected)
+    elif mode == "CENTER":
+        target = sum(float(obj.location[axis_index]) for obj in selected) / len(selected)
+    else:
+        active = context.view_layer.objects.active if context.view_layer else None
+        if active is None:
+            return {"ok": False, "message": "Alignment mode ACTIVE requires an active object"}
+        target = float(active.location[axis_index])
+        mode = "ACTIVE"
+
+    transaction = live_preview.begin(label, context)
+    for obj in selected:
+        live_preview._record_object_transform(obj)
+        obj.location[axis_index] = target
+    transaction["applied_steps"].append(
+        {
+            "type": "align_selected_objects",
+            "label": label,
+            "objects": [obj.name for obj in selected],
+            "axis": axis,
+            "mode": mode,
+            "value": target,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Aligned {len(selected)} object(s) on {axis}",
+        "objects": [obj.name for obj in selected],
+        "axis": axis,
+        "value": target,
+        "transaction_id": transaction["id"],
+    }
+
+
+def distribute_selected_objects(
+    context,
+    *,
+    axis="X",
+    start=None,
+    end=None,
+    label="Distribute selected objects",
+):
+    selected = [obj for obj in context.selected_objects if obj]
+    if len(selected) < 2:
+        return {"ok": False, "message": "Select at least two objects to distribute"}
+    axis_index, axis = _axis_index(axis)
+    ordered = sorted(selected, key=lambda obj: (float(obj.location[axis_index]), obj.name))
+    if start is None:
+        start = float(ordered[0].location[axis_index])
+    if end is None:
+        end = float(ordered[-1].location[axis_index])
+    start = float(start)
+    end = float(end)
+    transaction = live_preview.begin(label, context)
+    positions = {}
+    for index, obj in enumerate(ordered):
+        factor = index / max(1, len(ordered) - 1)
+        position = start + (end - start) * factor
+        live_preview._record_object_transform(obj)
+        obj.location[axis_index] = position
+        positions[obj.name] = position
+    transaction["applied_steps"].append(
+        {
+            "type": "distribute_selected_objects",
+            "label": label,
+            "objects": [obj.name for obj in ordered],
+            "axis": axis,
+            "start": start,
+            "end": end,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Distributed {len(ordered)} object(s) on {axis}",
+        "objects": [obj.name for obj in ordered],
+        "positions": positions,
+        "transaction_id": transaction["id"],
+    }
 
 
 def shade_smooth_selected(context, *, add_weighted_normals=True, label="Shade smooth selected"):
