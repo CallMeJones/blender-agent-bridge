@@ -13,6 +13,7 @@ from . import (
     agent_memory,
     agent_loop,
     bridge_server,
+    build_info,
     chat_history,
     context_bundle,
     context_planner,
@@ -372,6 +373,7 @@ class CLAUDEBLENDER_OT_copy_chat_history(bpy.types.Operator):
 def _draw_ask_section(layout, state, prefs):
     ask_box = _draw_section(layout, "Chat")
     bridge_running = bridge_server.is_running()
+    _draw_wrapped(ask_box, build_info.diagnostics_summary(), width=46, max_lines=2)
     ask_box.label(text=f"Bridge: {'On' if bridge_running else 'Off'}")
     bridge_row = ask_box.row(align=True)
     if bridge_running:
@@ -996,24 +998,12 @@ class CLAUDEBLENDER_OT_copy_mcp_config(bpy.types.Operator):
     def execute(self, context):
         prefs = _prefs(context)
         url = context.scene.claude_blender.bridge_url or f"http://127.0.0.1:{getattr(prefs, 'bridge_port', bridge_server.DEFAULT_PORT)}"
-        script_path = os.path.join(os.path.dirname(__file__), "mcp_server.py")
-        config = {
-            "mcpServers": {
-                "blender": {
-                    "command": "python",
-                    "args": [
-                        script_path,
-                        "--bridge-url",
-                        url,
-                    ],
-                }
-            }
-        }
         token = getattr(prefs, "bridge_auth_token", "")
-        if token:
-            config["mcpServers"]["blender"]["env"] = {"BLENDER_BRIDGE_TOKEN": token}
+        config = build_info.mcp_config(url, token=token)
         context.window_manager.clipboard = json.dumps(config, indent=2)
-        context.scene.claude_blender.status = "Copied MCP config"
+        context.scene.claude_blender.status = (
+            f"Copied MCP config v{build_info.MCP_CONFIG_VERSION} for add-on {build_info.ADDON_VERSION}"
+        )
         return {"FINISHED"}
 
 

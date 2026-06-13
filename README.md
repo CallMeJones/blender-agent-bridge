@@ -46,6 +46,8 @@ Tool schemas are also selected per request. The agent loop keeps a small core se
 
 The extension now includes an External Bridge section. Press `Start` to expose a localhost-only JSON bridge from Blender, then `Copy MCP Config` to copy a stdio MCP server config for clients that support local MCP servers. The MCP surface is compact by default: use `blender_tool_catalog` as the single search/schema/invoke entry point for the full Blender helper catalog. Compatibility wrappers for search, schema lookup, and invocation remain available. See [EXTERNAL_BRIDGE_MCP.md](docs/EXTERNAL_BRIDGE_MCP.md).
 
+If a client still shows an old tool list after a zip reinstall or reload, replace the copied MCP config and refresh or restart that MCP client. The copied config includes add-on, bridge, MCP server, and config-version metadata in the server `env` block to make stale configs easier to spot.
+
 The sidebar is chat-oriented: `Send` starts a new instruction and clears the input box, `Continue` asks Claude to keep working from the current scene and memory, and short prompts like `ok`/`continue` are expanded into a real continuation request. Recent messages are stored in the `Claude Chat History` Text datablock and shown in the Conversation section. They do not approve or run generated Python.
 
 The Action Center groups the current agent state: running tool, pending script approval, live preview commit/revert, screenshot capture/open, docs cache controls, checkpoint status, and retry actions when Claude needs to stage a script again.

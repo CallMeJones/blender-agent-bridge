@@ -31,7 +31,7 @@ Run the checks that do not require Blender:
 ```powershell
 python tests\smoke_audit_log.py
 python tests\smoke_mcp_server.py
-python -m py_compile addon\claude_blender\audit_log.py addon\claude_blender\mcp_server.py addon\claude_blender\bridge_protocol.py addon\claude_blender\bridge_server.py scripts\build_extension_zip.py
+python -m py_compile addon\claude_blender\build_info.py addon\claude_blender\audit_log.py addon\claude_blender\mcp_server.py addon\claude_blender\bridge_protocol.py addon\claude_blender\bridge_server.py scripts\build_extension_zip.py
 ```
 
 Run Blender-background smoke tests when `blender` is on PATH.

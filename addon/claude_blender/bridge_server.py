@@ -11,7 +11,16 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import bpy
 
-from . import audit_log, anthropic_client, bridge_protocol, context_bundle, script_runner, tool_dispatcher, transcript
+from . import (
+    audit_log,
+    anthropic_client,
+    bridge_protocol,
+    build_info,
+    context_bundle,
+    script_runner,
+    tool_dispatcher,
+    transcript,
+)
 
 
 DEFAULT_HOST = "127.0.0.1"
@@ -37,10 +46,24 @@ def _scene_status():
     bundle = context_bundle.build_context_bundle(bpy.context)
     state = getattr(bpy.context.scene, "claude_blender", None)
     trust = script_runner.external_script_trust_snapshot(bpy.context, state=state) if state else {}
+    url = bridge_url() or (getattr(state, "bridge_url", "") if state else "")
+    diagnostics = build_info.diagnostics_dict(
+        bridge_url=url,
+        blender_version=".".join(str(part) for part in bpy.app.version),
+    )
     return {
         "ok": True,
+        "bridge_url": url,
         "bridge_version": bridge_protocol.BRIDGE_VERSION,
         "blender_version": ".".join(str(part) for part in bpy.app.version),
+        "addon_id": diagnostics["addon_id"],
+        "addon_name": diagnostics["addon_name"],
+        "addon_version": diagnostics["addon_version"],
+        "addon_path": diagnostics["addon_path"],
+        "mcp_server_version": diagnostics["mcp_server_version"],
+        "mcp_server_path": diagnostics["mcp_server_path"],
+        "mcp_config_version": diagnostics["mcp_config_version"],
+        "build_diagnostics": build_info.diagnostics_summary(),
         "scene": bpy.context.scene.name,
         "context_summary": context_bundle.summarize_for_status(bundle),
         "ui_status": getattr(state, "status", "") if state else "",
@@ -351,6 +374,9 @@ def status():
         "running": is_running(),
         "url": bridge_url(),
         "bridge_version": bridge_protocol.BRIDGE_VERSION,
+        "addon_version": build_info.ADDON_VERSION,
+        "mcp_server_version": build_info.MCP_SERVER_VERSION,
+        "mcp_config_version": build_info.MCP_CONFIG_VERSION,
     }
 
 

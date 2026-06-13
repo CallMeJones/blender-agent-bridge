@@ -11,8 +11,10 @@ import zipfile
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
+sys.path.insert(0, os.path.join(ROOT, "addon", "claude_blender"))
 
 import build_extension_zip  # noqa: E402
+import build_info  # noqa: E402
 
 
 EXCLUDED_SUFFIXES = (".pyc", ".pyo", ".blend", ".blend1", ".blend2", ".zip", ".sha256")
@@ -58,6 +60,7 @@ def _assert_package_clean(path):
         names = set(archive.namelist())
     assert "blender_manifest.toml" in names, sorted(names)[:20]
     assert "__init__.py" in names, sorted(names)[:20]
+    assert "build_info.py" in names, sorted(names)[:20]
     assert not any(name.lower().endswith(EXCLUDED_SUFFIXES) for name in names), sorted(names)
     return names
 
@@ -73,6 +76,7 @@ def main():
 
         result = build_extension_zip.build_extension(source_dir=source_dir, dist_dir=dist_dir)
         assert result["ok"], result
+        assert result["version"] == build_info.ADDON_VERSION, result
         assert os.path.exists(result["path"]), result
         assert os.path.exists(result["sha256_path"]), result
         _assert_package_clean(result["path"])

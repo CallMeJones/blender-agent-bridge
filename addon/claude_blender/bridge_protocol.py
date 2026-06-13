@@ -7,8 +7,13 @@ tool semantics.
 
 from __future__ import annotations
 
+try:
+    from . import build_info
+except ImportError:  # Allows direct imports from addon/claude_blender.
+    import build_info
 
-BRIDGE_VERSION = "0.2"
+
+BRIDGE_VERSION = build_info.BRIDGE_VERSION
 CONTRACT_SCHEMA_VERSION = "1.0"
 DEFAULT_TOOL_TIMEOUT_SECONDS = 60
 

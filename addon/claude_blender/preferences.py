@@ -6,6 +6,8 @@ import os
 
 import bpy
 
+from . import build_info
+
 
 MODEL_ITEMS = (
     (
@@ -136,6 +138,9 @@ class CLAUDEBLENDER_AP_preferences(bpy.types.AddonPreferences):
 
     def draw(self, context):
         layout = self.layout
+        layout.label(text=build_info.diagnostics_summary())
+        layout.label(text=f"Add-on path: {build_info.addon_root()}")
+        layout.separator()
         layout.prop(self, "model")
         layout.prop(self, "api_key_source")
         layout.prop(self, "execution_mode")

@@ -17,6 +17,7 @@ MCP_SERVER = os.path.join(ROOT, "addon", "claude_blender", "mcp_server.py")
 sys.path.insert(0, os.path.join(ROOT, "addon", "claude_blender"))
 
 import bridge_protocol  # noqa: E402
+import build_info  # noqa: E402
 
 
 class FakeBridgeHandler(BaseHTTPRequestHandler):
@@ -34,7 +35,17 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/health":
-            self._send({"ok": True, "scene": "Fake Scene", "bridge_version": "test"})
+            self._send(
+                {
+                    "ok": True,
+                    "scene": "Fake Scene",
+                    "bridge_version": bridge_protocol.BRIDGE_VERSION,
+                    "addon_version": build_info.ADDON_VERSION,
+                    "mcp_server_version": build_info.MCP_SERVER_VERSION,
+                    "mcp_config_version": build_info.MCP_CONFIG_VERSION,
+                    "build_diagnostics": build_info.diagnostics_summary(),
+                }
+            )
         elif parsed.path == "/tools":
             self._send(
                 {
@@ -166,6 +177,10 @@ def _assert_compact_tools_visible(proc):
     status_properties = status_tool["outputSchema"]["properties"]
     assert "external_script_trust_seconds_remaining" in status_properties, status_tool
     assert "mcp_client_refresh_hint" in status_properties, status_tool
+    assert "addon_version" in status_properties, status_tool
+    assert "mcp_server_version" in status_properties, status_tool
+    assert "mcp_config_version" in status_properties, status_tool
+    assert "build_diagnostics" in status_properties, status_tool
     scene_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "list_scene_objects")
     assert scene_tool["outputSchema"]["type"] == "object", scene_tool
     catalog_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "blender_tool_catalog")
@@ -250,6 +265,20 @@ def main():
         offline_listed = _assert_compact_tools_visible(offline_proc)
         offline_names = {tool["name"] for tool in offline_listed["result"]["tools"]}
         assert "invoke_blender_tool" in offline_names, offline_listed
+        offline_status = _send(
+            offline_proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 88,
+                "method": "tools/call",
+                "params": {"name": "blender_bridge_status", "arguments": {}},
+            },
+        )
+        offline_status_content = offline_status["result"]["structuredContent"]
+        assert offline_status_content["ok"] is False, offline_status
+        assert offline_status_content["bridge_url"] == "http://127.0.0.1:1", offline_status
+        assert offline_status_content["addon_version"] == build_info.ADDON_VERSION, offline_status
+        assert offline_status_content["mcp_config_version"] == build_info.MCP_CONFIG_VERSION, offline_status
         offline_search = _send(
             offline_proc,
             {
@@ -336,6 +365,20 @@ def main():
         assert paged_tools["result"]["nextCursor"] == "1", paged_tools
 
         _assert_compact_tools_visible(proc)
+        status_call = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 28,
+                "method": "tools/call",
+                "params": {"name": "blender_bridge_status", "arguments": {}},
+            },
+        )
+        status_content = status_call["result"]["structuredContent"]
+        assert status_content["addon_version"] == build_info.ADDON_VERSION, status_call
+        assert status_content["mcp_server_version"] == build_info.MCP_SERVER_VERSION, status_call
+        assert status_content["mcp_config_version"] == build_info.MCP_CONFIG_VERSION, status_call
+        assert build_info.ADDON_NAME in status_content["build_diagnostics"], status_call
 
         full_audit_fd, full_audit_path = tempfile.mkstemp(
             prefix="claude-blender-mcp-full-audit-",

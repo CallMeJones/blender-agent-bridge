@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import importlib
 
+from . import build_info
+
 bl_info = {
-    "name": "Claude for Blender",
+    "name": build_info.ADDON_NAME,
     "author": "Michael",
-    "version": (0, 1, 0),
-    "blender": (5, 1, 0),
+    "version": build_info.ADDON_VERSION_TUPLE,
+    "blender": build_info.BLENDER_VERSION_MIN_TUPLE,
     "location": "View3D > Sidebar > Claude",
     "description": "Scene-aware Claude assistant for Blender",
     "category": "3D View",
 }
 
 _MODULE_NAMES = (
+    "build_info",
     "properties",
     "preferences",
     "context_budget",

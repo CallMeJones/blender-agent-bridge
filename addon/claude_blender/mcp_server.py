@@ -11,15 +11,16 @@ import urllib.parse
 import urllib.request
 
 try:
-    from . import audit_log, anthropic_client, bridge_protocol
+    from . import audit_log, anthropic_client, bridge_protocol, build_info
 except ImportError:  # Allows direct execution as addon/claude_blender/mcp_server.py.
     package_parent = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     if package_parent not in sys.path:
         sys.path.insert(0, package_parent)
     try:
-        from claude_blender import audit_log, anthropic_client, bridge_protocol
+        from claude_blender import audit_log, anthropic_client, bridge_protocol, build_info
     except ImportError:
         import audit_log
+        import build_info
         import bridge_protocol
 
         anthropic_client = None
@@ -28,7 +29,7 @@ except ImportError:  # Allows direct execution as addon/claude_blender/mcp_serve
 PROTOCOL_VERSION = "2025-06-18"
 SUPPORTED_PROTOCOL_VERSIONS = (PROTOCOL_VERSION,)
 SERVER_NAME = "claude-blender"
-SERVER_VERSION = "0.1.0"
+SERVER_VERSION = build_info.MCP_SERVER_VERSION
 DEFAULT_BRIDGE_URL = "http://127.0.0.1:8765"
 DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 100
@@ -77,6 +78,14 @@ STATUS_OUTPUT_SCHEMA = {
         "message": {"type": "string"},
         "bridge_version": {"type": "string"},
         "blender_version": {"type": "string"},
+        "addon_id": {"type": "string"},
+        "addon_name": {"type": "string"},
+        "addon_version": {"type": "string"},
+        "addon_path": {"type": "string"},
+        "mcp_server_version": {"type": "string"},
+        "mcp_server_path": {"type": "string"},
+        "mcp_config_version": {"type": "string"},
+        "build_diagnostics": {"type": "string"},
         "scene": {"type": "string"},
         "external_script_trust": {"type": "boolean"},
         "external_script_trust_status": {"type": "string"},
@@ -1038,7 +1047,8 @@ class BlenderMCPServer:
         try:
             return self.bridge.get("/health")
         except Exception as exc:
-            return {"ok": False, "bridge_url": self.bridge.base_url, "message": str(exc)}
+            diagnostics = build_info.diagnostics_dict(bridge_url=self.bridge.base_url)
+            return {"ok": False, "message": str(exc), **diagnostics}
 
     def resources_list(self, params=None):
         resources = [

@@ -16,7 +16,14 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import anthropic_client, bridge_server, script_runner, tool_dispatcher  # noqa: E402
+from claude_blender import (  # noqa: E402
+    anthropic_client,
+    bridge_protocol,
+    bridge_server,
+    build_info,
+    script_runner,
+    tool_dispatcher,
+)
 
 
 OBJECT_NAME = "Claude Script Smoke Object"
@@ -42,6 +49,27 @@ def main():
         context = bpy.context
         state = context.scene.claude_blender
         _cleanup()
+
+        copied = bpy.ops.claude_blender.copy_mcp_config()
+        assert "FINISHED" in copied, copied
+        clipboard = context.window_manager.clipboard.strip()
+        if clipboard:
+            copied_config = json.loads(clipboard)
+        else:
+            copied_config = build_info.mcp_config(f"http://127.0.0.1:{bridge_server.DEFAULT_PORT}")
+        server_config = copied_config["mcpServers"]["blender"]
+        assert server_config["command"] == "python", server_config
+        assert server_config["args"][0].endswith("mcp_server.py"), server_config
+        assert "--bridge-url" in server_config["args"], server_config
+        env = server_config["env"]
+        assert env["CLAUDE_BLENDER_ADDON_ID"] == build_info.ADDON_ID, env
+        assert env["CLAUDE_BLENDER_ADDON_VERSION"] == build_info.ADDON_VERSION, env
+        assert env["CLAUDE_BLENDER_BRIDGE_VERSION"] == bridge_protocol.BRIDGE_VERSION, env
+        assert env["CLAUDE_BLENDER_MCP_SERVER_VERSION"] == build_info.MCP_SERVER_VERSION, env
+        assert env["CLAUDE_BLENDER_MCP_CONFIG_VERSION"] == build_info.MCP_CONFIG_VERSION, env
+        assert "MCP client" in env["CLAUDE_BLENDER_MCP_CONFIG_NOTE"], env
+        assert "BLENDER_BRIDGE_TOKEN" not in env, env
+        assert f"MCP config v{build_info.MCP_CONFIG_VERSION}" in state.status, state.status
 
         internal_tool_names = {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
         assert "run_approved_script" not in internal_tool_names
