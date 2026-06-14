@@ -789,6 +789,138 @@ def animate_material_property(
     }
 
 
+def _record_light_settings(light_obj):
+    data = light_obj.data if light_obj and light_obj.type == "LIGHT" else None
+    if data is None:
+        return
+    transaction = live_preview.begin()
+    key = f"light:{data.name}:settings"
+    if key in transaction["before_state"]:
+        return
+    transaction["before_state"][key] = {
+        "kind": "light_settings",
+        "light_data_name": data.name,
+        "energy": float(data.energy),
+        "color": tuple(float(component) for component in data.color),
+        "shadow_soft_size": float(getattr(data, "shadow_soft_size", 0.0)),
+        "spot_size": float(getattr(data, "spot_size", 0.0)),
+        "spot_blend": float(getattr(data, "spot_blend", 0.0)),
+    }
+    transaction["changed_data_blocks"].append(data.name)
+
+
+def _record_light_data_animation(light_obj):
+    data = light_obj.data if light_obj and light_obj.type == "LIGHT" else None
+    if data is None:
+        return
+    transaction = live_preview.begin()
+    key = f"light:{data.name}:animation"
+    if key in transaction["before_state"]:
+        return
+    animation_data = data.animation_data
+    action = animation_data.action if animation_data else None
+    transaction["before_state"][key] = {
+        "kind": "light_data_animation",
+        "light_data_name": data.name,
+        "had_animation_data": animation_data is not None,
+        "action_name": action.name if action else None,
+    }
+    transaction["changed_data_blocks"].append(data.name)
+
+
+def _assign_light_preview_action(light_obj):
+    _record_light_data_animation(light_obj)
+    action = bpy.data.actions.new(name=f"{light_obj.name} Claude Light Preview Action")
+    light_obj.data.animation_data_create().action = action
+    live_preview._record_created_id("action", action.name)
+    return action
+
+
+def _light_animation_value(current, value):
+    if hasattr(current, "__len__") and not isinstance(current, str):
+        values = list(value if value is not None else current)
+        while len(values) < len(current):
+            values.append(current[len(values)])
+        return tuple(float(component) for component in values[: len(current)])
+    if isinstance(value, (list, tuple)):
+        return float(value[0]) if value else float(current)
+    return float(value if value is not None else current)
+
+
+def animate_light_property(
+    context,
+    *,
+    light_name="",
+    property_name="energy",
+    frame_start,
+    frame_end,
+    value_start=None,
+    value_end=None,
+    interpolation="LINEAR",
+    label="Animate light property",
+):
+    light_obj = bpy.data.objects.get(light_name) if light_name else context.active_object
+    if light_obj is None or light_obj.type != "LIGHT":
+        light_obj = next((obj for obj in context.scene.objects if obj.type == "LIGHT"), None)
+    if light_obj is None or light_obj.type != "LIGHT":
+        return {"ok": False, "message": "A light object is required for light animation"}
+    frame_start, frame_end, error = _normalize_frame_range(frame_start, frame_end, "Light animation")
+    if error:
+        return error
+    property_key = str(property_name or "energy").strip().lower()
+    data_path_map = {
+        "energy": "energy",
+        "intensity": "energy",
+        "color": "color",
+        "colour": "color",
+        "shadow_soft_size": "shadow_soft_size",
+        "spot_size": "spot_size",
+        "spot_blend": "spot_blend",
+    }
+    data_path = data_path_map.get(property_key)
+    if data_path is None or not hasattr(light_obj.data, data_path):
+        return {"ok": False, "message": f"Unsupported light animation property: {property_name}"}
+    if value_start is None and value_end is None:
+        return {"ok": False, "message": "Light animation needs at least value_end or value_start"}
+
+    transaction = live_preview.begin(label, context)
+    scene = context.scene
+    live_preview._record_scene_timeline(scene)
+    scene.frame_start = min(scene.frame_start, frame_start)
+    scene.frame_end = max(scene.frame_end, frame_end)
+    _record_light_settings(light_obj)
+    action = _assign_light_preview_action(light_obj)
+    current = getattr(light_obj.data, data_path)
+    start = _light_animation_value(current, value_start)
+    end = _light_animation_value(start, value_end)
+    setattr(light_obj.data, data_path, start)
+    light_obj.data.keyframe_insert(data_path=data_path, frame=frame_start)
+    setattr(light_obj.data, data_path, end)
+    light_obj.data.keyframe_insert(data_path=data_path, frame=frame_end)
+    _set_action_interpolation(action, interpolation)
+    scene.frame_set(frame_start)
+    transaction["applied_steps"].append(
+        {
+            "type": "animate_light_property",
+            "label": label,
+            "light": light_obj.name,
+            "property": data_path,
+            "frame_start": frame_start,
+            "frame_end": frame_end,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Animated {data_path} on light {light_obj.name}",
+        "light": light_obj.name,
+        "property": data_path,
+        "action": action.name,
+        "transaction_id": transaction["id"],
+    }
+
+
 def create_follow_path_animation(
     context,
     *,

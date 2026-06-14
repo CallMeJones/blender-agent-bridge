@@ -137,18 +137,157 @@ def _keyframe_summary(point):
     }
 
 
+def _driver_summary(data_block, *, max_drivers=12):
+    animation_data = getattr(data_block, "animation_data", None)
+    drivers = list(getattr(animation_data, "drivers", []) or []) if animation_data else []
+    return [
+        {
+            "data_path": driver.data_path,
+            "array_index": int(driver.array_index),
+            "expression": getattr(driver.driver, "expression", ""),
+            "type": getattr(driver.driver, "type", None),
+            "variables": [
+                {
+                    "name": variable.name,
+                    "type": variable.type,
+                    "targets": [
+                        {
+                            "id": getattr(target.id, "name", None),
+                            "data_path": target.data_path,
+                            "transform_type": getattr(target, "transform_type", None),
+                        }
+                        for target in list(variable.targets)[:4]
+                    ],
+                }
+                for variable in list(getattr(driver.driver, "variables", []))[:8]
+            ],
+        }
+        for driver in drivers[:max_drivers]
+    ]
+
+
+def _animation_data_summary(data_block, *, max_drivers=8):
+    animation_data = getattr(data_block, "animation_data", None)
+    if animation_data is None:
+        return {"has_animation_data": False, "action": None, "driver_count": 0, "nla_track_count": 0}
+    action = animation_data.action
+    drivers = list(getattr(animation_data, "drivers", []) or [])
+    nla_tracks = list(getattr(animation_data, "nla_tracks", []) or [])
+    result = {
+        "has_animation_data": True,
+        "action": action.name if action else None,
+        "driver_count": len(drivers),
+        "nla_track_count": len(nla_tracks),
+        "drivers": _driver_summary(data_block, max_drivers=max_drivers),
+    }
+    if action:
+        frame_range = list(getattr(action, "frame_range", (0, 0)))
+        result["action_frame_range"] = [round(float(value), 4) for value in frame_range]
+    if nla_tracks:
+        result["nla_tracks"] = [
+            {
+                "name": track.name,
+                "mute": bool(getattr(track, "mute", False)),
+                "solo": bool(getattr(track, "is_solo", False)),
+                "strip_count": len(getattr(track, "strips", []) or []),
+            }
+            for track in nla_tracks[:12]
+        ]
+    return result
+
+
+def _constraint_summary(constraint):
+    item = {
+        "name": constraint.name,
+        "type": constraint.type,
+        "influence": round(float(getattr(constraint, "influence", 0.0)), 5),
+        "mute": bool(getattr(constraint, "mute", False)),
+        "target": getattr(getattr(constraint, "target", None), "name", None),
+        "subtarget": getattr(constraint, "subtarget", ""),
+    }
+    for attr in (
+        "track_axis",
+        "up_axis",
+        "owner_space",
+        "target_space",
+        "use_curve_follow",
+        "use_fixed_location",
+        "offset_factor",
+        "forward_axis",
+    ):
+        if hasattr(constraint, attr):
+            value = getattr(constraint, attr)
+            item[attr] = round(float(value), 5) if isinstance(value, float) else value
+    return item
+
+
+def _action_from(data_block):
+    animation_data = getattr(data_block, "animation_data", None)
+    return animation_data.action if animation_data else None
+
+
+def _append_action(actions, seen, action):
+    if action and action.name not in seen:
+        seen.add(action.name)
+        actions.append(action)
+
+
+def _object_related_actions(obj):
+    actions = [_action_from(obj)]
+    data = getattr(obj, "data", None)
+    if data:
+        actions.append(_action_from(data))
+    if obj.type == "MESH" and data and getattr(data, "shape_keys", None):
+        actions.append(_action_from(data.shape_keys))
+    for slot in obj.material_slots:
+        material = slot.material
+        if material:
+            actions.append(_action_from(material))
+            node_tree = material.node_tree if material.use_nodes else None
+            if node_tree:
+                actions.append(_action_from(node_tree))
+    return [action for action in actions if action]
+
+
+def _action_owners(action):
+    owners = []
+    for obj in bpy.data.objects:
+        if _action_from(obj) == action:
+            owners.append({"kind": "object", "name": obj.name, "type": obj.type})
+        data = getattr(obj, "data", None)
+        if data and _action_from(data) == action:
+            owners.append({"kind": "object_data", "object": obj.name, "name": data.name, "type": obj.type})
+        if obj.type == "MESH" and data and getattr(data, "shape_keys", None) and _action_from(data.shape_keys) == action:
+            owners.append({"kind": "shape_keys", "object": obj.name, "name": data.shape_keys.name})
+    for material in bpy.data.materials:
+        if _action_from(material) == action:
+            owners.append({"kind": "material", "name": material.name})
+        node_tree = material.node_tree if material.use_nodes else None
+        if node_tree and _action_from(node_tree) == action:
+            owners.append({"kind": "material_node_tree", "material": material.name, "name": node_tree.name})
+    return owners[:40]
+
+
 def _action_summary(action, *, max_keyframes_per_curve=8):
     fcurves = context_bundle._iter_action_fcurves(action)
     frame_range = list(getattr(action, "frame_range", (0, 0)))
     return {
         "name": action.name,
+        "users": int(getattr(action, "users", 0)),
         "frame_range": [round(float(value), 4) for value in frame_range],
         "fcurve_count": len(fcurves),
+        "owners": _action_owners(action),
         "fcurves": [
             {
                 "data_path": fcurve.data_path,
                 "array_index": int(fcurve.array_index),
+                "extrapolation": getattr(fcurve, "extrapolation", None),
+                "mute": bool(getattr(fcurve, "mute", False)),
                 "keyframe_count": len(fcurve.keyframe_points),
+                "frame_range": [
+                    round(float(min((point.co[0] for point in fcurve.keyframe_points), default=0.0)), 4),
+                    round(float(max((point.co[0] for point in fcurve.keyframe_points), default=0.0)), 4),
+                ],
                 "keyframes": [
                     _keyframe_summary(point)
                     for point in list(fcurve.keyframe_points)[:max_keyframes_per_curve]
@@ -230,19 +369,14 @@ def get_animation_details(context, args):
     seen = set()
 
     for obj in objects:
-        animation_data = getattr(obj, "animation_data", None)
-        action = animation_data.action if animation_data else None
-        if action and action.name not in seen:
-            seen.add(action.name)
-            actions.append(action)
+        for action in _object_related_actions(obj):
+            _append_action(actions, seen, action)
 
     if action_names:
         for name in action_names:
             action = bpy.data.actions.get(name)
             if action:
-                if action.name not in seen:
-                    seen.add(action.name)
-                    actions.append(action)
+                _append_action(actions, seen, action)
             else:
                 missing_actions.append(name)
     elif not actions:
@@ -261,6 +395,24 @@ def get_animation_details(context, args):
                 "name": obj.name,
                 "type": obj.type,
                 "animation_data": context_bundle._object_summary(obj).get("animation"),
+                "object_animation": _animation_data_summary(obj),
+                "data_animation": _animation_data_summary(obj.data) if getattr(obj, "data", None) else None,
+                "constraints": [_constraint_summary(constraint) for constraint in list(obj.constraints)[:24]],
+                "drivers": _driver_summary(obj),
+                "shape_key_animation": _animation_data_summary(obj.data.shape_keys)
+                if obj.type == "MESH" and obj.data and obj.data.shape_keys
+                else None,
+                "materials": [
+                    {
+                        "slot_index": index,
+                        "name": slot.material.name if slot.material else None,
+                        "material_animation": _animation_data_summary(slot.material) if slot.material else None,
+                        "node_tree_animation": _animation_data_summary(slot.material.node_tree)
+                        if slot.material and slot.material.use_nodes and slot.material.node_tree
+                        else None,
+                    }
+                    for index, slot in enumerate(obj.material_slots)
+                ],
             }
             for obj in objects
         ],
@@ -268,6 +420,7 @@ def get_animation_details(context, args):
             _action_summary(action, max_keyframes_per_curve=max_keyframes)
             for action in actions[:max_actions]
         ],
+        "total_action_count": len(bpy.data.actions),
         "missing_object_names": missing_objects,
         "missing_action_names": missing_actions,
     }
@@ -615,6 +768,21 @@ def animate_material_property(context, args):
         create_if_missing=bool(args.get("create_if_missing", True)),
         interpolation=str(args.get("interpolation") or "LINEAR"),
         label=args.get("label", "Animate material property"),
+    )
+
+
+def animate_light_property(context, args):
+    active = context.active_object.name if context.active_object else ""
+    return advanced_helpers.animate_light_property(
+        context,
+        light_name=str(args.get("light_name") or active),
+        property_name=str(args.get("property_name") or "energy"),
+        frame_start=int(args.get("frame_start", context.scene.frame_start)),
+        frame_end=int(args.get("frame_end", context.scene.frame_end)),
+        value_start=args.get("value_start"),
+        value_end=args.get("value_end"),
+        interpolation=str(args.get("interpolation") or "LINEAR"),
+        label=args.get("label", "Animate light property"),
     )
 
 
@@ -995,6 +1163,7 @@ TOOL_FUNCTIONS = {
     "animate_shape_key": animate_shape_key,
     "animate_object_bounce": animate_object_bounce,
     "animate_material_property": animate_material_property,
+    "animate_light_property": animate_light_property,
     "create_follow_path_animation": create_follow_path_animation,
     "create_text_object": create_text_object,
     "create_curve_path": create_curve_path,

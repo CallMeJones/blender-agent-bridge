@@ -58,7 +58,7 @@ SYSTEM_PROMPT = (
     "For scene building and layout, prefer create_primitive, duplicate_selected_objects, parent_selected_to_empty, align_selected_objects, distribute_selected_objects, assign_material_to_selected, assign_emission_material_to_selected, create_shader_material, create_text_object, create_curve_path, create_collection, link_selected_to_collection, add_light, add_camera, add_modifier_to_selected, add_geometry_nodes_modifier, add_track_to_constraint, add_copy_transform_constraint, create_basic_armature, add_particle_system_to_selected, set_render_settings, set_camera_settings, and set_world_background. "
     "For model refinement, prefer shade_smooth_selected, add_bevel_and_subsurf, create_wheel_assembly, add_panel_seams, add_window_materials, and apply_vehicle_refinement_template when they fit the task. "
     "For shape-key animation, prefer create_shape_key and animate_shape_key before drafting Python. "
-    "For animation, prefer set_scene_frame_range, animate_selected_transform, animate_object_bounce, animate_material_property, create_follow_path_animation, and create_camera_orbit. "
+    "For animation, prefer set_scene_frame_range, animate_selected_transform, animate_object_bounce, animate_material_property, animate_light_property, create_follow_path_animation, and create_camera_orbit. "
     "For complex scene builds that need many objects or more than about eight helper calls, stage one cohesive Blender Python script with draft_script instead of making a long chain of helper calls. "
     "When helper tools cannot express the requested edit, use draft_script to stage Blender Python for user approval. "
     "When calling draft_script, put the complete Python source in the code field. Do not put script code in final chat text for the user to paste manually. "
@@ -648,6 +648,38 @@ def blender_tool_definitions():
             },
         },
         {
+            "name": "animate_light_property",
+            "description": "Keyframe a light data property such as energy, color, shadow softness, spot size, or spot blend. Applies immediately with preview revert support.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "light_name": {"type": "string"},
+                    "property_name": {
+                        "type": "string",
+                        "enum": ["energy", "intensity", "color", "colour", "shadow_soft_size", "spot_size", "spot_blend"],
+                    },
+                    "frame_start": {"type": "integer"},
+                    "frame_end": {"type": "integer"},
+                    "value_start": {
+                        "oneOf": [
+                            {"type": "number"},
+                            {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                        ]
+                    },
+                    "value_end": {
+                        "oneOf": [
+                            {"type": "number"},
+                            {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                        ]
+                    },
+                    "interpolation": {"type": "string", "enum": ["CONSTANT", "LINEAR", "BEZIER"]},
+                    "label": {"type": "string"},
+                },
+                "required": ["property_name", "frame_start", "frame_end"],
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "create_follow_path_animation",
             "description": "Animate an object along an existing curve or a new curve built from path points. Applies immediately with preview revert support.",
             "input_schema": {
@@ -1199,6 +1231,7 @@ _TOOL_GROUPS = {
         "animate_selected_transform",
         "animate_object_bounce",
         "animate_material_property",
+        "animate_light_property",
         "create_follow_path_animation",
         "create_camera_orbit",
         "animate_shape_key",
@@ -1212,6 +1245,7 @@ _TOOL_GROUPS = {
         "set_render_settings",
         "set_camera_settings",
         "set_world_background",
+        "animate_light_property",
     },
     "deep_inspect": {
         "get_geometry_nodes_details",
@@ -1230,6 +1264,7 @@ _TOOL_GROUPS = {
         "animate_shape_key",
         "animate_object_bounce",
         "animate_material_property",
+        "animate_light_property",
         "create_follow_path_animation",
         "create_text_object",
         "create_curve_path",
@@ -1271,7 +1306,7 @@ _GROUP_KEYWORDS = {
     "basic_edit": {"make", "create", "add", "move", "scale", "rotate", "transform", "object", "primitive", "collection", "duplicate", "copy", "parent", "align", "distribute", "layout", "arrange"},
     "materials": {"material", "shader", "color", "colour", "red", "blue", "green", "metal", "metallic", "chrome", "glass", "emission", "glow", "window"},
     "animation": {"animate", "animation", "keyframe", "timeline", "frame", "orbit", "bounce", "driver", "motion", "follow path", "path"},
-    "camera_render": {"camera", "render", "light", "lighting", "world", "background", "dof", "depth of field", "lens", "compositor", "resolution"},
+    "camera_render": {"camera", "render", "light", "lighting", "world", "background", "dof", "depth of field", "lens", "compositor", "resolution", "intensity"},
     "deep_inspect": {"inspect", "analyze", "analyse", "summarize", "summary", "details", "world model", "what", "list"},
     "advanced_create": {"geometry nodes", "shape key", "text", "curve", "particle", "armature", "constraint", "rig", "driver"},
     "refinement": {"refine", "polish", "smooth", "high poly", "high-poly", "detail", "bevel", "subdivision", "subsurf", "seam", "panel"},
@@ -1386,6 +1421,7 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "create_shader_material",
     "animate_object_bounce",
     "animate_material_property",
+    "animate_light_property",
     "create_follow_path_animation",
     "duplicate_selected_objects",
     "parent_selected_to_empty",

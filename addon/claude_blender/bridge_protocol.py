@@ -163,6 +163,11 @@ TOOL_CONTRACTS = {
         "mutates_scene": True,
         "requires_live_preview": True,
     },
+    "animate_light_property": {
+        "description": "Keyframe a light data property such as energy, color, shadow softness, spot size, or spot blend",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
     "create_follow_path_animation": {
         "description": "Animate an object along an existing curve or a new curve built from path points",
         "mutates_scene": True,

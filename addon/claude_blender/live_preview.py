@@ -1282,6 +1282,29 @@ def revert(context):
                     animation_data.action = bpy.data.actions.get(before["action_name"]) if before["action_name"] else None
                 elif node_tree.animation_data:
                     node_tree.animation_data_clear()
+        elif before.get("kind") == "light_settings":
+            light = bpy.data.lights.get(before["light_data_name"])
+            if light:
+                light.energy = before["energy"]
+                light.color = before["color"]
+                if hasattr(light, "shadow_soft_size"):
+                    light.shadow_soft_size = before["shadow_soft_size"]
+                if hasattr(light, "spot_size"):
+                    light.spot_size = before["spot_size"]
+                if hasattr(light, "spot_blend"):
+                    light.spot_blend = before["spot_blend"]
+            else:
+                rollback_warnings.append(f"Missing light data for settings restore: {before['light_data_name']}")
+        elif before.get("kind") == "light_data_animation":
+            light = bpy.data.lights.get(before["light_data_name"])
+            if light:
+                if before["had_animation_data"]:
+                    animation_data = light.animation_data_create()
+                    animation_data.action = bpy.data.actions.get(before["action_name"]) if before["action_name"] else None
+                elif light.animation_data:
+                    light.animation_data_clear()
+            else:
+                rollback_warnings.append(f"Missing light data for animation restore: {before['light_data_name']}")
         elif before.get("kind") == "shape_keys":
             obj = bpy.data.objects.get(before["object_name"])
             if obj is None or obj.type != "MESH" or obj.data is None:

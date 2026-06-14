@@ -19,6 +19,7 @@ from claude_blender import anthropic_client, bridge_protocol, context_bundle, li
 ANIMATION_TOOLS = {
     "animate_object_bounce",
     "animate_material_property",
+    "animate_light_property",
     "create_follow_path_animation",
 }
 
@@ -35,7 +36,7 @@ def _select_object(context, obj):
     context.view_layer.objects.active = obj
 
 
-def _snapshot(scene, cube, camera):
+def _snapshot(scene, cube, camera, light):
     return {
         "objects": set(bpy.data.objects.keys()),
         "curves": set(bpy.data.curves.keys()),
@@ -45,6 +46,8 @@ def _snapshot(scene, cube, camera):
         "cube_materials": [slot.material.name if slot.material else None for slot in cube.material_slots],
         "camera_constraints": [constraint.name for constraint in camera.constraints],
         "camera_action": camera.animation_data.action.name if camera.animation_data and camera.animation_data.action else None,
+        "light_energy": round(float(light.data.energy), 6),
+        "light_action": light.data.animation_data.action.name if light.data.animation_data and light.data.animation_data.action else None,
         "scene_camera": scene.camera.name if scene.camera else None,
         "frame_start": scene.frame_start,
         "frame_end": scene.frame_end,
@@ -65,8 +68,9 @@ def main():
     scene = context.scene
     cube = bpy.data.objects["Cube"]
     camera = bpy.data.objects["Camera"]
+    light = bpy.data.objects["Light"]
     _select_object(context, cube)
-    initial = _snapshot(scene, cube, camera)
+    initial = _snapshot(scene, cube, camera, light)
 
     try:
         bundle = context_bundle.build_context_bundle(context)
@@ -107,6 +111,21 @@ def main():
         assert material.node_tree.animation_data and material.node_tree.animation_data.action
         assert material.node_tree.animation_data.action.name == material_result["action"]
 
+        light_result = _execute(
+            context,
+            "animate_light_property",
+            {
+                "light_name": "Light",
+                "property_name": "energy",
+                "frame_start": 1,
+                "frame_end": 48,
+                "value_start": 100.0,
+                "value_end": 700.0,
+            },
+        )
+        assert light.data.animation_data and light.data.animation_data.action
+        assert light.data.animation_data.action.name == light_result["action"]
+
         follow = _execute(
             context,
             "create_follow_path_animation",
@@ -123,6 +142,28 @@ def main():
         assert camera.constraints.get("Claude Camera Follow Path")
         assert camera.animation_data and camera.animation_data.action
 
+        details = _execute(context, "get_animation_details", {"object_names": ["Cube", "Camera", "Light"], "max_actions": 12})
+        objects_by_name = {item["name"]: item for item in details["objects"]}
+        assert objects_by_name["Cube"]["object_animation"]["action"] == bounce["action"], details
+        assert objects_by_name["Cube"]["materials"][0]["node_tree_animation"]["action"] == material_result["action"], details
+        assert any(constraint["type"] == "FOLLOW_PATH" for constraint in objects_by_name["Camera"]["constraints"]), details
+        assert objects_by_name["Light"]["data_animation"]["action"] == light_result["action"], details
+        assert any(
+            owner.get("kind") == "material_node_tree" and owner.get("material") == material_result["material"]
+            for action in details["actions"]
+            for owner in action["owners"]
+        ), details
+        assert any(
+            owner.get("kind") == "object" and owner.get("name") == "Camera"
+            for action in details["actions"]
+            for owner in action["owners"]
+        ), details
+        assert any(
+            owner.get("kind") == "object_data" and owner.get("object") == "Light"
+            for action in details["actions"]
+            for owner in action["owners"]
+        ), details
+
         state = scene.claude_blender
         assert state.pending_preview
         assert state.pending_preview_summary
@@ -130,7 +171,7 @@ def main():
         reverted = _execute(context, "revert_preview", {})
         assert not reverted.get("rollback_warnings"), reverted
         assert not state.pending_preview
-        final = _snapshot(scene, cube, camera)
+        final = _snapshot(scene, cube, camera, light)
         assert final == initial, {"initial": initial, "final": final, "reverted": reverted}
 
         print("smoke_animation_helpers: ok")
