@@ -1292,6 +1292,76 @@ def revert_preview(context, args):
     return live_preview.revert(context)
 
 
+def _compact_targets(step):
+    for key in (
+        "objects",
+        "selected_objects",
+        "actions",
+        "materials",
+        "created_objects",
+        "duplicates",
+        "collections",
+        "lights",
+        "cameras",
+    ):
+        value = step.get(key)
+        if not value:
+            continue
+        if isinstance(value, list):
+            names = []
+            for item in value[:8]:
+                if isinstance(item, dict):
+                    names.append(str(item.get("object") or item.get("action") or item.get("name") or item))
+                else:
+                    names.append(str(item))
+            return names
+        return [str(value)]
+    for key in ("object", "target", "camera", "material", "collection", "action", "world"):
+        value = step.get(key)
+        if value:
+            return [str(value)]
+    return []
+
+
+def _preview_change_report(transaction):
+    steps = list((transaction or {}).get("applied_steps") or [])
+    if not steps:
+        return {}
+    step = steps[-1]
+    label = str(step.get("label") or step.get("type") or "Live preview change")
+    kind = str(step.get("type") or "preview_change")
+    targets = _compact_targets(step)
+    target_text = ", ".join(targets[:5]) if targets else "current scene"
+    if len(targets) > 5:
+        target_text += f", +{len(targets) - 5} more"
+    manifest = live_preview.transaction_manifest(transaction)
+    rollback_scopes = manifest.get("rollback_scopes") or []
+    rollback_text = ", ".join(rollback_scopes[:5]) if rollback_scopes else "none"
+    return {
+        "label": label,
+        "type": kind,
+        "targets": targets,
+        "expected_changes": f"{label}: {kind} affects {target_text}. Rollback snapshots: {rollback_text}.",
+        "rollback_snapshot_count": int(manifest.get("snapshot_count", 0) or 0),
+        "rollback_scopes": rollback_scopes,
+    }
+
+
+def _attach_preview_change_report(result):
+    if not isinstance(result, dict) or not result.get("ok") or not result.get("transaction_id"):
+        return result
+    transaction = live_preview.current_transaction()
+    if not transaction or transaction.get("id") != result.get("transaction_id"):
+        return result
+    report = _preview_change_report(transaction)
+    if not report:
+        return result
+    enriched = dict(result)
+    enriched.setdefault("expected_changes", report["expected_changes"])
+    enriched.setdefault("preview_change_report", report)
+    return enriched
+
+
 TOOL_FUNCTIONS = {
     "inspect_scene": inspect_scene,
     "list_scene_objects": list_scene_objects,
@@ -1379,6 +1449,7 @@ def execute_tool(context, name, args):
         result = {"ok": False, "message": f"{type(exc).__name__}: {exc}"}
     if isinstance(result, str):
         return result
+    result = _attach_preview_change_report(result)
     return _json_result(result)
 
 

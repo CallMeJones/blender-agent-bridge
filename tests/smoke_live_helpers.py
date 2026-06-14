@@ -64,6 +64,8 @@ def main():
             "scale": [1.0, 1.0, 1.0],
         },
     )
+    assert created["preview_change_report"]["rollback_snapshot_count"] >= 1, created
+    assert "expected_changes" in created, created
     sphere = bpy.data.objects[created["object"]]
     _select_object(context, sphere)
 

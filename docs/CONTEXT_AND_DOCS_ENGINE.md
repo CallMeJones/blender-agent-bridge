@@ -115,7 +115,7 @@ The docs engine should be version-aware and official-source-first.
 5. Return concise cached snippets and official Blender source URLs.
 6. Return official docs search/index URLs when the local cache has no targeted match.
 
-Current implementation: `docs_index.py` seeds a local JSON cache with targeted snippets for transforms, materials, lights, cameras, constraints, timeline settings, keyframes, Blender 5.1 layered Actions, and extension manifests. It can also download Blender's official versioned Python API zip, safely extract it, parse HTML pages, and build a compact `full_index.json`.
+Current implementation: `docs_index.py` seeds a local JSON cache with targeted snippets for transforms, materials, lights, cameras, constraints, timeline settings, keyframes, Blender 5.1 layered Actions, and extension manifests. It can also download Blender's official versioned Python API zip, safely extract it, parse HTML pages, and build a compact `full_index.json`. Search results include compact citation records and a `citation_report` string that can be copied into transcript/status output when docs influenced code.
 
 The cache layout is:
 
@@ -231,7 +231,7 @@ Claude should prefer immediate helper calls for low-risk visible changes and res
 
 ## Viewport Image Context
 
-When the `Viewport` toggle is enabled, `viewport_capture.py` tries to capture a PNG from the active Blender UI area and attach it to the Anthropic request as an image block. The context bundle keeps only metadata such as capture method, local path, media type, and byte size in transcript-visible text.
+When the `Viewport` toggle is enabled, `viewport_capture.py` tries to capture a PNG from the active Blender UI area and attach it to the Anthropic request as an image block. If the capture exceeds the configured byte budget, the add-on downscales and re-saves the PNG with Blender's image API before attaching it. The context bundle keeps only metadata such as capture method, local path, media type, dimensions, resize status, and byte size in transcript-visible text.
 
 If Blender is running headless or the screenshot operator fails, the visual context records `requested: true` and `available: false` without blocking the prompt.
 

@@ -187,7 +187,7 @@ Acceptance:
 - Claude can comment on visible composition, object placement, materials, and framing.
 - User can toggle screenshot inclusion per prompt.
 
-Status: Initial viewport screenshot attachment is implemented with a user toggle, local capture cache, maximum byte limit, API-only image blocks, and transcript-safe metadata. Explicit resize/compression remains later work.
+Status: Viewport screenshot attachment is implemented with a user toggle, local capture cache, maximum byte limit, API-only image blocks, transcript-safe metadata, and explicit PNG downscaling/re-save when a capture exceeds the request byte budget. Broader visual QA and animation/playblast review remain later work.
 
 ### Milestone 3: Approved Script Execution
 
@@ -236,7 +236,7 @@ Acceptance:
 - Responses cite the docs snippets used in the local transcript/log.
 - Scripts use current Blender API names and avoid outdated examples.
 
-Status: Docs cache is implemented as a version-keyed local JSON cache with curated snippets, official Blender URL candidates, and an optional full Python API zip downloader/indexer. Full Blender Manual indexing remains later work.
+Status: Docs cache is implemented as a version-keyed local JSON cache with curated snippets, official Blender URL candidates, citation records/reporting, and an optional full Python API zip downloader/indexer. Official Manual search URL fallback exists for non-API workflow concepts; full Blender Manual indexing remains later work.
 
 ### Milestone 4.5: Safe Editing Helpers
 
@@ -248,6 +248,8 @@ Acceptance:
 
 - Simple object, material, transform, camera, light, and keyframe changes do not require arbitrary generated Python.
 - Helper calls are reversible through undo/checkpoint flow.
+
+Status: Safe editing helpers now cover the original simple edits plus advanced bounded helpers, refinement helpers, object visibility/display, animation controls, rollback manifests, and generic preview change reports that summarize expected live-helper changes and rollback coverage.
 
 ### Milestone 5: Animation Workflows
 
@@ -274,7 +276,7 @@ Acceptance:
 - Live-helper tool calls route through the same preview/revert system.
 - The bridge is off by default, binds only to `127.0.0.1`, and can require a bearer token.
 
-Status: Initial external bridge is implemented. Blender exposes a localhost JSON bridge, and `mcp_server.py` implements MCP lifecycle, tools, resources, and ping over stdio. The sidebar can start/stop the bridge and copy a client config.
+Status: External bridge is implemented. Blender exposes a localhost JSON bridge, and `mcp_server.py` implements MCP lifecycle, compact catalog search/schema/invoke, tool wrappers, resources, prompts, pagination, JSON Schema validation, trust status, and diagnostics over stdio. The sidebar can start/stop the bridge and copy versioned client config. Real-client smoke is still required after install/reload or tool-surface changes.
 
 ### Milestone 6: Packaging And QA
 

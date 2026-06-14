@@ -119,6 +119,10 @@ def docs_base_url(version):
     return f"https://docs.blender.org/api/{version}/"
 
 
+def manual_base_url(version):
+    return f"https://docs.blender.org/manual/en/{version}/"
+
+
 def docs_zip_url(version):
     return f"{docs_base_url(version)}{docs_zip_name(version)}"
 
@@ -434,6 +438,7 @@ def _search_entries(entries, query, max_results):
     scored.sort(key=lambda item: (-item[0], item[1].get("title", "")))
     return [
         {
+            "id": entry.get("id"),
             "title": entry.get("title"),
             "url": entry.get("url"),
             "snippet": entry.get("snippet"),
@@ -448,6 +453,7 @@ def _fallback_results(version, query, max_results):
     query_slug = "+".join(_terms(query)) or "bpy"
     return [
         {
+            "id": "official-api-index",
             "title": "Blender Python API Index",
             "url": f"https://docs.blender.org/api/{version}/index.html",
             "snippet": "Official Blender Python API index. Use when the local docs cache has no targeted result.",
@@ -455,13 +461,47 @@ def _fallback_results(version, query, max_results):
             "score": 0,
         },
         {
+            "id": "official-api-search",
             "title": "Blender Python API Search",
             "url": f"https://docs.blender.org/api/{version}/search.html?q={query_slug}",
             "snippet": "Official Blender API search URL for this query.",
             "source": "official_url_candidate",
             "score": 0,
         },
+        {
+            "id": "official-manual-search",
+            "title": "Blender Manual Search",
+            "url": f"{manual_base_url(version)}search.html?q={query_slug}",
+            "snippet": "Official Blender Manual search URL for workflow and UI concepts that are not covered by Python API reference pages.",
+            "source": "official_manual_url_candidate",
+            "score": 0,
+        },
     ][:max_results]
+
+
+def _citation_records(results):
+    citations = []
+    for index, result in enumerate(results or [], start=1):
+        url = result.get("url") or ""
+        if not url:
+            continue
+        citations.append(
+            {
+                "ref": f"D{index}",
+                "title": result.get("title") or "Blender docs",
+                "url": url,
+                "source": result.get("source", "unknown"),
+                "score": int(result.get("score") or 0),
+            }
+        )
+    return citations
+
+
+def _citation_report(citations):
+    if not citations:
+        return "No Blender docs citations available."
+    parts = [f"[{item['ref']}] {item['title']} - {item['url']}" for item in citations[:5]]
+    return "Docs used: " + "; ".join(parts)
 
 
 def search_blender_docs(query, *, cache_dir=None, local_first=True, max_results=5):
@@ -473,6 +513,7 @@ def search_blender_docs(query, *, cache_dir=None, local_first=True, max_results=
     results = _search_entries(all_entries, query, max_results)
     if not results:
         results = _fallback_results(version, query, max_results)
+    citations = _citation_records(results)
     payload = {
         "query": query,
         "version": version,
@@ -481,6 +522,8 @@ def search_blender_docs(query, *, cache_dir=None, local_first=True, max_results=
         "full_index_file": full_index_path,
         "full_index_entries": len(full_entries),
         "results": results,
+        "citations": citations,
+        "citation_report": _citation_report(citations),
         "source_policy": "local JSON cache first, official Blender docs URLs second",
     }
     text = json.dumps(payload, sort_keys=True)
@@ -488,6 +531,8 @@ def search_blender_docs(query, *, cache_dir=None, local_first=True, max_results=
         return payload
     while len(payload["results"]) > 1 and len(json.dumps(payload, sort_keys=True)) > context_budget.MAX_DOC_RESULT_CHARS:
         payload["results"].pop()
+        payload["citations"] = _citation_records(payload["results"])
+        payload["citation_report"] = _citation_report(payload["citations"])
     payload["truncated_for_context_budget"] = True
     return payload
 

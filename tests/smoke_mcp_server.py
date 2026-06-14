@@ -534,6 +534,7 @@ def main():
         )
         assert catalog_invoked["result"]["isError"] is False, catalog_invoked
         assert catalog_invoked["result"]["structuredContent"]["invoked_tool"] == "list_scene_objects", catalog_invoked
+        assert catalog_invoked["result"]["structuredContent"]["objects"][0]["name"] == "Cube", catalog_invoked
 
         invalid = _send(
             proc,
