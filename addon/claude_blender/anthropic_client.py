@@ -51,12 +51,12 @@ SYSTEM_PROMPT = (
     "If agent_memory is enabled, treat it as the running project thread so the user can work progressively across prompts. "
     "Use prior goals, attempted steps, and remaining tasks from agent_memory, but treat the current Blender scene context as authoritative if they conflict. "
     "Read context_plan before acting. It explains which scene details were included or omitted to stay within the request budget. "
-    "If omitted details matter, call inspect_scene, get_object_details, get_animation_details, get_material_node_details, get_geometry_nodes_details, get_shader_nodes_details, get_rigging_details, get_shape_key_details, get_curve_text_details, get_simulation_details, get_collection_layer_details, get_render_camera_compositor_details, or search_blender_docs instead of guessing. "
+    "If omitted details matter, call inspect_scene, get_object_details, get_animation_details, get_material_node_details, get_geometry_nodes_details, get_shader_nodes_details, get_rigging_details, get_shape_key_details, get_curve_text_details, get_simulation_details, get_collection_layer_details, get_render_camera_compositor_details, capture_viewport, or search_blender_docs instead of guessing. "
     "When target objects are unclear, use list_scene_objects and select_objects before applying selected-object tools. "
     "When the user asks to change the scene, use safe helper tools first so Blender changes immediately. "
     "Use direct Blender data concepts: objects, collections, materials, cameras, lights, actions, keyframes. "
     "For scene building and layout, prefer create_primitive, create_empty, duplicate_selected_objects, parent_selected_to_empty, align_selected_objects, distribute_selected_objects, set_object_visibility, set_object_display, assign_material_to_selected, assign_emission_material_to_selected, create_shader_material, create_text_object, create_curve_path, create_collection, link_selected_to_collection, add_light, add_camera, add_modifier_to_selected, add_geometry_nodes_modifier, add_track_to_constraint, add_copy_transform_constraint, create_basic_armature, add_particle_system_to_selected, set_render_settings, set_camera_settings, and set_world_background. "
-    "For model refinement, prefer shade_smooth_selected, add_bevel_and_subsurf, create_wheel_assembly, add_panel_seams, add_window_materials, and apply_vehicle_refinement_template when they fit the task. "
+    "For model refinement and production presentation, prefer shade_smooth_selected, add_bevel_and_subsurf, create_wheel_assembly, add_panel_seams, add_window_materials, apply_vehicle_refinement_template, create_studio_product_stage, and add_dimension_callouts when they fit the task. "
     "For shape-key animation, prefer create_shape_key and animate_shape_key before drafting Python. "
     "For animation, prefer set_scene_frame_range, set_animation_preview_range, animate_selected_transform, animate_object_bounce, animate_material_property, animate_light_property, create_follow_path_animation, create_turntable_animation, create_pulse_animation, create_reveal_animation, create_staggered_motion, set_action_interpolation, retime_actions, add_action_cycles, clear_animation, and create_camera_orbit. "
     "For complex scene builds that need many objects or more than about eight helper calls, stage one cohesive Blender Python script with draft_script instead of making a long chain of helper calls. "
@@ -116,6 +116,20 @@ def blender_tool_definitions():
                 "type": "object",
                 "properties": {
                     "include_visual": {"type": "boolean", "description": "Whether viewport image context was requested"}
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "capture_viewport",
+            "description": "Capture the current Blender viewport/window and return visual context metadata plus a local artifact path. Use the Viewport context toggle when Claude needs actual image blocks; this callable tool is for explicit screenshot requests and MCP clients.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "max_bytes": {
+                        "type": "integer",
+                        "description": "Maximum PNG bytes to keep after resizing/compression. Defaults to the add-on preference.",
+                    }
                 },
                 "additionalProperties": False,
             },
@@ -1240,6 +1254,39 @@ def blender_tool_definitions():
             },
         },
         {
+            "name": "create_studio_product_stage",
+            "description": "Create a production-style product presentation stage around a target object: floor, backdrop, key/fill/rim area lights, target empty, and optional camera. Applies immediately with preview revert support.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "target_name": {"type": "string"},
+                    "stage_name": {"type": "string"},
+                    "floor": {"type": "boolean"},
+                    "backdrop": {"type": "boolean"},
+                    "lighting": {"type": "boolean"},
+                    "camera": {"type": "boolean"},
+                    "label": {"type": "string"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "add_dimension_callouts",
+            "description": "Add non-destructive dimension/ruler callouts around a target object's bounds for width, depth, and height. Applies immediately with preview revert support.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "target_name": {"type": "string"},
+                    "unit_label": {"type": "string"},
+                    "include_width": {"type": "boolean"},
+                    "include_depth": {"type": "boolean"},
+                    "include_height": {"type": "boolean"},
+                    "label": {"type": "string"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "add_track_to_constraint",
             "description": "Add a Track To constraint from selected object(s) to a target object. Useful for cameras/lights looking at a target. Applies immediately with preview revert support.",
             "input_schema": {
@@ -1500,10 +1547,12 @@ _TOOL_GROUPS = {
     },
     "camera_render": {
         "get_render_camera_compositor_details",
+        "capture_viewport",
         "add_light",
         "add_camera",
         "set_active_camera",
         "create_camera_orbit",
+        "create_studio_product_stage",
         "create_turntable_animation",
         "set_render_settings",
         "set_camera_settings",
@@ -1519,6 +1568,7 @@ _TOOL_GROUPS = {
         "get_simulation_details",
         "get_collection_layer_details",
         "get_render_camera_compositor_details",
+        "capture_viewport",
     },
     "advanced_create": {
         "create_shader_material",
@@ -1544,6 +1594,8 @@ _TOOL_GROUPS = {
         "add_particle_system_to_selected",
         "create_basic_armature",
         "add_copy_transform_constraint",
+        "create_studio_product_stage",
+        "add_dimension_callouts",
         "duplicate_selected_objects",
         "parent_selected_to_empty",
         "align_selected_objects",
@@ -1554,6 +1606,8 @@ _TOOL_GROUPS = {
         "add_bevel_and_subsurf",
         "add_panel_seams",
         "add_window_materials",
+        "create_studio_product_stage",
+        "add_dimension_callouts",
     },
     "vehicle": {
         "shade_smooth_selected",
@@ -1562,6 +1616,8 @@ _TOOL_GROUPS = {
         "add_panel_seams",
         "add_window_materials",
         "apply_vehicle_refinement_template",
+        "create_studio_product_stage",
+        "add_dimension_callouts",
         "create_shader_material",
         "add_light",
         "add_camera",
@@ -1579,10 +1635,10 @@ _GROUP_KEYWORDS = {
     "basic_edit": {"make", "create", "add", "move", "scale", "rotate", "transform", "object", "primitive", "empty", "marker", "collection", "duplicate", "copy", "parent", "align", "distribute", "layout", "arrange", "hide", "unhide", "visibility", "visible", "display", "wireframe", "show name", "in front"},
     "materials": {"material", "shader", "color", "colour", "red", "blue", "green", "metal", "metallic", "chrome", "glass", "emission", "glow", "window"},
     "animation": {"animate", "animation", "keyframe", "timeline", "frame", "orbit", "bounce", "driver", "motion", "follow path", "path", "retime", "interpolation", "easing", "loop", "cycles", "turntable", "pulse", "reveal", "stagger"},
-    "camera_render": {"camera", "render", "light", "lighting", "world", "background", "dof", "depth of field", "lens", "compositor", "resolution", "intensity"},
-    "deep_inspect": {"inspect", "analyze", "analyse", "summarize", "summary", "details", "world model", "what", "list"},
-    "advanced_create": {"geometry nodes", "shape key", "text", "curve", "particle", "armature", "constraint", "rig", "driver"},
-    "refinement": {"refine", "polish", "smooth", "high poly", "high-poly", "detail", "bevel", "subdivision", "subsurf", "seam", "panel"},
+    "camera_render": {"camera", "render", "light", "lighting", "world", "background", "dof", "depth of field", "lens", "compositor", "resolution", "intensity", "studio", "product stage", "presentation"},
+    "deep_inspect": {"inspect", "analyze", "analyse", "summarize", "summary", "details", "world model", "what", "list", "screenshot", "viewport", "visual", "image", "capture"},
+    "advanced_create": {"geometry nodes", "shape key", "text", "curve", "particle", "armature", "constraint", "rig", "driver", "callout", "dimension", "label"},
+    "refinement": {"refine", "polish", "smooth", "high poly", "high-poly", "detail", "bevel", "subdivision", "subsurf", "seam", "panel", "dimension", "callout", "stage"},
     "vehicle": {"car", "vehicle", "truck", "wheel", "tire", "tyre", "rim", "headlight", "taillight", "windshield", "door", "grille"},
     "rigging": {"rig", "armature", "bone", "constraint", "copy location", "copy rotation", "track to"},
     "curves_text": {"curve", "path", "text", "label", "spline"},
@@ -1714,6 +1770,8 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "distribute_selected_objects",
     "shade_smooth_selected",
     "add_bevel_and_subsurf",
+    "create_studio_product_stage",
+    "add_dimension_callouts",
     "apply_vehicle_refinement_template",
     "draft_script",
 }

@@ -85,6 +85,14 @@ TOOL_CONTRACTS = {
         "description": "Search local cached official Blender docs before online docs",
         "mutates_scene": False,
     },
+    "capture_viewport": {
+        "description": "Capture the current viewport/window and return visual metadata plus a local artifact path",
+        "mutates_scene": False,
+        "has_side_effects": True,
+        "permissions": ["scene:read", "files:write"],
+        "supports_headless": False,
+        "timeout_seconds": 30,
+    },
     "set_selected_location_delta": {
         "description": "Move selected Blender objects by a delta with rollback state",
         "mutates_scene": True,
@@ -324,6 +332,16 @@ TOOL_CONTRACTS = {
     },
     "apply_vehicle_refinement_template": {
         "description": "Apply a bounded vehicle detail kit with wheels, windows, seams, lights, and smoothing",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
+    "create_studio_product_stage": {
+        "description": "Create a bounded studio/product presentation stage around a target object",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
+    "add_dimension_callouts": {
+        "description": "Add non-destructive dimension/ruler callouts around a target object's bounds",
         "mutates_scene": True,
         "requires_live_preview": True,
     },

@@ -153,6 +153,8 @@ Common changes should use typed helper tools before arbitrary code:
 - `add_panel_seams`
 - `add_window_materials`
 - `apply_vehicle_refinement_template`
+- `create_studio_product_stage`
+- `add_dimension_callouts`
 
 Helpers can validate object names, expected types, frame ranges, and value ranges before applying changes. When a helper is too limited, Claude can fall back to a proposed Python script.
 

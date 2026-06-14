@@ -97,7 +97,7 @@ Expose Claude to narrow client tools rather than raw Python first:
 - `get_simulation_details`: returns particle/simulation modifiers and particle settings summaries.
 - `get_collection_layer_details`: returns collection tree, collection visibility, and view-layer summaries.
 - `get_render_camera_compositor_details`: returns render settings, active camera, world settings, and compositor nodes.
-- `capture_viewport`: returns a screenshot or preview render reference.
+- `capture_viewport`: captures the interactive viewport/window when available and returns metadata plus a local PNG artifact path.
 - `search_blender_docs`: returns targeted snippets and links from official docs.
 - `plan_scene_change`: creates a user-readable plan before code or tool execution.
 - `select_objects`: selects named objects and optionally sets the active object.
@@ -128,6 +128,8 @@ Expose Claude to narrow client tools rather than raw Python first:
 - `add_panel_seams`: adds simple dark curve seams around a mesh body's bounds.
 - `add_window_materials`: creates/assigns blue glass and optional window panels.
 - `apply_vehicle_refinement_template`: applies a bounded vehicle detail kit with smoothing, wheels, glass, seams, headlights, and taillights.
+- `create_studio_product_stage`: creates a bounded floor/backdrop/key-fill-rim-light/camera presentation setup around a target.
+- `add_dimension_callouts`: adds width/depth/height curve and text callouts around a target's bounds.
 - `add_track_to_constraint`: adds a Track To constraint from selected objects to a target.
 - `add_light`: creates a light object.
 - `add_camera`: creates a camera and makes it active.

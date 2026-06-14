@@ -13,7 +13,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import anthropic_client, context_bundle, tool_dispatcher  # noqa: E402
+from claude_blender import anthropic_client, bridge_protocol, context_bundle, tool_dispatcher  # noqa: E402
 
 
 REFINEMENT_TOOLS = {
@@ -23,6 +23,8 @@ REFINEMENT_TOOLS = {
     "add_panel_seams",
     "add_window_materials",
     "apply_vehicle_refinement_template",
+    "create_studio_product_stage",
+    "add_dimension_callouts",
 }
 
 
@@ -44,7 +46,10 @@ def _snapshot(cube):
         "meshes": set(bpy.data.meshes.keys()),
         "curves": set(bpy.data.curves.keys()),
         "materials": set(bpy.data.materials.keys()),
+        "lights": set(bpy.data.lights.keys()),
+        "cameras": set(bpy.data.cameras.keys()),
         "actions": set(bpy.data.actions.keys()),
+        "scene_camera": bpy.context.scene.camera.name if bpy.context.scene.camera else None,
         "cube_modifiers": [modifier.name for modifier in cube.modifiers],
         "cube_smooth": [bool(poly.use_smooth) for poly in cube.data.polygons],
     }
@@ -61,6 +66,7 @@ def main():
         assert REFINEMENT_TOOLS.issubset(set(bundle["available_tools"]))
         full_names = {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
         assert REFINEMENT_TOOLS.issubset(full_names)
+        assert REFINEMENT_TOOLS.issubset(set(bridge_protocol.TOOL_CONTRACTS))
 
         _execute(context, "shade_smooth_selected", {"add_weighted_normals": True})
         assert all(poly.use_smooth for poly in cube.data.polygons)
@@ -78,6 +84,15 @@ def main():
 
         glass = _execute(context, "add_window_materials", {"target_name": "Cube", "create_panels": True})
         assert glass["created_objects"]
+
+        stage = _execute(context, "create_studio_product_stage", {"target_name": "Cube", "stage_name": "Claude Test Stage"})
+        assert stage["created_objects"]
+        assert len(stage["lights"]) == 3
+        assert stage["camera"]
+
+        callouts = _execute(context, "add_dimension_callouts", {"target_name": "Cube", "unit_label": "m"})
+        assert {"width", "depth", "height"} == set(callouts["measurements"])
+        assert len(callouts["created_objects"]) == 6
 
         _execute(context, "revert_preview", {})
         final = _snapshot(cube)

@@ -162,6 +162,7 @@ Simple changes should go through allowlisted helper tools instead of arbitrary g
 Initial helpers:
 
 - `list_scene_objects(type_filter, max_objects)`
+- `capture_viewport(max_bytes)`: captures the interactive viewport/window when UI is available and returns metadata plus the local PNG artifact path. Normal Claude visual prompts should still use the Viewport context toggle, which can attach the image block directly.
 - `select_objects(object_names, active_object_name, extend)`
 - `set_current_frame(frame)`
 - `create_primitive(primitive_type, name, location, rotation, scale)`
@@ -196,6 +197,8 @@ Initial helpers:
 - `add_panel_seams(target_name, bevel_depth)`
 - `add_window_materials(target_name, material_name, color, create_panels)`
 - `apply_vehicle_refinement_template(target_name, detail_level)`
+- `create_studio_product_stage(target_name, stage_name, floor, backdrop, lighting, camera)`
+- `add_dimension_callouts(target_name, unit_label, include_width, include_depth, include_height)`
 
 Helpers should validate inputs and return structured results. Claude can still propose Python for advanced operations, but the default path for common edits should be helper-first.
 

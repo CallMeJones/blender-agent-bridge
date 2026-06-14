@@ -7,7 +7,7 @@ import re
 
 import bpy
 
-from . import advanced_helpers, context_bundle, docs_index, live_preview, preferences, script_runner, world_model
+from . import advanced_helpers, context_bundle, docs_index, live_preview, preferences, script_runner, viewport_capture, world_model
 
 
 def _float_list(values, length, default):
@@ -1167,6 +1167,31 @@ def apply_vehicle_refinement_template(context, args):
     )
 
 
+def create_studio_product_stage(context, args):
+    return advanced_helpers.create_studio_product_stage(
+        context,
+        target_name=str(args.get("target_name") or ""),
+        stage_name=str(args.get("stage_name") or "Claude Product Stage"),
+        floor=bool(args.get("floor", True)),
+        backdrop=bool(args.get("backdrop", True)),
+        lighting=bool(args.get("lighting", True)),
+        camera=bool(args.get("camera", True)),
+        label=args.get("label", "Create studio product stage"),
+    )
+
+
+def add_dimension_callouts(context, args):
+    return advanced_helpers.add_dimension_callouts(
+        context,
+        target_name=str(args.get("target_name") or ""),
+        unit_label=str(args.get("unit_label") or "bu"),
+        include_width=bool(args.get("include_width", True)),
+        include_depth=bool(args.get("include_depth", True)),
+        include_height=bool(args.get("include_height", True)),
+        label=args.get("label", "Add dimension callouts"),
+    )
+
+
 def add_track_to_constraint(context, args):
     return live_preview.add_track_to_constraint(
         context,
@@ -1252,6 +1277,25 @@ def create_camera_orbit(context, args):
         lens=float(args.get("lens", 35.0)),
         label=args.get("label", "Create camera orbit"),
     )
+
+
+def capture_viewport(context, args):
+    prefs = preferences.get_preferences(context)
+    max_bytes = args.get("max_bytes")
+    if max_bytes is None:
+        max_bytes = getattr(prefs, "max_screenshot_bytes", viewport_capture.DEFAULT_MAX_BYTES)
+    metadata, attachments = viewport_capture.capture_viewport(
+        context,
+        capture_dir=getattr(prefs, "capture_cache_dir", None),
+        max_bytes=_bounded_int(max_bytes, viewport_capture.DEFAULT_MAX_BYTES, minimum=262144, maximum=20 * 1024 * 1024),
+    )
+    return {
+        "ok": bool(metadata.get("available")),
+        "message": metadata.get("note") or "Viewport screenshot capture complete",
+        "visual_context": metadata,
+        "attachment_available": bool(attachments),
+        "attachment_keys": sorted(attachments.keys()),
+    }
 
 
 def search_blender_docs(context, args):
@@ -1424,6 +1468,8 @@ TOOL_FUNCTIONS = {
     "add_panel_seams": add_panel_seams,
     "add_window_materials": add_window_materials,
     "apply_vehicle_refinement_template": apply_vehicle_refinement_template,
+    "create_studio_product_stage": create_studio_product_stage,
+    "add_dimension_callouts": add_dimension_callouts,
     "add_track_to_constraint": add_track_to_constraint,
     "add_light": add_light,
     "add_camera": add_camera,
@@ -1431,6 +1477,7 @@ TOOL_FUNCTIONS = {
     "set_active_camera": set_active_camera,
     "animate_selected_transform": animate_selected_transform,
     "create_camera_orbit": create_camera_orbit,
+    "capture_viewport": capture_viewport,
     "search_blender_docs": search_blender_docs,
     "draft_script": draft_script,
     "run_approved_script": run_approved_script,

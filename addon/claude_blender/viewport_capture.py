@@ -27,6 +27,8 @@ def _capture_filepath(capture_dir):
 
 
 def _has_ui_context(context):
+    if bool(getattr(bpy.app, "background", False)):
+        return False
     return bool(getattr(context, "window", None) and getattr(context, "screen", None))
 
 

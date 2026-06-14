@@ -9,6 +9,7 @@ import sys
 import tempfile
 import zipfile
 import base64
+import json
 
 import bpy
 
@@ -17,7 +18,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import anthropic_client, context_budget, context_bundle, docs_index, viewport_capture  # noqa: E402
+from claude_blender import anthropic_client, bridge_protocol, context_budget, context_bundle, docs_index, tool_dispatcher, viewport_capture  # noqa: E402
 
 
 def main():
@@ -30,6 +31,15 @@ def main():
         assert "_attachments" not in public
         assert public["visual_context"]["requested"] is True
         assert public["visual_context"]["available"] is False
+        assert "capture_viewport" in bundle["available_tools"]
+        assert "capture_viewport" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
+        assert "capture_viewport" in bridge_protocol.TOOL_CONTRACTS
+
+        captured = json.loads(tool_dispatcher.execute_tool(bpy.context, "capture_viewport", {"max_bytes": 512 * 1024}))
+        assert captured["ok"] is False, captured
+        assert captured["visual_context"]["requested"] is True, captured
+        assert captured["visual_context"]["available"] is False, captured
+        assert "interactive Blender window" in captured["message"], captured
 
         tiny_png = os.path.join(cache_dir, "tiny.png")
         with open(tiny_png, "wb") as handle:

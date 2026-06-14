@@ -70,7 +70,10 @@ def main():
         tools = _get(base + "/tools")
         names = {tool["name"] for tool in tools["tools"]}
         assert "list_scene_objects" in names, names
+        assert "capture_viewport" in names, names
         assert "apply_vehicle_refinement_template" in names, names
+        assert "create_studio_product_stage" in names, names
+        assert "add_dimension_callouts" in names, names
 
         health = _request_with_pump(lambda: _get(base + "/health"))
         assert health["ok"], health

@@ -361,6 +361,53 @@ def _create_curve_line(context, name, points, bevel_depth, material=None):
     return obj
 
 
+def _create_text_label(context, name, text, location, *, size=0.2, rotation=(0.0, 0.0, 0.0), material=None):
+    curve = bpy.data.curves.new(f"{name} Data", "FONT")
+    curve.body = str(text)
+    curve.align_x = "CENTER"
+    curve.align_y = "CENTER"
+    curve.size = max(0.01, float(size))
+    obj = bpy.data.objects.new(name, curve)
+    obj.location = _coerce_vector(location, (0.0, 0.0, 0.0))
+    obj.rotation_euler = _coerce_vector(rotation, (0.0, 0.0, 0.0))
+    context.scene.collection.objects.link(obj)
+    if material:
+        curve.materials.append(material)
+    live_preview._record_created_id("object", obj.name)
+    live_preview._record_created_id("curve", curve.name)
+    return obj
+
+
+def _create_empty_target(context, name, location, *, display_size=0.4):
+    empty = bpy.data.objects.new(name, object_data=None)
+    empty.empty_display_type = "PLAIN_AXES"
+    empty.empty_display_size = max(0.01, float(display_size))
+    empty.location = _coerce_vector(location, (0.0, 0.0, 0.0))
+    context.scene.collection.objects.link(empty)
+    live_preview._record_created_id("object", empty.name)
+    return empty
+
+
+def _create_area_light(context, name, location, *, energy, size, color, target=None):
+    data = bpy.data.lights.new(name=name, type="AREA")
+    data.energy = max(0.0, float(energy))
+    data.size = max(0.01, float(size))
+    data.color = (float(color[0]), float(color[1]), float(color[2]))
+    obj = bpy.data.objects.new(name=name, object_data=data)
+    obj.location = _coerce_vector(location, (0.0, 0.0, 0.0))
+    context.scene.collection.objects.link(obj)
+    live_preview._record_created_id("object", obj.name)
+    live_preview._record_created_id("light", data.name)
+    if target is not None:
+        constraint = obj.constraints.new(type="TRACK_TO")
+        constraint.name = "Claude Look At Target"
+        constraint.target = target
+        constraint.track_axis = "TRACK_NEGATIVE_Z"
+        constraint.up_axis = "UP_Y"
+        live_preview._record_created_constraint(obj, constraint)
+    return obj
+
+
 def _create_wheel_parts(context, *, name, location, radius, thickness, axis, tire_material, rim_material):
     rotation = _axis_rotation(axis)
     bpy.ops.mesh.primitive_torus_add(
@@ -2530,6 +2577,241 @@ def add_window_materials(
         "material": material.name,
         "assigned_objects": assigned,
         "created_objects": created,
+        "transaction_id": transaction["id"],
+    }
+
+
+def create_studio_product_stage(
+    context,
+    *,
+    target_name="",
+    stage_name="Claude Product Stage",
+    floor=True,
+    backdrop=True,
+    lighting=True,
+    camera=True,
+    label="Create studio product stage",
+):
+    target = bpy.data.objects.get(target_name) if target_name else context.active_object
+    if target is None or not hasattr(target, "bound_box"):
+        return {"ok": False, "message": "A target object with bounds is required for a studio stage"}
+    transaction = live_preview.begin(label, context)
+    bounds = _bounds_world(target)
+    min_x, min_y, min_z = bounds["min"]
+    max_x, max_y, max_z = bounds["max"]
+    center_x, center_y, center_z = bounds["center"]
+    sx, sy, sz = bounds["size"]
+    max_dim = max(1.0, sx, sy, sz)
+    stage_name = str(stage_name or "Claude Product Stage")
+    floor_material = _material_for_color(f"{stage_name} Warm Gray", (0.58, 0.57, 0.54, 1.0))
+    backdrop_material = _material_for_color(f"{stage_name} Soft Backdrop", (0.72, 0.71, 0.68, 1.0))
+
+    created = []
+    floor_thickness = max(0.02, max_dim * 0.025)
+    if floor:
+        created.append(
+            _create_cube_object(
+                context,
+                f"{stage_name} Floor",
+                (center_x, center_y, min_z - floor_thickness / 2.0),
+                (max_dim * 2.8, max_dim * 2.2, floor_thickness),
+                floor_material,
+            ).name
+        )
+    if backdrop:
+        created.append(
+            _create_cube_object(
+                context,
+                f"{stage_name} Backdrop",
+                (center_x, max_y + max_dim * 0.72, min_z + max_dim * 0.7),
+                (max_dim * 2.8, floor_thickness, max_dim * 1.45),
+                backdrop_material,
+            ).name
+        )
+
+    target_empty = _create_empty_target(
+        context,
+        f"{stage_name} Target",
+        (center_x, center_y, center_z),
+        display_size=max_dim * 0.12,
+    )
+    created.append(target_empty.name)
+
+    lights = []
+    if lighting:
+        key = _create_area_light(
+            context,
+            f"{stage_name} Key Light",
+            (min_x - max_dim * 1.2, min_y - max_dim * 1.35, max_z + max_dim * 1.3),
+            energy=650.0,
+            size=max_dim * 1.15,
+            color=(1.0, 0.93, 0.84),
+            target=target_empty,
+        )
+        fill = _create_area_light(
+            context,
+            f"{stage_name} Fill Light",
+            (max_x + max_dim * 1.3, min_y - max_dim * 0.9, max_z + max_dim * 0.75),
+            energy=180.0,
+            size=max_dim * 1.7,
+            color=(0.78, 0.86, 1.0),
+            target=target_empty,
+        )
+        rim = _create_area_light(
+            context,
+            f"{stage_name} Rim Light",
+            (center_x, max_y + max_dim * 1.25, max_z + max_dim * 1.1),
+            energy=360.0,
+            size=max_dim * 0.75,
+            color=(1.0, 1.0, 0.94),
+            target=target_empty,
+        )
+        lights = [key.name, fill.name, rim.name]
+        created.extend(lights)
+
+    camera_name = ""
+    if camera:
+        live_preview._record_scene_camera(context.scene)
+        data = bpy.data.cameras.new(name=f"{stage_name} Camera")
+        data.lens = 70.0
+        data.dof.use_dof = True
+        data.dof.focus_object = target_empty
+        data.dof.aperture_fstop = 5.6
+        camera_obj = bpy.data.objects.new(name=f"{stage_name} Camera", object_data=data)
+        camera_obj.location = (center_x - max_dim * 1.8, min_y - max_dim * 2.2, center_z + max_dim * 1.0)
+        context.scene.collection.objects.link(camera_obj)
+        live_preview._record_created_id("object", camera_obj.name)
+        live_preview._record_created_id("camera", data.name)
+        constraint = camera_obj.constraints.new(type="TRACK_TO")
+        constraint.name = "Claude Look At Target"
+        constraint.target = target_empty
+        constraint.track_axis = "TRACK_NEGATIVE_Z"
+        constraint.up_axis = "UP_Y"
+        live_preview._record_created_constraint(camera_obj, constraint)
+        context.scene.camera = camera_obj
+        camera_name = camera_obj.name
+        created.append(camera_obj.name)
+
+    transaction["applied_steps"].append(
+        {
+            "type": "create_studio_product_stage",
+            "label": label,
+            "target": target.name,
+            "created_objects": created,
+            "lights": lights,
+            "camera": camera_name,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Created product stage around {target.name}",
+        "target": target.name,
+        "created_objects": created,
+        "lights": lights,
+        "camera": camera_name,
+        "transaction_id": transaction["id"],
+    }
+
+
+def add_dimension_callouts(
+    context,
+    *,
+    target_name="",
+    unit_label="bu",
+    include_width=True,
+    include_depth=True,
+    include_height=True,
+    label="Add dimension callouts",
+):
+    target = bpy.data.objects.get(target_name) if target_name else context.active_object
+    if target is None or not hasattr(target, "bound_box"):
+        return {"ok": False, "message": "A target object with bounds is required for dimension callouts"}
+    if not any((include_width, include_depth, include_height)):
+        return {"ok": False, "message": "Enable at least one dimension callout"}
+    transaction = live_preview.begin(label, context)
+    bounds = _bounds_world(target)
+    min_x, min_y, min_z = bounds["min"]
+    max_x, max_y, max_z = bounds["max"]
+    center_x, center_y, center_z = bounds["center"]
+    sx, sy, sz = bounds["size"]
+    max_dim = max(1.0, sx, sy, sz)
+    offset = max_dim * 0.18
+    line_material = _material_for_color(f"{target.name} Dimension Lines", (0.02, 0.02, 0.02, 1.0))
+    text_material = _material_for_color(f"{target.name} Dimension Text", (0.95, 0.95, 0.88, 1.0))
+    bevel = max(0.004, max_dim * 0.006)
+    text_size = max(0.08, max_dim * 0.075)
+    unit_label = str(unit_label or "bu")
+    created = []
+    measurements = {}
+
+    def add_line(name, points, text, text_location, rotation=(math.radians(60.0), 0.0, 0.0)):
+        line = _create_curve_line(context, name, points, bevel, line_material)
+        label_obj = _create_text_label(
+            context,
+            f"{name} Label",
+            text,
+            text_location,
+            size=text_size,
+            rotation=rotation,
+            material=text_material,
+        )
+        created.extend([line.name, label_obj.name])
+
+    if include_width:
+        y = min_y - offset
+        z = min_z + offset * 0.35
+        value = float(sx)
+        measurements["width"] = value
+        add_line(
+            f"{target.name} Width Callout",
+            [(min_x, y, z), (max_x, y, z)],
+            f"W {value:.2f} {unit_label}",
+            (center_x, y, z + offset * 0.22),
+        )
+    if include_depth:
+        x = max_x + offset
+        z = min_z + offset * 0.35
+        value = float(sy)
+        measurements["depth"] = value
+        add_line(
+            f"{target.name} Depth Callout",
+            [(x, min_y, z), (x, max_y, z)],
+            f"D {value:.2f} {unit_label}",
+            (x, center_y, z + offset * 0.22),
+            rotation=(math.radians(60.0), 0.0, math.radians(90.0)),
+        )
+    if include_height:
+        x = max_x + offset
+        y = max_y + offset
+        value = float(sz)
+        measurements["height"] = value
+        add_line(
+            f"{target.name} Height Callout",
+            [(x, y, min_z), (x, y, max_z)],
+            f"H {value:.2f} {unit_label}",
+            (x, y, center_z),
+            rotation=(math.radians(70.0), 0.0, math.radians(90.0)),
+        )
+
+    transaction["applied_steps"].append(
+        {
+            "type": "add_dimension_callouts",
+            "label": label,
+            "target": target.name,
+            "created_objects": created,
+            "measurements": measurements,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Added dimension callouts for {target.name}",
+        "target": target.name,
+        "created_objects": created,
+        "measurements": measurements,
         "transaction_id": transaction["id"],
     }
 
