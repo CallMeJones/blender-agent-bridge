@@ -287,6 +287,132 @@ Acceptance:
 - Extension package validates with Blender's extension command.
 - Install docs and safety notes are clear.
 
+### Milestone 7: Intent-Correct Advanced Animation
+
+Milestone 7 should move beyond simple keyframe helpers into an animation workflow that understands the user's intent, applies human animation principles, validates the result, and repairs prompt drift. The goal is not just "make something move"; it is "make the motion satisfy the user's brief in a way an animator would recognize."
+
+Solo can be an optional companion integration for durable memory, style profiles, project knowledge, and correction history, but it should not be required to complete or ship Milestone 7. Blender remains responsible for scene execution, preview/playblast, physics/simulation, and final edits. The core animation workflow should run from Blender scene context and local agent memory alone, with Solo adding cross-session memory when available.
+
+#### Milestone 7A: Animation Brief And Prompt Contract
+
+- Turn each animation prompt into a structured brief before editing the scene.
+- Capture subject, action, motivation, style, camera, timing, physics, constraints, and success criteria.
+- Ask short clarifying questions when prompt intent is under-specified.
+- For clear prompts, produce a compact user-visible interpretation before generation.
+- Preserve prompt requirements as a checklist that later validation can test.
+
+Acceptance:
+
+- A prompt such as "make the red ball bounce three times and get smaller each bounce" becomes an explicit contract with object, count, timing, scale, camera, and validation criteria.
+- The agent can distinguish ambiguity that needs user input from detail that can be inferred safely.
+- The prompt contract is available to the generation, validation, and repair steps.
+
+#### Milestone 7B: Timing Charts And Blocking Tools
+
+- Add tools for animator-style blocking before spline/f-curve polish.
+- Support key poses, holds, breakdowns, spacing notes, motion arcs, and frame-by-frame beat plans.
+- Represent timing charts as structured data that helper tools can execute.
+- Keep blocking edits reversible through the live-preview transaction system.
+
+Candidate tools:
+
+- `create_animation_brief`
+- `create_timing_chart`
+- `block_key_poses`
+- `add_breakdown_pose`
+- `set_pose_hold`
+- `create_motion_arc`
+
+Acceptance:
+
+- The agent can create readable blocking for common actions such as jumps, throws, impacts, turns, camera moves, and reveal animations.
+- Generated blocking uses clear keyframes and holds before adding interpolation polish.
+- Users can preview, commit, or revert the blocking pass.
+
+#### Milestone 7C: Animation Principles Evaluator
+
+- Add a principles layer that reasons about staging, anticipation, squash and stretch, timing and spacing, arcs, slow in/out, follow-through, overlap, secondary action, pose clarity, silhouette, weight, contact points, center of mass, and line of action.
+- Store principle decisions as structured metadata, not only prose in the prompt.
+- Evaluate generated animation against the principle plan.
+
+Candidate tools:
+
+- `analyze_motion_arcs`
+- `analyze_fcurve_spacing`
+- `analyze_pose_clarity`
+- `analyze_animation_principles`
+
+Acceptance:
+
+- A simple "happy jump" includes anticipation, launch, arc, landing squash, overshoot, and settle.
+- The evaluator can identify missing anticipation, overly linear motion, unclear pose staging, or absent settle after impact.
+- Findings can feed the repair loop without losing the original prompt contract.
+
+#### Milestone 7D: Animation-Aware Scene Understanding
+
+- Deepen scene inspection for advanced animation context.
+- Include rig controls, bones, IK/FK chains, constraints, drivers, actions, NLA tracks, contact surfaces, object scale/units, mass/weight hints, cameras, shot framing, pose libraries, shape keys, cloth, rigid-body, and particle systems.
+- Reuse the existing context planner so this detail is retrieved on demand instead of always sent in every prompt.
+
+Acceptance:
+
+- The agent can inspect where animation data actually lives: object transforms, data blocks, shape keys, materials, constraints, drivers, NLA, and rig controls.
+- The agent can avoid common wrong edits such as keyframing the mesh object when a rig control should be animated.
+- The context planner exposes deeper animation context only when the request needs it.
+
+#### Milestone 7E: Physics, Contact, And Prompt Validators
+
+- Add validators that check the generated animation against both the brief and physical plausibility.
+- Detect foot/object sliding, contact penetration, impossible acceleration, center-of-mass problems, collision/intersection issues, missing required actions, wrong object counts, camera framing failures, overly linear motion, incorrect frame ranges, and missing settle after impact.
+- Use Blender physics/simulation where appropriate, then bake and inspect results rather than relying only on language-model judgment.
+
+Candidate tools:
+
+- `analyze_contact_sliding`
+- `analyze_center_of_mass`
+- `analyze_collision_penetration`
+- `compare_animation_to_brief`
+
+Acceptance:
+
+- The validator can tell whether a requested action happened, whether it happened the requested number of times, and whether the camera kept the subject visible.
+- Physics-heavy prompts can use Blender simulation when helper-generated keyframes are not enough.
+- Validation results are structured enough to drive targeted repairs.
+
+#### Milestone 7F: Playblast Review And Repair Loop
+
+- Add a contract loop: prompt -> brief -> user-visible interpretation -> generate -> evaluate -> repair.
+- Add playblast or viewport-preview capture for animation review.
+- Compare the playblast, animation data, and scene state against the prompt contract.
+- Generate focused repair operations rather than starting over when only part of the animation is wrong.
+
+Candidate tools:
+
+- `create_animation_playblast`
+- `review_playblast_against_brief`
+- `repair_animation_from_findings`
+
+Acceptance:
+
+- The agent can repair prompt drift such as wrong bounce count, camera losing the subject, missing scale change, or absent follow-through.
+- The repair loop preserves successful parts of the animation.
+- The user sees concise review findings and can commit or revert the repaired preview.
+
+#### Milestone 7G: Optional Solo-Backed Style And Project Memory
+
+- Use Solo to remember user animation preferences, style profiles, project-specific animation rules, prior corrections, reusable animation briefs/templates, character/rig facts, and failed interpretations that should not repeat.
+- Treat Solo as a durable companion memory and planning surface around Blender, not as a Blender execution backend.
+- Keep local Blender agent memory for immediate scene/session continuity and use Solo for cross-session project memory.
+- Include privacy and availability states in the UI: connected, unavailable, disabled, or limited.
+
+Acceptance:
+
+- Milestone 7A-7F can be implemented, tested, and shipped without Solo.
+- When Solo is connected and enabled, the agent can retrieve relevant style/project memory before creating the animation brief.
+- When Solo is unavailable, the agent continues with local Blender context and local agent memory without blocking the animation workflow.
+- User corrections such as "when I say punchy, I mean fast anticipation and a hard impact" can become reusable future context.
+- Solo memory never contains secrets, raw credentials, API keys, or hidden private content.
+
 ## Open Questions
 
 - Should the Anthropic API transport stay inside Blender, or move to the companion bridge once the tool loop grows?
@@ -309,3 +435,4 @@ Acceptance:
 - Screenshot context is controlled by a toggle.
 - User should be able to choose sidebar or floating UI eventually.
 - Live helper changes should show logs/status only, not pause for a plan.
+- Milestone 7 should not require Solo. Solo is an optional durable-memory enhancement for advanced animation style, project rules, reusable briefs, and correction history; Blender remains the execution layer, and the core animation workflow should run without Solo.
