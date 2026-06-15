@@ -104,6 +104,26 @@ def main():
         blocking_names = _names(blocking_tools)
         assert "create_timing_chart" in blocking_names, blocking_meta
         assert "block_key_poses" in blocking_names, blocking_meta
+        assert "add_breakdown_pose" in blocking_names, blocking_meta
+        assert "set_pose_hold" in blocking_names, blocking_meta
+        assert "create_motion_arc" in blocking_names, blocking_meta
+
+        principles_tools, principles_meta = anthropic_client.select_blender_tool_definitions(
+            "Analyze this jump animation for anticipation, spacing, motion arcs, pose clarity, and settle.",
+            bundle,
+        )
+        principles_names = _names(principles_tools)
+        assert "analyze_animation_principles" in principles_names, principles_meta
+        assert "analyze_motion_arcs" in principles_names, principles_meta
+        assert "analyze_fcurve_spacing" in principles_names, principles_meta
+        assert "analyze_pose_clarity" in principles_names, principles_meta
+        assert "sample_animation_state" in principles_names, principles_meta
+        assert "analyze_contact_sliding" in principles_names, principles_meta
+        assert "analyze_collision_penetration" in principles_names, principles_meta
+        assert "analyze_camera_framing" in principles_names, principles_meta
+        assert "compare_animation_to_brief" in principles_names, principles_meta
+        assert "review_playblast_against_brief" in principles_names, principles_meta
+        assert "repair_animation_from_findings" in principles_names, principles_meta
 
         captured_tool_names = []
 

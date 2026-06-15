@@ -19,6 +19,7 @@ Recommended GitHub repository name: `blender-agent-bridge`.
 - Inspect the active `.blend` file through structured scene, selection, material, animation, rigging, render, camera, compositor, collection, and node-tree summaries.
 - Attach a bounded viewport screenshot when the `Viewport` toggle is enabled, with project/session-scoped local storage and MCP image resources for external clients.
 - Capture sampled animation playblast frames as project/session-scoped MCP image resources so agents can review timing, spacing, staging, arcs, and contact poses.
+- Let agents sample animation state, analyze f-curve spacing, motion arcs, pose clarity, contact sliding, bbox penetration, camera framing, and compare results against an animation brief before repair.
 - Search cached official Blender Python API and Manual documentation before version-sensitive scripting.
 - Let the in-Blender Claude assistant or external MCP agents call bounded live helper tools for common scene edits such as transforms, primitives, materials, cameras, lights, keyframes, constraints, geometry-node starters, shape keys, particles, text/curves, render settings, lighting presets, material palettes, product/vehicle/character kits, product turntables, and production scene organization.
 - Keep live helper edits inside preview transactions so the user can commit, revert, or use Blender undo.

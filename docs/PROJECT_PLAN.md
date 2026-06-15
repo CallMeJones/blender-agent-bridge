@@ -88,6 +88,23 @@ Expose Claude to narrow client tools rather than raw Python first:
 - `list_scene_objects`: returns object names, types, selection state, visibility, collections, and locations.
 - `get_object_details`: returns deeper details for named objects.
 - `get_animation_details`: returns actions, f-curves, keyframes, constraints, drivers, and timeline details.
+- `create_animation_brief`: creates a structured animation prompt contract.
+- `create_timing_chart`: creates an animator-style timing and blocking chart.
+- `block_key_poses`: applies key poses from a chart through reversible preview.
+- `add_breakdown_pose`: inserts an in-between pose between two keyed poses.
+- `set_pose_hold`: repeats keyed values to create a hold.
+- `create_motion_arc`: creates a sampled in-scene motion arc guide.
+- `sample_animation_state`: samples object transforms across frames for objective review.
+- `analyze_motion_arcs`: checks sampled motion paths and path length.
+- `analyze_fcurve_spacing`: checks key spacing, interpolation, and mechanical value spacing.
+- `analyze_pose_clarity`: checks keyed pose count, holds, and transform readability.
+- `analyze_animation_principles`: checks keyed data against the prompt contract and animation principles.
+- `analyze_contact_sliding`: detects object sliding while in contact with a plane.
+- `analyze_collision_penetration`: detects sampled bounding-box intersections.
+- `analyze_camera_framing`: checks whether animated subjects stay inside a camera-safe region.
+- `compare_animation_to_brief`: compares sampled animation state against the prompt contract.
+- `review_playblast_against_brief`: combines playblast metadata and current animation state review.
+- `repair_animation_from_findings`: turns structured findings into targeted non-mutating repair suggestions.
 - `get_material_node_details`: returns material slots, shader node summaries, and image texture references.
 - `get_geometry_nodes_details`: returns geometry-node modifier and node-group summaries.
 - `get_shader_nodes_details`: returns material shader-node summaries for selected or named materials.
@@ -320,7 +337,7 @@ Acceptance:
 - The agent can distinguish ambiguity that needs user input from detail that can be inferred safely.
 - The prompt contract is available to the generation, validation, and repair steps.
 
-Status: Initial `create_animation_brief` tool is implemented as a non-mutating prompt-contract helper that resolves subjects, timing, counts, secondary scale/visibility/brightness requirements, assumptions, ambiguities, success criteria, and validation-plan flags from the current Blender context. The agent loop now preflights animation generation prompts with this brief and returns a concise clarifying question before model generation when the brief is ambiguous.
+Status: Complete for the current milestone scope. `create_animation_brief` is implemented as a non-mutating prompt-contract helper that resolves subjects, timing, counts, secondary scale/visibility/brightness requirements, assumptions, ambiguities, success criteria, and validation-plan flags from the current Blender context. The agent loop preflights animation generation prompts with this brief, carries the contract into generation context, and returns a concise clarifying question before model generation when the brief is ambiguous.
 
 #### Milestone 7B: Timing Charts And Blocking Tools
 
@@ -344,7 +361,7 @@ Acceptance:
 - Generated blocking uses clear keyframes and holds before adding interpolation polish.
 - Users can preview, commit, or revert the blocking pass.
 
-Status: Initial `create_timing_chart` and `block_key_poses` tools are implemented. Timing charts are read-only structured pose/hold/breakdown plans, and key-pose blocking writes reversible preview keyframes for selected or named objects.
+Status: Core helper set is implemented. `create_timing_chart` creates read-only structured pose/hold/breakdown plans; `block_key_poses`, `add_breakdown_pose`, `set_pose_hold`, and `create_motion_arc` support reversible animator-style blocking, holds, breakdowns, and in-scene arc visualization for selected or named objects.
 
 #### Milestone 7C: Animation Principles Evaluator
 
@@ -364,6 +381,8 @@ Acceptance:
 - A simple "happy jump" includes anticipation, launch, arc, landing squash, overshoot, and settle.
 - The evaluator can identify missing anticipation, overly linear motion, unclear pose staging, or absent settle after impact.
 - Findings can feed the repair loop without losing the original prompt contract.
+
+Status: Initial data-level evaluator is implemented. `analyze_motion_arcs`, `analyze_fcurve_spacing`, `analyze_pose_clarity`, and `analyze_animation_principles` inspect keyed transform data against the animation brief and timing chart, returning structured findings for arcs, timing/spacing, pose clarity, anticipation, squash/stretch, contact/weight, secondary action, and settle.
 
 #### Milestone 7D: Animation-Aware Scene Understanding
 
@@ -396,6 +415,8 @@ Acceptance:
 - Physics-heavy prompts can use Blender simulation when helper-generated keyframes are not enough.
 - Validation results are structured enough to drive targeted repairs.
 
+Status: Initial local validators are implemented for sampled animation state, contact sliding against a contact plane, sampled bounding-box penetration, camera framing, and brief comparison. These are intentionally read-only so a capable agent can inspect and plan before mutating the scene.
+
 #### Milestone 7F: Playblast Review And Repair Loop
 
 - Add a contract loop: prompt -> brief -> user-visible interpretation -> generate -> evaluate -> repair.
@@ -405,7 +426,7 @@ Acceptance:
 
 Candidate tools:
 
-- `create_animation_playblast`
+- `capture_animation_playblast`
 - `review_playblast_against_brief`
 - `repair_animation_from_findings`
 
@@ -414,6 +435,8 @@ Acceptance:
 - The agent can repair prompt drift such as wrong bounce count, camera losing the subject, missing scale change, or absent follow-through.
 - The repair loop preserves successful parts of the animation.
 - The user sees concise review findings and can commit or revert the repaired preview.
+
+Status: Initial playblast metadata review and non-mutating repair planning are implemented. `review_playblast_against_brief` combines available playblast metadata with current animation-state comparison, and `repair_animation_from_findings` proposes targeted helper calls such as interpolation changes, pose holds, camera repair, or reblocking without applying them automatically.
 
 #### Milestone 7G: Optional Solo-Backed Style And Project Memory
 

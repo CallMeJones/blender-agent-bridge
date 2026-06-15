@@ -1839,6 +1839,346 @@ def create_staggered_motion(
     return {"ok": True, "message": f"Created staggered motion for {len(animated)} object(s)", "objects": animated, "missing_object_names": missing, "transaction_id": transaction["id"]}
 
 
+TRANSFORM_PATHS = ("location", "rotation_euler", "scale")
+TRANSFORM_PATH_ALIASES = {
+    "location": "location",
+    "position": "location",
+    "translation": "location",
+    "rotation": "rotation_euler",
+    "rotation_euler": "rotation_euler",
+    "scale": "scale",
+}
+
+
+def _resolve_named_or_selected_objects(context, object_names=None, *, selected_only=False, fallback_active=True):
+    names = [str(name) for name in object_names or [] if str(name).strip()]
+    missing = []
+    if names:
+        objects = [bpy.data.objects.get(name) for name in names]
+        missing = [name for name, obj in zip(names, objects) if obj is None]
+        objects = [obj for obj in objects if obj]
+    elif selected_only or context.selected_objects:
+        objects = list(context.selected_objects)
+    elif fallback_active and context.active_object:
+        objects = [context.active_object]
+    else:
+        objects = []
+    return [obj for obj in objects if obj], missing
+
+
+def _normalize_transform_paths(paths=None, *, action=None):
+    normalized = []
+    for path in paths or []:
+        key = TRANSFORM_PATH_ALIASES.get(str(path).strip().lower())
+        if key and key not in normalized:
+            normalized.append(key)
+    if normalized:
+        return normalized
+    if action:
+        for fcurve in live_preview._iter_action_fcurves(action):
+            if fcurve.data_path in TRANSFORM_PATHS and fcurve.data_path not in normalized:
+                normalized.append(fcurve.data_path)
+    return normalized
+
+
+def _fcurves_for_path(action, path):
+    result = {}
+    if not action:
+        return result
+    for fcurve in live_preview._iter_action_fcurves(action):
+        if fcurve.data_path == path:
+            result[int(fcurve.array_index)] = fcurve
+    return result
+
+
+def _evaluate_transform_path(action, path, frame, fallback):
+    fallback_values = _coerce_vector(fallback, fallback)
+    fcurves = _fcurves_for_path(action, path)
+    values = []
+    for index, fallback_value in enumerate(fallback_values):
+        fcurve = fcurves.get(index)
+        values.append(float(fcurve.evaluate(frame)) if fcurve else float(fallback_value))
+    return tuple(values)
+
+
+def _action_keyframes_for_paths(action, paths):
+    frames = set()
+    for fcurve in live_preview._iter_action_fcurves(action) if action else []:
+        if fcurve.data_path not in paths:
+            continue
+        frames.update(int(round(point.co.x)) for point in fcurve.keyframe_points)
+    return sorted(frames)
+
+
+def _surrounding_frames(action, frame, paths):
+    frames = _action_keyframes_for_paths(action, paths)
+    previous = [item for item in frames if item < frame]
+    following = [item for item in frames if item > frame]
+    return (max(previous) if previous else None, min(following) if following else None)
+
+
+def _prepare_transform_action_for_edit(obj):
+    action = obj.animation_data.action if obj.animation_data and obj.animation_data.action else None
+    if action:
+        transaction = live_preview.current_transaction()
+        if transaction and f"created:action:{action.name}" in transaction.get("before_state", {}):
+            return action, False
+        live_preview._record_object_animation(obj)
+        live_preview._record_action_edit(action)
+        return action, False
+    return live_preview._assign_preview_action(obj), True
+
+
+def _set_transform_path(obj, path, values):
+    if path == "location":
+        obj.location = values
+    elif path == "rotation_euler":
+        obj.rotation_euler = values
+    elif path == "scale":
+        obj.scale = values
+
+
+def _transform_fallback(obj, path):
+    if path == "location":
+        return obj.location
+    if path == "rotation_euler":
+        return obj.rotation_euler
+    return obj.scale
+
+
+def add_breakdown_pose(
+    context,
+    *,
+    object_names=None,
+    frame=None,
+    previous_frame=None,
+    next_frame=None,
+    factor=0.5,
+    location=None,
+    rotation=None,
+    scale=None,
+    paths=None,
+    selected_only=False,
+    interpolation="CONSTANT",
+    label="Add breakdown pose",
+):
+    frame = int(frame if frame is not None else context.scene.frame_current)
+    factor = max(0.0, min(1.0, float(factor)))
+    objects, missing = _resolve_named_or_selected_objects(context, object_names, selected_only=selected_only)
+    if not objects:
+        return {"ok": False, "message": "No objects found for breakdown pose", "missing_object_names": missing}
+
+    transaction = live_preview.begin(label, context)
+    scene = context.scene
+    live_preview._record_scene_timeline(scene)
+    scene.frame_start = min(scene.frame_start, frame)
+    scene.frame_end = max(scene.frame_end, frame)
+    interpolation = str(interpolation or "CONSTANT").upper()
+    keyed = []
+    for obj in objects:
+        live_preview._record_object_transform(obj)
+        action, created_action = _prepare_transform_action_for_edit(obj)
+        explicit = {}
+        if location is not None:
+            explicit["location"] = _coerce_vector(location, obj.location)
+        if rotation is not None:
+            explicit["rotation_euler"] = _coerce_vector(rotation, obj.rotation_euler)
+        if scale is not None:
+            explicit["scale"] = _coerce_vector(scale, obj.scale)
+        active_paths = _normalize_transform_paths(paths, action=action)
+        if explicit:
+            active_paths = [path for path in TRANSFORM_PATHS if path in explicit or path in active_paths]
+        if not active_paths:
+            active_paths = list(explicit)
+        if not active_paths:
+            return {"ok": False, "message": "Breakdown pose needs existing transform animation or explicit location, rotation, or scale values"}
+        prev_frame = int(previous_frame) if previous_frame is not None else None
+        next_item = int(next_frame) if next_frame is not None else None
+        if prev_frame is None or next_item is None:
+            inferred_prev, inferred_next = _surrounding_frames(action, frame, active_paths)
+            prev_frame = prev_frame if prev_frame is not None else inferred_prev
+            next_item = next_item if next_item is not None else inferred_next
+        keyed_paths = []
+        values_by_path = {}
+        for path in active_paths:
+            fallback = _transform_fallback(obj, path)
+            if path in explicit:
+                values = explicit[path]
+            elif prev_frame is not None and next_item is not None and next_item != prev_frame:
+                before = _evaluate_transform_path(action, path, prev_frame, fallback)
+                after = _evaluate_transform_path(action, path, next_item, fallback)
+                values = tuple(before[index] + (after[index] - before[index]) * factor for index in range(3))
+            else:
+                values = _evaluate_transform_path(action, path, frame, fallback)
+            _set_transform_path(obj, path, values)
+            obj.keyframe_insert(data_path=path, frame=frame)
+            keyed_paths.append(path)
+            values_by_path[path] = [round(float(value), 6) for value in values]
+        _set_action_interpolation(action, interpolation)
+        keyed.append(
+            {
+                "object": obj.name,
+                "action": action.name,
+                "created_action": created_action,
+                "frame": frame,
+                "paths": keyed_paths,
+                "previous_frame": prev_frame,
+                "next_frame": next_item,
+                "factor": factor,
+                "values": values_by_path,
+            }
+        )
+    scene.frame_set(frame)
+    transaction["applied_steps"].append({"type": "add_breakdown_pose", "label": label, "objects": keyed, "frame": frame})
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Added breakdown pose at frame {frame} for {len(keyed)} object(s)",
+        "objects": keyed,
+        "missing_object_names": missing,
+        "transaction_id": transaction["id"],
+    }
+
+
+def set_pose_hold(
+    context,
+    *,
+    object_names=None,
+    frame=None,
+    hold_frames=4,
+    paths=None,
+    selected_only=False,
+    interpolation="CONSTANT",
+    label="Set pose hold",
+):
+    frame = int(frame if frame is not None else context.scene.frame_current)
+    hold_frames = max(1, int(hold_frames or 1))
+    hold_frame = frame + hold_frames
+    objects, missing = _resolve_named_or_selected_objects(context, object_names, selected_only=selected_only)
+    if not objects:
+        return {"ok": False, "message": "No objects found for pose hold", "missing_object_names": missing}
+
+    transaction = live_preview.begin(label, context)
+    scene = context.scene
+    live_preview._record_scene_timeline(scene)
+    scene.frame_start = min(scene.frame_start, frame)
+    scene.frame_end = max(scene.frame_end, hold_frame)
+    interpolation = str(interpolation or "CONSTANT").upper()
+    held = []
+    for obj in objects:
+        live_preview._record_object_transform(obj)
+        action, created_action = _prepare_transform_action_for_edit(obj)
+        active_paths = _normalize_transform_paths(paths, action=action) or list(TRANSFORM_PATHS)
+        keyed_paths = []
+        values_by_path = {}
+        for path in active_paths:
+            values = _evaluate_transform_path(action, path, frame, _transform_fallback(obj, path))
+            for key_frame in (frame, hold_frame):
+                _set_transform_path(obj, path, values)
+                obj.keyframe_insert(data_path=path, frame=key_frame)
+            keyed_paths.append(path)
+            values_by_path[path] = [round(float(value), 6) for value in values]
+        _set_action_interpolation(action, interpolation)
+        held.append(
+            {
+                "object": obj.name,
+                "action": action.name,
+                "created_action": created_action,
+                "frame": frame,
+                "hold_frame": hold_frame,
+                "hold_frames": hold_frames,
+                "paths": keyed_paths,
+                "values": values_by_path,
+            }
+        )
+    scene.frame_set(frame)
+    transaction["applied_steps"].append({"type": "set_pose_hold", "label": label, "objects": held, "frame": frame, "hold_frame": hold_frame})
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Set {hold_frames}-frame hold from frame {frame} for {len(held)} object(s)",
+        "objects": held,
+        "missing_object_names": missing,
+        "transaction_id": transaction["id"],
+    }
+
+
+def create_motion_arc(
+    context,
+    *,
+    object_names=None,
+    frame_start=None,
+    frame_end=None,
+    sample_step=4,
+    selected_only=False,
+    name_prefix="Claude Motion Arc",
+    bevel_depth=0.015,
+    color=(0.08, 0.45, 1.0, 1.0),
+    label="Create motion arc",
+):
+    objects, missing = _resolve_named_or_selected_objects(context, object_names, selected_only=selected_only)
+    if not objects:
+        return {"ok": False, "message": "No objects found for motion arc", "missing_object_names": missing}
+    scene = context.scene
+    frame_start = int(frame_start if frame_start is not None else scene.frame_start)
+    frame_end = int(frame_end if frame_end is not None else scene.frame_end)
+    if frame_end < frame_start:
+        frame_start, frame_end = frame_end, frame_start
+    sample_step = max(1, int(sample_step or 1))
+    frames = list(range(frame_start, frame_end + 1, sample_step))
+    if frames[-1] != frame_end:
+        frames.append(frame_end)
+    if len(frames) < 2:
+        frames = [frame_start, frame_start + 1]
+
+    transaction = live_preview.begin(label, context)
+    material = _material_for_color(f"{name_prefix} Material", _coerce_color(color, (0.08, 0.45, 1.0, 1.0)))
+    arcs = []
+    for obj in objects:
+        action = obj.animation_data.action if obj.animation_data and obj.animation_data.action else None
+        points = [
+            _evaluate_transform_path(action, "location", frame, obj.location)
+            for frame in frames
+        ]
+        curve = bpy.data.curves.new(f"{name_prefix} {obj.name} Data", "CURVE")
+        curve.dimensions = "3D"
+        curve.resolution_u = 2
+        curve.bevel_depth = max(0.0, float(bevel_depth))
+        spline = curve.splines.new("POLY")
+        spline.points.add(len(points) - 1)
+        for point, coords in zip(spline.points, points):
+            point.co = (float(coords[0]), float(coords[1]), float(coords[2]), 1.0)
+        arc_obj = bpy.data.objects.new(f"{name_prefix} {obj.name}", curve)
+        context.scene.collection.objects.link(arc_obj)
+        curve.materials.append(material)
+        live_preview._record_created_id("curve", curve.name)
+        live_preview._record_created_id("object", arc_obj.name)
+        arcs.append(
+            {
+                "source_object": obj.name,
+                "arc_object": arc_obj.name,
+                "curve": curve.name,
+                "frame_start": frame_start,
+                "frame_end": frame_end,
+                "sample_step": sample_step,
+                "sample_count": len(points),
+                "points": [[round(float(component), 6) for component in coords] for coords in points],
+            }
+        )
+    transaction["applied_steps"].append({"type": "create_motion_arc", "label": label, "arcs": arcs})
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Created {len(arcs)} motion arc(s)",
+        "arcs": arcs,
+        "missing_object_names": missing,
+        "transaction_id": transaction["id"],
+    }
+
+
 def block_key_poses(
     context,
     *,

@@ -53,6 +53,50 @@ TOOL_CONTRACTS = {
         "description": "Create a structured timing/blocking chart from an animation brief",
         "mutates_scene": False,
     },
+    "analyze_motion_arcs": {
+        "description": "Analyze sampled location motion arcs for selected or named objects",
+        "mutates_scene": False,
+    },
+    "analyze_fcurve_spacing": {
+        "description": "Analyze transform key spacing and interpolation for selected or named objects",
+        "mutates_scene": False,
+    },
+    "analyze_pose_clarity": {
+        "description": "Analyze keyed pose count, holds, and transform readability",
+        "mutates_scene": False,
+    },
+    "analyze_animation_principles": {
+        "description": "Evaluate animation data against animator principles and the prompt contract",
+        "mutates_scene": False,
+    },
+    "sample_animation_state": {
+        "description": "Sample object transform state across an animation range",
+        "mutates_scene": False,
+    },
+    "analyze_contact_sliding": {
+        "description": "Detect object sliding while sampled bounding boxes are near a contact plane",
+        "mutates_scene": False,
+    },
+    "analyze_collision_penetration": {
+        "description": "Detect sampled world bounding-box intersections between animated objects",
+        "mutates_scene": False,
+    },
+    "analyze_camera_framing": {
+        "description": "Check whether animated subjects remain framed by the active or named camera",
+        "mutates_scene": False,
+    },
+    "compare_animation_to_brief": {
+        "description": "Compare current animation state against a structured animation brief",
+        "mutates_scene": False,
+    },
+    "review_playblast_against_brief": {
+        "description": "Review playblast metadata and current animation state against a prompt contract",
+        "mutates_scene": False,
+    },
+    "repair_animation_from_findings": {
+        "description": "Create targeted non-mutating repair suggestions from structured animation findings",
+        "mutates_scene": False,
+    },
     "get_material_node_details": {
         "description": "Return material node, socket, and link details",
         "mutates_scene": False,
@@ -259,6 +303,21 @@ TOOL_CONTRACTS = {
     },
     "block_key_poses": {
         "description": "Block keyed transform poses for selected or named objects",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
+    "add_breakdown_pose": {
+        "description": "Add a keyed breakdown pose between existing key poses",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
+    "set_pose_hold": {
+        "description": "Duplicate a keyed pose to create a readable hold",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
+    "create_motion_arc": {
+        "description": "Create preview curve objects that visualize sampled object motion arcs",
         "mutates_scene": True,
         "requires_live_preview": True,
     },

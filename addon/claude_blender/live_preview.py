@@ -1467,6 +1467,19 @@ def revert(context):
             action = bpy.data.actions.get(before["action_name"])
             if action:
                 current_fcurves = _iter_action_fcurves(action)
+                saved_keys = {
+                    (saved["data_path"], int(saved["array_index"]))
+                    for saved in before.get("fcurves", [])
+                }
+                if hasattr(action, "fcurves"):
+                    for fcurve in list(current_fcurves):
+                        key = (fcurve.data_path, int(fcurve.array_index))
+                        if key not in saved_keys:
+                            try:
+                                action.fcurves.remove(fcurve)
+                            except Exception as exc:
+                                rollback_warnings.append(f"Could not remove added f-curve during restore: {type(exc).__name__}: {exc}")
+                    current_fcurves = _iter_action_fcurves(action)
                 for saved in before.get("fcurves", []):
                     fcurve = next(
                         (
@@ -1477,8 +1490,16 @@ def revert(context):
                         None,
                     )
                     if fcurve is None:
-                        rollback_warnings.append(f"Missing f-curve for action restore: {action.name} {saved['data_path']}[{saved['array_index']}]")
-                        continue
+                        if hasattr(action, "fcurves"):
+                            try:
+                                fcurve = action.fcurves.new(data_path=saved["data_path"], index=int(saved["array_index"]))
+                                current_fcurves.append(fcurve)
+                            except Exception as exc:
+                                rollback_warnings.append(f"Missing f-curve for action restore: {action.name} {saved['data_path']}[{saved['array_index']}]: {type(exc).__name__}: {exc}")
+                                continue
+                        else:
+                            rollback_warnings.append(f"Missing f-curve for action restore: {action.name} {saved['data_path']}[{saved['array_index']}]")
+                            continue
                     if saved.get("extrapolation") is not None:
                         fcurve.extrapolation = saved["extrapolation"]
                     fcurve.mute = bool(saved.get("mute", False))
@@ -1494,12 +1515,15 @@ def revert(context):
                             if attr == "type" or not hasattr(modifier, attr):
                                 continue
                             setattr(modifier, attr, value)
-                    points = list(fcurve.keyframe_points)
                     saved_points = saved.get("keyframes", [])
-                    if len(points) != len(saved_points):
-                        rollback_warnings.append(f"Keyframe count changed for action restore: {action.name} {saved['data_path']}[{saved['array_index']}]")
-                    for point, point_state in zip(points, saved_points):
-                        point.co = point_state["co"]
+                    try:
+                        while len(fcurve.keyframe_points) > 0:
+                            fcurve.keyframe_points.remove(fcurve.keyframe_points[-1], fast=True)
+                    except Exception as exc:
+                        rollback_warnings.append(f"Could not clear f-curve keyframes during restore: {action.name} {saved['data_path']}[{saved['array_index']}]: {type(exc).__name__}: {exc}")
+                        continue
+                    for point_state in saved_points:
+                        point = fcurve.keyframe_points.insert(point_state["co"][0], point_state["co"][1], options={"FAST"})
                         if point_state.get("interpolation") is not None:
                             point.interpolation = point_state["interpolation"]
                         if point_state.get("easing") is not None and hasattr(point, "easing"):
@@ -1617,6 +1641,25 @@ def revert(context):
                     if scene.collection.children.get(collection.name):
                         scene.collection.children.unlink(collection)
                 bpy.data.collections.remove(collection)
+    for before in list(transaction["before_state"].values()):
+        if not before.get("created"):
+            continue
+        if before.get("kind") == "material":
+            material = bpy.data.materials.get(before["name"])
+            if material and material.users == 0:
+                bpy.data.materials.remove(material)
+        elif before.get("kind") == "curve":
+            curve = bpy.data.curves.get(before["name"])
+            if curve and curve.users == 0:
+                bpy.data.curves.remove(curve)
+        elif before.get("kind") == "mesh":
+            mesh = bpy.data.meshes.get(before["name"])
+            if mesh and mesh.users == 0:
+                bpy.data.meshes.remove(mesh)
+        elif before.get("kind") == "action":
+            action = bpy.data.actions.get(before["name"])
+            if action and action.users == 0:
+                bpy.data.actions.remove(action)
     for before in list(transaction["before_state"].values()):
         if before.get("kind") != "shader_material":
             continue

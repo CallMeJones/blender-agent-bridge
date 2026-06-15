@@ -29,6 +29,7 @@ _MODULE_NAMES = (
     "audit_log",
     "script_analysis",
     "animation_brief",
+    "animation_analysis",
     "advanced_helpers",
     "viewport_capture",
     "playblast_capture",

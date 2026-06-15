@@ -7,7 +7,7 @@ import re
 
 import bpy
 
-from . import animation_brief, advanced_helpers, context_bundle, docs_index, live_preview, playblast_capture, preferences, script_runner, viewport_capture, world_model
+from . import animation_analysis, animation_brief, advanced_helpers, context_bundle, docs_index, live_preview, playblast_capture, preferences, script_runner, viewport_capture, world_model
 
 
 def _float_list(values, length, default):
@@ -450,6 +450,125 @@ def create_timing_chart(context, args):
         frame_start=args.get("frame_start"),
         frame_end=args.get("frame_end"),
         beats=args.get("beats") if isinstance(args.get("beats"), list) else None,
+    )
+
+
+def analyze_motion_arcs(context, args):
+    return animation_analysis.analyze_motion_arcs(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", False)),
+        frame_start=args.get("frame_start"),
+        frame_end=args.get("frame_end"),
+        max_samples=_bounded_int(args.get("max_samples"), 16, minimum=2, maximum=120),
+    )
+
+
+def analyze_fcurve_spacing(context, args):
+    return animation_analysis.analyze_fcurve_spacing(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", False)),
+        paths=_name_list(args.get("paths")),
+    )
+
+
+def analyze_pose_clarity(context, args):
+    return animation_analysis.analyze_pose_clarity(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", False)),
+    )
+
+
+def analyze_animation_principles(context, args):
+    return animation_analysis.analyze_animation_principles(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", False)),
+        prompt=str(args.get("prompt") or ""),
+        brief=args.get("brief") if isinstance(args.get("brief"), dict) else None,
+        timing_chart=args.get("timing_chart") if isinstance(args.get("timing_chart"), dict) else None,
+        frame_start=args.get("frame_start"),
+        frame_end=args.get("frame_end"),
+    )
+
+
+def sample_animation_state(context, args):
+    return animation_analysis.sample_animation_state(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        frame_start=args.get("frame_start"),
+        frame_end=args.get("frame_end"),
+        sample_step=_bounded_int(args.get("sample_step"), 4, minimum=1, maximum=10000),
+        selected_only=bool(args.get("selected_only", False)),
+    )
+
+
+def analyze_contact_sliding(context, args):
+    return animation_analysis.analyze_contact_sliding(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        frame_start=args.get("frame_start"),
+        frame_end=args.get("frame_end"),
+        sample_step=_bounded_int(args.get("sample_step"), 2, minimum=1, maximum=10000),
+        contact_z=float(args.get("contact_z", 0.0)),
+        contact_tolerance=float(args.get("contact_tolerance", 0.05)),
+        sliding_tolerance=float(args.get("sliding_tolerance", 0.08)),
+        selected_only=bool(args.get("selected_only", False)),
+    )
+
+
+def analyze_collision_penetration(context, args):
+    return animation_analysis.analyze_collision_penetration(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        frame_start=args.get("frame_start"),
+        frame_end=args.get("frame_end"),
+        sample_step=_bounded_int(args.get("sample_step"), 4, minimum=1, maximum=10000),
+        tolerance=float(args.get("tolerance", 0.0)),
+        selected_only=bool(args.get("selected_only", False)),
+    )
+
+
+def analyze_camera_framing(context, args):
+    return animation_analysis.analyze_camera_framing(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        camera_name=str(args.get("camera_name") or ""),
+        frame_start=args.get("frame_start"),
+        frame_end=args.get("frame_end"),
+        sample_step=_bounded_int(args.get("sample_step"), 8, minimum=1, maximum=10000),
+        margin=float(args.get("margin", 0.05)),
+        selected_only=bool(args.get("selected_only", False)),
+    )
+
+
+def compare_animation_to_brief(context, args):
+    return animation_analysis.compare_animation_to_brief(
+        context,
+        brief=args.get("brief") if isinstance(args.get("brief"), dict) else None,
+        prompt=str(args.get("prompt") or ""),
+        subject_names=_name_list(args.get("subject_names")),
+        frame_start=args.get("frame_start"),
+        frame_end=args.get("frame_end"),
+    )
+
+
+def review_playblast_against_brief(context, args):
+    return animation_analysis.review_playblast_against_brief(
+        context,
+        playblast=args.get("playblast") if isinstance(args.get("playblast"), dict) else None,
+        brief=args.get("brief") if isinstance(args.get("brief"), dict) else None,
+        prompt=str(args.get("prompt") or ""),
+    )
+
+
+def repair_animation_from_findings(context, args):
+    return animation_analysis.repair_animation_from_findings(
+        context,
+        findings=args.get("findings") if isinstance(args.get("findings"), list) else [],
+        brief=args.get("brief") if isinstance(args.get("brief"), dict) else None,
     )
 
 
@@ -954,6 +1073,52 @@ def block_key_poses(context, args):
         selected_only=bool(args.get("selected_only", False)),
         interpolation=str(args.get("interpolation") or "CONSTANT"),
         label=args.get("label", "Block key poses"),
+    )
+
+
+def add_breakdown_pose(context, args):
+    return advanced_helpers.add_breakdown_pose(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        frame=args.get("frame"),
+        previous_frame=args.get("previous_frame"),
+        next_frame=args.get("next_frame"),
+        factor=float(args.get("factor", 0.5)),
+        location=_optional_float_list(args.get("location"), 3, (0.0, 0.0, 0.0)),
+        rotation=_optional_float_list(args.get("rotation"), 3, (0.0, 0.0, 0.0)),
+        scale=_optional_float_list(args.get("scale"), 3, (1.0, 1.0, 1.0)),
+        paths=_name_list(args.get("paths")),
+        selected_only=bool(args.get("selected_only", False)),
+        interpolation=str(args.get("interpolation") or "CONSTANT"),
+        label=args.get("label", "Add breakdown pose"),
+    )
+
+
+def set_pose_hold(context, args):
+    return advanced_helpers.set_pose_hold(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        frame=args.get("frame"),
+        hold_frames=_bounded_int(args.get("hold_frames"), 4, minimum=1, maximum=10000),
+        paths=_name_list(args.get("paths")),
+        selected_only=bool(args.get("selected_only", False)),
+        interpolation=str(args.get("interpolation") or "CONSTANT"),
+        label=args.get("label", "Set pose hold"),
+    )
+
+
+def create_motion_arc(context, args):
+    return advanced_helpers.create_motion_arc(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        frame_start=args.get("frame_start"),
+        frame_end=args.get("frame_end"),
+        sample_step=_bounded_int(args.get("sample_step"), 4, minimum=1, maximum=10000),
+        selected_only=bool(args.get("selected_only", False)),
+        name_prefix=str(args.get("name_prefix") or "Claude Motion Arc"),
+        bevel_depth=float(args.get("bevel_depth", 0.015)),
+        color=_float_list(args.get("color"), 4, (0.08, 0.45, 1.0, 1.0)),
+        label=args.get("label", "Create motion arc"),
     )
 
 
@@ -1602,6 +1767,17 @@ TOOL_FUNCTIONS = {
     "get_animation_details": get_animation_details,
     "create_animation_brief": create_animation_brief,
     "create_timing_chart": create_timing_chart,
+    "analyze_motion_arcs": analyze_motion_arcs,
+    "analyze_fcurve_spacing": analyze_fcurve_spacing,
+    "analyze_pose_clarity": analyze_pose_clarity,
+    "analyze_animation_principles": analyze_animation_principles,
+    "sample_animation_state": sample_animation_state,
+    "analyze_contact_sliding": analyze_contact_sliding,
+    "analyze_collision_penetration": analyze_collision_penetration,
+    "analyze_camera_framing": analyze_camera_framing,
+    "compare_animation_to_brief": compare_animation_to_brief,
+    "review_playblast_against_brief": review_playblast_against_brief,
+    "repair_animation_from_findings": repair_animation_from_findings,
     "get_material_node_details": get_material_node_details,
     "get_geometry_nodes_details": get_geometry_nodes_details,
     "get_shader_nodes_details": get_shader_nodes_details,
@@ -1639,6 +1815,9 @@ TOOL_FUNCTIONS = {
     "create_reveal_animation": create_reveal_animation,
     "create_staggered_motion": create_staggered_motion,
     "block_key_poses": block_key_poses,
+    "add_breakdown_pose": add_breakdown_pose,
+    "set_pose_hold": set_pose_hold,
+    "create_motion_arc": create_motion_arc,
     "create_text_object": create_text_object,
     "create_curve_path": create_curve_path,
     "add_particle_system_to_selected": add_particle_system_to_selected,

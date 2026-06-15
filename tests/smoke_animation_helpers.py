@@ -20,6 +20,20 @@ ANIMATION_TOOLS = {
     "create_animation_brief",
     "create_timing_chart",
     "block_key_poses",
+    "add_breakdown_pose",
+    "set_pose_hold",
+    "create_motion_arc",
+    "analyze_motion_arcs",
+    "analyze_fcurve_spacing",
+    "analyze_pose_clarity",
+    "analyze_animation_principles",
+    "sample_animation_state",
+    "analyze_contact_sliding",
+    "analyze_collision_penetration",
+    "analyze_camera_framing",
+    "compare_animation_to_brief",
+    "review_playblast_against_brief",
+    "repair_animation_from_findings",
     "animate_object_bounce",
     "animate_material_property",
     "animate_light_property",
@@ -189,6 +203,135 @@ def main():
         block_action = bpy.data.actions[blocked["objects"][0]["action"]]
         assert _action_keyframes(block_action) == [1.0, 12.0, 24.0, 26.0], blocked
         assert scene.frame_end >= 26, blocked
+
+        breakdown = _execute(
+            context,
+            "add_breakdown_pose",
+            {
+                "object_names": ["Cube"],
+                "frame": 6,
+                "previous_frame": 1,
+                "next_frame": 12,
+                "factor": 0.5,
+                "paths": ["location", "scale"],
+                "interpolation": "CONSTANT",
+            },
+        )
+        assert breakdown["objects"][0]["values"]["location"] == [0.0, 0.0, 1.0], breakdown
+        assert 6.0 in _action_keyframes(block_action), breakdown
+
+        hold = _execute(
+            context,
+            "set_pose_hold",
+            {
+                "object_names": ["Cube"],
+                "frame": 12,
+                "hold_frames": 3,
+                "paths": ["location"],
+            },
+        )
+        assert hold["objects"][0]["hold_frame"] == 15, hold
+        assert 15.0 in _action_keyframes(block_action), hold
+
+        arc = _execute(
+            context,
+            "create_motion_arc",
+            {"object_names": ["Cube"], "frame_start": 1, "frame_end": 24, "sample_step": 6},
+        )
+        assert arc["arcs"][0]["arc_object"] in bpy.data.objects, arc
+        assert arc["arcs"][0]["sample_count"] >= 5, arc
+
+        arc_analysis = _execute(
+            context,
+            "analyze_motion_arcs",
+            {"object_names": ["Cube"], "frame_start": 1, "frame_end": 24, "max_samples": 8},
+        )
+        assert arc_analysis["objects"][0]["path_length"] > 0, arc_analysis
+
+        spacing_analysis = _execute(context, "analyze_fcurve_spacing", {"object_names": ["Cube"], "paths": ["location"]})
+        assert spacing_analysis["objects"][0]["keyframes"], spacing_analysis
+        assert spacing_analysis["objects"][0]["segments"], spacing_analysis
+
+        pose_analysis = _execute(context, "analyze_pose_clarity", {"object_names": ["Cube"]})
+        assert pose_analysis["objects"][0]["pose_count"] >= 4, pose_analysis
+        assert pose_analysis["objects"][0]["holds"], pose_analysis
+
+        principles = _execute(
+            context,
+            "analyze_animation_principles",
+            {
+                "object_names": ["Cube"],
+                "brief": contract,
+                "timing_chart": chart,
+                "frame_start": 1,
+                "frame_end": 48,
+            },
+        )
+        assert principles["brief_contract_id"] == contract["contract_id"], principles
+        assert principles["principle_checks"][0]["squash_stretch"] == "pass", principles
+        assert any(item["principle"] == "anticipation" for item in principles["findings"]), principles
+
+        samples = _execute(
+            context,
+            "sample_animation_state",
+            {"object_names": ["Cube"], "frame_start": 1, "frame_end": 24, "sample_step": 12},
+        )
+        assert samples["sampled_frames"] == [1, 13, 24], samples
+        assert samples["frames"][0]["objects"][0]["name"] == "Cube", samples
+
+        contact = _execute(
+            context,
+            "analyze_contact_sliding",
+            {
+                "object_names": ["Cube"],
+                "frame_start": 1,
+                "frame_end": 26,
+                "sample_step": 12,
+                "contact_z": -1.0,
+                "contact_tolerance": 0.05,
+            },
+        )
+        assert "Cube" in contact["contacts"], contact
+
+        collisions = _execute(
+            context,
+            "analyze_collision_penetration",
+            {"object_names": ["Cube"], "frame_start": 1, "frame_end": 24, "sample_step": 12},
+        )
+        assert collisions["sampled_frames"] == [1, 13, 24], collisions
+
+        framing = _execute(
+            context,
+            "analyze_camera_framing",
+            {"object_names": ["Cube"], "camera_name": "Camera", "frame_start": 1, "frame_end": 24, "sample_step": 12},
+        )
+        assert framing["samples"], framing
+        assert framing["samples"][0]["camera"] == "Camera", framing
+
+        comparison = _execute(
+            context,
+            "compare_animation_to_brief",
+            {"brief": contract, "frame_start": 1, "frame_end": 24},
+        )
+        assert comparison["brief_contract_id"] == contract["contract_id"], comparison
+        assert not any(item.get("requirement") == "action" for item in comparison["findings"]), comparison
+
+        playblast_review = _execute(
+            context,
+            "review_playblast_against_brief",
+            {
+                "brief": contract,
+                "playblast": {"available": True, "playblast_id": "smoke", "frames": [{"frame": 1}, {"frame": 12}, {"frame": 24}]},
+            },
+        )
+        assert playblast_review["playblast_id"] == "smoke", playblast_review
+
+        repair_plan = _execute(
+            context,
+            "repair_animation_from_findings",
+            {"findings": [{"severity": "warning", "message": "Contact points slide across the ground plane."}], "brief": contract},
+        )
+        assert repair_plan["suggested_tool_calls"][0]["tool"] == "set_pose_hold", repair_plan
 
         bounce = _execute(
             context,

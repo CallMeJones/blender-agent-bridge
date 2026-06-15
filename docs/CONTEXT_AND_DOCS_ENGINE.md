@@ -182,6 +182,20 @@ Initial helpers:
 - `create_animation_brief(prompt, subject_names, frame_start, frame_end)`
 - `create_timing_chart(prompt, brief, subject_names, frame_start, frame_end, beats)`
 - `block_key_poses(object_names, poses, selected_only, interpolation)`
+- `add_breakdown_pose(object_names, frame, previous_frame, next_frame, factor, location, rotation, scale, paths)`
+- `set_pose_hold(object_names, frame, hold_frames, paths)`
+- `create_motion_arc(object_names, frame_start, frame_end, sample_step)`
+- `analyze_motion_arcs(object_names, frame_start, frame_end, max_samples)`
+- `analyze_fcurve_spacing(object_names, paths)`
+- `analyze_pose_clarity(object_names)`
+- `analyze_animation_principles(object_names, brief, timing_chart, frame_start, frame_end)`
+- `sample_animation_state(object_names, frame_start, frame_end, sample_step)`
+- `analyze_contact_sliding(object_names, frame_start, frame_end, contact_z, contact_tolerance, sliding_tolerance)`
+- `analyze_collision_penetration(object_names, frame_start, frame_end, tolerance)`
+- `analyze_camera_framing(object_names, camera_name, frame_start, frame_end, margin)`
+- `compare_animation_to_brief(brief, prompt, subject_names, frame_start, frame_end)`
+- `review_playblast_against_brief(playblast, brief, prompt)`
+- `repair_animation_from_findings(findings, brief)`
 - `animate_selected_transform(frame_start, frame_end, location_start, location_end, rotation_start, rotation_end, scale_start, scale_end)`
 - `create_camera_orbit(target_name, frame_start, frame_end, radius, height, name)`
 - `add_modifier(object_name, type, settings)`

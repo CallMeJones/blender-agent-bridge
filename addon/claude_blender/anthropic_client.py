@@ -58,7 +58,7 @@ SYSTEM_PROMPT = (
     "For scene building and layout, prefer create_primitive, create_empty, duplicate_selected_objects, parent_selected_to_empty, align_selected_objects, distribute_selected_objects, set_object_visibility, set_object_display, assign_material_to_selected, assign_emission_material_to_selected, create_shader_material, create_text_object, create_curve_path, create_collection, link_selected_to_collection, add_light, add_camera, add_modifier_to_selected, add_geometry_nodes_modifier, add_track_to_constraint, add_copy_transform_constraint, create_basic_armature, add_particle_system_to_selected, set_render_settings, set_camera_settings, and set_world_background. "
     "For model refinement and production presentation, prefer shade_smooth_selected, add_bevel_and_subsurf, create_wheel_assembly, add_panel_seams, add_window_materials, apply_vehicle_refinement_template, apply_product_refinement_template, apply_character_refinement_template, create_studio_product_stage, add_dimension_callouts, apply_lighting_preset, create_material_palette, create_product_turntable_setup, and organize_scene_for_production when they fit the task. "
     "For shape-key animation, prefer create_shape_key and animate_shape_key before drafting Python. "
-    "For animation, use any animation_brief in context as the prompt contract; otherwise call create_animation_brief first when the prompt needs an explicit contract, success criteria, or later validation. Use create_timing_chart and block_key_poses for animator-style blocking before spline/f-curve polish; then prefer set_scene_frame_range, set_animation_preview_range, animate_selected_transform, animate_object_bounce, animate_material_property, animate_light_property, create_follow_path_animation, create_turntable_animation, create_pulse_animation, create_reveal_animation, create_staggered_motion, set_action_interpolation, retime_actions, add_action_cycles, clear_animation, and create_camera_orbit. "
+    "For animation, use any animation_brief in context as the prompt contract; otherwise call create_animation_brief first when the prompt needs an explicit contract, success criteria, or later validation. Use create_timing_chart, block_key_poses, add_breakdown_pose, set_pose_hold, and create_motion_arc for animator-style blocking before spline/f-curve polish; then use analyze_animation_principles plus focused analyzers to check timing, spacing, arcs, pose clarity, anticipation, squash/stretch, and settle before repair. Then prefer set_scene_frame_range, set_animation_preview_range, animate_selected_transform, animate_object_bounce, animate_material_property, animate_light_property, create_follow_path_animation, create_turntable_animation, create_pulse_animation, create_reveal_animation, create_staggered_motion, set_action_interpolation, retime_actions, add_action_cycles, clear_animation, and create_camera_orbit. "
     "For complex scene builds that need many objects or more than about eight helper calls, stage one cohesive Blender Python script with draft_script instead of making a long chain of helper calls. "
     "When helper tools cannot express the requested edit, use draft_script to stage Blender Python for user approval. "
     "When calling draft_script, put the complete Python source in the code field. Do not put script code in final chat text for the user to paste manually. "
@@ -279,6 +279,169 @@ def blender_tool_definitions():
                             "additionalProperties": False,
                         },
                     },
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "analyze_motion_arcs",
+            "description": "Read-only analysis of sampled keyed location motion arcs for selected or named objects.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "object_names": {"type": "array", "items": {"type": "string"}},
+                    "selected_only": {"type": "boolean"},
+                    "frame_start": {"type": "integer"},
+                    "frame_end": {"type": "integer"},
+                    "max_samples": {"type": "integer"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "analyze_fcurve_spacing",
+            "description": "Read-only analysis of transform key spacing, segment distances, and interpolation choices.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "object_names": {"type": "array", "items": {"type": "string"}},
+                    "selected_only": {"type": "boolean"},
+                    "paths": {"type": "array", "items": {"type": "string", "enum": ["location", "rotation_euler", "scale"]}},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "analyze_pose_clarity",
+            "description": "Read-only analysis of keyed pose count, transform readability, and detected holds.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "object_names": {"type": "array", "items": {"type": "string"}},
+                    "selected_only": {"type": "boolean"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "analyze_animation_principles",
+            "description": "Evaluate keyed animation against core animation principles and the prompt contract. Returns structured findings that can feed repair.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "object_names": {"type": "array", "items": {"type": "string"}},
+                    "selected_only": {"type": "boolean"},
+                    "prompt": {"type": "string"},
+                    "brief": {"type": "object"},
+                    "timing_chart": {"type": "object"},
+                    "frame_start": {"type": "integer"},
+                    "frame_end": {"type": "integer"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "sample_animation_state",
+            "description": "Sample selected or named object transforms across an animation range for objective review.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "object_names": {"type": "array", "items": {"type": "string"}},
+                    "selected_only": {"type": "boolean"},
+                    "frame_start": {"type": "integer"},
+                    "frame_end": {"type": "integer"},
+                    "sample_step": {"type": "integer"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "analyze_contact_sliding",
+            "description": "Detect sliding while animated object bounds are near a contact plane.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "object_names": {"type": "array", "items": {"type": "string"}},
+                    "selected_only": {"type": "boolean"},
+                    "frame_start": {"type": "integer"},
+                    "frame_end": {"type": "integer"},
+                    "sample_step": {"type": "integer"},
+                    "contact_z": {"type": "number"},
+                    "contact_tolerance": {"type": "number"},
+                    "sliding_tolerance": {"type": "number"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "analyze_collision_penetration",
+            "description": "Detect sampled world bounding-box intersections between animated objects.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "object_names": {"type": "array", "items": {"type": "string"}},
+                    "selected_only": {"type": "boolean"},
+                    "frame_start": {"type": "integer"},
+                    "frame_end": {"type": "integer"},
+                    "sample_step": {"type": "integer"},
+                    "tolerance": {"type": "number"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "analyze_camera_framing",
+            "description": "Check whether animated subjects stay inside a camera-safe region.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "object_names": {"type": "array", "items": {"type": "string"}},
+                    "selected_only": {"type": "boolean"},
+                    "camera_name": {"type": "string"},
+                    "frame_start": {"type": "integer"},
+                    "frame_end": {"type": "integer"},
+                    "sample_step": {"type": "integer"},
+                    "margin": {"type": "number"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "compare_animation_to_brief",
+            "description": "Compare current animation samples and framing against a structured animation brief or prompt.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "brief": {"type": "object"},
+                    "prompt": {"type": "string"},
+                    "subject_names": {"type": "array", "items": {"type": "string"}},
+                    "frame_start": {"type": "integer"},
+                    "frame_end": {"type": "integer"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "review_playblast_against_brief",
+            "description": "Review playblast metadata and current animation state against a prompt contract.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "playblast": {"type": "object"},
+                    "brief": {"type": "object"},
+                    "prompt": {"type": "string"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "repair_animation_from_findings",
+            "description": "Turn structured animation findings into focused repair tool suggestions without mutating the scene.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "findings": {"type": "array", "items": {"type": "object"}},
+                    "brief": {"type": "object"},
                 },
                 "additionalProperties": False,
             },
@@ -1034,6 +1197,100 @@ def blender_tool_definitions():
             },
         },
         {
+            "name": "add_breakdown_pose",
+            "description": "Add a keyed breakdown pose between surrounding key poses, optionally using explicit transform values. Applies immediately with preview revert support.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "object_names": {"type": "array", "items": {"type": "string"}},
+                    "selected_only": {"type": "boolean"},
+                    "frame": {"type": "integer"},
+                    "previous_frame": {"type": "integer"},
+                    "next_frame": {"type": "integer"},
+                    "factor": {"type": "number"},
+                    "location": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                    "rotation": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                    "scale": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                    "paths": {"type": "array", "items": {"type": "string", "enum": ["location", "rotation_euler", "scale"]}},
+                    "interpolation": {
+                        "type": "string",
+                        "enum": [
+                            "CONSTANT",
+                            "LINEAR",
+                            "BEZIER",
+                            "SINE",
+                            "QUAD",
+                            "CUBIC",
+                            "QUART",
+                            "QUINT",
+                            "EXPO",
+                            "CIRC",
+                            "BACK",
+                            "BOUNCE",
+                            "ELASTIC",
+                        ],
+                    },
+                    "label": {"type": "string"},
+                },
+                "required": ["frame"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "set_pose_hold",
+            "description": "Duplicate a keyed pose for a hold so contact, staging, or hero poses read before polish. Applies immediately with preview revert support.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "object_names": {"type": "array", "items": {"type": "string"}},
+                    "selected_only": {"type": "boolean"},
+                    "frame": {"type": "integer"},
+                    "hold_frames": {"type": "integer"},
+                    "paths": {"type": "array", "items": {"type": "string", "enum": ["location", "rotation_euler", "scale"]}},
+                    "interpolation": {
+                        "type": "string",
+                        "enum": [
+                            "CONSTANT",
+                            "LINEAR",
+                            "BEZIER",
+                            "SINE",
+                            "QUAD",
+                            "CUBIC",
+                            "QUART",
+                            "QUINT",
+                            "EXPO",
+                            "CIRC",
+                            "BACK",
+                            "BOUNCE",
+                            "ELASTIC",
+                        ],
+                    },
+                    "label": {"type": "string"},
+                },
+                "required": ["frame"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "create_motion_arc",
+            "description": "Create preview curve objects from sampled object locations so motion arcs are visible in the scene. Applies immediately with preview revert support.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "object_names": {"type": "array", "items": {"type": "string"}},
+                    "selected_only": {"type": "boolean"},
+                    "frame_start": {"type": "integer"},
+                    "frame_end": {"type": "integer"},
+                    "sample_step": {"type": "integer"},
+                    "name_prefix": {"type": "string"},
+                    "bevel_depth": {"type": "number"},
+                    "color": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+                    "label": {"type": "string"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "create_text_object",
             "description": "Create a text object with transform, alignment, size, and optional simple material. Applies immediately with preview revert support.",
             "input_schema": {
@@ -1748,6 +2005,17 @@ _TOOL_GROUPS = {
         "get_animation_details",
         "create_animation_brief",
         "create_timing_chart",
+        "analyze_motion_arcs",
+        "analyze_fcurve_spacing",
+        "analyze_pose_clarity",
+        "analyze_animation_principles",
+        "sample_animation_state",
+        "analyze_contact_sliding",
+        "analyze_collision_penetration",
+        "analyze_camera_framing",
+        "compare_animation_to_brief",
+        "review_playblast_against_brief",
+        "repair_animation_from_findings",
         "set_current_frame",
         "set_scene_frame_range",
         "animate_selected_transform",
@@ -1765,6 +2033,9 @@ _TOOL_GROUPS = {
         "create_reveal_animation",
         "create_staggered_motion",
         "block_key_poses",
+        "add_breakdown_pose",
+        "set_pose_hold",
+        "create_motion_arc",
         "create_camera_orbit",
         "capture_animation_playblast",
         "animate_shape_key",
@@ -1795,6 +2066,16 @@ _TOOL_GROUPS = {
         "get_simulation_details",
         "get_collection_layer_details",
         "get_render_camera_compositor_details",
+        "analyze_motion_arcs",
+        "analyze_fcurve_spacing",
+        "analyze_pose_clarity",
+        "analyze_animation_principles",
+        "sample_animation_state",
+        "analyze_contact_sliding",
+        "analyze_collision_penetration",
+        "analyze_camera_framing",
+        "compare_animation_to_brief",
+        "review_playblast_against_brief",
         "capture_viewport",
         "capture_animation_playblast",
     },
@@ -1804,6 +2085,7 @@ _TOOL_GROUPS = {
         "create_shape_key",
         "create_animation_brief",
         "create_timing_chart",
+        "analyze_animation_principles",
         "animate_shape_key",
         "animate_object_bounce",
         "animate_material_property",
@@ -1819,6 +2101,9 @@ _TOOL_GROUPS = {
         "create_reveal_animation",
         "create_staggered_motion",
         "block_key_poses",
+        "add_breakdown_pose",
+        "set_pose_hold",
+        "create_motion_arc",
         "create_text_object",
         "create_curve_path",
         "create_empty",
@@ -1906,7 +2191,7 @@ _GROUP_KEYWORDS = {
     "selection": {"select", "selected", "active", "frame", "playhead", "inspect"},
     "basic_edit": {"make", "create", "add", "move", "scale", "rotate", "transform", "object", "primitive", "empty", "marker", "collection", "duplicate", "copy", "parent", "align", "distribute", "layout", "arrange", "hide", "unhide", "visibility", "visible", "display", "wireframe", "show name", "in front"},
     "materials": {"material", "shader", "color", "colour", "red", "blue", "green", "metal", "metallic", "chrome", "glass", "emission", "glow", "window"},
-    "animation": {"animate", "animation", "animation brief", "prompt contract", "success criteria", "timing chart", "key pose", "key poses", "hold", "breakdown", "keyframe", "timeline", "frame", "orbit", "bounce", "driver", "motion", "follow path", "path", "retime", "interpolation", "easing", "loop", "cycles", "turntable", "pulse", "reveal", "stagger", "playblast", "timing", "spacing", "blocking"},
+    "animation": {"animate", "animation", "animation brief", "prompt contract", "success criteria", "timing chart", "key pose", "key poses", "hold", "breakdown", "keyframe", "timeline", "frame", "orbit", "bounce", "driver", "motion", "motion arc", "arc", "follow path", "path", "retime", "interpolation", "easing", "loop", "cycles", "turntable", "pulse", "reveal", "stagger", "playblast", "timing", "spacing", "blocking", "anticipation", "squash", "stretch", "settle", "follow-through", "principles"},
     "camera_render": {"camera", "render", "light", "lighting", "world", "background", "dof", "depth of field", "lens", "compositor", "resolution", "intensity", "studio", "product stage", "presentation", "turntable"},
     "deep_inspect": {"inspect", "analyze", "analyse", "summarize", "summary", "details", "world model", "what", "list", "screenshot", "viewport", "visual", "image", "capture", "playblast", "review"},
     "advanced_create": {"geometry nodes", "shape key", "text", "curve", "particle", "armature", "constraint", "rig", "driver", "callout", "dimension", "label", "palette", "swatch", "organize", "collection"},
@@ -1988,6 +2273,31 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
 
     budget = max(4000, int(max_schema_chars or TOOL_SCHEMA_CHAR_BUDGET))
     protected = set(_CORE_TOOL_NAMES)
+    for group in matched_groups:
+        if group in {"vehicle", "product", "character", "refinement", "camera_render", "rigging", "curves_text", "particles", "geometry_nodes"}:
+            protected.update(_TOOL_GROUPS.get(group, set()))
+    if "animation" in matched_groups:
+        protected.update(
+            {
+                "create_animation_brief",
+                "create_timing_chart",
+                "block_key_poses",
+                "add_breakdown_pose",
+                "set_pose_hold",
+                "create_motion_arc",
+                "analyze_motion_arcs",
+                "analyze_fcurve_spacing",
+                "analyze_pose_clarity",
+                "analyze_animation_principles",
+                "sample_animation_state",
+                "analyze_contact_sliding",
+                "analyze_collision_penetration",
+                "analyze_camera_framing",
+                "compare_animation_to_brief",
+                "review_playblast_against_brief",
+                "repair_animation_from_findings",
+            }
+        )
     if "draft_script" in selected:
         protected.add("draft_script")
     while _schema_chars(tools) > budget:
@@ -2039,6 +2349,9 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "create_reveal_animation",
     "create_staggered_motion",
     "block_key_poses",
+    "add_breakdown_pose",
+    "set_pose_hold",
+    "create_motion_arc",
     "duplicate_selected_objects",
     "parent_selected_to_empty",
     "align_selected_objects",
