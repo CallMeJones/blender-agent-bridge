@@ -7,7 +7,7 @@ import re
 
 import bpy
 
-from . import advanced_helpers, context_bundle, docs_index, live_preview, preferences, script_runner, viewport_capture, world_model
+from . import advanced_helpers, context_bundle, docs_index, live_preview, playblast_capture, preferences, script_runner, viewport_capture, world_model
 
 
 def _float_list(values, length, default):
@@ -1343,6 +1343,32 @@ def capture_viewport(context, args):
     }
 
 
+def capture_animation_playblast(context, args):
+    prefs = preferences.get_preferences(context)
+    max_bytes = args.get("max_bytes")
+    if max_bytes is None:
+        max_bytes = getattr(prefs, "max_screenshot_bytes", viewport_capture.DEFAULT_MAX_BYTES)
+    metadata = playblast_capture.capture_animation_playblast(
+        context,
+        frame_start=args.get("frame_start"),
+        frame_end=args.get("frame_end"),
+        max_frames=_bounded_int(
+            args.get("max_frames"),
+            playblast_capture.DEFAULT_MAX_FRAMES,
+            minimum=1,
+            maximum=playblast_capture.MAX_PLAYBLAST_FRAMES,
+        ),
+        max_bytes=_bounded_int(max_bytes, viewport_capture.DEFAULT_MAX_BYTES, minimum=262144, maximum=20 * 1024 * 1024),
+        brief=str(args.get("brief") or ""),
+        capture_dir=getattr(prefs, "capture_cache_dir", None),
+    )
+    return {
+        "ok": bool(metadata.get("available")),
+        "message": metadata.get("note") or "Animation playblast capture complete",
+        "playblast": metadata,
+    }
+
+
 def search_blender_docs(context, args):
     prefs = preferences.get_preferences(context)
     return docs_index.search_blender_docs(
@@ -1527,6 +1553,7 @@ TOOL_FUNCTIONS = {
     "animate_selected_transform": animate_selected_transform,
     "create_camera_orbit": create_camera_orbit,
     "capture_viewport": capture_viewport,
+    "capture_animation_playblast": capture_animation_playblast,
     "search_blender_docs": search_blender_docs,
     "draft_script": draft_script,
     "run_approved_script": run_approved_script,

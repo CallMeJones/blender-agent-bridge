@@ -55,7 +55,7 @@ After building a release zip, install `dist/claude_blender-<version>.zip` in a c
 - `Copy MCP Config` includes the current config metadata.
 - The MCP client sees `blender_bridge_status`, `list_scene_objects`, `draft_script`, and `run_approved_script`, or can reach them through the compact catalog surface.
 - `blender_bridge_status` reports matching add-on/bridge/MCP versions.
-- `resources/list` includes capture resources, and `resources/read` can read `blender://captures/latest/metadata` after a capture.
+- `resources/list` includes capture and playblast resources, and `resources/read` can read `blender://captures/latest/metadata` after a capture plus `blender://playblasts/latest/metadata` after a playblast capture.
 - External script trust presets can be granted and revoked, and trust clears after bridge restart or add-on reload.
 
 ## Release Checklist
@@ -65,6 +65,6 @@ After building a release zip, install `dist/claude_blender-<version>.zip` in a c
 - Confirm the generated zip includes `LICENSE` at the package root.
 - Install the zip into a clean Blender profile.
 - Start the External Bridge and run an MCP smoke against the installed extension.
-- Capture one viewport screenshot and confirm project-local or fallback capture storage behaves as documented.
+- Capture one viewport screenshot and one sampled animation playblast, then confirm project-local or fallback capture storage behaves as documented.
 - Review `SECURITY.md`, `PRIVACY.md`, and declared manifest permissions.
-- Scan the zip for secrets, generated logs, checkpoints, screenshots, caches, and private `.blend` files.
+- Scan the zip for secrets, generated logs, checkpoints, screenshots, playblast frame sequences, caches, and private `.blend` files.

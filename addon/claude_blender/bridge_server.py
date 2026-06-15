@@ -17,6 +17,7 @@ from . import (
     bridge_protocol,
     build_info,
     context_bundle,
+    playblast_capture,
     preferences,
     script_runner,
     tool_dispatcher,
@@ -170,6 +171,13 @@ def _resources():
             "description": "Metadata and local path for the latest viewport screenshot",
             "mimeType": "application/json",
         },
+        {
+            "uri": playblast_capture.LATEST_PLAYBLAST_METADATA_URI,
+            "name": "latest-playblast-metadata",
+            "title": "Latest Animation Playblast Metadata",
+            "description": "Metadata and frame resource URIs for the latest sampled animation playblast",
+            "mimeType": "application/json",
+        },
     ]
 
 
@@ -228,6 +236,36 @@ def _read_resource(uri):
             context=bpy.context,
             preferred_dir=_capture_cache_dir(),
         )
+    playblast_id, playblast_kind, playblast_frame = playblast_capture.parse_playblast_resource_uri(uri)
+    if playblast_id:
+        if playblast_id == "latest" and playblast_kind == "metadata":
+            return {
+                "mimeType": "application/json",
+                "text": json.dumps(
+                    playblast_capture.latest_playblast_metadata(context=bpy.context, preferred_dir=_capture_cache_dir()),
+                    indent=2,
+                    sort_keys=True,
+                ),
+            }
+        if playblast_kind == "metadata":
+            metadata = playblast_capture.playblast_metadata(
+                playblast_id,
+                context=bpy.context,
+                preferred_dir=_capture_cache_dir(),
+            )
+            if not metadata.get("available"):
+                return None
+            return {
+                "mimeType": "application/json",
+                "text": json.dumps(metadata, indent=2, sort_keys=True),
+            }
+        if playblast_kind == "frame":
+            return playblast_capture.playblast_frame_resource(
+                playblast_id,
+                playblast_frame,
+                context=bpy.context,
+                preferred_dir=_capture_cache_dir(),
+            )
     return None
 
 

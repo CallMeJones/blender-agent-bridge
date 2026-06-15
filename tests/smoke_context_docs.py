@@ -18,7 +18,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import anthropic_client, bridge_protocol, context_budget, context_bundle, docs_index, tool_dispatcher, viewport_capture  # noqa: E402
+from claude_blender import anthropic_client, bridge_protocol, context_budget, context_bundle, docs_index, playblast_capture, tool_dispatcher, viewport_capture  # noqa: E402
 
 
 def main():
@@ -32,14 +32,57 @@ def main():
         assert public["visual_context"]["requested"] is True
         assert public["visual_context"]["available"] is False
         assert "capture_viewport" in bundle["available_tools"]
+        assert "capture_animation_playblast" in bundle["available_tools"]
         assert "capture_viewport" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
+        assert "capture_animation_playblast" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
         assert "capture_viewport" in bridge_protocol.TOOL_CONTRACTS
+        assert "capture_animation_playblast" in bridge_protocol.TOOL_CONTRACTS
 
         captured = json.loads(tool_dispatcher.execute_tool(bpy.context, "capture_viewport", {"max_bytes": 512 * 1024}))
         assert captured["ok"] is False, captured
         assert captured["visual_context"]["requested"] is True, captured
         assert captured["visual_context"]["available"] is False, captured
         assert "interactive Blender window" in captured["message"], captured
+        playblast = json.loads(
+            tool_dispatcher.execute_tool(
+                bpy.context,
+                "capture_animation_playblast",
+                {"frame_start": 1, "frame_end": 12, "max_frames": 4, "brief": "background smoke"},
+            )
+        )
+        assert playblast["ok"] is False, playblast
+        assert playblast["playblast"]["requested"] is True, playblast
+        assert playblast["playblast"]["available"] is False, playblast
+        assert playblast["playblast"]["sampled_frames"] == [1, 5, 8, 12], playblast
+        assert "interactive Blender window" in playblast["message"], playblast
+
+        original_has_ui_context = viewport_capture.has_ui_context
+        original_capture_viewport_to_file = viewport_capture.capture_viewport_to_file
+        playblast_failure_dir = tempfile.mkdtemp(prefix="claude-blender-playblast-failure-", dir=cache_dir)
+        try:
+            viewport_capture.has_ui_context = lambda _context: True
+
+            def _fail_frame_capture(_context, _filepath):
+                raise RuntimeError("synthetic frame failure")
+
+            viewport_capture.capture_viewport_to_file = _fail_frame_capture
+            failed_playblast = playblast_capture.capture_animation_playblast(
+                bpy.context,
+                frame_start=1,
+                frame_end=2,
+                max_frames=2,
+                brief="frame failure smoke",
+                capture_dir=playblast_failure_dir,
+            )
+            assert failed_playblast["ok"] is False, failed_playblast
+            assert failed_playblast["available"] is False, failed_playblast
+            assert failed_playblast["frames"][0]["available"] is False, failed_playblast
+            assert "synthetic frame failure" in failed_playblast["frames"][0]["note"], failed_playblast
+            assert os.path.isfile(failed_playblast["metadata_path"]), failed_playblast
+        finally:
+            viewport_capture.has_ui_context = original_has_ui_context
+            viewport_capture.capture_viewport_to_file = original_capture_viewport_to_file
+            shutil.rmtree(playblast_failure_dir, ignore_errors=True)
 
         project_dir = tempfile.mkdtemp(prefix="claude-blender-project-", dir=cache_dir)
         project_blend = os.path.join(project_dir, "Capture Project.blend")

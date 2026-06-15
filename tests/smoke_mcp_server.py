@@ -131,6 +131,12 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                             "title": "Latest Viewport Capture Metadata",
                             "mimeType": "application/json",
                         },
+                        {
+                            "uri": "blender://playblasts/latest/metadata",
+                            "name": "latest-playblast-metadata",
+                            "title": "Latest Animation Playblast Metadata",
+                            "mimeType": "application/json",
+                        },
                     ],
                 }
             )
@@ -188,6 +194,55 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                                 "metadata_uri": "blender://captures/test-capture/metadata",
                             }
                         ),
+                    }
+                )
+            elif uri == "blender://playblasts/latest/metadata":
+                self._send(
+                    {
+                        "ok": True,
+                        "uri": "blender://playblasts/latest/metadata",
+                        "mimeType": "application/json",
+                        "text": json.dumps(
+                            {
+                                "ok": True,
+                                "available": True,
+                                "playblast_id": "test-playblast",
+                                "metadata_uri": "blender://playblasts/test-playblast/metadata",
+                                "latest_metadata_uri": "blender://playblasts/latest/metadata",
+                                "frames": [
+                                    {
+                                        "frame": 1,
+                                        "available": True,
+                                        "resource_uri": "blender://playblasts/test-playblast/frames/1",
+                                    }
+                                ],
+                            }
+                        ),
+                    }
+                )
+            elif uri == "blender://playblasts/test-playblast/metadata":
+                self._send(
+                    {
+                        "ok": True,
+                        "uri": "blender://playblasts/test-playblast/metadata",
+                        "mimeType": "application/json",
+                        "text": json.dumps(
+                            {
+                                "ok": True,
+                                "available": True,
+                                "playblast_id": "test-playblast",
+                                "metadata_uri": "blender://playblasts/test-playblast/metadata",
+                            }
+                        ),
+                    }
+                )
+            elif uri == "blender://playblasts/test-playblast/frames/1":
+                self._send(
+                    {
+                        "ok": True,
+                        "uri": "blender://playblasts/test-playblast/frames/1",
+                        "mimeType": "image/png",
+                        "blob": "iVBORw0KGgo=",
                     }
                 )
             else:
@@ -695,12 +750,15 @@ def main():
         assert "blender://scene/status" in uris
         assert "blender://captures/latest" in uris
         assert "blender://captures/latest/metadata" in uris
+        assert "blender://playblasts/latest/metadata" in uris
 
         templates = _send(proc, {"jsonrpc": "2.0", "id": 40, "method": "resources/templates/list"})
         template_names = {item["name"] for item in templates["result"]["resourceTemplates"]}
         assert "scene-resource" in template_names, templates
         assert "capture-resource" in template_names, templates
         assert "capture-metadata-resource" in template_names, templates
+        assert "playblast-metadata-resource" in template_names, templates
+        assert "playblast-frame-resource" in template_names, templates
 
         prompts = _send(proc, {"jsonrpc": "2.0", "id": 41, "method": "prompts/list"})
         prompt_names = {item["name"] for item in prompts["result"]["prompts"]}
@@ -765,6 +823,40 @@ def main():
         )
         exact_metadata = json.loads(exact_metadata_resource["result"]["contents"][0]["text"])
         assert exact_metadata["resource_uri"] == "blender://captures/test-capture", exact_metadata_resource
+        playblast_metadata_resource = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 47,
+                "method": "resources/read",
+                "params": {"uri": "blender://playblasts/latest/metadata"},
+            },
+        )
+        playblast_metadata = json.loads(playblast_metadata_resource["result"]["contents"][0]["text"])
+        assert playblast_metadata["metadata_uri"] == "blender://playblasts/test-playblast/metadata", playblast_metadata_resource
+        playblast_exact_metadata_resource = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 48,
+                "method": "resources/read",
+                "params": {"uri": playblast_metadata["metadata_uri"]},
+            },
+        )
+        playblast_exact_metadata = json.loads(playblast_exact_metadata_resource["result"]["contents"][0]["text"])
+        assert playblast_exact_metadata["playblast_id"] == "test-playblast", playblast_exact_metadata_resource
+        playblast_frame_resource = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 49,
+                "method": "resources/read",
+                "params": {"uri": playblast_metadata["frames"][0]["resource_uri"]},
+            },
+        )
+        playblast_frame = playblast_frame_resource["result"]["contents"][0]
+        assert playblast_frame["mimeType"] == "image/png", playblast_frame_resource
+        assert playblast_frame["blob"] == "iVBORw0KGgo=", playblast_frame_resource
         print("smoke_mcp_server: ok")
     finally:
         proc.kill()

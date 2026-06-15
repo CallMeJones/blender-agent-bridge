@@ -18,6 +18,7 @@ Recommended GitHub repository name: `blender-agent-bridge`.
 
 - Inspect the active `.blend` file through structured scene, selection, material, animation, rigging, render, camera, compositor, collection, and node-tree summaries.
 - Attach a bounded viewport screenshot when the `Viewport` toggle is enabled, with project/session-scoped local storage and MCP image resources for external clients.
+- Capture sampled animation playblast frames as project/session-scoped MCP image resources so agents can review timing, spacing, staging, arcs, and contact poses.
 - Search cached official Blender Python API documentation before version-sensitive scripting.
 - Let the in-Blender Claude assistant or external MCP agents call bounded live helper tools for common scene edits such as transforms, primitives, materials, cameras, lights, keyframes, constraints, geometry-node starters, shape keys, particles, text/curves, render settings, lighting presets, material palettes, product turntables, and production scene organization.
 - Keep live helper edits inside preview transactions so the user can commit, revert, or use Blender undo.
@@ -32,7 +33,7 @@ Connected agents do not get blanket access to Blender. The in-Blender Claude ass
 
 Viewport images are sent only when the user enables the `Viewport` toggle. The localhost bridge does not call a model provider by itself; external MCP clients decide what to send to their own providers after reading resources or tool results.
 
-Saved `.blend` projects store generated viewport captures under `.claude_blender/captures/<session_id>` by default, while unsaved or unwritable projects fall back to the user cache. Treat these captures as generated runtime artifacts unless you intentionally keep them as visual QA evidence.
+Saved `.blend` projects store generated viewport captures and playblast frame sequences under `.claude_blender/captures/<session_id>` by default, while unsaved or unwritable projects fall back to the user cache. Treat these captures as generated runtime artifacts unless you intentionally keep them as visual QA evidence.
 
 See [SECURITY.md](SECURITY.md) and [PRIVACY.md](PRIVACY.md) for the detailed model.
 
@@ -42,7 +43,7 @@ See [SECURITY.md](SECURITY.md) and [PRIVACY.md](PRIVACY.md) for the detailed mod
 - Python available on `PATH` for build scripts and the external MCP server.
 - `ANTHROPIC_API_KEY` set in the environment before launching Blender when using the in-Blender Claude chat.
 - Network permission for Anthropic requests, Blender docs downloads, and the optional localhost bridge.
-- File permission for docs caches, viewport captures, checkpoints, transcripts, and audit logs.
+- File permission for docs caches, viewport captures, playblast frame sequences, checkpoints, transcripts, and audit logs.
 
 ## Install from Source
 
@@ -97,7 +98,7 @@ The External Bridge section in the sidebar can expose a localhost-only JSON brid
 
 The MCP surface is intentionally compact by default. `blender_tool_catalog` is the main search/schema/invoke entry point for the full local tool catalog, with compatibility wrappers still available for direct search, schema lookup, and invocation.
 
-External clients can also read resources such as scene status, tool contracts, transcripts, audit logs, and viewport captures. The capture resources include `blender://captures/latest`, `blender://captures/latest/metadata`, and exact `blender://captures/{capture_id}` URIs returned in capture metadata.
+External clients can also read resources such as scene status, tool contracts, transcripts, audit logs, viewport captures, and sampled animation playblast frames. The capture resources include `blender://captures/latest`, `blender://captures/latest/metadata`, and exact `blender://captures/{capture_id}` URIs returned in capture metadata. Animation review resources include `blender://playblasts/latest/metadata`, exact `blender://playblasts/{playblast_id}/metadata`, and `blender://playblasts/{playblast_id}/frames/{frame}` PNG frame resources.
 
 Some MCP clients cache tool lists and server configs. After installing a new zip, reloading the add-on, or pressing `Copy MCP Config`, replace the old client config and refresh or restart that MCP client.
 

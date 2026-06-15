@@ -193,7 +193,7 @@ Acceptance:
 - Claude can comment on visible composition, object placement, materials, and framing.
 - User can toggle screenshot inclusion per prompt.
 
-Status: Viewport screenshot attachment is implemented with a user toggle, project/session-scoped capture storage, maximum byte limit, API-only image blocks, transcript-safe metadata, MCP capture resources for external clients, and explicit PNG downscaling/re-save when a capture exceeds the request byte budget. Broader visual QA and animation/playblast review remain later work.
+Status: Viewport screenshot attachment is implemented with a user toggle, project/session-scoped capture storage, maximum byte limit, API-only image blocks, transcript-safe metadata, MCP capture resources for external clients, and explicit PNG downscaling/re-save when a capture exceeds the request byte budget. Initial animation playblast frame capture is now scaffolded as sampled viewport PNG resources for MCP clients. Broader visual QA and automated animation review remain later work.
 
 ### Milestone 3: Approved Script Execution
 
@@ -261,11 +261,14 @@ Status: Safe editing helpers now cover the original simple edits plus advanced b
 
 - Add richer timeline, f-curve, action, camera, and constraint summaries.
 - Add animation-specific script templates/checks.
+- Add sampled playblast frame capture for visual animation review.
 
 Acceptance:
 
 - Claude can create simple object, material, light, and camera animations.
-- Generated animations can be previewed and undone.
+- Generated animations can be previewed, sampled for visual review, and undone.
+
+Status: Basic animation helpers are implemented for transforms, object bounce, material/light properties, path following, interpolation, retiming, cycles, preview ranges, turntables, pulse/reveal/staggered motion, and camera orbits. Initial sampled playblast frame capture is implemented for interactive Blender sessions and exposed through MCP resources. Remaining work: timing/blocking tools, animation-principles review, physics/contact validation, and repair loops.
 
 ### Milestone 5.5: External Bridge And MCP
 

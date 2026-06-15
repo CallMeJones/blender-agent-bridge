@@ -132,8 +132,13 @@ Current resources:
 - `blender://captures/latest/metadata`
 - `blender://captures/{capture_id}`
 - `blender://captures/{capture_id}/metadata`
+- `blender://playblasts/latest/metadata`
+- `blender://playblasts/{playblast_id}/metadata`
+- `blender://playblasts/{playblast_id}/frames/{frame}`
 
 `blender://captures/latest` is scoped to the currently connected Blender bridge and its active project/session. Capture metadata includes the exact `capture_id` resource URIs for repeat reads. By default, saved `.blend` files store captures in a hidden project-local `.claude_blender/captures/<session_id>` folder so separate projects do not overwrite each other. Unsaved or unwritable projects fall back to `~/.claude_blender/captures/<project_id>/<session_id>`. A custom capture cache preference remains a custom base directory and still gets project/session subfolders.
+
+`capture_animation_playblast` captures sampled viewport PNG frames across an animation range when Blender is running with an interactive window. The metadata resource lists exact frame URIs so external clients can inspect timing, spacing, staging, arcs, and contact poses without relying only on keyframe data. In background/headless mode it fails soft and reports that an interactive window is required.
 
 ## Prompts
 

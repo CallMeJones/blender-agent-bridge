@@ -104,6 +104,8 @@ Support two visual modes:
 
 Current implementation captures a bounded PNG screenshot from Blender's UI when the user enables the `Viewport` toggle. The image is attached to the Anthropic request as an image block and stripped from transcript-visible context. If the PNG is too large, Blender's image API downscales and re-saves a smaller copy before upload. Saved `.blend` projects store captures in a project-local `.claude_blender/captures/<session_id>` folder by default, with a global user-cache fallback for unsaved or unwritable projects. The MCP bridge also exposes the latest capture and exact capture ids as image resources for external clients. If Blender is headless or the operator fails, the bundle records that visual context was requested but unavailable.
 
+Animation playblast capture uses the same storage boundary and writes sampled viewport PNG frame sequences under the active capture session. MCP clients can read playblast metadata and exact frame resources, which gives agents visible poses for reviewing timing, spacing, staging, arcs, contact, and prompt intent before later repair loops.
+
 For repeated images or larger workflows, the Files API may help later, but it should remain optional because it is beta and has different retention behavior.
 
 ## Docs Strategy

@@ -19,7 +19,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import bridge_server, viewport_capture  # noqa: E402
+from claude_blender import bridge_server, playblast_capture, viewport_capture  # noqa: E402
 
 
 def _request_with_pump(fn, timeout=10):
@@ -80,6 +80,7 @@ def main():
         assert "create_material_palette" in names, names
         assert "create_product_turntable_setup" in names, names
         assert "organize_scene_for_production" in names, names
+        assert "capture_animation_playblast" in names, names
 
         health = _request_with_pump(lambda: _get(base + "/health"))
         assert health["ok"], health
@@ -97,6 +98,7 @@ def main():
         assert "blender://scene/context" in uris, resources
         assert "blender://captures/latest" in uris, resources
         assert "blender://captures/latest/metadata" in uris, resources
+        assert "blender://playblasts/latest/metadata" in uris, resources
         resource_url = base + "/resource?" + urllib.parse.urlencode({"uri": "blender://scene/status"})
         resource = _request_with_pump(lambda: _get(resource_url))
         assert resource["ok"], resource
@@ -121,6 +123,37 @@ def main():
         assert metadata["exact_resource_uri"].endswith(latest["captureId"]), metadata
         exact_metadata = viewport_capture.capture_metadata(latest["captureId"], capture_dir=capture_dir)
         assert exact_metadata["resource_uri"].endswith(latest["captureId"]), exact_metadata
+        playblast_dir = os.path.join(capture_dir, "playblasts", "test-playblast")
+        os.makedirs(playblast_dir, exist_ok=True)
+        frame_path = os.path.join(playblast_dir, "frame-0001.png")
+        shutil.copyfile(capture_path, frame_path)
+        playblast_metadata = {
+            "ok": True,
+            "available": True,
+            "playblast_id": "test-playblast",
+            "created_at": time.time(),
+            "metadata_uri": "blender://playblasts/test-playblast/metadata",
+            "latest_metadata_uri": "blender://playblasts/latest/metadata",
+            "playblast_dir": playblast_dir,
+            "frames": [
+                {
+                    "frame": 1,
+                    "available": True,
+                    "path": frame_path,
+                    "resource_uri": "blender://playblasts/test-playblast/frames/1",
+                    "size_bytes": os.path.getsize(frame_path),
+                    "width": 1,
+                    "height": 1,
+                }
+            ],
+        }
+        with open(os.path.join(playblast_dir, "metadata.json"), "w", encoding="utf-8") as handle:
+            json.dump(playblast_metadata, handle)
+        latest_playblast = playblast_capture.latest_playblast_metadata(capture_dir=capture_dir)
+        assert latest_playblast["playblast_id"] == "test-playblast", latest_playblast
+        frame_resource = playblast_capture.playblast_frame_resource("test-playblast", 1, capture_dir=capture_dir)
+        assert frame_resource["mimeType"] == "image/png", frame_resource
+        assert frame_resource["blob"], frame_resource
         shutil.rmtree(capture_dir, ignore_errors=True)
 
         stopped = bridge_server.stop_bridge()

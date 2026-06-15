@@ -244,6 +244,8 @@ By default, saved `.blend` files store viewport captures beside the project in `
 
 If Blender is running headless or the screenshot operator fails, the visual context records `requested: true` and `available: false` without blocking the prompt.
 
+`capture_animation_playblast` uses the same storage model to capture sampled viewport PNG frames across an animation range. It writes a playblast metadata manifest with frame resource URIs such as `blender://playblasts/{playblast_id}/frames/{frame}`. This is the first visual QA path for animation review: agents can compare visible sampled poses against the brief, timing, spacing, staging, arcs, and contact expectations. It requires an interactive Blender window and fails soft in background mode.
+
 ## Guarded Execution
 
 The runner should:

@@ -5,7 +5,8 @@ Start with the top-level `README.md`, then use these deeper notes for developmen
 ## Current Implementation Notes
 
 - Viewport captures are exposed to MCP clients through `blender://captures/latest`, `blender://captures/latest/metadata`, and exact `blender://captures/{capture_id}` resources.
-- Saved `.blend` files store generated captures in project-local `.claude_blender/captures/<session_id>` folders by default. Unsaved or unwritable projects use the global user cache.
+- Sampled animation playblast frames are exposed through `blender://playblasts/latest/metadata`, exact playblast metadata resources, and frame PNG resources for animation review.
+- Saved `.blend` files store generated captures and playblast frames in project-local `.claude_blender/captures/<session_id>` folders by default. Unsaved or unwritable projects use the global user cache.
 - External script trust is runtime-only and can be granted from sidebar presets such as 15 minutes, 1 hour, 4 hours, or the current Blender session.
 - The helper catalog now includes production kits for lighting presets, material palettes, product turntable staging, and scene organization.
 

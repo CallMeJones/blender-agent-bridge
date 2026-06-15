@@ -183,6 +183,10 @@ def _capture_dir_candidates(capture_dir=None, *, context=None, preferred_dir=Non
     return candidates
 
 
+def capture_dir_candidates(capture_dir=None, *, context=None, preferred_dir=None):
+    return _capture_dir_candidates(capture_dir, context=context, preferred_dir=preferred_dir)
+
+
 def _capture_file_candidates(capture_dir):
     if not os.path.isdir(capture_dir):
         return []
@@ -381,6 +385,10 @@ def _has_ui_context(context):
     return bool(getattr(context, "window", None) and getattr(context, "screen", None))
 
 
+def has_ui_context(context):
+    return _has_ui_context(context)
+
+
 def _capture_with_operator(context, filepath):
     area = getattr(context, "area", None)
     if area and area.type == "VIEW_3D":
@@ -388,6 +396,10 @@ def _capture_with_operator(context, filepath):
         return "screen.screenshot_area"
     bpy.ops.screen.screenshot(filepath=filepath)
     return "screen.screenshot"
+
+
+def capture_viewport_to_file(context, filepath):
+    return _capture_with_operator(context, filepath)
 
 
 def load_preview_image(filepath):

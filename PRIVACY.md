@@ -4,9 +4,9 @@ Blender Agent Bridge is designed to keep project context local unless the user a
 
 ## Local Data
 
-The add-on may store local Blender Text datablocks for chat history, transcripts, pending scripts, script logs, repair context, and agent memory. It may also write docs caches, checkpoints, viewport screenshots, and audit logs under user-controlled local paths.
+The add-on may store local Blender Text datablocks for chat history, transcripts, pending scripts, script logs, repair context, and agent memory. It may also write docs caches, checkpoints, viewport screenshots, sampled playblast frame sequences, and audit logs under user-controlled local paths.
 
-Viewport screenshots are generated only when visual context is requested. Saved `.blend` files store captures under a project-local `.claude_blender/captures/<session_id>` folder by default. Unsaved or unwritable projects use the global `~/.claude_blender/captures/<project_id>/<session_id>` fallback, and a custom capture cache preference acts as a custom base directory. Treat project-local captures as generated artifacts unless you intentionally keep them.
+Viewport screenshots are generated only when visual context is requested. Sampled animation playblast frames are generated only when `capture_animation_playblast` is called. Saved `.blend` files store captures under a project-local `.claude_blender/captures/<session_id>` folder by default. Unsaved or unwritable projects use the global `~/.claude_blender/captures/<project_id>/<session_id>` fallback, and a custom capture cache preference acts as a custom base directory. Treat project-local captures as generated artifacts unless you intentionally keep them.
 
 The default audit log path is:
 
@@ -26,13 +26,14 @@ When the in-Blender Claude assistant calls Anthropic, it can send:
 - docs snippets;
 - agent memory when enabled;
 - viewport screenshots only when the Viewport toggle is enabled.
+- sampled playblast frames only when an agent or user explicitly requests animation capture.
 
 The localhost MCP bridge itself does not call an LLM provider. External MCP clients decide what to send to their own model provider after reading resources or tool results.
 
 ## User Controls
 
-- Keep screenshots off unless visual context is needed.
+- Keep screenshots off unless visual context is needed, and request playblast capture only when animation review needs visible frames.
 - Use `Clear Memory` for a fresh local agent thread.
 - Use `Reject Script` for unwanted pending Python.
 - Use `Revoke Trust` to end a runtime external script trust preset before it expires.
-- Delete local checkpoint, screenshot, docs-cache, and audit files from disk when no longer needed.
+- Delete local checkpoint, screenshot, playblast, docs-cache, and audit files from disk when no longer needed.

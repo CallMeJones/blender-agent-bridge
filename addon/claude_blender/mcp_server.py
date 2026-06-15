@@ -143,6 +143,20 @@ RESOURCE_TEMPLATES = [
         "description": "Exact viewport screenshot metadata for a capture from the running Blender bridge.",
         "mimeType": "application/json",
     },
+    {
+        "uriTemplate": "blender://playblasts/{playblast_id}/metadata",
+        "name": "playblast-metadata-resource",
+        "title": "Blender Playblast Metadata Resource",
+        "description": "Animation playblast metadata with sampled frame resource URIs.",
+        "mimeType": "application/json",
+    },
+    {
+        "uriTemplate": "blender://playblasts/{playblast_id}/frames/{frame}",
+        "name": "playblast-frame-resource",
+        "title": "Blender Playblast Frame Resource",
+        "description": "Sampled animation playblast frame PNG resources captured by the running Blender bridge.",
+        "mimeType": "image/png",
+    },
 ]
 
 PROMPTS = {
@@ -552,7 +566,7 @@ def _tool_category(tool):
         return "script"
     if name in {"commit_preview", "revert_preview"}:
         return "preview"
-    if name.startswith("get_") or name.startswith("list_") or name in {"inspect_scene", "search_blender_docs", "capture_viewport"}:
+    if name.startswith("get_") or name.startswith("list_") or name in {"inspect_scene", "search_blender_docs", "capture_viewport", "capture_animation_playblast"}:
         return "inspect"
     if "material" in name or "shader" in name or name == "set_world_background":
         return "materials"

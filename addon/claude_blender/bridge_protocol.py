@@ -93,6 +93,14 @@ TOOL_CONTRACTS = {
         "supports_headless": False,
         "timeout_seconds": 30,
     },
+    "capture_animation_playblast": {
+        "description": "Capture sampled viewport frames across an animation range for visual review",
+        "mutates_scene": False,
+        "has_side_effects": True,
+        "permissions": ["scene:read", "files:write"],
+        "supports_headless": False,
+        "timeout_seconds": 120,
+    },
     "set_selected_location_delta": {
         "description": "Move selected Blender objects by a delta with rollback state",
         "mutates_scene": True,

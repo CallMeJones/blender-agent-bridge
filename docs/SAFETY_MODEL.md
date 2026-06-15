@@ -36,7 +36,7 @@ Current implementation:
 
 ### Limited Autonomous
 
-Claude can call only allowlisted tools such as `inspect_scene`, `capture_viewport`, `set_object_transform`, or `add_light`. Arbitrary Python stays blocked.
+Claude can call only allowlisted tools such as `inspect_scene`, `capture_viewport`, `capture_animation_playblast`, `set_object_transform`, or `add_light`. Arbitrary Python stays blocked.
 
 Use this later for fast iterative workflows.
 
@@ -61,7 +61,7 @@ Defaults and boundaries:
 - MCP clients call `mcp_server.py`; they do not import Blender Python or touch `bpy`.
 - Mutating helper tools still run inside Blender and use the live-preview/revert path.
 - Generated arbitrary Python is still staged with `draft_script` and must be approved in Blender.
-- Viewport screenshots exposed through MCP capture resources are local artifacts. Saved `.blend` files use a project-local `.claude_blender/captures/` folder by default, while unsaved or unwritable projects use the global user cache.
+- Viewport screenshots and sampled animation playblast frames exposed through MCP capture resources are local artifacts. Saved `.blend` files use a project-local `.claude_blender/captures/` folder by default, while unsaved or unwritable projects use the global user cache.
 - External clients should surface tool calls clearly because MCP tools are model-controlled.
 
 ## Risk Checks

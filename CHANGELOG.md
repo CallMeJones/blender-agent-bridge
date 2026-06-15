@@ -14,6 +14,7 @@
 - Added runtime external script trust presets for 15 minutes, 1 hour, 4 hours, or the current Blender session, with revoke/reload/bridge-start clearing behavior.
 - Added MCP viewport capture resources, including latest capture metadata and exact `blender://captures/{capture_id}` reads.
 - Added project/session-scoped capture storage: saved `.blend` files use project-local `.claude_blender/captures/<session_id>` folders by default, with global fallback for unsaved or unwritable projects.
+- Added sampled animation playblast frame capture with MCP metadata and exact `blender://playblasts/{playblast_id}/frames/{frame}` PNG resources for visual animation review.
 - Added production helper kits for lighting presets, material palettes, product turntable staging, and scene organization.
 
 ## 0.1.0

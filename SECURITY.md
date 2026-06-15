@@ -19,7 +19,7 @@ Do not include API keys, bridge tokens, proprietary `.blend` files, or private s
 - Live helper tools are bounded and should use reversible preview transactions.
 - Checkpoints are saved before approved scripts when enabled.
 - Runtime external script trust presets allow iterative tokenless script runs only for staged scripts that still pass static checks. Trust is cleared by revoke, add-on reload, file load, or bridge restart depending on the preset.
-- MCP capture resources expose local viewport screenshots to connected MCP clients. Keep screenshots off when visual context is not needed, and treat project-local `.claude_blender/captures/` folders as generated artifacts.
+- MCP capture resources expose local viewport screenshots and sampled playblast frames to connected MCP clients. Keep screenshots and playblast capture off when visual context is not needed, and treat project-local `.claude_blender/captures/` folders as generated artifacts.
 - Audit events are written locally to `~/.claude_blender/audit.jsonl` by default. Script/code-like arguments, tokens, keys, and passwords are redacted before logging.
 - Static script checks are guardrails, not a sandbox. Blender Python can still access local files, network, and process state if the user approves it.
 

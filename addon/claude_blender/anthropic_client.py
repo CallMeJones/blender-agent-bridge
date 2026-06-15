@@ -51,7 +51,7 @@ SYSTEM_PROMPT = (
     "If agent_memory is enabled, treat it as the running project thread so the user can work progressively across prompts. "
     "Use prior goals, attempted steps, and remaining tasks from agent_memory, but treat the current Blender scene context as authoritative if they conflict. "
     "Read context_plan before acting. It explains which scene details were included or omitted to stay within the request budget. "
-    "If omitted details matter, call inspect_scene, get_object_details, get_animation_details, get_material_node_details, get_geometry_nodes_details, get_shader_nodes_details, get_rigging_details, get_shape_key_details, get_curve_text_details, get_simulation_details, get_collection_layer_details, get_render_camera_compositor_details, capture_viewport, or search_blender_docs instead of guessing. "
+    "If omitted details matter, call inspect_scene, get_object_details, get_animation_details, get_material_node_details, get_geometry_nodes_details, get_shader_nodes_details, get_rigging_details, get_shape_key_details, get_curve_text_details, get_simulation_details, get_collection_layer_details, get_render_camera_compositor_details, capture_viewport, capture_animation_playblast, or search_blender_docs instead of guessing. "
     "When target objects are unclear, use list_scene_objects and select_objects before applying selected-object tools. "
     "When the user asks to change the scene, use safe helper tools first so Blender changes immediately. "
     "Use direct Blender data concepts: objects, collections, materials, cameras, lights, actions, keyframes. "
@@ -130,6 +130,30 @@ def blender_tool_definitions():
                         "type": "integer",
                         "description": "Maximum PNG bytes to keep after resizing/compression. Defaults to the add-on preference.",
                     }
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "capture_animation_playblast",
+            "description": "Capture sampled viewport frames across an animation range and return playblast metadata plus MCP frame resource URIs for visual animation review. Requires an interactive Blender window and fails soft in background mode.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "frame_start": {"type": "integer"},
+                    "frame_end": {"type": "integer"},
+                    "max_frames": {
+                        "type": "integer",
+                        "description": "Maximum sampled frames to capture from the animation range. Defaults to 12.",
+                    },
+                    "max_bytes": {
+                        "type": "integer",
+                        "description": "Maximum PNG bytes per sampled frame after resizing/compression.",
+                    },
+                    "brief": {
+                        "type": "string",
+                        "description": "Short animation intent or prompt contract to store with the playblast metadata.",
+                    },
                 },
                 "additionalProperties": False,
             },
@@ -1604,11 +1628,13 @@ _TOOL_GROUPS = {
         "create_reveal_animation",
         "create_staggered_motion",
         "create_camera_orbit",
+        "capture_animation_playblast",
         "animate_shape_key",
     },
     "camera_render": {
         "get_render_camera_compositor_details",
         "capture_viewport",
+        "capture_animation_playblast",
         "add_light",
         "add_camera",
         "set_active_camera",
@@ -1632,6 +1658,7 @@ _TOOL_GROUPS = {
         "get_collection_layer_details",
         "get_render_camera_compositor_details",
         "capture_viewport",
+        "capture_animation_playblast",
     },
     "advanced_create": {
         "create_shader_material",
@@ -1709,9 +1736,9 @@ _GROUP_KEYWORDS = {
     "selection": {"select", "selected", "active", "frame", "playhead", "inspect"},
     "basic_edit": {"make", "create", "add", "move", "scale", "rotate", "transform", "object", "primitive", "empty", "marker", "collection", "duplicate", "copy", "parent", "align", "distribute", "layout", "arrange", "hide", "unhide", "visibility", "visible", "display", "wireframe", "show name", "in front"},
     "materials": {"material", "shader", "color", "colour", "red", "blue", "green", "metal", "metallic", "chrome", "glass", "emission", "glow", "window"},
-    "animation": {"animate", "animation", "keyframe", "timeline", "frame", "orbit", "bounce", "driver", "motion", "follow path", "path", "retime", "interpolation", "easing", "loop", "cycles", "turntable", "pulse", "reveal", "stagger"},
+    "animation": {"animate", "animation", "keyframe", "timeline", "frame", "orbit", "bounce", "driver", "motion", "follow path", "path", "retime", "interpolation", "easing", "loop", "cycles", "turntable", "pulse", "reveal", "stagger", "playblast", "timing", "spacing"},
     "camera_render": {"camera", "render", "light", "lighting", "world", "background", "dof", "depth of field", "lens", "compositor", "resolution", "intensity", "studio", "product stage", "presentation", "turntable"},
-    "deep_inspect": {"inspect", "analyze", "analyse", "summarize", "summary", "details", "world model", "what", "list", "screenshot", "viewport", "visual", "image", "capture"},
+    "deep_inspect": {"inspect", "analyze", "analyse", "summarize", "summary", "details", "world model", "what", "list", "screenshot", "viewport", "visual", "image", "capture", "playblast", "review"},
     "advanced_create": {"geometry nodes", "shape key", "text", "curve", "particle", "armature", "constraint", "rig", "driver", "callout", "dimension", "label", "palette", "swatch", "organize", "collection"},
     "refinement": {"refine", "polish", "smooth", "high poly", "high-poly", "detail", "bevel", "subdivision", "subsurf", "seam", "panel", "dimension", "callout", "stage", "palette", "lighting"},
     "vehicle": {"car", "vehicle", "truck", "wheel", "tire", "tyre", "rim", "headlight", "taillight", "windshield", "door", "grille"},

@@ -222,6 +222,7 @@ def build_context_bundle(context, *, include_visual=False, capture_dir=None, max
             "get_collection_layer_details",
             "get_render_camera_compositor_details",
             "capture_viewport",
+            "capture_animation_playblast",
             "search_blender_docs",
             "select_objects",
             "set_current_frame",
