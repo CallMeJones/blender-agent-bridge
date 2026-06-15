@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
+import tempfile
 
 import bpy
 
@@ -86,6 +88,22 @@ def _action_keyframes(action):
     return sorted(set(frames))
 
 
+def _write_pattern_png(path):
+    image = bpy.data.images.new(f"Claude Smoke Frame {os.path.basename(path)}", width=8, height=8, alpha=True)
+    try:
+        pixels = []
+        for y in range(8):
+            for x in range(8):
+                bright = 0.85 if (x < 4 and y < 4) or (x >= 4 and y >= 4) else 0.15
+                pixels.extend([bright, 0.25, 1.0 - bright, 1.0])
+        image.pixels[:] = pixels
+        image.filepath_raw = path
+        image.file_format = "PNG"
+        image.save()
+    finally:
+        bpy.data.images.remove(image)
+
+
 def main():
     claude_blender.register()
     context = bpy.context
@@ -95,6 +113,7 @@ def main():
     light = bpy.data.objects["Light"]
     _select_object(context, cube)
     initial = _snapshot(scene, cube, camera, light)
+    visual_dir = ""
 
     try:
         bundle = context_bundle.build_context_bundle(context)
@@ -339,6 +358,42 @@ def main():
         assert playblast_review["visual_review"]["frame_coverage"]["covers_end"] is False, playblast_review
         assert any(item["tool"] == "capture_animation_playblast" for item in playblast_review["repair_operations"]), playblast_review
 
+        visual_dir = tempfile.mkdtemp(prefix="claude-blender-playblast-")
+        static_frames = []
+        for frame_number in (1, 36, 72):
+            path = os.path.join(visual_dir, f"frame-{frame_number:04d}.png")
+            _write_pattern_png(path)
+            static_frames.append(
+                {
+                    "frame": frame_number,
+                    "available": True,
+                    "path": path,
+                    "resource_uri": f"blender://playblasts/static/frames/{frame_number}",
+                    "size_bytes": os.path.getsize(path),
+                    "width": 8,
+                    "height": 8,
+                }
+            )
+        static_review = _execute(
+            context,
+            "review_playblast_against_brief",
+            {
+                "brief": contract,
+                "playblast": {
+                    "available": True,
+                    "playblast_id": "static",
+                    "sampled_frames": [1, 36, 72],
+                    "frames": static_frames,
+                },
+            },
+        )
+        motion_evidence = static_review["visual_review"]["motion_evidence"]
+        assert motion_evidence["digest_frame_count"] == 3, static_review
+        assert motion_evidence["max_grid_delta"] == 0.0, static_review
+        assert any("clear motion" in item["message"] for item in static_review["findings"]), static_review
+        assert any(item["tool"] == "block_key_poses" for item in static_review["repair_operations"]), static_review
+        assert all(item["tool_call"]["name"] == item["tool"] for item in static_review["repair_operations"]), static_review
+
         repair_plan = _execute(
             context,
             "repair_animation_from_findings",
@@ -346,6 +401,7 @@ def main():
         )
         assert repair_plan["suggested_tool_calls"][0]["tool"] == "set_pose_hold", repair_plan
         assert repair_plan["repair_operations"][0]["arguments"]["object_names"] == ["Cube"], repair_plan
+        assert repair_plan["repair_operations"][0]["tool_call"]["input"]["object_names"] == ["Cube"], repair_plan
         assert repair_plan["repair_operations"][0]["source_finding_index"] == 0, repair_plan
 
         bounce = _execute(
@@ -444,6 +500,8 @@ def main():
 
         print("smoke_animation_helpers: ok")
     finally:
+        if visual_dir:
+            shutil.rmtree(visual_dir, ignore_errors=True)
         claude_blender.unregister()
 
 

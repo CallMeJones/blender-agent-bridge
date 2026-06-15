@@ -436,7 +436,7 @@ Acceptance:
 - The repair loop preserves successful parts of the animation.
 - The user sees concise review findings and can commit or revert the repaired preview.
 
-Status: Initial playblast-aware review and non-mutating repair planning are implemented. `review_playblast_against_brief` now normalizes playblast frame evidence, checks frame resource availability, frame coverage, and undersampling against the brief, combines that with current animation-state comparison, and returns structured repair operations. `repair_animation_from_findings` maps findings to targeted helper calls with arguments, such as fresh playblast capture, interpolation changes, pose holds, camera repair, anticipation/settle breakdowns, or reblocking, without applying them automatically.
+Status: Playblast-aware review and non-mutating repair planning are implemented. `review_playblast_against_brief` normalizes playblast frame evidence, checks frame resource availability, frame coverage, undersampling, compact pixel digests, and visual frame-to-frame motion deltas against the brief, combines that with current animation-state comparison, and returns structured repair operations. `repair_animation_from_findings` maps findings to targeted helper calls with arguments, executable `tool_call` payloads, preview/commit flags, and source-finding references, such as fresh playblast capture, interpolation changes, pose holds, camera repair, anticipation/settle breakdowns, or reblocking, without applying them automatically.
 
 #### Milestone 7G: Optional Solo-Backed Style And Project Memory
 

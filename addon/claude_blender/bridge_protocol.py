@@ -90,11 +90,11 @@ TOOL_CONTRACTS = {
         "mutates_scene": False,
     },
     "review_playblast_against_brief": {
-        "description": "Review playblast metadata and current animation state against a prompt contract",
+        "description": "Review playblast metadata, compact pixel motion evidence, and current animation state against a prompt contract",
         "mutates_scene": False,
     },
     "repair_animation_from_findings": {
-        "description": "Create targeted non-mutating repair suggestions from structured animation findings",
+        "description": "Create targeted non-mutating repair operations with executable helper tool-call payloads",
         "mutates_scene": False,
     },
     "get_material_node_details": {

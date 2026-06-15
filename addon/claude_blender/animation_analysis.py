@@ -12,6 +12,9 @@ from bpy_extras.object_utils import world_to_camera_view
 from . import animation_brief, live_preview, playblast_capture
 
 
+VISUAL_MOTION_DELTA_THRESHOLD = 0.01
+
+
 def _name_list(value):
     if value is None:
         return []
@@ -592,6 +595,115 @@ def _normalize_playblast(context, playblast):
     return playblast_capture.latest_playblast_metadata(context=context)
 
 
+def _image_digest(path, *, grid_size=4, max_samples=4096):
+    if not path or not os.path.isfile(path):
+        return {}
+    image = None
+    try:
+        image = bpy.data.images.load(path, check_existing=False)
+        width = int(image.size[0])
+        height = int(image.size[1])
+        pixel_count = width * height
+        if width <= 0 or height <= 0 or pixel_count <= 0:
+            return {"available": False, "note": "Image has no readable pixels"}
+
+        pixels = image.pixels
+        stride = max(1, math.ceil(pixel_count / max(1, int(max_samples))))
+        sample_count = 0
+        sum_r = sum_g = sum_b = sum_a = 0.0
+        sum_luma = 0.0
+        sum_luma_sq = 0.0
+        min_luma = 1.0
+        max_luma = 0.0
+        for pixel_index in range(0, pixel_count, stride):
+            offset = pixel_index * 4
+            r = float(pixels[offset])
+            g = float(pixels[offset + 1])
+            b = float(pixels[offset + 2])
+            a = float(pixels[offset + 3])
+            luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
+            sample_count += 1
+            sum_r += r
+            sum_g += g
+            sum_b += b
+            sum_a += a
+            sum_luma += luma
+            sum_luma_sq += luma * luma
+            min_luma = min(min_luma, luma)
+            max_luma = max(max_luma, luma)
+
+        grid = []
+        grid_size = max(2, min(8, int(grid_size or 4)))
+        for grid_y in range(grid_size):
+            y = min(height - 1, max(0, int((grid_y + 0.5) * height / grid_size)))
+            for grid_x in range(grid_size):
+                x = min(width - 1, max(0, int((grid_x + 0.5) * width / grid_size)))
+                offset = (y * width + x) * 4
+                luma = 0.2126 * float(pixels[offset]) + 0.7152 * float(pixels[offset + 1]) + 0.0722 * float(pixels[offset + 2])
+                grid.append(max(0, min(255, int(round(luma * 255)))))
+
+        mean_luma = sum_luma / sample_count if sample_count else 0.0
+        variance = max(0.0, (sum_luma_sq / sample_count) - (mean_luma * mean_luma)) if sample_count else 0.0
+        return {
+            "available": True,
+            "sample_count": int(sample_count),
+            "mean_rgb": [
+                round(sum_r / sample_count, 6),
+                round(sum_g / sample_count, 6),
+                round(sum_b / sample_count, 6),
+            ] if sample_count else [0.0, 0.0, 0.0],
+            "mean_alpha": round(sum_a / sample_count, 6) if sample_count else 0.0,
+            "mean_luminance": round(mean_luma, 6),
+            "luminance_range": round(max_luma - min_luma, 6),
+            "luminance_variance": round(variance, 8),
+            "grid_size": [grid_size, grid_size],
+            "grid_signature": grid,
+        }
+    except Exception as exc:
+        return {"available": False, "note": f"Image pixels could not be inspected: {type(exc).__name__}: {exc}"}
+    finally:
+        if image is not None:
+            try:
+                bpy.data.images.remove(image)
+            except Exception:
+                pass
+
+
+def _grid_delta(first_digest, second_digest):
+    first = first_digest.get("grid_signature") or []
+    second = second_digest.get("grid_signature") or []
+    if not first or len(first) != len(second):
+        return None
+    distance = sum(abs(int(a) - int(b)) for a, b in zip(first, second))
+    return round(distance / (len(first) * 255.0), 6)
+
+
+def _playblast_motion_evidence(visual_evidence):
+    digested = [frame for frame in visual_evidence if (frame.get("image_digest") or {}).get("available")]
+    deltas = []
+    for previous, current in zip(digested, digested[1:]):
+        delta = _grid_delta(previous.get("image_digest") or {}, current.get("image_digest") or {})
+        if delta is None:
+            continue
+        deltas.append(
+            {
+                "from_frame": int(previous.get("frame", 0) or 0),
+                "to_frame": int(current.get("frame", 0) or 0),
+                "grid_delta": delta,
+                "visual_change_detected": delta >= VISUAL_MOTION_DELTA_THRESHOLD,
+            }
+        )
+    max_delta = max((item["grid_delta"] for item in deltas), default=0.0)
+    return {
+        "digest_frame_count": len(digested),
+        "delta_count": len(deltas),
+        "motion_threshold": VISUAL_MOTION_DELTA_THRESHOLD,
+        "max_grid_delta": round(float(max_delta), 6),
+        "visual_change_detected": bool(max_delta >= VISUAL_MOTION_DELTA_THRESHOLD),
+        "frame_deltas": deltas,
+    }
+
+
 def _playblast_frame_evidence(playblast):
     evidence = []
     findings = []
@@ -615,6 +727,47 @@ def _playblast_frame_evidence(playblast):
             "height": height,
             "note": str(frame.get("note") or ""),
         }
+        if available and path:
+            digest = _image_digest(path)
+            if digest:
+                item["image_digest"] = digest
+                if not digest.get("available"):
+                    findings.append(
+                        _finding(
+                            "warning",
+                            "A playblast frame is available but its image pixels could not be inspected.",
+                            principle="visual_review",
+                            frame=frame_number,
+                            repair_tool="capture_animation_playblast",
+                            evidence={"path": path, "note": digest.get("note", "")},
+                        )
+                    )
+                elif digest.get("mean_alpha", 1.0) <= 0.01:
+                    findings.append(
+                        _finding(
+                            "warning",
+                            "A playblast frame appears transparent or empty.",
+                            principle="visual_review",
+                            frame=frame_number,
+                            repair_tool="capture_animation_playblast",
+                            evidence={"path": path, "mean_alpha": digest.get("mean_alpha", 0.0)},
+                        )
+                    )
+                elif digest.get("luminance_range", 1.0) <= 0.005 and digest.get("luminance_variance", 1.0) <= 0.00001:
+                    findings.append(
+                        _finding(
+                            "info",
+                            "A playblast frame has very low visible contrast, so pose review may be weak.",
+                            principle="visual_review",
+                            frame=frame_number,
+                            repair_tool="capture_animation_playblast",
+                            evidence={
+                                "path": path,
+                                "luminance_range": digest.get("luminance_range", 0.0),
+                                "luminance_variance": digest.get("luminance_variance", 0.0),
+                            },
+                        )
+                    )
         evidence.append(item)
         if frame.get("available") and path and not file_exists:
             findings.append(
@@ -676,6 +829,7 @@ def review_playblast_against_brief(context, *, playblast=None, brief=None, promp
     findings.extend(frame_findings)
     frames = metadata.get("frames") or []
     usable_frames = [frame for frame in visual_evidence if frame.get("available")]
+    motion_evidence = _playblast_motion_evidence(visual_evidence)
     if not metadata.get("available") and not usable_frames:
         findings.append(
             _finding(
@@ -727,6 +881,17 @@ def review_playblast_against_brief(context, *, playblast=None, brief=None, promp
                 evidence={"requested_count": int(requested_count), "usable_frame_count": len(usable_frames)},
             )
         )
+    if (brief or {}).get("action") and motion_evidence["delta_count"] and not motion_evidence["visual_change_detected"]:
+        findings.append(
+            _finding(
+                "warning",
+                "Sampled playblast frames do not show clear motion for the requested action.",
+                principle="visual_review",
+                requirement="action",
+                repair_tool="block_key_poses",
+                evidence=motion_evidence,
+            )
+        )
     comparison = compare_animation_to_brief(context, brief=brief, prompt=prompt) if (brief or prompt) else {}
     findings.extend(comparison.get("findings") or [])
     repair_plan = repair_animation_from_findings(context, findings=findings, brief=brief if isinstance(brief, dict) else None)
@@ -743,6 +908,7 @@ def review_playblast_against_brief(context, *, playblast=None, brief=None, promp
             "resource_type": metadata.get("resource_type", ""),
             "frame_coverage": coverage,
             "frames": visual_evidence,
+            "motion_evidence": motion_evidence,
             "review_hints": metadata.get("review_hints") or [],
         },
         "findings": findings,
@@ -753,12 +919,18 @@ def review_playblast_against_brief(context, *, playblast=None, brief=None, promp
 
 
 def _operation(tool, reason, *, arguments=None, source_index=None, finding=None, confidence="medium"):
+    arguments = arguments or {}
+    mutates_scene = tool not in {"capture_animation_playblast", "create_timing_chart", "review_playblast_against_brief"}
     operation = {
         "tool": tool,
-        "arguments": arguments or {},
+        "arguments": arguments,
+        "tool_call": {"name": tool, "input": arguments},
         "reason": reason,
         "confidence": confidence,
-        "mutates_scene": tool not in {"capture_animation_playblast", "create_timing_chart", "review_playblast_against_brief"},
+        "mutates_scene": mutates_scene,
+        "preview_safe": bool(mutates_scene),
+        "requires_user_commit": bool(mutates_scene),
+        "execution_phase": "repair_preview" if mutates_scene else ("evidence_collection" if tool == "capture_animation_playblast" else "planning"),
     }
     if source_index is not None:
         operation["source_finding_index"] = int(source_index)
@@ -794,11 +966,14 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
     frame_start, frame_end = _brief_frame_range(context, brief or {})
     primary_subject = subject_names[0] if subject_names else ""
     for index, finding in enumerate(findings or []):
+        repair_tool = str(finding.get("repair_tool") or "").lower()
         text = " ".join(
             str(finding.get(key) or "")
             for key in ("message", "principle", "requirement", "repair_tool", "recommendation")
         ).lower()
-        if "playblast" in text or "visual_review" in text or "frame" in text and "unavailable" in text:
+        if repair_tool == "capture_animation_playblast" or (
+            not repair_tool and ("playblast" in text or ("frame" in text and "unavailable" in text))
+        ):
             operations.append(
                 _operation(
                     "capture_animation_playblast",
