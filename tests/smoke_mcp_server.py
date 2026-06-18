@@ -486,6 +486,8 @@ def _assert_compact_tools_visible(proc):
         "start_render_job",
         "get_render_job_status",
         "cancel_render_job",
+        "assemble_render_job_video",
+        "validate_render_job_output",
     }.issubset(names), listed
     assert "draft_script" not in names, listed
     assert "run_approved_script" not in names, listed
@@ -511,6 +513,10 @@ def _assert_compact_tools_visible(proc):
     render_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "start_render_job")
     assert "output_kind" in render_tool["inputSchema"]["properties"], render_tool
     assert render_tool["annotations"]["riskLevel"] == "read", render_tool
+    assemble_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "assemble_render_job_video")
+    assert assemble_tool["inputSchema"]["required"] == ["job_id"], assemble_tool
+    validate_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "validate_render_job_output")
+    assert validate_tool["annotations"]["readOnlyHint"] is True, validate_tool
     invoke_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "invoke_blender_tool")
     assert invoke_tool["annotations"]["readOnlyHint"] is False, invoke_tool
     assert "run_approved_script" in bridge_protocol.list_tool_contracts()["tools"]

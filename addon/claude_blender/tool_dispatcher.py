@@ -2475,6 +2475,36 @@ def cancel_render_job(context, args):
     )
 
 
+def assemble_render_job_video(context, args):
+    prefs = preferences.get_preferences(context)
+    return render_jobs.assemble_render_job_video(
+        str(args.get("job_id") or ""),
+        context=context,
+        preferred_dir=getattr(prefs, "capture_cache_dir", None),
+        fps=args.get("fps"),
+        output_path=str(args.get("output_path") or ""),
+        quality=str(args.get("quality") or "HIGH"),
+        overwrite=bool(args.get("overwrite", True)),
+        allow_partial=bool(args.get("allow_partial", False)),
+    )
+
+
+def validate_render_job_output(context, args):
+    prefs = preferences.get_preferences(context)
+    validation = render_jobs.validate_render_job_output(
+        str(args.get("job_id") or ""),
+        context=context,
+        preferred_dir=getattr(prefs, "capture_cache_dir", None),
+        require_video=bool(args.get("require_video", True)),
+        min_video_size_bytes=args.get("min_video_size_bytes", 1),
+    )
+    return {
+        "ok": bool(validation.get("ok")),
+        "message": validation.get("message", "Render output validation complete"),
+        "validation": validation,
+    }
+
+
 def search_blender_docs(context, args):
     prefs = preferences.get_preferences(context)
     return docs_index.search_blender_docs(
@@ -2497,9 +2527,11 @@ def draft_script(context, args):
             "blocked": True,
             "message": (
                 "This looks like a long render or playblast job. Use start_render_job first, then poll "
-                "get_render_job_status, unless the render job helper cannot express the request."
+                "get_render_job_status. Use assemble_render_job_video and validate_render_job_output for "
+                "PNG sequences unless the render helpers cannot express the request."
             ),
             "recommended_tool": "start_render_job",
+            "followup_tools": ["assemble_render_job_video", "validate_render_job_output"],
             "requires_user_approval": False,
         }
     if (
@@ -2821,6 +2853,8 @@ TOOL_FUNCTIONS = {
     "start_render_job": start_render_job,
     "get_render_job_status": get_render_job_status,
     "cancel_render_job": cancel_render_job,
+    "assemble_render_job_video": assemble_render_job_video,
+    "validate_render_job_output": validate_render_job_output,
     "search_blender_docs": search_blender_docs,
     "draft_script": draft_script,
     "run_approved_script": run_approved_script,

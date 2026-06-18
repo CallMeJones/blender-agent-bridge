@@ -40,6 +40,8 @@ def main():
         assert "start_render_job" in bundle["available_tools"]
         assert "get_render_job_status" in bundle["available_tools"]
         assert "cancel_render_job" in bundle["available_tools"]
+        assert "assemble_render_job_video" in bundle["available_tools"]
+        assert "validate_render_job_output" in bundle["available_tools"]
         assert "jump_to_workspace" in bundle["available_tools"]
         assert "focus_object_in_viewport" in bundle["available_tools"]
         assert "capture_viewport" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
@@ -51,6 +53,8 @@ def main():
         assert "start_render_job" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
         assert "get_render_job_status" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
         assert "cancel_render_job" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
+        assert "assemble_render_job_video" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
+        assert "validate_render_job_output" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
         assert "jump_to_workspace" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
         assert "focus_object_in_viewport" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
         assert "capture_viewport" in bridge_protocol.TOOL_CONTRACTS
@@ -62,6 +66,8 @@ def main():
         assert "start_render_job" in bridge_protocol.TOOL_CONTRACTS
         assert "get_render_job_status" in bridge_protocol.TOOL_CONTRACTS
         assert "cancel_render_job" in bridge_protocol.TOOL_CONTRACTS
+        assert "assemble_render_job_video" in bridge_protocol.TOOL_CONTRACTS
+        assert "validate_render_job_output" in bridge_protocol.TOOL_CONTRACTS
         assert "jump_to_workspace" in bridge_protocol.TOOL_CONTRACTS
         assert "focus_object_in_viewport" in bridge_protocol.TOOL_CONTRACTS
 

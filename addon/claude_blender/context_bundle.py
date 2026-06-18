@@ -251,6 +251,8 @@ def build_context_bundle(context, *, include_visual=False, capture_dir=None, max
             "start_render_job",
             "get_render_job_status",
             "cancel_render_job",
+            "assemble_render_job_video",
+            "validate_render_job_output",
             "search_blender_docs",
             "select_objects",
             "jump_to_workspace",

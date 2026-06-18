@@ -43,6 +43,8 @@ COMPACT_DIRECT_TOOL_NAMES = (
     "start_render_job",
     "get_render_job_status",
     "cancel_render_job",
+    "assemble_render_job_video",
+    "validate_render_job_output",
 )
 CATALOG_TOOL_NAME = "blender_tool_catalog"
 WRAPPER_TOOL_NAMES = {
@@ -723,7 +725,7 @@ def _tool_category(tool):
         return "preview"
     if name in {"get_workspace_layout", "jump_to_workspace", "focus_object_in_viewport"}:
         return "navigation"
-    if name in {"start_render_job", "get_render_job_status", "cancel_render_job"}:
+    if name in {"start_render_job", "get_render_job_status", "cancel_render_job", "assemble_render_job_video", "validate_render_job_output"}:
         return "camera_render"
     if name.startswith("get_") or name.startswith("list_") or name in {
         "inspect_scene",

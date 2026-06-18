@@ -90,6 +90,8 @@ def main():
         assert "start_render_job" in names, names
         assert "get_render_job_status" in names, names
         assert "cancel_render_job" in names, names
+        assert "assemble_render_job_video" in names, names
+        assert "validate_render_job_output" in names, names
         assert "jump_to_workspace" in names, names
         assert "focus_object_in_viewport" in names, names
 

@@ -90,6 +90,73 @@ def main():
         )
         assert log_resource["mimeType"] == "text/plain", log_resource
 
+        assembled = _execute(
+            bpy.context,
+            "assemble_render_job_video",
+            {
+                "job_id": job_id,
+                "fps": 12,
+                "quality": "LOW",
+            },
+        )
+        assert assembled["ok"] is True, assembled
+        deadline = time.time() + 45
+        while time.time() < deadline:
+            status_payload = _execute(bpy.context, "get_render_job_status", {"job_id": job_id})
+            assert status_payload["ok"] is True, status_payload
+            status = status_payload["render_job"]
+            if status["status"] in {"completed", "failed", "cancelled"} and status.get("video_available"):
+                break
+            time.sleep(0.5)
+
+        assert status["status"] == "completed", status
+        assert status["video_available"] is True, status
+        assert os.path.isfile(status["video_path"]), status
+        validated = _execute(
+            bpy.context,
+            "validate_render_job_output",
+            {
+                "job_id": job_id,
+                "require_video": True,
+            },
+        )
+        assert validated["ok"] is True, validated
+        assert validated["validation"]["checks"]["video_available"] is True, validated
+        video_resource = render_jobs.render_job_video_resource(
+            job_id,
+            capture_dir=status["capture_dir"],
+            context=bpy.context,
+        )
+        assert video_resource["mimeType"] == "video/mp4", video_resource
+        assert video_resource["blob"], video_resource
+
+        started_video = _execute(
+            bpy.context,
+            "start_render_job",
+            {
+                "frame_start": 1,
+                "frame_end": 1,
+                "resolution_x": 32,
+                "resolution_y": 32,
+                "samples": 1,
+                "output_kind": "video",
+                "job_name": "smoke direct mp4 render job",
+            },
+        )
+        assert started_video["ok"] is True, started_video
+        video_job_id = started_video["render_job"]["job_id"]
+        video_status = started_video["render_job"]
+        deadline = time.time() + 45
+        while time.time() < deadline:
+            status_payload = _execute(bpy.context, "get_render_job_status", {"job_id": video_job_id})
+            assert status_payload["ok"] is True, status_payload
+            video_status = status_payload["render_job"]
+            if video_status["status"] in {"completed", "failed", "cancelled"}:
+                break
+            time.sleep(0.5)
+        assert video_status["status"] == "completed", video_status
+        assert video_status["video_available"] is True, video_status
+
         synthetic_id = "tracked-running-complete-frames"
         synthetic_job_dir = os.path.join(status["capture_dir"], "render-jobs", synthetic_id)
         synthetic_frames_dir = os.path.join(synthetic_job_dir, "frames")

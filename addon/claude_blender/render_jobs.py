@@ -21,6 +21,8 @@ METADATA_FILENAME = "metadata.json"
 CHILD_STATUS_FILENAME = "child-status.json"
 LOG_FILENAME = "render.log"
 SCRIPT_FILENAME = "render_job.py"
+ASSEMBLY_LOG_FILENAME = "assembly.log"
+ASSEMBLY_SCRIPT_FILENAME = "assemble_video.py"
 BLEND_COPY_FILENAME = "render_job.blend"
 FRAME_PREFIX = "frame_"
 MAX_FRAME_RESOURCE_BYTES = 20 * 1024 * 1024
@@ -222,6 +224,14 @@ def set_samples(scene, samples):
             pass
 
 
+def set_movie_output(scene):
+    settings = scene.render.image_settings
+    if hasattr(settings, "media_type"):
+        settings.media_type = "VIDEO"
+    else:
+        settings.file_format = "FFMPEG"
+
+
 try:
     scene = bpy.context.scene
     camera_name = CONFIG.get("camera_name") or ""
@@ -242,7 +252,7 @@ try:
 
     output_kind = CONFIG.get("output_kind", "frames")
     if output_kind == "video":
-        scene.render.image_settings.file_format = "FFMPEG"
+        set_movie_output(scene)
         scene.render.filepath = CONFIG["video_path"]
         try:
             scene.render.ffmpeg.format = "MPEG4"
@@ -260,6 +270,120 @@ try:
     write_status("completed", message="Render completed")
 except Exception as exc:
     write_status("failed", message=f"{{type(exc).__name__}}: {{exc}}", traceback=traceback.format_exc())
+    raise
+"""
+
+
+def _assembly_script_text(config):
+    config_text = json.dumps(config, indent=2, sort_keys=True)
+    return f"""import json
+import os
+import traceback
+
+import bpy
+
+CONFIG = {config_text}
+
+
+def write_status(status, **extra):
+    payload = {{
+        "ok": status == "completed",
+        "status": status,
+        "updated_at": __import__("time").time(),
+    }}
+    payload.update(extra)
+    path = CONFIG["child_status_path"]
+    temp = path + ".tmp"
+    with open(temp, "w", encoding="utf-8", newline="\\n") as handle:
+        json.dump(payload, handle, indent=2, sort_keys=True)
+    os.replace(temp, path)
+
+
+def sequence_collection(editor):
+    strips = getattr(editor, "strips", None)
+    if strips is not None:
+        return strips
+    return getattr(editor, "sequences", None)
+
+
+def add_image_sequence(scene, frame_paths):
+    editor = scene.sequence_editor_create()
+    strips = sequence_collection(editor)
+    if strips is None or not hasattr(strips, "new_image"):
+        raise RuntimeError("Blender sequence editor image API is unavailable")
+    first_path = frame_paths[0]
+    strip = strips.new_image(
+        name="render_job_frames",
+        filepath=first_path,
+        channel=1,
+        frame_start=1,
+    )
+    directory = os.path.dirname(first_path)
+    for path in frame_paths[1:]:
+        if os.path.dirname(path) != directory:
+            raise RuntimeError("All frame paths must be in the same directory")
+        strip.elements.append(os.path.basename(path))
+    try:
+        strip.frame_final_duration = len(frame_paths)
+    except Exception:
+        pass
+    return strip
+
+
+def set_movie_output(scene):
+    settings = scene.render.image_settings
+    if hasattr(settings, "media_type"):
+        settings.media_type = "VIDEO"
+    else:
+        settings.file_format = "FFMPEG"
+
+
+try:
+    frame_paths = list(CONFIG["frame_paths"])
+    if not frame_paths:
+        raise RuntimeError("No frame paths were provided")
+    for path in frame_paths:
+        if not os.path.isfile(path):
+            raise RuntimeError("Frame file missing: " + path)
+
+    output_path = CONFIG["output_path"]
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    scene = bpy.context.scene
+    add_image_sequence(scene, frame_paths)
+
+    scene.frame_start = 1
+    scene.frame_end = len(frame_paths)
+    scene.render.fps = int(CONFIG["fps"])
+    scene.render.resolution_x = int(CONFIG["resolution_x"])
+    scene.render.resolution_y = int(CONFIG["resolution_y"])
+    scene.render.resolution_percentage = 100
+    scene.render.use_file_extension = True
+    set_movie_output(scene)
+    scene.render.filepath = output_path
+    try:
+        scene.render.ffmpeg.format = "MPEG4"
+        scene.render.ffmpeg.codec = "H264"
+        scene.render.ffmpeg.constant_rate_factor = CONFIG.get("quality", "HIGH")
+    except Exception:
+        pass
+
+    write_status("running", message="Video assembly started", render_phase="video_assembly")
+    bpy.ops.render.render(animation=True)
+    final_path = output_path if os.path.isfile(output_path) else output_path + ".mp4"
+    write_status(
+        "completed",
+        message="Video assembly completed",
+        render_phase="video_assembly",
+        video_path=final_path,
+        video_size_bytes=os.path.getsize(final_path) if os.path.isfile(final_path) else 0,
+    )
+except Exception as exc:
+    write_status(
+        "failed",
+        message=f"{{type(exc).__name__}}: {{exc}}",
+        render_phase="video_assembly",
+        traceback=traceback.format_exc(),
+    )
     raise
 """
 
@@ -327,6 +451,8 @@ def start_render_job(
         "blend_path": blend_path,
         "script_path": script_path,
         "log_path": log_path,
+        "assembly_script_path": "",
+        "assembly_log_path": "",
         "video_path": video_path if output_kind == "video" else "",
         "metadata_path": _metadata_path(job_dir),
         "child_status_path": child_status_path,
@@ -448,9 +574,12 @@ def render_job_status(job_id, *, context=None, preferred_dir=None, capture_dir=N
     if child_status:
         status = str(child_status.get("status") or status)
         message = str(child_status.get("message") or message)
+        for key in ("render_phase", "video_path", "video_size_bytes"):
+            if key in child_status:
+                metadata[key] = child_status[key]
     if process_running:
         status = "running"
-    elif returncode == 0 and status not in {"completed", "cancelled"}:
+    elif returncode == 0 and status not in {"completed", "failed", "cancelled"}:
         status = "completed"
         message = "Render completed"
     elif returncode not in {None, 0} and status != "cancelled":
@@ -483,8 +612,203 @@ def render_job_status(job_id, *, context=None, preferred_dir=None, capture_dir=N
         video_path = metadata.get("video_path") or ""
         metadata["video_available"] = bool(video_path and os.path.isfile(video_path))
         metadata["video_size_bytes"] = os.path.getsize(video_path) if metadata["video_available"] else 0
+    else:
+        video_path = metadata.get("video_path") or ""
+        metadata["video_available"] = bool(video_path and os.path.isfile(video_path))
+        metadata["video_size_bytes"] = os.path.getsize(video_path) if metadata["video_available"] else int(metadata.get("video_size_bytes") or 0)
+    assembly_log_path = metadata.get("assembly_log_path") or ""
+    if assembly_log_path:
+        metadata["assembly_log_tail"] = _log_tail(assembly_log_path, max_bytes=4096)
     _write_json(metadata["metadata_path"], metadata)
     return metadata
+
+
+def _default_video_output_path(metadata, output_path=""):
+    job_dir = metadata.get("job_dir") or os.path.dirname(metadata.get("metadata_path") or "")
+    requested = str(output_path or "").strip()
+    if requested:
+        path = os.path.expanduser(requested)
+        if not os.path.isabs(path):
+            path = os.path.join(job_dir, path)
+    else:
+        path = os.path.join(job_dir, "render.mp4")
+    if os.path.splitext(path)[1].lower() != ".mp4":
+        path = f"{path}.mp4"
+    return os.path.abspath(path)
+
+
+def _validation_for_metadata(metadata, *, require_video=True, min_video_size_bytes=1):
+    frame_files = _frame_files(metadata)
+    total = int(metadata.get("total_frames", 0) or 0)
+    frame_count = len(frame_files)
+    video_path = metadata.get("video_path") or ""
+    video_available = bool(video_path and os.path.isfile(video_path))
+    video_size = os.path.getsize(video_path) if video_available else 0
+    min_video_size = _bounded_int(min_video_size_bytes, 1, minimum=0, maximum=1024 * 1024 * 1024)
+    checks = {
+        "frame_count": frame_count,
+        "total_frames": total,
+        "frame_sequence_complete": bool(frame_count and (not total or frame_count >= total)),
+        "newest_frame": frame_files[-1][0] if frame_files else None,
+        "newest_frame_path": frame_files[-1][1] if frame_files else "",
+        "video_required": bool(require_video),
+        "video_available": video_available,
+        "video_path": video_path,
+        "video_size_bytes": video_size,
+        "video_min_size_bytes": min_video_size,
+        "video_size_ok": bool(video_available and video_size >= min_video_size),
+    }
+    warnings = []
+    if not checks["frame_sequence_complete"]:
+        warnings.append("Frame sequence is incomplete")
+    if require_video and not video_available:
+        warnings.append("MP4 video output is missing")
+    if require_video and video_available and video_size < min_video_size:
+        warnings.append("MP4 video output is smaller than expected")
+    return {
+        "ok": checks["frame_sequence_complete"] and (not require_video or checks["video_size_ok"]),
+        "available": True,
+        "job_id": metadata.get("job_id", ""),
+        "status": metadata.get("status", ""),
+        "checks": checks,
+        "warnings": warnings,
+        "metadata_uri": metadata.get("metadata_uri", ""),
+        "log_resource_uri": metadata.get("log_resource_uri", ""),
+        "video_resource_uri": metadata.get("video_resource_uri", "") if video_available else "",
+        "message": "Render output validated" if not warnings else "; ".join(warnings),
+    }
+
+
+def validate_render_job_output(job_id, *, context=None, preferred_dir=None, capture_dir=None, require_video=True, min_video_size_bytes=1):
+    metadata = render_job_status(job_id, context=context, preferred_dir=preferred_dir, capture_dir=capture_dir)
+    if not metadata.get("available", True) and not metadata.get("ok"):
+        return metadata
+    return _validation_for_metadata(
+        metadata,
+        require_video=bool(require_video),
+        min_video_size_bytes=min_video_size_bytes,
+    )
+
+
+def assemble_render_job_video(
+    job_id,
+    *,
+    context=None,
+    preferred_dir=None,
+    capture_dir=None,
+    fps=None,
+    output_path="",
+    quality="HIGH",
+    overwrite=True,
+    allow_partial=False,
+):
+    metadata = render_job_status(job_id, context=context, preferred_dir=preferred_dir, capture_dir=capture_dir)
+    if not metadata.get("available", True) and not metadata.get("ok"):
+        return metadata
+
+    job_id = metadata.get("job_id", str(job_id or ""))
+    process = _PROCESSES.get(job_id)
+    if process is not None and process.poll() is None:
+        return {
+            "ok": False,
+            "message": "Render job is still running; wait for completion before assembling MP4 output",
+            "render_job": metadata,
+        }
+
+    frame_files = _frame_files(metadata)
+    frame_count = len(frame_files)
+    total = int(metadata.get("total_frames", 0) or 0)
+    if not frame_files:
+        return {"ok": False, "message": "Render job has no PNG frames to assemble", "render_job": metadata}
+    if total and frame_count < total and not allow_partial:
+        return {
+            "ok": False,
+            "message": f"Render job frame sequence is incomplete ({frame_count}/{total}); pass allow_partial to assemble anyway",
+            "render_job": metadata,
+        }
+
+    output_path = _default_video_output_path(metadata, output_path)
+    if os.path.isfile(output_path) and not overwrite:
+        metadata["video_path"] = output_path
+        metadata["video_resource_uri"] = _video_resource_uri(job_id)
+        _write_json(metadata["metadata_path"], metadata)
+        validation = _validation_for_metadata(metadata, require_video=True)
+        return {
+            "ok": validation["ok"],
+            "message": "Existing MP4 output reused" if validation["ok"] else validation["message"],
+            "render_job": render_job_status(job_id, context=context, preferred_dir=preferred_dir, capture_dir=capture_dir),
+            "validation": validation,
+        }
+
+    job_dir = metadata.get("job_dir") or os.path.dirname(metadata.get("metadata_path") or output_path)
+    script_path = os.path.join(job_dir, ASSEMBLY_SCRIPT_FILENAME)
+    log_path = os.path.join(job_dir, ASSEMBLY_LOG_FILENAME)
+    blender_binary = getattr(bpy.app, "binary_path", "") or "blender"
+    fps_value = _bounded_int(fps, int(metadata.get("fps", 24) or 24), minimum=1, maximum=240)
+    quality_value = str(quality or "HIGH").upper()
+    if quality_value not in {"NONE", "LOWEST", "LOW", "MEDIUM", "HIGH", "PERC_LOSSLESS", "LOSSLESS"}:
+        quality_value = "HIGH"
+    config = {
+        "frame_paths": [path for _frame, path in frame_files],
+        "fps": fps_value,
+        "output_path": output_path,
+        "resolution_x": int(metadata.get("resolution_x", 1920) or 1920),
+        "resolution_y": int(metadata.get("resolution_y", 1080) or 1080),
+        "quality": quality_value,
+        "child_status_path": metadata.get("child_status_path") or _child_status_path(job_dir),
+    }
+    try:
+        with open(script_path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(_assembly_script_text(config))
+        command = [blender_binary, "--background", "--factory-startup", "--python", script_path]
+        log_handle = open(log_path, "w", encoding="utf-8", newline="\n")
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        process = subprocess.Popen(
+            command,
+            cwd=job_dir,
+            stdout=log_handle,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            creationflags=creationflags,
+        )
+        log_handle.close()
+        _PROCESSES[job_id] = process
+        metadata.update(
+            {
+                "status": "running",
+                "render_phase": "video_assembly",
+                "message": "Video assembly started in a background Blender process",
+                "assembly_started_at": time.time(),
+                "completed_at": 0.0,
+                "assembly_script_path": script_path,
+                "assembly_log_path": log_path,
+                "video_path": output_path,
+                "video_resource_uri": _video_resource_uri(job_id),
+                "video_available": False,
+                "video_size_bytes": 0,
+                "pid": int(process.pid or 0),
+                "returncode": None,
+            }
+        )
+        _write_json(metadata["metadata_path"], metadata)
+    except Exception as exc:
+        metadata.update(
+            {
+                "ok": False,
+                "status": "failed",
+                "render_phase": "video_assembly",
+                "completed_at": time.time(),
+                "message": f"Failed to start video assembly: {type(exc).__name__}: {exc}",
+            }
+        )
+        _write_json(metadata["metadata_path"], metadata)
+        return {"ok": False, "message": metadata["message"], "render_job": metadata}
+
+    return {
+        "ok": True,
+        "message": metadata["message"],
+        "render_job": render_job_status(job_id, context=context, preferred_dir=preferred_dir, capture_dir=capture_dir),
+    }
 
 
 def latest_render_job_metadata(capture_dir=None, *, context=None, preferred_dir=None):

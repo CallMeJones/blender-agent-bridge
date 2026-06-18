@@ -21,7 +21,7 @@ Recommended GitHub repository name: `blender-agent-bridge`.
 - Attach a bounded viewport screenshot when the `Viewport` toggle is enabled, with project/session-scoped local storage and MCP image resources for external clients.
 - Capture sampled animation playblast frames as project/session-scoped MCP image resources so agents can review timing, spacing, staging, arcs, and contact poses.
 - Render camera thumbnails as project/session-scoped MCP image resources for client-readable still evidence.
-- Start long-running render jobs in background Blender processes so MCP clients can poll progress instead of timing out during high-resolution frame/video renders.
+- Start long-running render jobs in background Blender processes so MCP clients can poll progress, assemble PNG sequences into MP4, and validate frame/video outputs instead of timing out or falling back to shell scripts.
 - Inspect workspace/window/area layout and use interactive helpers for workspace switching or viewport focus.
 - Let agents sample animation state, analyze f-curve spacing, motion arcs, pose clarity, contact sliding, bbox penetration, camera framing, and compare results against an animation brief before repair.
 - Search cached official Blender Python API and Manual documentation before version-sensitive scripting.
