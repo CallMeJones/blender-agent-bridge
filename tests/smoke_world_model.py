@@ -54,6 +54,7 @@ def main():
     claude_blender.register()
     created_objects = []
     created_node_groups = []
+    created_actions = []
     try:
         context = bpy.context
         scene = context.scene
@@ -88,6 +89,23 @@ def main():
         if armature.data and armature.data.bones:
             armature.data.bones[0].name = "CTRL_Main"
             armature.data.bones["CTRL_Main"].use_deform = False
+        pose_action = None
+        pose_bone = armature.pose.bones.get("CTRL_Main") if armature.pose else None
+        if pose_bone:
+            pose_bone.location.x = 0.0
+            pose_bone.keyframe_insert(data_path="location", frame=1)
+            pose_bone.location.x = 1.0
+            pose_bone.keyframe_insert(data_path="location", frame=12)
+            pose_action = armature.animation_data.action if armature.animation_data else None
+        if pose_action:
+            pose_action.name = "Claude World Pose Action"
+            created_actions.append(pose_action)
+        try:
+            if pose_action:
+                marker = pose_action.pose_markers.new("Ready Pose")
+                marker.frame = 1
+        except Exception:
+            pass
         created_objects.append(armature)
         armature_modifier = cube.modifiers.new("Claude World Armature Mod", "ARMATURE")
         armature_modifier.object = armature
@@ -146,6 +164,9 @@ def main():
 
         rigging = _execute(context, "get_rigging_details", {"object_names": ["Claude World Armature", "Cube"]})
         assert any(item["type"] == "ARMATURE" for item in rigging["objects"]), rigging
+        armature_details = next(item for item in rigging["objects"] if item["type"] == "ARMATURE")
+        assert armature_details["armature"]["control_hints"]["control_candidate_count"] >= 1, rigging
+        assert armature_details["armature"]["pose_library_candidates"], rigging
 
         animation_context = _execute(
             context,
@@ -155,16 +176,20 @@ def main():
         by_name = {item["name"]: item for item in animation_context["objects"]}
         assert by_name["Cube"]["rig"]["likely_rig_driven"] is True, animation_context
         assert by_name["Cube"]["suggested_primary_animation_target"] == "rig_controls", animation_context
+        assert by_name["Cube"]["animation_routing_confidence"] == "high", animation_context
         assert by_name["Cube"]["rig"]["control_targets"][0]["control_candidate_count"] >= 1, animation_context
         assert by_name["Claude World Armature"]["rig_control_hints"]["control_candidate_count"] >= 1, animation_context
+        assert by_name["Claude World Armature"]["object_animation"]["channel_summary"]["has_pose_bone_keys"], animation_context
+        assert by_name["Claude World Armature"]["pose_library_candidates"], animation_context
         assert "get_rigging_details" in by_name["Cube"]["recommended_detail_tools"], animation_context
         assert "get_shape_key_details" in by_name["Cube"]["recommended_detail_tools"], animation_context
         assert "get_simulation_details" in animation_context["recommended_next_tools"], animation_context
         assert animation_context["summary"]["rig_driven_object_count"] >= 2, animation_context
         assert animation_context["summary"]["rig_control_candidate_count"] >= 1, animation_context
+        assert animation_context["summary"]["pose_library_candidate_count"] >= 1, animation_context
         assert animation_context["summary"]["contact_surface_candidate_count"] >= 1, animation_context
         assert animation_context["contact_surface_candidates"][0]["name"] == "Claude World Ground", animation_context
-        assert any(route["object"] == "Cube" and route["rig_control_candidate_count"] >= 1 for route in animation_context["subject_routing"]), animation_context
+        assert any(route["object"] == "Cube" and route["rig_control_candidate_count"] >= 1 and route["animation_routing_confidence"] == "high" for route in animation_context["subject_routing"]), animation_context
         assert animation_context["summary"]["active_camera"] == "Camera", animation_context
 
         shape_keys = _execute(context, "get_shape_key_details", {"object_names": ["Cube"]})
@@ -201,6 +226,9 @@ def main():
         for group in created_node_groups:
             if group.name in bpy.data.node_groups:
                 bpy.data.node_groups.remove(group)
+        for action in created_actions:
+            if action.name in bpy.data.actions:
+                bpy.data.actions.remove(action)
         for name in ["Claude World Geometry Nodes"]:
             group = bpy.data.node_groups.get(name)
             if group:

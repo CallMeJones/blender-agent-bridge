@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.join(ROOT, "addon", "claude_blender"))
 
 import bridge_protocol  # noqa: E402
 import build_info  # noqa: E402
+import mcp_server  # noqa: E402
 
 
 class FakeBridgeHandler(BaseHTTPRequestHandler):
@@ -350,6 +351,9 @@ def _assert_compact_tools_visible(proc):
         "get_blender_tool_schema",
         "invoke_blender_tool",
         "list_scene_objects",
+        "plan_animation_workflow",
+        "run_animation_workflow",
+        "run_animation_task",
     }.issubset(names), listed
     assert "draft_script" not in names, listed
     assert "run_approved_script" not in names, listed
@@ -369,6 +373,9 @@ def _assert_compact_tools_visible(proc):
     assert "invoke" in catalog_tool["inputSchema"]["properties"]["action"]["enum"], catalog_tool
     search_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "search_blender_tools")
     assert search_tool["annotations"]["readOnlyHint"] is True, search_tool
+    task_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "run_animation_task")
+    assert set(task_tool["inputSchema"]["properties"]) == {"prompt"}, task_tool
+    assert task_tool["inputSchema"]["required"] == ["prompt"], task_tool
     invoke_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "invoke_blender_tool")
     assert invoke_tool["annotations"]["readOnlyHint"] is False, invoke_tool
     assert "run_approved_script" in bridge_protocol.list_tool_contracts()["tools"]
@@ -433,7 +440,27 @@ def _initialize(proc):
     return initialized
 
 
+def _assert_animation_search_routes_first(response, *, query):
+    tools = response["result"]["structuredContent"]["tools"]
+    names = [tool["name"] for tool in tools]
+    assert names[:3] == ["run_animation_task", "plan_animation_workflow", "run_animation_workflow"], (query, names)
+    for generic_name in ("set_selected_location_delta", "set_selected_transform", "select_objects"):
+        if generic_name in names:
+            assert names.index(generic_name) > names.index("run_animation_workflow"), (query, names)
+    if "draft_script" in names:
+        assert names.index("draft_script") > names.index("run_animation_workflow"), (query, names)
+
+
 def main():
+    assert not mcp_server._contains_any_phrase(
+        "Create an architectural arch from cubes",
+        mcp_server.ANIMATION_ROUTE_TERMS,
+    )
+    assert mcp_server._contains_any_phrase(
+        "Make the selected cube bounce twice",
+        mcp_server.ANIMATION_ROUTE_TERMS,
+    )
+
     offline_audit_fd, offline_audit_path = tempfile.mkstemp(
         prefix="claude-blender-mcp-offline-audit-",
         suffix=".jsonl",
@@ -487,6 +514,24 @@ def main():
             tool["name"] for tool in offline_catalog_search["result"]["structuredContent"]["tools"]
         }
         assert {"draft_script", "run_approved_script"}.issubset(offline_catalog_found), offline_catalog_search
+        for query in (
+            "Make the selected cube bounce twice and get smaller each bounce.",
+            "Block a jump animation with anticipation, contact, apex, settle.",
+            "Review this animation for spacing and contact sliding.",
+        ):
+            offline_animation_search = _send(
+                offline_proc,
+                {
+                    "jsonrpc": "2.0",
+                    "id": 96,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "search_blender_tools",
+                        "arguments": {"query": query, "limit": 8},
+                    },
+                },
+            )
+            _assert_animation_search_routes_first(offline_animation_search, query=query)
         offline_catalog_schema = _send(
             offline_proc,
             {
@@ -608,6 +653,25 @@ def main():
         searched_tools = searched["result"]["structuredContent"]["tools"]
         assert "input_schema" in searched_tools[0], searched
         assert "output_schema" in searched_tools[0], searched
+
+        for query in (
+            "Make the selected cube bounce twice and get smaller each bounce.",
+            "Block a jump animation with anticipation, contact, apex, settle.",
+            "Review this animation for spacing and contact sliding.",
+        ):
+            animation_search = _send(
+                proc,
+                {
+                    "jsonrpc": "2.0",
+                    "id": 97,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "search_blender_tools",
+                        "arguments": {"query": query, "limit": 8},
+                    },
+                },
+            )
+            _assert_animation_search_routes_first(animation_search, query=query)
 
         catalog_search = _send(
             proc,

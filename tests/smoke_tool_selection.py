@@ -58,10 +58,16 @@ def main():
             "add_panel_seams",
             "add_bevel_and_subsurf",
             "shade_smooth_selected",
-            "draft_script",
         }:
             assert expected in vehicle_names, (expected, vehicle_meta)
+        assert "draft_script" not in vehicle_names, vehicle_meta
         assert vehicle_meta["schema_chars"] <= anthropic_client.TOOL_SCHEMA_CHAR_BUDGET
+
+        script_tools, script_meta = anthropic_client.select_blender_tool_definitions(
+            "Draft a Python script to build a custom procedural rig helper.",
+            bundle,
+        )
+        assert "draft_script" in _names(script_tools), script_meta
 
         product_tools, product_meta = anthropic_client.select_blender_tool_definitions(
             "Polish this product into a premium catalog studio shot with dimensions and a turntable.",
@@ -95,10 +101,12 @@ def main():
         animation_names = _names(animation_tools)
         assert "plan_animation_workflow" in animation_names, animation_meta
         assert "run_animation_workflow" in animation_names, animation_meta
+        assert "run_animation_task" in animation_names, animation_meta
         assert "create_animation_brief" in animation_names, animation_meta
         assert "create_timing_chart" in animation_names, animation_meta
         assert "animate_object_bounce" in animation_names, animation_meta
         assert "create_progressive_bounce_animation" in animation_names, animation_meta
+        assert "draft_script" not in animation_names, animation_meta
 
         blocking_tools, blocking_meta = anthropic_client.select_blender_tool_definitions(
             "Create a timing chart and block key poses for a jump animation.",
@@ -118,6 +126,7 @@ def main():
         principles_names = _names(principles_tools)
         assert "plan_animation_workflow" in principles_names, principles_meta
         assert "run_animation_workflow" in principles_names, principles_meta
+        assert "run_animation_task" in principles_names, principles_meta
         assert "get_animation_scene_context" in principles_names, principles_meta
         assert "analyze_animation_principles" in principles_names, principles_meta
         assert "analyze_motion_arcs" in principles_names, principles_meta
@@ -126,10 +135,12 @@ def main():
         assert "sample_animation_state" in principles_names, principles_meta
         assert "analyze_contact_sliding" in principles_names, principles_meta
         assert "analyze_collision_penetration" in principles_names, principles_meta
+        assert "analyze_center_of_mass" in principles_names, principles_meta
         assert "analyze_camera_framing" in principles_names, principles_meta
         assert "analyze_motion_physics" in principles_names, principles_meta
         assert "compare_animation_to_brief" in principles_names, principles_meta
         assert "review_playblast_against_brief" in principles_names, principles_meta
+        assert "review_inspection_renders_against_brief" in principles_names, principles_meta
         assert "repair_animation_from_findings" in principles_names, principles_meta
         assert "run_animation_repair_loop" in principles_names, principles_meta
         assert "create_progressive_bounce_animation" in principles_names, principles_meta

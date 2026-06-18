@@ -109,6 +109,18 @@ TOOL_CONTRACTS = {
             "additionalProperties": False,
         },
     },
+    "run_animation_task": {
+        "description": "One-input animation task wrapper that routes the prompt through the Milestone 7 planner/runner workflow before any script fallback",
+        "mutates_scene": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string"},
+            },
+            "required": ["prompt"],
+            "additionalProperties": False,
+        },
+    },
     "analyze_motion_arcs": {
         "description": "Analyze sampled location motion arcs for selected or named objects",
         "mutates_scene": False,
@@ -137,6 +149,10 @@ TOOL_CONTRACTS = {
         "description": "Detect sampled world bounding-box intersections between animated objects",
         "mutates_scene": False,
     },
+    "analyze_center_of_mass": {
+        "description": "Check sampled subject centers against support-surface footprints for balance and weight",
+        "mutates_scene": False,
+    },
     "analyze_camera_framing": {
         "description": "Check whether animated subjects remain framed by the active or named camera",
         "mutates_scene": False,
@@ -151,6 +167,10 @@ TOOL_CONTRACTS = {
     },
     "review_playblast_against_brief": {
         "description": "Review playblast metadata, compact pixel motion evidence, and current animation state against a prompt contract",
+        "mutates_scene": False,
+    },
+    "review_inspection_renders_against_brief": {
+        "description": "Review diagnostic object render metadata and image evidence against a prompt contract",
         "mutates_scene": False,
     },
     "repair_animation_from_findings": {

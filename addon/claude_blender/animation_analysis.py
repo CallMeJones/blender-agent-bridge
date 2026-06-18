@@ -9,10 +9,27 @@ import bpy
 import mathutils
 from bpy_extras.object_utils import world_to_camera_view
 
-from . import animation_brief, live_preview, playblast_capture
+from . import animation_brief, inspection_render, live_preview, playblast_capture
 
 
 VISUAL_MOTION_DELTA_THRESHOLD = 0.01
+INSPECTION_DETAIL_KEYWORDS = {
+    "bay",
+    "bays",
+    "close-up",
+    "closeup",
+    "detail",
+    "gear",
+    "landing gear",
+    "occluded",
+    "side",
+    "underside",
+    "underneath",
+    "wheel",
+    "wheels",
+}
+EVIDENCE_COLLECTION_TOOLS = {"capture_animation_playblast", "capture_object_inspection_renders"}
+READ_ONLY_REVIEW_TOOLS = {"create_timing_chart", "review_playblast_against_brief", "review_inspection_renders_against_brief"}
 
 
 def _name_list(value):
@@ -91,6 +108,34 @@ def _bbox_intersects(a, b, tolerance=0.0):
     return all(amin[index] <= bmax[index] + tolerance and amax[index] + tolerance >= bmin[index] for index in range(3))
 
 
+def _bbox_xy_contains(box, xy, margin=0.0):
+    mins, maxs = box
+    margin = float(margin or 0.0)
+    return (
+        float(mins[0]) - margin <= float(xy[0]) <= float(maxs[0]) + margin
+        and float(mins[1]) - margin <= float(xy[1]) <= float(maxs[1]) + margin
+    )
+
+
+def _bbox_xy_distance_outside(box, xy, margin=0.0):
+    mins, maxs = box
+    margin = float(margin or 0.0)
+    x = float(xy[0])
+    y = float(xy[1])
+    dx = max(float(mins[0]) - margin - x, 0.0, x - (float(maxs[0]) + margin))
+    dy = max(float(mins[1]) - margin - y, 0.0, y - (float(maxs[1]) + margin))
+    return math.sqrt(dx * dx + dy * dy)
+
+
+def _bbox_union(boxes):
+    boxes = list(boxes or [])
+    if not boxes:
+        return None
+    mins = [min(box[0][index] for box in boxes) for index in range(3)]
+    maxs = [max(box[1][index] for box in boxes) for index in range(3)]
+    return mins, maxs
+
+
 def _distance(a, b):
     return math.sqrt(sum((float(a[index]) - float(b[index])) ** 2 for index in range(3)))
 
@@ -144,6 +189,74 @@ def sample_animation_state(context, *, object_names=None, frame_start=None, fram
         "sampled_frames": frames,
         "missing_object_names": missing,
     }
+
+
+def _object_samples_by_name(sample_summary):
+    by_object = {}
+    for frame in sample_summary.get("frames") or []:
+        for obj in frame.get("objects") or []:
+            by_object.setdefault(obj.get("name", ""), []).append(obj)
+    for items in by_object.values():
+        items.sort(key=lambda item: int(item.get("frame", 0) or 0))
+    return {name: items for name, items in by_object.items() if name}
+
+
+def _count_local_extrema(values, *, axis=2, minimum_prominence=0.05, mode="max"):
+    count = 0
+    extrema_frames = []
+    if len(values) < 3:
+        return count, extrema_frames
+    for index in range(1, len(values) - 1):
+        previous = float(values[index - 1]["world_location"][axis])
+        current = float(values[index]["world_location"][axis])
+        following = float(values[index + 1]["world_location"][axis])
+        if mode == "min":
+            is_extreme = current < previous and current < following
+            prominence = min(previous - current, following - current)
+        else:
+            is_extreme = current > previous and current > following
+            prominence = min(current - previous, current - following)
+        if is_extreme and prominence >= float(minimum_prominence):
+            count += 1
+            extrema_frames.append(int(values[index].get("frame", 0) or 0))
+    return count, extrema_frames
+
+
+def _estimate_repeated_action_count(action, object_samples):
+    action = str(action or "").lower()
+    if action in {"bounce", "jump"}:
+        return _count_local_extrema(object_samples, axis=2, minimum_prominence=0.03, mode="max")
+    if action in {"fall", "drop"}:
+        return _count_local_extrema(object_samples, axis=2, minimum_prominence=0.03, mode="min")
+    return 0, []
+
+
+def _scale_average(sample):
+    scale = sample.get("scale") or []
+    if not scale:
+        return 1.0
+    return sum(float(value) for value in scale[:3]) / min(3, len(scale))
+
+
+def _action_keyframes(obj):
+    action = _action_for_object(obj)
+    if not action:
+        return []
+    frames = []
+    for fcurve in _iter_fcurves(action):
+        frames.extend(int(round(point.co.x)) for point in fcurve.keyframe_points)
+    return sorted(set(frames))
+
+
+def _settle_distance(object_samples, frame_end):
+    if len(object_samples) < 3:
+        return 0.0, []
+    tail = object_samples[-3:]
+    frames = [int(item.get("frame", 0) or 0) for item in tail]
+    if frames[-1] < int(frame_end):
+        return 0.0, frames
+    distance = _distance(tail[-2]["world_location"], tail[-1]["world_location"])
+    return round(distance, 6), frames
 
 
 def _action_for_object(obj):
@@ -474,6 +587,117 @@ def analyze_collision_penetration(context, *, object_names=None, frame_start=Non
     return {"ok": True, "message": f"Checked {len(objects)} object(s) for bbox intersections", "findings": findings, "sampled_frames": frames, "missing_object_names": missing}
 
 
+def _likely_support_objects(context, subjects):
+    subject_names = {obj.name for obj in subjects}
+    candidates = []
+    for obj in context.scene.objects:
+        if obj.name in subject_names or obj.type != "MESH":
+            continue
+        dimensions = obj.dimensions
+        if float(dimensions.z) <= 0.2 and float(dimensions.x) >= 0.5 and float(dimensions.y) >= 0.5:
+            candidates.append(obj)
+    return candidates
+
+
+def analyze_center_of_mass(
+    context,
+    *,
+    object_names=None,
+    support_object_names=None,
+    frame_start=None,
+    frame_end=None,
+    sample_step=4,
+    support_margin=0.05,
+    contact_tolerance=0.12,
+    selected_only=False,
+):
+    objects, missing = _resolve_objects(context, object_names, selected_only=selected_only)
+    supports, support_missing = _resolve_objects(context, support_object_names, max_objects=20) if support_object_names else ([], [])
+    if not supports:
+        supports = _likely_support_objects(context, objects)
+    frames = _frame_samples(context.scene, frame_start, frame_end, sample_step, max_samples=48)
+    findings = []
+    samples = []
+    support_samples = []
+
+    def collect(frame):
+        support_boxes = [(support, _bbox_world(support)) for support in supports]
+        support_union = _bbox_union([box for _support, box in support_boxes])
+        support_top_z = max((box[1][2] for _support, box in support_boxes), default=None)
+        support_item = {
+            "frame": frame,
+            "support_objects": [support.name for support, _box in support_boxes],
+            "support_union_xy": [
+                [round(float(support_union[0][0]), 6), round(float(support_union[0][1]), 6)],
+                [round(float(support_union[1][0]), 6), round(float(support_union[1][1]), 6)],
+            ] if support_union else [],
+            "support_top_z": round(float(support_top_z), 6) if support_top_z is not None else None,
+        }
+        support_samples.append(support_item)
+        for obj in objects:
+            mins, maxs = _bbox_world(obj)
+            center = _world_center(obj)
+            contact_like = bool(support_top_z is not None and abs(float(mins[2]) - float(support_top_z)) <= float(contact_tolerance))
+            supported = bool(support_union and _bbox_xy_contains(support_union, (center[0], center[1]), margin=support_margin))
+            outside_distance = _bbox_xy_distance_outside(support_union, (center[0], center[1]), margin=support_margin) if support_union else 0.0
+            sample = {
+                "frame": frame,
+                "object": obj.name,
+                "center_xy": [round(float(center[0]), 6), round(float(center[1]), 6)],
+                "center_z": round(float(center[2]), 6),
+                "bottom_z": round(float(mins[2]), 6),
+                "top_z": round(float(maxs[2]), 6),
+                "contact_like": contact_like,
+                "support_available": bool(support_union),
+                "center_within_support": supported,
+                "outside_support_distance": round(float(outside_distance), 6),
+            }
+            samples.append(sample)
+            if support_union and contact_like and not supported:
+                findings.append(
+                    {
+                        "severity": "warning",
+                        "requirement": "center_of_mass",
+                        "principle": "weight",
+                        "object": obj.name,
+                        "frame": frame,
+                        "repair_tool": "set_pose_hold",
+                        "message": "Subject center is outside the support footprint during a contact-like pose.",
+                        "evidence": {
+                            "sampled_frames": [frame],
+                            "support_objects": support_item["support_objects"],
+                            "center_xy": sample["center_xy"],
+                            "support_union_xy": support_item["support_union_xy"],
+                            "outside_support_distance": sample["outside_support_distance"],
+                        },
+                    }
+                )
+
+    _set_frame_preserved(context, frames, collect)
+    if objects and not supports:
+        findings.append(
+            {
+                "severity": "info",
+                "requirement": "center_of_mass",
+                "principle": "weight",
+                "message": "No support surface candidates were available for center-of-mass validation.",
+                "repair_tool": "get_animation_scene_context",
+                "evidence": {"sampled_frames": frames},
+            }
+        )
+    return {
+        "ok": True,
+        "message": f"Analyzed center-of-mass support for {len(objects)} object(s)",
+        "sampled_frames": frames,
+        "samples": samples,
+        "support_samples": support_samples,
+        "support_object_names": [obj.name for obj in supports],
+        "findings": findings,
+        "missing_object_names": missing,
+        "missing_support_object_names": support_missing,
+    }
+
+
 def analyze_camera_framing(context, *, object_names=None, camera_name="", frame_start=None, frame_end=None, sample_step=8, margin=0.05, selected_only=False):
     scene = context.scene
     camera = bpy.data.objects.get(camera_name) if camera_name else scene.camera
@@ -661,16 +885,121 @@ def compare_animation_to_brief(context, *, brief=None, prompt="", subject_names=
     )
     if samples.get("ok"):
         moved = False
-        by_object = {}
-        for frame in samples["frames"]:
-            for obj in frame["objects"]:
-                by_object.setdefault(obj["name"], []).append(obj)
-        for _name, items in by_object.items():
+        by_object = _object_samples_by_name(samples)
+        action = str(brief.get("action") or "").lower()
+        requested_count = timing.get("requested_count")
+        try:
+            requested_count = int(requested_count) if requested_count is not None else None
+        except (TypeError, ValueError):
+            requested_count = None
+        scale_decreases = any("scale decreases" in str(item).lower() or "smaller" in str(item).lower() for item in (brief.get("secondary_actions") or []))
+        scale_increases = any("scale increases" in str(item).lower() or "bigger" in str(item).lower() or "grow" in str(item).lower() for item in (brief.get("secondary_actions") or []))
+        for name, items in by_object.items():
             if len(items) < 2:
                 continue
             first_location = items[0]["world_location"]
             if any(_distance(first_location, item["world_location"]) > 0.001 for item in items[1:]):
                 moved = True
+            if requested_count is not None and action in {"bounce", "jump", "fall", "drop"}:
+                detected_count, count_frames = _estimate_repeated_action_count(action, items)
+                if detected_count != requested_count:
+                    findings.append(
+                        {
+                            "severity": "warning",
+                            "requirement": "action_count",
+                            "principle": "timing_spacing",
+                            "object": name,
+                            "repair_tool": "create_progressive_bounce_animation" if scale_decreases and action in {"bounce", "jump"} else "animate_object_bounce",
+                            "message": "Detected repeated action count does not match the requested count.",
+                            "evidence": {
+                                "requested_count": requested_count,
+                                "detected_count": detected_count,
+                                "detected_count_frames": count_frames,
+                                "sampled_frames": samples.get("sampled_frames") or [],
+                                "brief_frame_start": start,
+                                "brief_frame_end": end,
+                            },
+                        }
+                    )
+            if scale_decreases or scale_increases:
+                first_scale = _scale_average(items[0])
+                last_scale = _scale_average(items[-1])
+                if scale_decreases and last_scale >= first_scale - 0.01:
+                    findings.append(
+                        {
+                            "severity": "warning",
+                            "requirement": "scale_change",
+                            "principle": "secondary_action",
+                            "object": name,
+                            "repair_tool": "create_progressive_bounce_animation" if action in {"bounce", "jump"} else "block_key_poses",
+                            "message": "The brief asks for decreasing scale, but sampled scale does not decrease over the shot.",
+                            "evidence": {
+                                "first_scale_average": round(first_scale, 6),
+                                "last_scale_average": round(last_scale, 6),
+                                "sampled_frames": samples.get("sampled_frames") or [],
+                                "brief_frame_start": start,
+                                "brief_frame_end": end,
+                            },
+                        }
+                    )
+                if scale_increases and last_scale <= first_scale + 0.01:
+                    findings.append(
+                        {
+                            "severity": "warning",
+                            "requirement": "scale_change",
+                            "principle": "secondary_action",
+                            "object": name,
+                            "repair_tool": "block_key_poses",
+                            "message": "The brief asks for increasing scale, but sampled scale does not increase over the shot.",
+                            "evidence": {
+                                "first_scale_average": round(first_scale, 6),
+                                "last_scale_average": round(last_scale, 6),
+                                "sampled_frames": samples.get("sampled_frames") or [],
+                                "brief_frame_start": start,
+                                "brief_frame_end": end,
+                            },
+                        }
+                    )
+            settle_distance, settle_frames = _settle_distance(items, end)
+            total_motion = max((_distance(items[0]["world_location"], item["world_location"]) for item in items[1:]), default=0.0)
+            if action in {"bounce", "jump", "fall", "drop"} and total_motion > 0.001 and settle_distance > max(0.025, total_motion * 0.1):
+                findings.append(
+                    {
+                        "severity": "warning",
+                        "requirement": "settle",
+                        "principle": "settle",
+                        "object": name,
+                        "frame": settle_frames[-1] if settle_frames else end,
+                        "repair_tool": "add_breakdown_pose",
+                        "message": "The final sampled poses still move noticeably, so the action may be missing a settle.",
+                        "evidence": {
+                            "settle_distance": settle_distance,
+                            "settle_frames": settle_frames,
+                            "sampled_frames": samples.get("sampled_frames") or [],
+                            "brief_frame_start": start,
+                            "brief_frame_end": end,
+                        },
+                    }
+                )
+            keyframes = _action_keyframes(bpy.data.objects.get(name)) if bpy.data.objects.get(name) else []
+            if keyframes and (min(keyframes) > start or max(keyframes) < end):
+                findings.append(
+                    {
+                        "severity": "info",
+                        "requirement": "frame_range",
+                        "principle": "timing_spacing",
+                        "object": name,
+                        "repair_tool": "retime_actions",
+                        "message": "Object keyframes do not span the full contracted frame range.",
+                        "evidence": {
+                            "keyframe_start": min(keyframes),
+                            "keyframe_end": max(keyframes),
+                            "brief_frame_start": start,
+                            "brief_frame_end": end,
+                            "sampled_frames": samples.get("sampled_frames") or [],
+                        },
+                    }
+                )
         if brief.get("action") and not moved:
             findings.append({"severity": "warning", "requirement": "action", "message": "Sampled subject transforms do not show clear motion."})
     if subjects and brief.get("validation_plan", {}).get("check_camera_framing"):
@@ -685,6 +1014,9 @@ def compare_animation_to_brief(context, *, brief=None, prompt="", subject_names=
         contact = analyze_contact_sliding(context, object_names=subjects, frame_start=start, frame_end=end, sample_step=validation_sample_step)
         validation_results["contact_sliding"] = contact
         findings.extend(contact.get("findings") or [])
+        center = analyze_center_of_mass(context, object_names=subjects, frame_start=start, frame_end=end, sample_step=validation_sample_step)
+        validation_results["center_of_mass"] = center
+        findings.extend(center.get("findings") or [])
         if len(subjects) >= 2:
             collisions = analyze_collision_penetration(context, object_names=subjects, frame_start=start, frame_end=end, sample_step=validation_sample_step)
             validation_results["collision_penetration"] = collisions
@@ -942,6 +1274,210 @@ def _playblast_frame_evidence(playblast):
     return evidence, findings
 
 
+def _normalize_inspection_render(context, metadata):
+    if isinstance(metadata, dict) and metadata:
+        return metadata
+    return inspection_render.latest_inspection_render_metadata(context=context)
+
+
+def _inspection_text(brief, prompt):
+    parts = [str(prompt or "")]
+    if isinstance(brief, dict):
+        parts.extend(str(item) for item in (brief.get("secondary_actions") or []))
+        parts.extend(str(item) for item in (brief.get("success_criteria") or []))
+        parts.append(str(brief.get("user_visible_interpretation") or ""))
+        parts.append(str(brief.get("action") or ""))
+    return " ".join(parts).lower()
+
+
+def _required_inspection_views(brief, prompt):
+    text = _inspection_text(brief, prompt)
+    views = []
+    if any(word in text for word in ("underside", "underneath", "landing gear", "gear", "bay", "bays", "wheel", "wheels")):
+        views.extend(["front_below", "underside", "side"])
+    if "side" in text:
+        views.append("side")
+    if any(word in text for word in ("front", "nose")):
+        views.append("front")
+    result = []
+    for view in views:
+        if view not in result:
+            result.append(view)
+    return result
+
+
+def _inspection_render_evidence(metadata):
+    evidence = []
+    findings = []
+    for image_item in metadata.get("images") or []:
+        path = str(image_item.get("path") or "")
+        file_exists = bool(path and os.path.isfile(path))
+        available = bool(image_item.get("available")) and (not path or file_exists)
+        item = {
+            "image_id": str(image_item.get("image_id") or ""),
+            "object": str(image_item.get("object") or ""),
+            "view": str(image_item.get("view") or ""),
+            "available": available,
+            "resource_uri": str(image_item.get("resource_uri") or ""),
+            "path": path,
+            "file_exists": file_exists,
+            "size_bytes": int(image_item.get("size_bytes", 0) or 0),
+            "width": int(image_item.get("width", 0) or 0),
+            "height": int(image_item.get("height", 0) or 0),
+            "note": str(image_item.get("note") or ""),
+        }
+        if available and path:
+            digest = _image_digest(path)
+            if digest:
+                item["image_digest"] = digest
+                if not digest.get("available"):
+                    findings.append(
+                        _finding(
+                            "warning",
+                            "An inspection render is available but its image pixels could not be inspected.",
+                            principle="visual_detail_review",
+                            object_name=item["object"],
+                            repair_tool="capture_object_inspection_renders",
+                            evidence={"path": path, "image_id": item["image_id"], "view": item["view"], "note": digest.get("note", "")},
+                        )
+                    )
+                elif digest.get("mean_alpha", 1.0) <= 0.01:
+                    findings.append(
+                        _finding(
+                            "warning",
+                            "An inspection render appears transparent or empty.",
+                            principle="visual_detail_review",
+                            object_name=item["object"],
+                            repair_tool="capture_object_inspection_renders",
+                            evidence={"path": path, "image_id": item["image_id"], "view": item["view"], "mean_alpha": digest.get("mean_alpha", 0.0)},
+                        )
+                    )
+                elif digest.get("luminance_range", 1.0) <= 0.005 and digest.get("luminance_variance", 1.0) <= 0.00001:
+                    findings.append(
+                        _finding(
+                            "info",
+                            "An inspection render has very low visible contrast, so visual-detail review may be weak.",
+                            principle="visual_detail_review",
+                            object_name=item["object"],
+                            repair_tool="capture_object_inspection_renders",
+                            evidence={
+                                "path": path,
+                                "image_id": item["image_id"],
+                                "view": item["view"],
+                                "luminance_range": digest.get("luminance_range", 0.0),
+                                "luminance_variance": digest.get("luminance_variance", 0.0),
+                            },
+                        )
+                    )
+        evidence.append(item)
+        if image_item.get("available") and path and not file_exists:
+            findings.append(
+                _finding(
+                    "warning",
+                    "An inspection render is marked available but the PNG file is missing.",
+                    principle="visual_detail_review",
+                    object_name=item["object"],
+                    repair_tool="capture_object_inspection_renders",
+                    evidence={"path": path, "image_id": item["image_id"], "view": item["view"]},
+                )
+            )
+        if available and (item["width"] <= 0 or item["height"] <= 0 or item["size_bytes"] <= 0):
+            findings.append(
+                _finding(
+                    "warning",
+                    "An inspection render has incomplete image metadata.",
+                    principle="visual_detail_review",
+                    object_name=item["object"],
+                    repair_tool="capture_object_inspection_renders",
+                    evidence={"image_id": item["image_id"], "view": item["view"], "width": item["width"], "height": item["height"], "size_bytes": item["size_bytes"]},
+                )
+            )
+    return evidence, findings
+
+
+def review_inspection_renders_against_brief(context, *, inspection_render_metadata=None, brief=None, prompt=""):
+    metadata = _normalize_inspection_render(context, inspection_render_metadata)
+    brief = brief if isinstance(brief, dict) else {}
+    findings = []
+    image_evidence, image_findings = _inspection_render_evidence(metadata)
+    findings.extend(image_findings)
+    usable_images = [item for item in image_evidence if item.get("available")]
+    object_names = list(metadata.get("object_names") or [])
+    if not object_names:
+        object_names = sorted({item.get("object", "") for item in image_evidence if item.get("object")})
+    if not object_names:
+        object_names = _brief_subject_names(brief)
+    required_views = _required_inspection_views(brief, prompt)
+    available_views = sorted({item.get("view", "") for item in usable_images if item.get("view")})
+    missing_views = [view for view in required_views if view not in available_views]
+    if not metadata.get("available") or not usable_images:
+        findings.append(
+            _finding(
+                "warning",
+                "No usable object inspection renders are available for visual-detail review.",
+                principle="visual_detail_review",
+                repair_tool="capture_object_inspection_renders",
+                evidence={
+                    "object_names": object_names,
+                    "requested_views": required_views or ["front_below", "side"],
+                    "available_views": available_views,
+                    "metadata_uri": metadata.get("metadata_uri", ""),
+                },
+            )
+        )
+    if required_views and missing_views:
+        findings.append(
+            _finding(
+                "warning",
+                "Inspection renders do not include all views needed by the prompt or brief.",
+                principle="visual_detail_review",
+                repair_tool="capture_object_inspection_renders",
+                evidence={
+                    "object_names": object_names,
+                    "requested_views": required_views,
+                    "available_views": available_views,
+                    "missing_views": missing_views,
+                    "metadata_uri": metadata.get("metadata_uri", ""),
+                },
+            )
+        )
+    if usable_images and any(keyword in _inspection_text(brief, prompt) for keyword in INSPECTION_DETAIL_KEYWORDS):
+        findings.append(
+            _finding(
+                "info",
+                "Inspection render evidence is available for visual-detail repair decisions.",
+                principle="visual_detail_review",
+                evidence={
+                    "object_names": object_names,
+                    "available_views": available_views,
+                    "image_resource_uris": [item.get("resource_uri", "") for item in usable_images if item.get("resource_uri")],
+                    "metadata_uri": metadata.get("metadata_uri", ""),
+                },
+            )
+        )
+    repair_plan = repair_animation_from_findings(context, findings=findings, brief=brief)
+    return {
+        "ok": True,
+        "message": "Reviewed object inspection render evidence against brief",
+        "status": "pass" if not [item for item in findings if str(item.get("severity", "")).lower() in {"warning", "error"}] else "needs_repair",
+        "render_id": metadata.get("render_id", ""),
+        "image_count": len(metadata.get("images") or []),
+        "usable_image_count": len(usable_images),
+        "visual_detail_review": {
+            "available": bool(metadata.get("available")) and bool(usable_images),
+            "metadata_uri": metadata.get("metadata_uri", ""),
+            "resource_type": metadata.get("resource_type", ""),
+            "required_views": required_views,
+            "available_views": available_views,
+            "missing_views": missing_views,
+            "images": image_evidence,
+        },
+        "findings": findings,
+        "repair_operations": repair_plan.get("repair_operations", []),
+        "suggested_tool_calls": repair_plan.get("suggested_tool_calls", []),
+    }
+
+
 def _playblast_coverage(context, playblast, brief):
     frame_start, frame_end = _brief_frame_range(context, brief)
     sampled_frames = [int(frame) for frame in playblast.get("sampled_frames") or []]
@@ -1079,7 +1615,10 @@ def review_playblast_against_brief(context, *, playblast=None, brief=None, promp
 
 def _operation(tool, reason, *, arguments=None, source_index=None, finding=None, confidence="medium", target_frames=None, target_frame_range=None):
     arguments = arguments or {}
-    mutates_scene = tool not in {"capture_animation_playblast", "create_timing_chart", "review_playblast_against_brief"}
+    mutates_scene = tool not in EVIDENCE_COLLECTION_TOOLS and tool not in READ_ONLY_REVIEW_TOOLS
+    execution_phase = "repair_preview" if mutates_scene else "planning"
+    if tool in EVIDENCE_COLLECTION_TOOLS:
+        execution_phase = "evidence_collection"
     operation = {
         "tool": tool,
         "arguments": arguments,
@@ -1089,7 +1628,7 @@ def _operation(tool, reason, *, arguments=None, source_index=None, finding=None,
         "mutates_scene": mutates_scene,
         "preview_safe": bool(mutates_scene),
         "requires_user_commit": bool(mutates_scene),
-        "execution_phase": "repair_preview" if mutates_scene else ("evidence_collection" if tool == "capture_animation_playblast" else "planning"),
+        "execution_phase": execution_phase,
     }
     if target_frames:
         operation["target_frames"] = [int(frame) for frame in target_frames]
@@ -1156,6 +1695,26 @@ def _finding_target_range(finding, frame_start, frame_end):
     return []
 
 
+def _finding_evidence(finding):
+    return finding.get("evidence") if isinstance(finding, dict) and isinstance(finding.get("evidence"), dict) else {}
+
+
+def _finding_object_names(finding, fallback=None):
+    evidence = _finding_evidence(finding)
+    names = _name_list(evidence.get("object_names"))
+    if not names and finding.get("object"):
+        names = [str(finding.get("object"))]
+    if not names:
+        names = list(fallback or [])
+    return names
+
+
+def _finding_views(finding, fallback=None):
+    evidence = _finding_evidence(finding)
+    views = _name_list(evidence.get("missing_views")) or _name_list(evidence.get("requested_views")) or list(fallback or [])
+    return views or ["front_below", "side"]
+
+
 def _dedupe_operations(operations):
     result = []
     seen = set()
@@ -1179,10 +1738,19 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
     subject_names = _brief_subject_names(brief)
     frame_start, frame_end = _brief_frame_range(context, brief or {})
     primary_subject = subject_names[0] if subject_names else ""
+    action = str((brief or {}).get("action") or "").lower() if isinstance(brief, dict) else ""
+    secondary_actions = [str(item).lower() for item in ((brief or {}).get("secondary_actions") or [])] if isinstance(brief, dict) else []
+    scale_decreases = any("scale decreases" in item or "smaller" in item or "scale down" in item for item in secondary_actions)
+    requested_count = ((brief or {}).get("timing") or {}).get("requested_count") if isinstance((brief or {}).get("timing"), dict) else None
+    try:
+        requested_count = int(requested_count) if requested_count is not None else None
+    except (TypeError, ValueError):
+        requested_count = None
     for index, finding in enumerate(findings or []):
         target_frames = _finding_target_frames(finding)
         target_frame_range = _finding_target_range(finding, frame_start, frame_end)
         repair_tool = str(finding.get("repair_tool") or "").lower()
+        evidence = _finding_evidence(finding)
         text = " ".join(
             str(finding.get(key) or "")
             for key in ("message", "principle", "requirement", "repair_tool", "recommendation")
@@ -1201,6 +1769,29 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     target_frame_range=target_frame_range,
                 )
             )
+        if repair_tool == "capture_object_inspection_renders" or (
+            not repair_tool and ("inspection render" in text or "visual-detail" in text or any(keyword in text for keyword in INSPECTION_DETAIL_KEYWORDS))
+        ):
+            object_names = _finding_object_names(finding, subject_names)
+            operations.append(
+                _operation(
+                    "capture_object_inspection_renders",
+                    "Capture focused object close-up renders so visual-detail repair has usable evidence.",
+                    arguments={
+                        "object_names": object_names,
+                        "views": _finding_views(finding),
+                        "frame": evidence.get("frame", target_frames[0] if target_frames else frame_start),
+                        "resolution_x": 800,
+                        "resolution_y": 600,
+                        "note": str(finding.get("message") or "Visual-detail inspection evidence")[:240],
+                    },
+                    source_index=index,
+                    finding=finding,
+                    confidence="high" if object_names else "medium",
+                    target_frames=target_frames,
+                    target_frame_range=target_frame_range,
+                )
+            )
         if "camera" in text or "framing" in text:
             operations.append(
                 _operation(
@@ -1213,6 +1804,62 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     target_frame_range=target_frame_range,
                 )
             )
+        if "action_count" in text or "requested count" in text or "wrong count" in text or "bounce count" in text:
+            if action in {"bounce", "jump"} and primary_subject:
+                if scale_decreases:
+                    operations.append(
+                        _operation(
+                            "create_progressive_bounce_animation",
+                            "Regenerate the helper-backed bounce with the requested count and scale change.",
+                            arguments={
+                                "object_name": primary_subject,
+                                "frame_start": frame_start,
+                                "frame_end": frame_end,
+                                "axis": "Z",
+                                "cycles": requested_count or 2,
+                                "scale_end_factor": 0.6,
+                                "interpolation": "BEZIER",
+                            },
+                            source_index=index,
+                            finding=finding,
+                            confidence="high",
+                            target_frames=target_frames,
+                            target_frame_range=target_frame_range,
+                        )
+                    )
+                else:
+                    operations.append(
+                        _operation(
+                            "animate_object_bounce",
+                            "Regenerate the helper-backed bounce with the requested count.",
+                            arguments={
+                                "object_name": primary_subject,
+                                "frame_start": frame_start,
+                                "frame_end": frame_end,
+                                "axis": "Z",
+                                "cycles": requested_count or 2,
+                                "interpolation": "BEZIER",
+                            },
+                            source_index=index,
+                            finding=finding,
+                            confidence="high",
+                            target_frames=target_frames,
+                            target_frame_range=target_frame_range,
+                        )
+                    )
+            else:
+                operations.append(
+                    _operation(
+                        "block_key_poses",
+                        "Reblock key poses to satisfy the requested repeated action count.",
+                        arguments={"object_names": subject_names, "poses": [], "interpolation": "CONSTANT"},
+                        source_index=index,
+                        finding=finding,
+                        confidence="low",
+                        target_frames=target_frames,
+                        target_frame_range=target_frame_range,
+                    )
+                )
         if "linear" in text or "spacing" in text or "slow" in text:
             operations.append(
                 _operation(
@@ -1225,11 +1872,48 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     target_frame_range=target_frame_range,
                 )
             )
+        if "center_of_mass" in text or "support footprint" in text or "support" in text:
+            hold_frame = int(finding.get("frame", target_frames[0] if target_frames else frame_start) or frame_start)
+            operations.append(
+                _operation(
+                    "set_pose_hold",
+                    "Hold or re-key the support/contact pose so the subject reads as balanced.",
+                    arguments={"object_names": subject_names, "frame": hold_frame, "hold_frames": 3, "paths": ["location"]},
+                    source_index=index,
+                    finding=finding,
+                    target_frames=target_frames,
+                    target_frame_range=target_frame_range,
+                )
+            )
         if "speed" in text or "acceleration" in text or "motion_physics" in text:
             operations.append(
                 _operation(
                     "retime_actions",
                     "Retiming may reduce physically implausible speed or acceleration spikes.",
+                    arguments={"object_names": subject_names, "frame_start": frame_start, "frame_end": frame_end, "snap_to_integer": True},
+                    source_index=index,
+                    finding=finding,
+                    confidence="low",
+                    target_frames=target_frames,
+                    target_frame_range=target_frame_range,
+                )
+            )
+        if "frame_range" in text or "contracted frame range" in text or "outside the brief frame range" in text:
+            operations.append(
+                _operation(
+                    "set_scene_frame_range",
+                    "Align the scene frame range to the prompt contract before retiming repairs.",
+                    arguments={"frame_start": frame_start, "frame_end": frame_end, "current_frame": frame_start},
+                    source_index=index,
+                    finding=finding,
+                    target_frames=target_frames,
+                    target_frame_range=target_frame_range,
+                )
+            )
+            operations.append(
+                _operation(
+                    "retime_actions",
+                    "Retiming may bring keyed motion back inside the contracted frame range.",
                     arguments={"object_names": subject_names, "frame_start": frame_start, "frame_end": frame_end, "snap_to_integer": True},
                     source_index=index,
                     finding=finding,
@@ -1314,7 +1998,12 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     target_frame_range=target_frame_range,
                 )
             )
-    if not operations and brief:
+    actionable_findings = [
+        finding
+        for finding in findings or []
+        if str(finding.get("severity", "")).lower() in {"warning", "error"} or finding.get("repair_tool")
+    ]
+    if not operations and brief and actionable_findings:
         operations.append(
             _operation(
                 "create_timing_chart",

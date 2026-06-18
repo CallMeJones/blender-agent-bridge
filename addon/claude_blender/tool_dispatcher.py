@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 
 import bpy
 
@@ -36,6 +37,30 @@ def _json_result(result):
 
 
 _PYTHON_FENCE_RE = re.compile(r"```(?:python|py)?\s*(.*?)```", re.IGNORECASE | re.DOTALL)
+_ANIMATION_WORKFLOW_MARKERS = {}
+_ANIMATION_WORKFLOW_TTL_SECONDS = 15 * 60
+_ANIMATION_INTENT_TERMS = {
+    "animate",
+    "animation",
+    "bounce",
+    "jump",
+    "keyframe",
+    "keyframes",
+    "pose",
+    "timing",
+    "arc",
+    "motion arc",
+    "settle",
+    "squash",
+    "stretch",
+    "playblast",
+    "f-curve",
+    "fcurve",
+    "block key",
+    "blocking",
+    "anticipation",
+    "contact sliding",
+}
 
 
 def _name_list(value):
@@ -75,6 +100,34 @@ def _extract_script_code(args):
         if match and match.group(1).strip():
             return match.group(1)
     return ""
+
+
+def _animation_workflow_marker_key(context):
+    scene = getattr(context, "scene", None)
+    return getattr(scene, "name", "") or "active_scene"
+
+
+def _mark_animation_workflow_seen(context):
+    _ANIMATION_WORKFLOW_MARKERS[_animation_workflow_marker_key(context)] = time.monotonic()
+
+
+def _animation_workflow_recently_seen(context):
+    marked_at = _ANIMATION_WORKFLOW_MARKERS.get(_animation_workflow_marker_key(context))
+    if not marked_at:
+        return False
+    return (time.monotonic() - float(marked_at)) <= _ANIMATION_WORKFLOW_TTL_SECONDS
+
+
+def _looks_like_animation_intent(text):
+    normalized = str(text or "").lower()
+    for term in _ANIMATION_INTENT_TERMS:
+        term_text = str(term or "").strip().lower()
+        if not term_text:
+            continue
+        pattern = re.escape(term_text).replace(r"\ ", r"\s+")
+        if re.search(rf"(?<![a-z0-9_]){pattern}(?![a-z0-9_])", normalized):
+            return True
+    return False
 
 
 def _resolve_objects(context, args, *, default_to_scene=False):
@@ -477,7 +530,7 @@ def create_timing_chart(context, args):
 
 
 def plan_animation_workflow(context, args):
-    return animation_workflow.plan_animation_workflow(
+    result = animation_workflow.plan_animation_workflow(
         context,
         prompt=str(args.get("prompt") or ""),
         subject_names=_name_list(args.get("subject_names")),
@@ -491,6 +544,9 @@ def plan_animation_workflow(context, args):
         playblast=args.get("playblast") if isinstance(args.get("playblast"), dict) else None,
         findings=args.get("findings") if isinstance(args.get("findings"), list) else None,
     )
+    if isinstance(result, dict) and result.get("ok"):
+        _mark_animation_workflow_seen(context)
+    return result
 
 
 _WORKFLOW_GENERATION_TOOLS = {
@@ -748,6 +804,29 @@ def run_animation_workflow(context, args):
     }
 
 
+def run_animation_task(context, args):
+    prompt = str(args.get("prompt") or "")
+    _mark_animation_workflow_seen(context)
+    result = run_animation_workflow(
+        context,
+        {
+            "prompt": prompt,
+            "mode": "full",
+            "apply_generation": True,
+            "run_review": True,
+            "capture_playblast": False,
+            "apply_repairs": False,
+        },
+    )
+    if isinstance(result, dict):
+        enriched = dict(result)
+        enriched.setdefault("message", "Animation task routed through run_animation_workflow")
+        enriched["invoked_workflow_tool"] = "run_animation_workflow"
+        enriched["task_prompt"] = prompt
+        return enriched
+    return result
+
+
 def analyze_motion_arcs(context, args):
     return animation_analysis.analyze_motion_arcs(
         context,
@@ -826,6 +905,20 @@ def analyze_collision_penetration(context, args):
     )
 
 
+def analyze_center_of_mass(context, args):
+    return animation_analysis.analyze_center_of_mass(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        support_object_names=_name_list(args.get("support_object_names")),
+        frame_start=args.get("frame_start"),
+        frame_end=args.get("frame_end"),
+        sample_step=_bounded_int(args.get("sample_step"), 4, minimum=1, maximum=10000),
+        support_margin=_bounded_float(args.get("support_margin"), 0.05, minimum=0.0, maximum=1000.0),
+        contact_tolerance=_bounded_float(args.get("contact_tolerance"), 0.12, minimum=0.0, maximum=1000.0),
+        selected_only=bool(args.get("selected_only", False)),
+    )
+
+
 def analyze_camera_framing(context, args):
     return animation_analysis.analyze_camera_framing(
         context,
@@ -872,6 +965,15 @@ def review_playblast_against_brief(context, args):
     )
 
 
+def review_inspection_renders_against_brief(context, args):
+    return animation_analysis.review_inspection_renders_against_brief(
+        context,
+        inspection_render_metadata=args.get("inspection_render") if isinstance(args.get("inspection_render"), dict) else None,
+        brief=args.get("brief") if isinstance(args.get("brief"), dict) else None,
+        prompt=str(args.get("prompt") or ""),
+    )
+
+
 def repair_animation_from_findings(context, args):
     return animation_analysis.repair_animation_from_findings(
         context,
@@ -882,19 +984,25 @@ def repair_animation_from_findings(context, args):
 
 _REPAIR_LOOP_READ_ONLY_TOOLS = {
     "capture_animation_playblast",
+    "capture_object_inspection_renders",
     "create_timing_chart",
     "review_playblast_against_brief",
+    "review_inspection_renders_against_brief",
     "repair_animation_from_findings",
 }
 
 _REPAIR_LOOP_DEFAULT_TOOLS = {
     "capture_animation_playblast",
+    "capture_object_inspection_renders",
     "create_timing_chart",
     "set_action_interpolation",
     "set_pose_hold",
     "add_breakdown_pose",
     "block_key_poses",
     "create_camera_orbit",
+    "animate_object_bounce",
+    "create_progressive_bounce_animation",
+    "set_scene_frame_range",
     "retime_actions",
 }
 
@@ -943,6 +1051,10 @@ def _repair_operation_blocker(tool, tool_args):
         return "block_key_poses requires explicit poses; this repair needs a planning pass first"
     if tool in {"set_pose_hold", "set_action_interpolation", "add_breakdown_pose"} and not tool_args.get("object_names"):
         return f"{tool} requires object_names"
+    if tool == "capture_object_inspection_renders" and not tool_args.get("object_names"):
+        return "capture_object_inspection_renders requires object_names"
+    if tool in {"animate_object_bounce", "create_progressive_bounce_animation"} and not tool_args.get("object_name"):
+        return f"{tool} requires object_name"
     if tool == "retime_actions" and not (tool_args.get("object_names") or tool_args.get("action_names")):
         return "retime_actions requires object_names or action_names"
     if tool == "create_camera_orbit" and not tool_args.get("target_name"):
@@ -2204,9 +2316,27 @@ def search_blender_docs(context, args):
 
 
 def draft_script(context, args):
+    script_text = _extract_script_code(args)
+    intent_text = "\n".join(
+        str(args.get(key) or "")
+        for key in ("intent", "expected_changes", "brief", "prompt")
+    )
+    guard_text = "\n".join([intent_text, script_text[:4000]])
+    if _looks_like_animation_intent(guard_text) and not _animation_workflow_recently_seen(context):
+        return {
+            "ok": False,
+            "code": "animation_workflow_required",
+            "message": "Use run_animation_workflow first unless helpers cannot express this.",
+            "requires_user_approval": False,
+            "recommended_tools": [
+                "plan_animation_workflow",
+                "run_animation_workflow",
+                "run_animation_task",
+            ],
+        }
     staged = script_runner.stage_script(
         context,
-        code=_extract_script_code(args),
+        code=script_text,
         intent=str(args.get("intent") or ""),
         expected_changes=str(args.get("expected_changes") or ""),
         risk_level=str(args.get("risk_level") or "medium"),
@@ -2394,6 +2524,7 @@ TOOL_FUNCTIONS = {
     "create_timing_chart": create_timing_chart,
     "plan_animation_workflow": plan_animation_workflow,
     "run_animation_workflow": run_animation_workflow,
+    "run_animation_task": run_animation_task,
     "analyze_motion_arcs": analyze_motion_arcs,
     "analyze_fcurve_spacing": analyze_fcurve_spacing,
     "analyze_pose_clarity": analyze_pose_clarity,
@@ -2401,10 +2532,12 @@ TOOL_FUNCTIONS = {
     "sample_animation_state": sample_animation_state,
     "analyze_contact_sliding": analyze_contact_sliding,
     "analyze_collision_penetration": analyze_collision_penetration,
+    "analyze_center_of_mass": analyze_center_of_mass,
     "analyze_camera_framing": analyze_camera_framing,
     "analyze_motion_physics": analyze_motion_physics,
     "compare_animation_to_brief": compare_animation_to_brief,
     "review_playblast_against_brief": review_playblast_against_brief,
+    "review_inspection_renders_against_brief": review_inspection_renders_against_brief,
     "repair_animation_from_findings": repair_animation_from_findings,
     "run_animation_repair_loop": run_animation_repair_loop,
     "get_material_node_details": get_material_node_details,

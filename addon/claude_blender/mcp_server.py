@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -34,7 +35,12 @@ DEFAULT_BRIDGE_URL = "http://127.0.0.1:8765"
 DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 100
 FULL_TOOL_LIST_ENV = "BLENDER_MCP_FULL_TOOL_LIST"
-COMPACT_DIRECT_TOOL_NAMES = ("list_scene_objects",)
+COMPACT_DIRECT_TOOL_NAMES = (
+    "list_scene_objects",
+    "plan_animation_workflow",
+    "run_animation_workflow",
+    "run_animation_task",
+)
 CATALOG_TOOL_NAME = "blender_tool_catalog"
 WRAPPER_TOOL_NAMES = {
     "blender_bridge_status",
@@ -42,6 +48,60 @@ WRAPPER_TOOL_NAMES = {
     "search_blender_tools",
     "get_blender_tool_schema",
     "invoke_blender_tool",
+}
+
+ANIMATION_ROUTE_TERMS = {
+    "animate",
+    "animation",
+    "bounce",
+    "jump",
+    "keyframe",
+    "keyframes",
+    "pose",
+    "timing",
+    "arc",
+    "arcs",
+    "settle",
+    "squash",
+    "stretch",
+    "playblast",
+    "f-curve",
+    "fcurve",
+    "block",
+    "blocking",
+    "anticipation",
+    "contact",
+    "spacing",
+}
+ANIMATION_ROUTE_TOOLS = {
+    "run_animation_task",
+    "plan_animation_workflow",
+    "run_animation_workflow",
+    "create_animation_brief",
+    "create_timing_chart",
+    "get_animation_scene_context",
+    "analyze_animation_principles",
+    "compare_animation_to_brief",
+    "review_playblast_against_brief",
+    "review_inspection_renders_against_brief",
+    "repair_animation_from_findings",
+    "run_animation_repair_loop",
+    "capture_animation_playblast",
+}
+GENERIC_SELECTED_OBJECT_TOOLS = {
+    "set_selected_location_delta",
+    "set_selected_transform",
+    "select_objects",
+}
+SCRIPT_EXPLICIT_TERMS = {
+    "script",
+    "python",
+    "custom code",
+    "custom python",
+    "draft_script",
+    "helper tools cannot express",
+    "helpers cannot express",
+    "approved script",
 }
 
 TOOL_CATEGORY_LABELS = {
@@ -221,7 +281,8 @@ PROMPTS = {
         ],
         "template": (
             "Handle this Blender animation task through the Milestone 7 workflow: {goal}\n\n"
-            "Call plan_animation_workflow first. For common helper-backed generation, call "
+            "For simple prompt-in/task-out use, call run_animation_task. For manual control, call "
+            "plan_animation_workflow first. For common helper-backed generation, call "
             "run_animation_workflow to execute the plan, review the result, and leave changes as a preview. "
             "For manual control, follow next_tool_calls in order for brief, scene routing, timing, "
             "helper generation, validation, playblast review, and repair. "
@@ -595,6 +656,18 @@ def _tool_search_text(tool):
     return " ".join(str(part).lower() for part in parts if part)
 
 
+def _contains_any_phrase(text, phrases):
+    normalized = str(text or "").lower()
+    for phrase in phrases:
+        phrase_text = str(phrase or "").strip().lower()
+        if not phrase_text:
+            continue
+        pattern = re.escape(phrase_text).replace(r"\ ", r"\s+")
+        if re.search(rf"(?<![a-z0-9_]){pattern}(?![a-z0-9_])", normalized):
+            return True
+    return False
+
+
 def _tool_category(tool):
     name = str((tool or {}).get("name") or "").lower()
     if name in {"draft_script", "run_approved_script"}:
@@ -607,8 +680,11 @@ def _tool_category(tool):
         "capture_viewport",
         "capture_animation_playblast",
         "capture_object_inspection_renders",
+        "review_inspection_renders_against_brief",
     }:
         return "inspect"
+    if name == "analyze_center_of_mass":
+        return "animation"
     if "material" in name or "shader" in name or name == "set_world_background":
         return "materials"
     if "camera" in name or "render" in name or name in {"add_light", "set_active_camera"}:
@@ -719,15 +795,22 @@ def _score_tool_match(tool, query):
         return 0
     terms = [term for term in normalized_query.split() if term]
     text = _tool_search_text(tool)
-    matched_terms = [term for term in terms if term in text]
-    if not matched_terms:
-        return None
-    score = sum(text.count(term) for term in terms)
-    score += len(matched_terms) * 5
-    if len(matched_terms) == len(terms):
-        score += 15
     name = str(tool.get("name") or "").lower()
     title = str(tool.get("title") or "").lower()
+    category = _tool_category(tool)
+    animation_query = _contains_any_phrase(normalized_query, ANIMATION_ROUTE_TERMS)
+    explicit_script_query = _contains_any_phrase(normalized_query, SCRIPT_EXPLICIT_TERMS)
+    matched_terms = [term for term in terms if term in text]
+    if not matched_terms:
+        if animation_query and (name in ANIMATION_ROUTE_TOOLS or category == "animation"):
+            score = 25
+        else:
+            return None
+    else:
+        score = sum(text.count(term) for term in terms)
+        score += len(matched_terms) * 5
+        if len(matched_terms) == len(terms):
+            score += 15
     if name == normalized_query:
         score += 1000
     elif name.startswith(normalized_query):
@@ -736,6 +819,23 @@ def _score_tool_match(tool, query):
         score += 500
     elif title.startswith(normalized_query):
         score += 100
+    if animation_query:
+        if name == "run_animation_task":
+            score += 1200
+        elif name == "plan_animation_workflow":
+            score += 1000
+        elif name == "run_animation_workflow":
+            score += 950
+        elif name in ANIMATION_ROUTE_TOOLS:
+            score += 500
+        elif category == "animation":
+            score += 250
+        if name in GENERIC_SELECTED_OBJECT_TOOLS:
+            score -= 250
+        if name == "draft_script" and not explicit_script_query:
+            score -= 1000
+    elif name == "draft_script" and not explicit_script_query:
+        score -= 100
     return score
 
 

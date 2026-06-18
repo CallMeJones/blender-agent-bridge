@@ -15,7 +15,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import agent_loop, anthropic_client, bridge_protocol, context_bundle, live_preview, tool_dispatcher  # noqa: E402
+from claude_blender import agent_loop, anthropic_client, bridge_protocol, context_bundle, live_preview, script_runner, tool_dispatcher  # noqa: E402
 
 
 ANIMATION_TOOLS = {
@@ -23,6 +23,7 @@ ANIMATION_TOOLS = {
     "create_timing_chart",
     "plan_animation_workflow",
     "run_animation_workflow",
+    "run_animation_task",
     "block_key_poses",
     "add_breakdown_pose",
     "set_pose_hold",
@@ -34,10 +35,12 @@ ANIMATION_TOOLS = {
     "sample_animation_state",
     "analyze_contact_sliding",
     "analyze_collision_penetration",
+    "analyze_center_of_mass",
     "analyze_camera_framing",
     "analyze_motion_physics",
     "compare_animation_to_brief",
     "review_playblast_against_brief",
+    "review_inspection_renders_against_brief",
     "repair_animation_from_findings",
     "run_animation_repair_loop",
     "animate_object_bounce",
@@ -127,6 +130,28 @@ def main():
         assert ANIMATION_TOOLS.issubset(tool_names)
         contract_names = set(bridge_protocol.TOOL_CONTRACTS)
         assert ANIMATION_TOOLS.issubset(contract_names)
+        assert not tool_dispatcher._looks_like_animation_intent("Create an architectural arch from cubes.")
+        assert tool_dispatcher._looks_like_animation_intent("Make the cube bounce twice.")
+
+        script_runner.clear_external_script_trust_for_all_scenes(
+            status=script_runner.NO_EXTERNAL_TRUST_STATUS,
+            audit_action="smoke_animation_routing_clear",
+        )
+        guarded_script = json.loads(
+            tool_dispatcher.execute_tool(
+                context,
+                "draft_script",
+                {
+                    "intent": "Animate the cube with a two-bounce keyframe sequence.",
+                    "expected_changes": "Cube bounces twice with smaller squash/stretch poses.",
+                    "risk_level": "low",
+                    "code": "print('animation fallback should not run before workflow')",
+                },
+            )
+        )
+        assert guarded_script["ok"] is False, guarded_script
+        assert guarded_script["code"] == "animation_workflow_required", guarded_script
+        assert "run_animation_workflow" in guarded_script["recommended_tools"], guarded_script
 
         preflight_context = {}
         clarification = agent_loop._apply_animation_brief_preflight(
@@ -234,6 +259,22 @@ def main():
         assert not any(item.get("principle") == "secondary_action" for item in workflow_run["review"]["findings"]), workflow_run
         reverted_workflow = _execute(context, "revert_preview", {})
         assert not reverted_workflow.get("rollback_warnings"), reverted_workflow
+        assert not scene.claude_blender.pending_preview
+        _select_object(context, cube)
+
+        task_run = _execute(
+            context,
+            "run_animation_task",
+            {
+                "prompt": "Make the selected cube bounce twice over 72 frames, getting smaller each bounce.",
+            },
+        )
+        assert task_run["invoked_workflow_tool"] == "run_animation_workflow", task_run
+        assert task_run["workflow"]["brief"]["action"] == "bounce", task_run
+        assert task_run["workflow"]["brief"]["timing"]["requested_count"] == 2, task_run
+        assert task_run["pending_preview"] is True, task_run
+        reverted_task = _execute(context, "revert_preview", {})
+        assert not reverted_task.get("rollback_warnings"), reverted_task
         assert not scene.claude_blender.pending_preview
         _select_object(context, cube)
 
@@ -395,6 +436,30 @@ def main():
         )
         assert collisions["sampled_frames"] == [1, 13, 24], collisions
 
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(2.0, 0.0, -1.05))
+        support = context.object
+        support.name = "Claude Off Support"
+        support.scale = (0.5, 0.5, 0.05)
+        context.view_layer.update()
+        try:
+            center = _execute(
+                context,
+                "analyze_center_of_mass",
+                {
+                    "object_names": ["Cube"],
+                    "support_object_names": ["Claude Off Support"],
+                    "frame_start": 1,
+                    "frame_end": 1,
+                    "sample_step": 1,
+                    "support_margin": 0.0,
+                    "contact_tolerance": 0.2,
+                },
+            )
+            assert center["support_object_names"] == ["Claude Off Support"], center
+            assert any(item.get("requirement") == "center_of_mass" for item in center["findings"]), center
+        finally:
+            bpy.data.objects.remove(support, do_unlink=True)
+
         framing = _execute(
             context,
             "analyze_camera_framing",
@@ -503,6 +568,41 @@ def main():
         assert all(item["tool_call"]["name"] == item["tool"] for item in static_review["repair_operations"]), static_review
         assert any(item.get("target_frames") == [1, 36, 72] for item in static_review["suggested_tool_calls"]), static_review
 
+        inspection_path = os.path.join(visual_dir, "inspection-front-below.png")
+        _write_pattern_png(inspection_path)
+        inspection_review = _execute(
+            context,
+            "review_inspection_renders_against_brief",
+            {
+                "prompt": "Inspect the cube underside and landing gear detail before repair.",
+                "brief": contract,
+                "inspection_render": {
+                    "available": True,
+                    "render_id": "inspect-smoke",
+                    "metadata_uri": "blender://inspection-renders/inspect-smoke/metadata",
+                    "object_names": ["Cube"],
+                    "images": [
+                        {
+                            "image_id": "Cube-front_below",
+                            "object": "Cube",
+                            "view": "front_below",
+                            "available": True,
+                            "path": inspection_path,
+                            "resource_uri": "blender://inspection-renders/inspect-smoke/images/Cube-front_below",
+                            "size_bytes": os.path.getsize(inspection_path),
+                            "width": 8,
+                            "height": 8,
+                        }
+                    ],
+                },
+            },
+        )
+        assert inspection_review["visual_detail_review"]["missing_views"] == ["underside", "side"], inspection_review
+        inspection_capture = next(item for item in inspection_review["repair_operations"] if item["tool"] == "capture_object_inspection_renders")
+        assert inspection_capture["mutates_scene"] is False, inspection_review
+        assert inspection_capture["arguments"]["object_names"] == ["Cube"], inspection_review
+        assert inspection_capture["arguments"]["views"] == ["underside", "side"], inspection_review
+
         repair_plan = _execute(
             context,
             "repair_animation_from_findings",
@@ -510,12 +610,19 @@ def main():
                 "findings": [
                     {"severity": "warning", "message": "Contact points slide across the ground plane."},
                     {"severity": "warning", "requirement": "motion_physics", "message": "Sampled acceleration spike may be physically implausible."},
+                    {
+                        "severity": "warning",
+                        "requirement": "action_count",
+                        "message": "Detected repeated action count does not match the requested count.",
+                        "evidence": {"requested_count": 2, "detected_count": 1, "sampled_frames": [1, 36, 72]},
+                    },
                 ],
                 "brief": contract,
             },
         )
         assert repair_plan["suggested_tool_calls"][0]["tool"] == "set_pose_hold", repair_plan
         assert any(item["tool"] == "retime_actions" for item in repair_plan["repair_operations"]), repair_plan
+        assert any(item["tool"] == "create_progressive_bounce_animation" for item in repair_plan["repair_operations"]), repair_plan
         assert repair_plan["repair_operations"][0]["arguments"]["object_names"] == ["Cube"], repair_plan
         assert repair_plan["repair_operations"][0]["tool_call"]["input"]["object_names"] == ["Cube"], repair_plan
         assert repair_plan["repair_operations"][0]["source_finding_index"] == 0, repair_plan

@@ -153,6 +153,32 @@ def _iter_action_fcurves(action):
     return result
 
 
+def _action_channel_summary(action, *, max_paths=18):
+    fcurves = _iter_action_fcurves(action)
+    frames = sorted({int(round(point.co.x)) for fcurve in fcurves for point in fcurve.keyframe_points})
+    keyed_paths = sorted({fcurve.data_path for fcurve in fcurves})
+    property_groups = Counter()
+    for path in keyed_paths:
+        if path.startswith("pose.bones"):
+            property_groups["pose_bones"] += 1
+        elif path.startswith("key_blocks"):
+            property_groups["shape_keys"] += 1
+        else:
+            property_groups[path.split("[", 1)[0].split(".", 1)[0]] += 1
+    return {
+        "keyframe_count": sum(len(fcurve.keyframe_points) for fcurve in fcurves),
+        "keyframe_range": [frames[0], frames[-1]] if frames else [],
+        "keyed_paths": keyed_paths[:max_paths],
+        "truncated_keyed_paths": max(0, len(keyed_paths) - max_paths),
+        "keyed_property_groups": dict(sorted(property_groups.items())),
+        "has_location_keys": any(path == "location" for path in keyed_paths),
+        "has_rotation_keys": any(path in {"rotation_euler", "rotation_quaternion"} for path in keyed_paths),
+        "has_scale_keys": any(path == "scale" for path in keyed_paths),
+        "has_pose_bone_keys": any(path.startswith("pose.bones") for path in keyed_paths),
+        "has_shape_key_keys": any(path.startswith("key_blocks") for path in keyed_paths),
+    }
+
+
 def _animation_owner_summary(data_block):
     animation_data = getattr(data_block, "animation_data", None)
     if animation_data is None:
@@ -160,13 +186,29 @@ def _animation_owner_summary(data_block):
     action = animation_data.action
     drivers = list(getattr(animation_data, "drivers", []) or [])
     nla_tracks = list(getattr(animation_data, "nla_tracks", []) or [])
+    action_slot = getattr(animation_data, "action_slot", None)
+    action_slots = list(getattr(action, "slots", []) or []) if action else []
+    pose_markers = list(getattr(action, "pose_markers", []) or []) if action else []
     return {
         "has_animation_data": True,
         "action": _safe_name(action),
+        "action_slot": _safe_name(action_slot),
+        "action_slot_count": len(action_slots),
+        "action_slots": [
+            {
+                "name": _safe_name(slot),
+                "identifier": getattr(slot, "identifier", ""),
+                "target_id_type": getattr(slot, "target_id_type", ""),
+            }
+            for slot in action_slots[:8]
+        ],
         "fcurve_count": len(_iter_action_fcurves(action)),
+        "channel_summary": _action_channel_summary(action),
         "driver_count": len(drivers),
         "nla_track_count": len(nla_tracks),
         "nla_tracks": [{"name": track.name, "strip_count": len(getattr(track, "strips", []) or [])} for track in nla_tracks[:8]],
+        "pose_marker_count": len(pose_markers),
+        "pose_markers": [{"name": marker.name, "frame": int(marker.frame)} for marker in pose_markers[:12]],
     }
 
 
@@ -221,7 +263,21 @@ def _pose_bone_control_hints(obj, *, max_candidates=16):
                 "parent": _safe_name(pose_bone.parent),
                 "use_deform": bool(data_bone.use_deform) if data_bone else None,
                 "constraint_types": sorted({con.type for con in constraints}),
+                "constraint_targets": [
+                    {
+                        "constraint": con.name,
+                        "type": con.type,
+                        "target": _safe_name(getattr(con, "target", None)),
+                        "subtarget": getattr(con, "subtarget", ""),
+                    }
+                    for con in constraints[:8]
+                    if getattr(con, "target", None) or getattr(con, "subtarget", "")
+                ],
                 "custom_shape": _safe_name(getattr(pose_bone, "custom_shape", None)),
+                "lock_location": [bool(value) for value in getattr(pose_bone, "lock_location", (False, False, False))],
+                "lock_rotation": [bool(value) for value in getattr(pose_bone, "lock_rotation", (False, False, False))],
+                "lock_scale": [bool(value) for value in getattr(pose_bone, "lock_scale", (False, False, False))],
+                "custom_properties": _idprops_summary(pose_bone, maximum=8),
                 "likely_control": True,
                 "reasons": reasons,
             }
@@ -232,6 +288,37 @@ def _pose_bone_control_hints(obj, *, max_candidates=16):
         "control_candidates": candidates[: max(1, int(max_candidates or 1))],
         "truncated": len(candidates) > max(1, int(max_candidates or 1)),
     }
+
+
+def _pose_library_candidates(obj, *, max_actions=8):
+    if obj.type != "ARMATURE":
+        return []
+    candidates = []
+    armature_name = obj.name.lower()
+    for action in bpy.data.actions:
+        fcurves = _iter_action_fcurves(action)
+        if not any(fcurve.data_path.startswith("pose.bones") for fcurve in fcurves):
+            continue
+        marker_count = len(getattr(action, "pose_markers", []) or [])
+        reasons = []
+        if marker_count:
+            reasons.append("pose_markers")
+        if getattr(action, "asset_data", None):
+            reasons.append("asset_action")
+        if "pose" in action.name.lower() or armature_name in action.name.lower():
+            reasons.append("name_hint")
+        if not reasons:
+            reasons.append("pose_bone_fcurves")
+        candidates.append(
+            {
+                "name": action.name,
+                "fcurve_count": len(fcurves),
+                "pose_marker_count": marker_count,
+                "keyframe_range": _action_channel_summary(action).get("keyframe_range", []),
+                "reasons": reasons,
+            }
+        )
+    return candidates[: max(1, int(max_actions or 1))]
 
 
 def _rig_target_armatures(obj):
@@ -336,13 +423,16 @@ def _animation_scene_object_context(obj):
     shape_key_count = len(obj.data.shape_keys.key_blocks) if obj.type == "MESH" and obj.data and obj.data.shape_keys else 0
     pose_bone_count = len(getattr(getattr(obj, "pose", None), "bones", []) or []) if obj.type == "ARMATURE" else 0
     rig_control_hints = _pose_bone_control_hints(obj) if obj.type == "ARMATURE" else None
+    pose_library_candidates = _pose_library_candidates(obj) if obj.type == "ARMATURE" else []
     z_min, z_max = _bbox_z_range(obj)
     dimensions = _xyz(obj.dimensions)
     tools = {"get_animation_details"}
     cautions = []
+    routing_confidence = "medium"
     if rig["likely_rig_driven"] or obj.type == "ARMATURE" or pose_bone_count:
         tools.add("get_rigging_details")
         cautions.append("Inspect rig controls before keyframing mesh/object transforms.")
+        routing_confidence = "high" if (rig_control_hints and rig_control_hints["control_candidate_count"]) or any(target["control_candidate_count"] for target in rig["control_targets"]) else "low"
     if obj.type == "ARMATURE" and pose_bone_count and rig_control_hints and not rig_control_hints["control_candidate_count"]:
         cautions.append("No obvious rig control bones were detected; inspect rigging details before posing.")
     if rig["likely_rig_driven"] and not any(target["control_candidate_count"] for target in rig["control_targets"]):
@@ -357,6 +447,10 @@ def _animation_scene_object_context(obj):
         tools.add("get_material_node_details")
     if constraints or drivers or object_animation["driver_count"]:
         tools.add("get_rigging_details")
+    if object_animation["has_animation_data"] and (object_animation.get("channel_summary") or {}).get("has_pose_bone_keys"):
+        tools.add("get_rigging_details")
+    if data_animation and data_animation["has_animation_data"]:
+        routing_confidence = max(routing_confidence, "medium", key={"low": 0, "medium": 1, "high": 2}.get)
     if rig["likely_rig_driven"]:
         primary_target = "rig_controls"
     elif shape_key_count:
@@ -388,8 +482,11 @@ def _animation_scene_object_context(obj):
         "rig": rig,
         "rig_control_hints": rig_control_hints,
         "pose_bone_count": pose_bone_count,
+        "pose_library_candidates": pose_library_candidates,
         "physics": physics,
         "suggested_primary_animation_target": primary_target,
+        "animation_routing_confidence": routing_confidence,
+        "recommended_animation_owner": primary_target,
         "recommended_detail_tools": sorted(tools),
         "cautions": cautions,
     }
@@ -437,7 +534,10 @@ def animation_scene_context(context, *, object_names=None, selected_only=False, 
                 "object": item["name"],
                 "type": item["type"],
                 "suggested_primary_animation_target": item["suggested_primary_animation_target"],
+                "recommended_animation_owner": item["recommended_animation_owner"],
+                "animation_routing_confidence": item["animation_routing_confidence"],
                 "rig_control_candidate_count": own_control_count or target_control_count,
+                "pose_library_candidate_count": len(item.get("pose_library_candidates") or []),
                 "likely_contact_surface": item["likely_contact_surface"],
                 "recommended_detail_tools": item["recommended_detail_tools"],
                 "cautions": item["cautions"][:4],
@@ -468,6 +568,7 @@ def animation_scene_context(context, *, object_names=None, selected_only=False, 
             for item in objects
             if item["physics"]["rigid_body"] or item["physics"]["simulation_modifiers"] or item["physics"]["particle_system_count"]
         ),
+        "pose_library_candidate_count": sum(len(item.get("pose_library_candidates") or []) for item in objects),
         "contact_surface_candidate_count": sum(1 for item in objects if item["likely_contact_surface"]),
         "rig_control_candidate_count": rig_control_candidate_count,
         "active_camera": _safe_name(context.scene.camera),
@@ -635,6 +736,8 @@ def rigging_details(context, *, object_names=None, max_objects=12):
                 ]
                 if obj.pose
                 else [],
+                "control_hints": _pose_bone_control_hints(obj, max_candidates=24),
+                "pose_library_candidates": _pose_library_candidates(obj, max_actions=12),
             }
         result.append(
             {
