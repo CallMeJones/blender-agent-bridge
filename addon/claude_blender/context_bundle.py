@@ -280,6 +280,7 @@ def build_context_bundle(context, *, include_visual=False, capture_dir=None, max
             "block_key_poses",
             "add_breakdown_pose",
             "set_pose_hold",
+            "set_rig_pose_hold",
             "create_motion_arc",
             "create_text_object",
             "create_curve_path",

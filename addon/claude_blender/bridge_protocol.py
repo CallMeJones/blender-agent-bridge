@@ -412,6 +412,11 @@ TOOL_CONTRACTS = {
         "mutates_scene": True,
         "requires_live_preview": True,
     },
+    "set_rig_pose_hold": {
+        "description": "Duplicate pose-bone transforms on named rig control bones for a readable hold",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
     "create_motion_arc": {
         "description": "Create preview curve objects that visualize sampled object motion arcs",
         "mutates_scene": True,

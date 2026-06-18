@@ -986,6 +986,7 @@ _REPAIR_LOOP_READ_ONLY_TOOLS = {
     "capture_animation_playblast",
     "capture_object_inspection_renders",
     "create_timing_chart",
+    "get_rigging_details",
     "review_playblast_against_brief",
     "review_inspection_renders_against_brief",
     "repair_animation_from_findings",
@@ -997,6 +998,7 @@ _REPAIR_LOOP_DEFAULT_TOOLS = {
     "create_timing_chart",
     "set_action_interpolation",
     "set_pose_hold",
+    "set_rig_pose_hold",
     "add_breakdown_pose",
     "block_key_poses",
     "create_camera_orbit",
@@ -1004,6 +1006,7 @@ _REPAIR_LOOP_DEFAULT_TOOLS = {
     "create_progressive_bounce_animation",
     "set_scene_frame_range",
     "retime_actions",
+    "get_rigging_details",
 }
 
 
@@ -1051,6 +1054,8 @@ def _repair_operation_blocker(tool, tool_args):
         return "block_key_poses requires explicit poses; this repair needs a planning pass first"
     if tool in {"set_pose_hold", "set_action_interpolation", "add_breakdown_pose"} and not tool_args.get("object_names"):
         return f"{tool} requires object_names"
+    if tool == "set_rig_pose_hold" and not tool_args.get("armature_name"):
+        return "set_rig_pose_hold requires armature_name"
     if tool == "capture_object_inspection_renders" and not tool_args.get("object_names"):
         return "capture_object_inspection_renders requires object_names"
     if tool in {"animate_object_bounce", "create_progressive_bounce_animation"} and not tool_args.get("object_name"):
@@ -1797,6 +1802,19 @@ def set_pose_hold(context, args):
         selected_only=bool(args.get("selected_only", False)),
         interpolation=str(args.get("interpolation") or "CONSTANT"),
         label=args.get("label", "Set pose hold"),
+    )
+
+
+def set_rig_pose_hold(context, args):
+    return advanced_helpers.set_rig_pose_hold(
+        context,
+        armature_name=str(args.get("armature_name") or ""),
+        bone_names=_name_list(args.get("bone_names")),
+        frame=args.get("frame"),
+        hold_frames=_bounded_int(args.get("hold_frames"), 4, minimum=1, maximum=60),
+        paths=_name_list(args.get("paths")),
+        interpolation=str(args.get("interpolation") or "CONSTANT"),
+        label=args.get("label", "Set rig pose hold"),
     )
 
 
@@ -2580,6 +2598,7 @@ TOOL_FUNCTIONS = {
     "block_key_poses": block_key_poses,
     "add_breakdown_pose": add_breakdown_pose,
     "set_pose_hold": set_pose_hold,
+    "set_rig_pose_hold": set_rig_pose_hold,
     "create_motion_arc": create_motion_arc,
     "create_text_object": create_text_object,
     "create_curve_path": create_curve_path,

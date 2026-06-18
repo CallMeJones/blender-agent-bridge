@@ -87,6 +87,7 @@ ANIMATION_ROUTE_TOOLS = {
     "repair_animation_from_findings",
     "run_animation_repair_loop",
     "capture_animation_playblast",
+    "set_rig_pose_hold",
 }
 GENERIC_SELECTED_OBJECT_TOOLS = {
     "set_selected_location_delta",
@@ -693,7 +694,7 @@ def _tool_category(tool):
         return "animation"
     if "geometry" in name or "modifier" in name or "bevel" in name or "subsurf" in name or "shape_key" in name:
         return "geometry"
-    if "rigging" in name or "armature" in name or "constraint" in name:
+    if "rigging" in name or "armature" in name or "constraint" in name or name == "set_rig_pose_hold":
         return "rigging"
     if "simulation" in name or "particle" in name:
         return "simulation"

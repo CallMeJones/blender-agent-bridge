@@ -145,6 +145,15 @@ def main():
         assert "run_animation_repair_loop" in principles_names, principles_meta
         assert "create_progressive_bounce_animation" in principles_names, principles_meta
 
+        rig_repair_tools, rig_repair_meta = anthropic_client.select_blender_tool_definitions(
+            "Review the character rig pose clarity, inspect controls, and hold a keyed armature control pose.",
+            bundle,
+        )
+        rig_repair_names = _names(rig_repair_tools)
+        assert "get_animation_scene_context" in rig_repair_names, rig_repair_meta
+        assert "get_rigging_details" in rig_repair_names, rig_repair_meta
+        assert "set_rig_pose_hold" in rig_repair_names, rig_repair_meta
+
         inspection_render_tools, inspection_render_meta = anthropic_client.select_blender_tool_definitions(
             "Render close-up underside views to inspect landing gear and open bays before repair.",
             bundle,

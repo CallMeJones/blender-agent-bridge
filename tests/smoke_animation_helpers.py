@@ -27,6 +27,7 @@ ANIMATION_TOOLS = {
     "block_key_poses",
     "add_breakdown_pose",
     "set_pose_hold",
+    "set_rig_pose_hold",
     "create_motion_arc",
     "analyze_motion_arcs",
     "analyze_fcurve_spacing",
@@ -559,8 +560,12 @@ def main():
             },
         )
         motion_evidence = static_review["visual_review"]["motion_evidence"]
+        image_interpretation = static_review["visual_review"]["image_interpretation"]
         assert motion_evidence["digest_frame_count"] == 3, static_review
         assert motion_evidence["max_grid_delta"] == 0.0, static_review
+        assert image_interpretation["interpreted_image_count"] == 3, static_review
+        assert image_interpretation["framing_reads"].get("cropped_subject") == 3, static_review
+        assert static_review["visual_review"]["frames"][0]["image_digest"]["visual_subject"]["bbox_normalized"], static_review
         assert any("clear motion" in item["message"] for item in static_review["findings"]), static_review
         static_block = next(item for item in static_review["repair_operations"] if item["tool"] == "block_key_poses")
         assert static_block["target_frames"] == [1, 36, 72], static_review
@@ -598,7 +603,13 @@ def main():
             },
         )
         assert inspection_review["visual_detail_review"]["missing_views"] == ["underside", "side"], inspection_review
-        inspection_capture = next(item for item in inspection_review["repair_operations"] if item["tool"] == "capture_object_inspection_renders")
+        assert inspection_review["visual_detail_review"]["image_interpretation"]["interpreted_image_count"] == 1, inspection_review
+        assert inspection_review["visual_detail_review"]["image_interpretation"]["cropped_image_count"] == 1, inspection_review
+        inspection_capture = next(
+            item
+            for item in inspection_review["repair_operations"]
+            if item["tool"] == "capture_object_inspection_renders" and item["arguments"]["views"] == ["underside", "side"]
+        )
         assert inspection_capture["mutates_scene"] is False, inspection_review
         assert inspection_capture["arguments"]["object_names"] == ["Cube"], inspection_review
         assert inspection_capture["arguments"]["views"] == ["underside", "side"], inspection_review
@@ -626,6 +637,83 @@ def main():
         assert repair_plan["repair_operations"][0]["arguments"]["object_names"] == ["Cube"], repair_plan
         assert repair_plan["repair_operations"][0]["tool_call"]["input"]["object_names"] == ["Cube"], repair_plan
         assert repair_plan["repair_operations"][0]["source_finding_index"] == 0, repair_plan
+
+        rig_create = _execute(
+            context,
+            "create_basic_armature",
+            {
+                "name": "Claude Rig Repair Armature",
+                "location": [3.0, 0.0, 0.0],
+                "rotation": [0.0, 0.0, 0.0],
+            },
+        )
+        rig = bpy.data.objects[rig_create["object"]]
+        if rig.data and rig.data.bones:
+            rig.data.bones[0].name = "CTRL_Main"
+            rig.data.bones["CTRL_Main"].use_deform = False
+        control_bone = rig.pose.bones.get("CTRL_Main") if rig.pose else None
+        if control_bone:
+            control_bone.rotation_mode = "QUATERNION"
+            control_bone.rotation_quaternion = (0.707107, 0.707107, 0.0, 0.0)
+        bpy.ops.mesh.primitive_cube_add(size=0.5, location=(3.0, 0.0, 0.0))
+        rig_subject = context.object
+        rig_subject.name = "Claude Rig Repair Subject"
+        rig_subject.data.name = "Claude Rig Repair Subject Mesh"
+        rig_subject.parent = rig
+        live_preview._record_created_id("object", rig_subject.name)
+        live_preview._record_created_id("mesh", rig_subject.data.name)
+        context.view_layer.update()
+        rig_details = _execute(context, "get_rigging_details", {"object_names": [rig.name], "max_objects": 1})
+        rig_armature = next(item for item in rig_details["objects"] if item["name"] == rig.name)
+        assert rig_armature["armature"]["control_hints"]["control_candidate_count"] >= 1, rig_details
+        rig_brief = {
+            "contract_id": "anim-rig-smoke",
+            "subjects": [{"name": rig_subject.name}],
+            "subject_names": [rig_subject.name],
+            "action": "jump",
+            "timing": {"frame_start": 1, "frame_end": 24},
+        }
+        rig_repair_plan = _execute(
+            context,
+            "repair_animation_from_findings",
+            {
+                "findings": [
+                    {
+                        "severity": "warning",
+                        "principle": "pose_clarity",
+                        "object": rig_subject.name,
+                        "frame": 8,
+                        "message": "Rig-driven pose clarity needs a held control pose.",
+                    }
+                ],
+                "brief": rig_brief,
+            },
+        )
+        rig_operations = rig_repair_plan["repair_operations"]
+        assert rig_operations[0]["tool"] == "get_rigging_details", rig_repair_plan
+        assert rig_operations[1]["tool"] == "set_rig_pose_hold", rig_repair_plan
+        assert rig_operations[1]["arguments"]["armature_name"] == rig.name, rig_repair_plan
+        assert rig_operations[1]["arguments"]["bone_names"] == ["CTRL_Main"], rig_repair_plan
+        rig_loop = _execute(
+            context,
+            "run_animation_repair_loop",
+            {
+                "brief": rig_brief,
+                "repair_operations": rig_operations,
+                "allowed_tools": ["get_rigging_details", "set_rig_pose_hold"],
+                "max_iterations": 1,
+                "max_operations": 2,
+                "recapture_after_mutation": False,
+            },
+        )
+        assert [item["tool"] for item in rig_loop["executed_operations"]] == ["get_rigging_details", "set_rig_pose_hold"], rig_loop
+        assert rig_loop["pending_preview"] is True, rig_loop
+        assert rig.animation_data and rig.animation_data.action, rig_loop
+        rig_fcurve_paths = {fcurve.data_path for fcurve in live_preview._iter_action_fcurves(rig.animation_data.action)}
+        assert 'pose.bones["CTRL_Main"].location' in rig_fcurve_paths, rig_loop
+        assert 'pose.bones["CTRL_Main"].rotation_quaternion' in rig_fcurve_paths, rig_loop
+        assert rig_loop["executed_operations"][1]["result"]["bones"][0]["paths"] == ["location", "rotation_quaternion"], rig_loop
+        _select_object(context, cube)
 
         retime_disabled_loop = _execute(
             context,

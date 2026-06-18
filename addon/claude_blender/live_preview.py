@@ -20,6 +20,15 @@ def _serialize_matrix(value):
     return tuple(tuple(float(component) for component in row) for row in value)
 
 
+def _serialize_quaternion(value):
+    return tuple(float(component) for component in value)
+
+
+def _set_sequence(target, value):
+    for index in range(min(len(target), len(value))):
+        target[index] = value[index]
+
+
 def _set_vector(target, value):
     target[0] = value[0]
     target[1] = value[1]
@@ -331,6 +340,24 @@ def _record_object_transform(obj):
             "scale": _serialize_vector(obj.scale),
         }
         transaction["changed_data_blocks"].append(obj.name)
+
+
+def _record_pose_bone_transform(armature, pose_bone):
+    transaction = begin()
+    key = f"pose_bone:{armature.name}:{pose_bone.name}:transform"
+    if key not in transaction["before_state"]:
+        transaction["before_state"][key] = {
+            "kind": "pose_bone_transform",
+            "armature_name": armature.name,
+            "bone_name": pose_bone.name,
+            "location": _serialize_vector(pose_bone.location),
+            "rotation_mode": pose_bone.rotation_mode,
+            "rotation_euler": _serialize_vector(pose_bone.rotation_euler),
+            "rotation_quaternion": _serialize_quaternion(pose_bone.rotation_quaternion),
+            "rotation_axis_angle": _serialize_quaternion(pose_bone.rotation_axis_angle),
+            "scale": _serialize_vector(pose_bone.scale),
+        }
+        transaction["changed_data_blocks"].append(f"{armature.name}:{pose_bone.name}")
 
 
 def _record_object_visibility(obj):
@@ -1315,6 +1342,20 @@ def revert(context):
             obj.parent = bpy.data.objects.get(before["parent_name"]) if before["parent_name"] else None
             obj.matrix_parent_inverse = Matrix(before["matrix_parent_inverse"])
             obj.matrix_world = Matrix(before["matrix_world"])
+        elif before.get("kind") == "pose_bone_transform":
+            armature = bpy.data.objects.get(before["armature_name"])
+            pose_bone = armature.pose.bones.get(before["bone_name"]) if armature and armature.pose else None
+            if not pose_bone:
+                rollback_warnings.append(
+                    f"Missing pose bone for transform restore: {before['armature_name']}:{before['bone_name']}"
+                )
+                continue
+            _set_vector(pose_bone.location, before["location"])
+            pose_bone.rotation_mode = before["rotation_mode"]
+            _set_vector(pose_bone.rotation_euler, before["rotation_euler"])
+            _set_sequence(pose_bone.rotation_quaternion, before.get("rotation_quaternion") or ())
+            _set_sequence(pose_bone.rotation_axis_angle, before.get("rotation_axis_angle") or ())
+            _set_vector(pose_bone.scale, before["scale"])
         elif before.get("kind") == "object_modifier":
             obj = bpy.data.objects.get(before["object_name"])
             if obj:

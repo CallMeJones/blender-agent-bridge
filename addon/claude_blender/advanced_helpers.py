@@ -2185,6 +2185,171 @@ def set_pose_hold(
     }
 
 
+RIG_POSE_PATHS = ("location", "rotation_euler", "rotation_quaternion", "rotation_axis_angle", "scale")
+RIG_POSE_PATH_ALIASES = {
+    **TRANSFORM_PATH_ALIASES,
+    "quaternion": "rotation_quaternion",
+    "rotation_quaternion": "rotation_quaternion",
+    "axis_angle": "rotation_axis_angle",
+    "rotation_axis_angle": "rotation_axis_angle",
+}
+
+
+def _pose_bone_rotation_path(pose_bone):
+    mode = str(getattr(pose_bone, "rotation_mode", "") or "").upper()
+    if mode == "QUATERNION":
+        return "rotation_quaternion"
+    if mode == "AXIS_ANGLE":
+        return "rotation_axis_angle"
+    return "rotation_euler"
+
+
+def _normalize_rig_pose_paths(paths=None, *, pose_bone=None):
+    normalized = []
+    for path in paths or []:
+        key = RIG_POSE_PATH_ALIASES.get(str(path).strip().lower())
+        if key in RIG_POSE_PATHS and key not in normalized:
+            normalized.append(key)
+    return normalized or ["location", _pose_bone_rotation_path(pose_bone)]
+
+
+def _pose_path_values(pose_bone, path):
+    return tuple(float(value) for value in getattr(pose_bone, path))
+
+
+def _resolve_armature_for_pose_hold(context, armature_name=""):
+    if armature_name:
+        armature = bpy.data.objects.get(str(armature_name))
+        return armature if armature and armature.type == "ARMATURE" else None
+    active = context.active_object
+    if active and active.type == "ARMATURE":
+        return active
+    for obj in context.selected_objects:
+        if obj and obj.type == "ARMATURE":
+            return obj
+    return None
+
+
+def _default_control_bone_names(armature, *, maximum=8):
+    result = []
+    pose_bones = list(getattr(getattr(armature, "pose", None), "bones", []) or [])
+    for pose_bone in pose_bones:
+        data_bone = armature.data.bones.get(pose_bone.name) if armature.data else None
+        lower = pose_bone.name.lower()
+        if (
+            "ctrl" in lower
+            or "control" in lower
+            or "ik" in lower
+            or "fk" in lower
+            or "target" in lower
+            or getattr(pose_bone, "custom_shape", None)
+            or (data_bone and not data_bone.use_deform)
+        ):
+            result.append(pose_bone.name)
+        if len(result) >= maximum:
+            break
+    if not result:
+        result = [pose_bone.name for pose_bone in pose_bones[:maximum]]
+    return result
+
+
+def set_rig_pose_hold(
+    context,
+    *,
+    armature_name="",
+    bone_names=None,
+    frame=None,
+    hold_frames=4,
+    paths=None,
+    interpolation="CONSTANT",
+    label="Set rig pose hold",
+):
+    armature = _resolve_armature_for_pose_hold(context, armature_name)
+    if armature is None:
+        return {"ok": False, "message": "An armature object is required for rig pose hold"}
+    if armature.pose is None:
+        return {"ok": False, "message": f"Armature has no pose bones: {armature.name}"}
+    requested_bones = [str(name) for name in bone_names or [] if str(name).strip()]
+    if not requested_bones:
+        requested_bones = _default_control_bone_names(armature)
+    pose_bones = []
+    missing_bones = []
+    for name in requested_bones:
+        pose_bone = armature.pose.bones.get(name)
+        if pose_bone:
+            pose_bones.append(pose_bone)
+        else:
+            missing_bones.append(name)
+    if not pose_bones:
+        return {
+            "ok": False,
+            "message": "No matching pose bones found for rig pose hold",
+            "armature": armature.name,
+            "missing_bone_names": missing_bones,
+        }
+
+    frame = int(frame if frame is not None else context.scene.frame_current)
+    hold_frames = max(1, int(hold_frames or 1))
+    hold_frame = frame + hold_frames
+    interpolation = str(interpolation or "CONSTANT").upper()
+
+    transaction = live_preview.begin(label, context)
+    scene = context.scene
+    live_preview._record_scene_timeline(scene)
+    scene.frame_start = min(scene.frame_start, frame)
+    scene.frame_end = max(scene.frame_end, hold_frame)
+    scene.frame_set(frame)
+    action, created_action = _prepare_transform_action_for_edit(armature)
+    keyed = []
+    for pose_bone in pose_bones:
+        live_preview._record_pose_bone_transform(armature, pose_bone)
+        keyed_paths = []
+        values_by_path = {}
+        active_paths = _normalize_rig_pose_paths(paths, pose_bone=pose_bone)
+        for path in active_paths:
+            values = _pose_path_values(pose_bone, path)
+            for key_frame in (frame, hold_frame):
+                setattr(pose_bone, path, values)
+                pose_bone.keyframe_insert(data_path=path, frame=key_frame)
+            keyed_paths.append(path)
+            values_by_path[path] = [round(float(value), 6) for value in values]
+        keyed.append(
+            {
+                "armature": armature.name,
+                "bone": pose_bone.name,
+                "action": action.name,
+                "created_action": created_action,
+                "frame": frame,
+                "hold_frame": hold_frame,
+                "hold_frames": hold_frames,
+                "paths": keyed_paths,
+                "values": values_by_path,
+            }
+        )
+    _set_action_interpolation(action, interpolation)
+    scene.frame_set(frame)
+    transaction["applied_steps"].append(
+        {
+            "type": "set_rig_pose_hold",
+            "label": label,
+            "armature": armature.name,
+            "bones": [item["bone"] for item in keyed],
+            "frame": frame,
+            "hold_frame": hold_frame,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Set {hold_frames}-frame rig hold from frame {frame} for {len(keyed)} control bone(s)",
+        "armature": armature.name,
+        "bones": keyed,
+        "missing_bone_names": missing_bones,
+        "transaction_id": transaction["id"],
+    }
+
+
 def create_motion_arc(
     context,
     *,

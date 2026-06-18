@@ -13,6 +13,9 @@ from . import animation_brief, inspection_render, live_preview, playblast_captur
 
 
 VISUAL_MOTION_DELTA_THRESHOLD = 0.01
+VISUAL_SUBJECT_MIN_COVERAGE = 0.01
+VISUAL_SUBJECT_TINY_COVERAGE = 0.04
+VISUAL_CROP_EDGE_MARGIN = 0.02
 INSPECTION_DETAIL_KEYWORDS = {
     "bay",
     "bays",
@@ -29,7 +32,25 @@ INSPECTION_DETAIL_KEYWORDS = {
     "wheels",
 }
 EVIDENCE_COLLECTION_TOOLS = {"capture_animation_playblast", "capture_object_inspection_renders"}
-READ_ONLY_REVIEW_TOOLS = {"create_timing_chart", "review_playblast_against_brief", "review_inspection_renders_against_brief"}
+READ_ONLY_REVIEW_TOOLS = {
+    "create_timing_chart",
+    "get_rigging_details",
+    "review_playblast_against_brief",
+    "review_inspection_renders_against_brief",
+}
+RIG_REPAIR_TERMS = {
+    "anticipation",
+    "center_of_mass",
+    "contact",
+    "control",
+    "pose",
+    "pose_clarity",
+    "rig",
+    "settle",
+    "slide",
+    "support",
+    "weight",
+}
 
 
 def _name_list(value):
@@ -1088,6 +1109,21 @@ def _image_digest(path, *, grid_size=4, max_samples=4096):
             return {"available": False, "note": "Image has no readable pixels"}
 
         pixels = image.pixels
+        def pixel_luma_at(x, y):
+            offset = (int(y) * width + int(x)) * 4
+            return (
+                0.2126 * float(pixels[offset])
+                + 0.7152 * float(pixels[offset + 1])
+                + 0.0722 * float(pixels[offset + 2])
+            )
+
+        corner_lumas = [
+            pixel_luma_at(0, 0),
+            pixel_luma_at(max(0, width - 1), 0),
+            pixel_luma_at(0, max(0, height - 1)),
+            pixel_luma_at(max(0, width - 1), max(0, height - 1)),
+        ]
+        background_luma = sum(corner_lumas) / len(corner_lumas)
         stride = max(1, math.ceil(pixel_count / max(1, int(max_samples))))
         sample_count = 0
         sum_r = sum_g = sum_b = sum_a = 0.0
@@ -1095,6 +1131,14 @@ def _image_digest(path, *, grid_size=4, max_samples=4096):
         sum_luma_sq = 0.0
         min_luma = 1.0
         max_luma = 0.0
+        foreground_count = 0
+        fg_min_x = width - 1
+        fg_min_y = height - 1
+        fg_max_x = 0
+        fg_max_y = 0
+        fg_sum_x = 0.0
+        fg_sum_y = 0.0
+        foreground_threshold = 0.04
         for pixel_index in range(0, pixel_count, stride):
             offset = pixel_index * 4
             r = float(pixels[offset])
@@ -1111,6 +1155,16 @@ def _image_digest(path, *, grid_size=4, max_samples=4096):
             sum_luma_sq += luma * luma
             min_luma = min(min_luma, luma)
             max_luma = max(max_luma, luma)
+            if a > 0.05 and abs(luma - background_luma) >= foreground_threshold:
+                x = pixel_index % width
+                y = pixel_index // width
+                foreground_count += 1
+                fg_min_x = min(fg_min_x, x)
+                fg_min_y = min(fg_min_y, y)
+                fg_max_x = max(fg_max_x, x)
+                fg_max_y = max(fg_max_y, y)
+                fg_sum_x += x
+                fg_sum_y += y
 
         grid = []
         grid_size = max(2, min(8, int(grid_size or 4)))
@@ -1122,8 +1176,54 @@ def _image_digest(path, *, grid_size=4, max_samples=4096):
                 luma = 0.2126 * float(pixels[offset]) + 0.7152 * float(pixels[offset + 1]) + 0.0722 * float(pixels[offset + 2])
                 grid.append(max(0, min(255, int(round(luma * 255)))))
 
+        edge_total = 0
+        edge_count = 0
+        for grid_y in range(grid_size):
+            for grid_x in range(grid_size):
+                value = grid[grid_y * grid_size + grid_x]
+                if grid_x + 1 < grid_size:
+                    edge_total += abs(value - grid[grid_y * grid_size + grid_x + 1])
+                    edge_count += 1
+                if grid_y + 1 < grid_size:
+                    edge_total += abs(value - grid[(grid_y + 1) * grid_size + grid_x])
+                    edge_count += 1
+        detail_score = (edge_total / (edge_count * 255.0)) if edge_count else 0.0
         mean_luma = sum_luma / sample_count if sample_count else 0.0
         variance = max(0.0, (sum_luma_sq / sample_count) - (mean_luma * mean_luma)) if sample_count else 0.0
+        coverage_ratio = (foreground_count / sample_count) if sample_count else 0.0
+        if foreground_count:
+            bbox = [
+                round(fg_min_x / max(1, width - 1), 6),
+                round(fg_min_y / max(1, height - 1), 6),
+                round(fg_max_x / max(1, width - 1), 6),
+                round(fg_max_y / max(1, height - 1), 6),
+            ]
+            center = [
+                round((fg_sum_x / foreground_count) / max(1, width - 1), 6),
+                round((fg_sum_y / foreground_count) / max(1, height - 1), 6),
+            ]
+        else:
+            bbox = []
+            center = []
+        edge_touch = {
+            "left": bool(bbox and bbox[0] <= VISUAL_CROP_EDGE_MARGIN),
+            "top": bool(bbox and bbox[1] <= VISUAL_CROP_EDGE_MARGIN),
+            "right": bool(bbox and bbox[2] >= 1.0 - VISUAL_CROP_EDGE_MARGIN),
+            "bottom": bool(bbox and bbox[3] >= 1.0 - VISUAL_CROP_EDGE_MARGIN),
+        }
+        edge_touch_count = sum(1 for value in edge_touch.values() if value)
+        if (max_luma - min_luma) <= 0.005 and variance <= 0.00001:
+            framing_read = "low_contrast"
+        elif coverage_ratio < VISUAL_SUBJECT_MIN_COVERAGE:
+            framing_read = "no_subject"
+        elif coverage_ratio < VISUAL_SUBJECT_TINY_COVERAGE:
+            framing_read = "tiny_subject"
+        elif edge_touch_count:
+            framing_read = "cropped_subject"
+        elif detail_score < 0.01:
+            framing_read = "soft_or_low_detail"
+        else:
+            framing_read = "readable"
         return {
             "available": True,
             "sample_count": int(sample_count),
@@ -1138,6 +1238,19 @@ def _image_digest(path, *, grid_size=4, max_samples=4096):
             "luminance_variance": round(variance, 8),
             "grid_size": [grid_size, grid_size],
             "grid_signature": grid,
+            "visual_subject": {
+                "coverage_ratio": round(float(coverage_ratio), 6),
+                "foreground_sample_count": int(foreground_count),
+                "background_luminance_estimate": round(float(background_luma), 6),
+                "foreground_threshold": round(float(foreground_threshold), 6),
+                "bbox_normalized": bbox,
+                "center_normalized": center,
+                "edge_touch": edge_touch,
+                "edge_touch_count": int(edge_touch_count),
+                "likely_cropped": bool(edge_touch_count),
+                "detail_score": round(float(detail_score), 6),
+                "framing_read": framing_read,
+            },
         }
     except Exception as exc:
         return {"available": False, "note": f"Image pixels could not be inspected: {type(exc).__name__}: {exc}"}
@@ -1156,6 +1269,83 @@ def _grid_delta(first_digest, second_digest):
         return None
     distance = sum(abs(int(a) - int(b)) for a, b in zip(first, second))
     return round(distance / (len(first) * 255.0), 6)
+
+
+def _visual_subject_from_item(item):
+    digest = item.get("image_digest") if isinstance(item, dict) else {}
+    return digest.get("visual_subject") if isinstance(digest, dict) else {}
+
+
+def _visual_interpretation_summary(items):
+    subjects = [
+        subject
+        for subject in (_visual_subject_from_item(item) for item in items or [])
+        if isinstance(subject, dict) and subject
+    ]
+    reads = {}
+    for subject in subjects:
+        key = str(subject.get("framing_read") or "unknown")
+        reads[key] = reads.get(key, 0) + 1
+    readable = reads.get("readable", 0)
+    usable = len(subjects)
+    average_coverage = (
+        sum(float(subject.get("coverage_ratio", 0.0) or 0.0) for subject in subjects) / usable
+        if usable
+        else 0.0
+    )
+    average_detail = (
+        sum(float(subject.get("detail_score", 0.0) or 0.0) for subject in subjects) / usable
+        if usable
+        else 0.0
+    )
+    cropped = [item for item in items or [] if (_visual_subject_from_item(item) or {}).get("likely_cropped")]
+    weak = [
+        item
+        for item in items or []
+        if str((_visual_subject_from_item(item) or {}).get("framing_read") or "")
+        in {"low_contrast", "no_subject", "tiny_subject", "soft_or_low_detail"}
+    ]
+    return {
+        "interpreted_image_count": usable,
+        "readable_image_count": readable,
+        "framing_reads": reads,
+        "average_subject_coverage": round(float(average_coverage), 6),
+        "average_detail_score": round(float(average_detail), 6),
+        "cropped_image_count": len(cropped),
+        "weak_image_count": len(weak),
+    }
+
+
+def _visual_subject_findings(subject, *, principle, frame=None, object_name="", view="", path="", repair_tool="capture_animation_playblast"):
+    findings = []
+    read = str((subject or {}).get("framing_read") or "")
+    if read not in {"cropped_subject", "no_subject", "tiny_subject"}:
+        return findings
+    if read == "cropped_subject":
+        message = "Visual evidence suggests the subject may be cropped by the image frame."
+        severity = "warning"
+    elif read == "no_subject":
+        message = "Visual evidence does not show a readable foreground subject."
+        severity = "warning"
+    else:
+        message = "Visual evidence shows only a very small foreground subject, so pose/detail review may be weak."
+        severity = "info"
+    findings.append(
+        _finding(
+            severity,
+            message,
+            principle=principle,
+            frame=frame,
+            object_name=object_name,
+            repair_tool=repair_tool,
+            evidence={
+                "path": path,
+                "view": view,
+                "visual_subject": subject,
+            },
+        )
+    )
+    return findings
 
 
 def _playblast_motion_evidence(visual_evidence):
@@ -1248,6 +1438,15 @@ def _playblast_frame_evidence(playblast):
                             },
                         )
                     )
+                findings.extend(
+                    _visual_subject_findings(
+                        digest.get("visual_subject") or {},
+                        principle="visual_review",
+                        frame=frame_number,
+                        path=path,
+                        repair_tool="capture_animation_playblast",
+                    )
+                )
         evidence.append(item)
         if frame.get("available") and path and not file_exists:
             findings.append(
@@ -1369,6 +1568,16 @@ def _inspection_render_evidence(metadata):
                             },
                         )
                     )
+                findings.extend(
+                    _visual_subject_findings(
+                        digest.get("visual_subject") or {},
+                        principle="visual_detail_review",
+                        object_name=item["object"],
+                        view=item["view"],
+                        path=path,
+                        repair_tool="capture_object_inspection_renders",
+                    )
+                )
         evidence.append(item)
         if image_item.get("available") and path and not file_exists:
             findings.append(
@@ -1402,6 +1611,7 @@ def review_inspection_renders_against_brief(context, *, inspection_render_metada
     image_evidence, image_findings = _inspection_render_evidence(metadata)
     findings.extend(image_findings)
     usable_images = [item for item in image_evidence if item.get("available")]
+    image_interpretation = _visual_interpretation_summary(usable_images)
     object_names = list(metadata.get("object_names") or [])
     if not object_names:
         object_names = sorted({item.get("object", "") for item in image_evidence if item.get("object")})
@@ -1471,6 +1681,7 @@ def review_inspection_renders_against_brief(context, *, inspection_render_metada
             "available_views": available_views,
             "missing_views": missing_views,
             "images": image_evidence,
+            "image_interpretation": image_interpretation,
         },
         "findings": findings,
         "repair_operations": repair_plan.get("repair_operations", []),
@@ -1514,6 +1725,7 @@ def review_playblast_against_brief(context, *, playblast=None, brief=None, promp
     frames = metadata.get("frames") or []
     usable_frames = [frame for frame in visual_evidence if frame.get("available")]
     motion_evidence = _playblast_motion_evidence(visual_evidence)
+    image_interpretation = _visual_interpretation_summary(usable_frames)
     coverage = _playblast_coverage(context, metadata, brief)
     if not metadata.get("available") and not usable_frames:
         findings.append(
@@ -1604,6 +1816,7 @@ def review_playblast_against_brief(context, *, playblast=None, brief=None, promp
             "frame_coverage": coverage,
             "frames": visual_evidence,
             "motion_evidence": motion_evidence,
+            "image_interpretation": image_interpretation,
             "review_hints": metadata.get("review_hints") or [],
         },
         "findings": findings,
@@ -1711,8 +1924,73 @@ def _finding_object_names(finding, fallback=None):
 
 def _finding_views(finding, fallback=None):
     evidence = _finding_evidence(finding)
-    views = _name_list(evidence.get("missing_views")) or _name_list(evidence.get("requested_views")) or list(fallback or [])
+    views = (
+        _name_list(evidence.get("missing_views"))
+        or _name_list(evidence.get("requested_views"))
+        or _name_list(evidence.get("view"))
+        or list(fallback or [])
+    )
     return views or ["front_below", "side"]
+
+
+def _rig_control_bone_names(armature, *, maximum=6):
+    result = []
+    pose_bones = list(getattr(getattr(armature, "pose", None), "bones", []) or [])
+    for pose_bone in pose_bones:
+        data_bone = armature.data.bones.get(pose_bone.name) if armature.data else None
+        lower = pose_bone.name.lower()
+        if (
+            "ctrl" in lower
+            or "control" in lower
+            or "ik" in lower
+            or "fk" in lower
+            or "target" in lower
+            or getattr(pose_bone, "custom_shape", None)
+            or (data_bone and not data_bone.use_deform)
+        ):
+            result.append(pose_bone.name)
+        if len(result) >= maximum:
+            break
+    if not result:
+        result = [pose_bone.name for pose_bone in pose_bones[:maximum]]
+    return result
+
+
+def _rig_repair_target(context, object_names):
+    seen = set()
+    armatures = []
+    for name in object_names or []:
+        obj = bpy.data.objects.get(str(name))
+        if obj is None:
+            continue
+        if obj.type == "ARMATURE" and obj.name not in seen:
+            armatures.append(obj)
+            seen.add(obj.name)
+        parent = obj.parent if getattr(obj.parent, "type", None) == "ARMATURE" else None
+        if parent and parent.name not in seen:
+            armatures.append(parent)
+            seen.add(parent.name)
+        for modifier in getattr(obj, "modifiers", []) or []:
+            if getattr(modifier, "type", "") != "ARMATURE":
+                continue
+            armature = getattr(modifier, "object", None)
+            if armature and armature.name not in seen:
+                armatures.append(armature)
+                seen.add(armature.name)
+    for armature in armatures:
+        bone_names = _rig_control_bone_names(armature)
+        if bone_names:
+            return {
+                "armature_name": armature.name,
+                "bone_names": bone_names,
+                "source_object_names": list(object_names or []),
+            }
+    return {}
+
+
+def _text_has_rig_repair_terms(text):
+    normalized = str(text or "").lower()
+    return any(term in normalized for term in RIG_REPAIR_TERMS)
 
 
 def _dedupe_operations(operations):
@@ -1751,10 +2029,45 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
         target_frame_range = _finding_target_range(finding, frame_start, frame_end)
         repair_tool = str(finding.get("repair_tool") or "").lower()
         evidence = _finding_evidence(finding)
+        severity = str(finding.get("severity", "")).lower()
         text = " ".join(
             str(finding.get(key) or "")
             for key in ("message", "principle", "requirement", "repair_tool", "recommendation")
         ).lower()
+        target_object_names = _finding_object_names(finding, subject_names)
+        rig_target = _rig_repair_target(context, target_object_names)
+        if rig_target and _text_has_rig_repair_terms(text):
+            hold_frame = int(finding.get("frame", target_frames[0] if target_frames else frame_start) or frame_start)
+            operations.append(
+                _operation(
+                    "get_rigging_details",
+                    "Inspect rig controls before applying rig-specific pose repair.",
+                    arguments={"object_names": [rig_target["armature_name"]], "max_objects": 4},
+                    source_index=index,
+                    finding=finding,
+                    confidence="high",
+                    target_frames=target_frames,
+                    target_frame_range=target_frame_range,
+                )
+            )
+            operations.append(
+                _operation(
+                    "set_rig_pose_hold",
+                    "Hold keyed rig control bones so the rig-driven subject reads cleanly at the problem pose.",
+                    arguments={
+                        "armature_name": rig_target["armature_name"],
+                        "bone_names": rig_target["bone_names"],
+                        "frame": hold_frame,
+                        "hold_frames": 4,
+                        "interpolation": "CONSTANT",
+                    },
+                    source_index=index,
+                    finding=finding,
+                    confidence="medium",
+                    target_frames=target_frames,
+                    target_frame_range=target_frame_range,
+                )
+            )
         if repair_tool == "capture_animation_playblast" or (
             not repair_tool and ("playblast" in text or ("frame" in text and "unavailable" in text))
         ):
@@ -1770,7 +2083,9 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                 )
             )
         if repair_tool == "capture_object_inspection_renders" or (
-            not repair_tool and ("inspection render" in text or "visual-detail" in text or any(keyword in text for keyword in INSPECTION_DETAIL_KEYWORDS))
+            not repair_tool
+            and severity in {"warning", "error"}
+            and ("inspection render" in text or "visual-detail" in text or any(keyword in text for keyword in INSPECTION_DETAIL_KEYWORDS))
         ):
             object_names = _finding_object_names(finding, subject_names)
             operations.append(
