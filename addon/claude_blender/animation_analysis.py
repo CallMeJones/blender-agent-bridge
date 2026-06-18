@@ -978,6 +978,7 @@ def review_playblast_against_brief(context, *, playblast=None, brief=None, promp
     frames = metadata.get("frames") or []
     usable_frames = [frame for frame in visual_evidence if frame.get("available")]
     motion_evidence = _playblast_motion_evidence(visual_evidence)
+    coverage = _playblast_coverage(context, metadata, brief)
     if not metadata.get("available") and not usable_frames:
         findings.append(
             _finding(
@@ -985,16 +986,23 @@ def review_playblast_against_brief(context, *, playblast=None, brief=None, promp
                 "No playblast frames are available for visual animation review.",
                 principle="visual_review",
                 repair_tool="capture_animation_playblast",
+                evidence=coverage,
             )
         )
     if frames and len(usable_frames) < len(frames):
+        unavailable_frames = [int(frame.get("frame", 0) or 0) for frame in visual_evidence if not frame.get("available")]
         findings.append(
             _finding(
                 "warning",
                 "Some requested playblast frames are unavailable.",
                 principle="visual_review",
                 repair_tool="capture_animation_playblast",
-                evidence={"requested_frame_count": len(frames), "usable_frame_count": len(usable_frames)},
+                evidence={
+                    "requested_frame_count": len(frames),
+                    "usable_frame_count": len(usable_frames),
+                    "unavailable_frames": unavailable_frames,
+                    "sampled_frames": coverage["sampled_frames"],
+                },
             )
         )
     if usable_frames and len(usable_frames) < 3:
@@ -1004,10 +1012,9 @@ def review_playblast_against_brief(context, *, playblast=None, brief=None, promp
                 "Playblast has very few usable sampled frames; timing and spacing review may be weak.",
                 principle="visual_review",
                 repair_tool="capture_animation_playblast",
-                evidence={"usable_frame_count": len(usable_frames)},
+                evidence={"usable_frame_count": len(usable_frames), "sampled_frames": coverage["sampled_frames"]},
             )
         )
-    coverage = _playblast_coverage(context, metadata, brief)
     if coverage["sampled_frames"] and not coverage["covers_range"]:
         findings.append(
             _finding(
@@ -1026,7 +1033,11 @@ def review_playblast_against_brief(context, *, playblast=None, brief=None, promp
                 "Playblast may be undersampled for the requested repeated action count.",
                 principle="timing_spacing",
                 repair_tool="capture_animation_playblast",
-                evidence={"requested_count": int(requested_count), "usable_frame_count": len(usable_frames)},
+                evidence={
+                    "requested_count": int(requested_count),
+                    "usable_frame_count": len(usable_frames),
+                    "sampled_frames": coverage["sampled_frames"],
+                },
             )
         )
     if (brief or {}).get("action") and motion_evidence["delta_count"] and not motion_evidence["visual_change_detected"]:
@@ -1066,7 +1077,7 @@ def review_playblast_against_brief(context, *, playblast=None, brief=None, promp
     }
 
 
-def _operation(tool, reason, *, arguments=None, source_index=None, finding=None, confidence="medium"):
+def _operation(tool, reason, *, arguments=None, source_index=None, finding=None, confidence="medium", target_frames=None, target_frame_range=None):
     arguments = arguments or {}
     mutates_scene = tool not in {"capture_animation_playblast", "create_timing_chart", "review_playblast_against_brief"}
     operation = {
@@ -1080,6 +1091,10 @@ def _operation(tool, reason, *, arguments=None, source_index=None, finding=None,
         "requires_user_commit": bool(mutates_scene),
         "execution_phase": "repair_preview" if mutates_scene else ("evidence_collection" if tool == "capture_animation_playblast" else "planning"),
     }
+    if target_frames:
+        operation["target_frames"] = [int(frame) for frame in target_frames]
+    if target_frame_range:
+        operation["target_frame_range"] = [int(target_frame_range[0]), int(target_frame_range[1])]
     if source_index is not None:
         operation["source_finding_index"] = int(source_index)
     if finding:
@@ -1092,6 +1107,55 @@ def _operation(tool, reason, *, arguments=None, source_index=None, finding=None,
     return operation
 
 
+def _unique_frames(frames):
+    result = []
+    seen = set()
+    for frame in frames or []:
+        try:
+            value = int(frame)
+        except (TypeError, ValueError):
+            continue
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return sorted(result)
+
+
+def _finding_target_frames(finding):
+    evidence = finding.get("evidence") if isinstance(finding, dict) and isinstance(finding.get("evidence"), dict) else {}
+    frames = []
+    if isinstance(finding, dict) and finding.get("frame") is not None:
+        frames.append(finding.get("frame"))
+    frames.extend(evidence.get("sampled_frames") or [])
+    frames.extend(evidence.get("unavailable_frames") or [])
+    for delta in evidence.get("frame_deltas") or []:
+        if not isinstance(delta, dict):
+            continue
+        frames.append(delta.get("from_frame"))
+        frames.append(delta.get("to_frame"))
+    for key in ("first_sampled_frame", "last_sampled_frame", "brief_frame_start", "brief_frame_end"):
+        if evidence.get(key) is not None:
+            frames.append(evidence.get(key))
+    return _unique_frames(frames)
+
+
+def _finding_target_range(finding, frame_start, frame_end):
+    evidence = finding.get("evidence") if isinstance(finding, dict) and isinstance(finding.get("evidence"), dict) else {}
+    start = int(evidence.get("brief_frame_start", frame_start) or frame_start)
+    end = int(evidence.get("brief_frame_end", frame_end) or frame_end)
+    if evidence.get("covers_start") is False and evidence.get("first_sampled_frame") is not None:
+        return [start, int(evidence.get("first_sampled_frame") or start)]
+    if evidence.get("covers_end") is False and evidence.get("last_sampled_frame") is not None:
+        return [int(evidence.get("last_sampled_frame") or end), end]
+    target_frames = _finding_target_frames(finding)
+    if target_frames:
+        return [min(target_frames), max(target_frames)]
+    if evidence and start != end:
+        return [start, end]
+    return []
+
+
 def _dedupe_operations(operations):
     result = []
     seen = set()
@@ -1100,6 +1164,8 @@ def _dedupe_operations(operations):
             operation.get("tool"),
             repr(sorted((operation.get("arguments") or {}).items())),
             operation.get("reason"),
+            repr(operation.get("target_frames") or []),
+            repr(operation.get("target_frame_range") or []),
         )
         if key in seen:
             continue
@@ -1114,6 +1180,8 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
     frame_start, frame_end = _brief_frame_range(context, brief or {})
     primary_subject = subject_names[0] if subject_names else ""
     for index, finding in enumerate(findings or []):
+        target_frames = _finding_target_frames(finding)
+        target_frame_range = _finding_target_range(finding, frame_start, frame_end)
         repair_tool = str(finding.get("repair_tool") or "").lower()
         text = " ".join(
             str(finding.get(key) or "")
@@ -1129,6 +1197,8 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     arguments={"frame_start": frame_start, "frame_end": frame_end, "max_frames": 12, "brief": (brief or {}).get("user_visible_interpretation", "")},
                     source_index=index,
                     finding=finding,
+                    target_frames=target_frames,
+                    target_frame_range=target_frame_range,
                 )
             )
         if "camera" in text or "framing" in text:
@@ -1139,6 +1209,8 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     arguments={"target_name": primary_subject, "frame_start": frame_start, "frame_end": frame_end},
                     source_index=index,
                     finding=finding,
+                    target_frames=target_frames,
+                    target_frame_range=target_frame_range,
                 )
             )
         if "linear" in text or "spacing" in text or "slow" in text:
@@ -1149,6 +1221,8 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     arguments={"object_names": subject_names, "interpolation": "BEZIER"},
                     source_index=index,
                     finding=finding,
+                    target_frames=target_frames,
+                    target_frame_range=target_frame_range,
                 )
             )
         if "speed" in text or "acceleration" in text or "motion_physics" in text:
@@ -1160,10 +1234,12 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     source_index=index,
                     finding=finding,
                     confidence="low",
+                    target_frames=target_frames,
+                    target_frame_range=target_frame_range,
                 )
             )
         if "contact" in text or "slide" in text:
-            hold_frame = int(finding.get("frame", frame_start) or frame_start)
+            hold_frame = int(finding.get("frame", target_frames[0] if target_frames else frame_start) or frame_start)
             operations.append(
                 _operation(
                     "set_pose_hold",
@@ -1171,6 +1247,8 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     arguments={"object_names": subject_names, "frame": hold_frame, "hold_frames": 4, "paths": ["location"]},
                     source_index=index,
                     finding=finding,
+                    target_frames=target_frames,
+                    target_frame_range=target_frame_range,
                 )
             )
         if "settle" in text or "follow" in text or "overshoot" in text:
@@ -1182,6 +1260,8 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     source_index=index,
                     finding=finding,
                     confidence="low",
+                    target_frames=target_frames,
+                    target_frame_range=target_frame_range,
                 )
             )
         if "anticipation" in text:
@@ -1193,6 +1273,8 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     source_index=index,
                     finding=finding,
                     confidence="low",
+                    target_frames=target_frames,
+                    target_frame_range=target_frame_range,
                 )
             )
         if "squash" in text or "stretch" in text or "scale change" in text or "scale animation" in text:
@@ -1204,6 +1286,8 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     source_index=index,
                     finding=finding,
                     confidence="low",
+                    target_frames=target_frames,
+                    target_frame_range=target_frame_range,
                 )
             )
         if "no sampled world-space motion" in text or "clear motion" in text:
@@ -1214,6 +1298,8 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     arguments={"brief": brief or {}, "frame_start": frame_start, "frame_end": frame_end},
                     source_index=index,
                     finding=finding,
+                    target_frames=target_frames,
+                    target_frame_range=target_frame_range,
                 )
             )
             operations.append(
@@ -1224,6 +1310,8 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     source_index=index,
                     finding=finding,
                     confidence="low",
+                    target_frames=target_frames,
+                    target_frame_range=target_frame_range,
                 )
             )
     if not operations and brief:
@@ -1235,10 +1323,14 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
             )
         )
     operations = _dedupe_operations(operations)
-    suggestions = [
-        {"tool": operation["tool"], "arguments": operation["arguments"], "reason": operation["reason"]}
-        for operation in operations
-    ]
+    suggestions = []
+    for operation in operations:
+        suggestion = {"tool": operation["tool"], "arguments": operation["arguments"], "reason": operation["reason"]}
+        if operation.get("target_frames"):
+            suggestion["target_frames"] = operation["target_frames"]
+        if operation.get("target_frame_range"):
+            suggestion["target_frame_range"] = operation["target_frame_range"]
+        suggestions.append(suggestion)
     return {
         "ok": True,
         "message": f"Created {len(operations)} repair operation suggestion(s)",

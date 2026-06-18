@@ -460,7 +460,9 @@ def main():
         assert playblast_review["visual_review"]["frames"][0]["resource_uri"].endswith("/1"), playblast_review
         assert playblast_review["visual_review"]["frame_coverage"]["covers_start"] is True, playblast_review
         assert playblast_review["visual_review"]["frame_coverage"]["covers_end"] is False, playblast_review
-        assert any(item["tool"] == "capture_animation_playblast" for item in playblast_review["repair_operations"]), playblast_review
+        coverage_capture = next(item for item in playblast_review["repair_operations"] if item["tool"] == "capture_animation_playblast")
+        assert coverage_capture["target_frame_range"] == [24, 72], playblast_review
+        assert coverage_capture["target_frames"] == [1, 12, 24, 72], playblast_review
 
         visual_dir = tempfile.mkdtemp(prefix="claude-blender-playblast-")
         static_frames = []
@@ -495,8 +497,11 @@ def main():
         assert motion_evidence["digest_frame_count"] == 3, static_review
         assert motion_evidence["max_grid_delta"] == 0.0, static_review
         assert any("clear motion" in item["message"] for item in static_review["findings"]), static_review
-        assert any(item["tool"] == "block_key_poses" for item in static_review["repair_operations"]), static_review
+        static_block = next(item for item in static_review["repair_operations"] if item["tool"] == "block_key_poses")
+        assert static_block["target_frames"] == [1, 36, 72], static_review
+        assert static_block["target_frame_range"] == [1, 72], static_review
         assert all(item["tool_call"]["name"] == item["tool"] for item in static_review["repair_operations"]), static_review
+        assert any(item.get("target_frames") == [1, 36, 72] for item in static_review["suggested_tool_calls"]), static_review
 
         repair_plan = _execute(
             context,
