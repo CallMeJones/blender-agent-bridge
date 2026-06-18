@@ -329,7 +329,7 @@ def _assert_full_tools_visible(proc):
         "run_approved_script",
     }.issubset(names), listed
     draft_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "draft_script")
-    assert draft_tool["annotations"]["mutatesScene"] is False, draft_tool
+    assert draft_tool["annotations"]["mutatesScene"] is True, draft_tool
     assert draft_tool["annotations"]["hasSideEffects"] is True, draft_tool
     assert draft_tool["annotations"]["readOnlyHint"] is False, draft_tool
     run_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "run_approved_script")

@@ -32,7 +32,7 @@ Current implementation:
 - Execution pushes a Blender undo step when possible, saves a timestamped `.blend` checkpoint when enabled, and records stdout/errors in `Claude Script Log`.
 - Failed scripts keep their pending code and expose a `Repair Script` action that sends the failed code and traceback back to Claude for a corrected draft.
 - External clients can normally call `run_approved_script` with a short-lived one-time token issued by the Blender UI for the current pending script.
-- Users can also enable a Blender-side external script trust window from sidebar presets. During that runtime-only window, external clients may run staged scripts without a per-script token, or with an empty token string, but each script still has to be staged in Blender and pass static checks at run time. Blocked scripts remain refused. Timed grants expire; session grants last until Revoke, add-on reload, file load, or bridge start.
+- Users can also enable a Blender-side external script trust window from sidebar presets. During that runtime-only window, external clients may call `draft_script` and have it auto-run after static checks pass, or run an already staged script without a per-script token. Blocked scripts remain refused. Timed grants expire; session grants last until Revoke, add-on reload, file load, or bridge start.
 
 ### Limited Autonomous
 
@@ -60,7 +60,7 @@ Defaults and boundaries:
 - Add-on preferences can require a bearer token for HTTP bridge requests.
 - MCP clients call `mcp_server.py`; they do not import Blender Python or touch `bpy`.
 - Mutating helper tools still run inside Blender and use the live-preview/revert path.
-- Generated arbitrary Python is still staged with `draft_script` and must be approved in Blender.
+- Generated arbitrary Python is normally staged with `draft_script` and must be approved in Blender. When the user grants a runtime external script trust window, `draft_script` auto-runs scripts that pass static checks until trust is revoked or expires.
 - Viewport screenshots and sampled animation playblast frames exposed through MCP capture resources are local artifacts. Saved `.blend` files use a project-local `.claude_blender/captures/` folder by default, while unsaved or unwritable projects use the global user cache.
 - External clients should surface tool calls clearly because MCP tools are model-controlled.
 
@@ -110,7 +110,7 @@ Before approved execution:
 - Save a timestamped Claude-created `.blend` checkpoint when checkpoints are enabled.
 - Record the generated script and result log locally.
 - For external clients, require the approval token to match the current pending script and consume it before execution.
-- If an external script trust window is active, accept tokenless external execution only within the runtime grant and only for a currently staged script that still passes static checks.
+- If an external script trust window is active, auto-run `draft_script` calls after static checks pass and accept tokenless external execution only within the runtime grant for a currently staged script that still passes static checks.
 
 During live preview:
 

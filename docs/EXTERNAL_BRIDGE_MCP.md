@@ -152,9 +152,9 @@ MCP tools are model-controlled, so the external client must make tool use visibl
 
 - Read-only tools inspect scene context and docs.
 - Live helper tools mutate the scene through preview rollback.
-- Generated arbitrary Python is still staged with `draft_script` and requires approval inside Blender.
+- Generated arbitrary Python is normally staged with `draft_script` and requires approval inside Blender.
 - External `run_approved_script` calls normally include a one-time token minted by the Blender sidebar's `Approve External Run` action. Tokens are short-lived, bound to the current pending script text, and consumed after one call.
-- For iterative sessions, the Blender sidebar can also grant external script trust from presets such as 15 minutes, 1 hour, 4 hours, or the current Blender session. While active, external clients may call `run_approved_script` without `approval_token`, or with an empty token string; Blender still requires a staged pending script, reruns static checks, refuses blocked scripts, and records the call in the audit log. Use `Revoke Trust` to end the window early. Trust grants are runtime-only and are cleared on add-on reload, file load, and bridge start.
+- For iterative sessions, the Blender sidebar can also grant external script trust from presets such as 15 minutes, 1 hour, 4 hours, or the current Blender session. While active, `draft_script` automatically runs scripts after staging if static checks pass, and external clients may still call `run_approved_script` without `approval_token`, or with an empty token string, for already staged scripts. Blender reruns static checks, refuses blocked scripts, checkpoints when enabled, and records the call in the audit log. Use `Revoke Trust` to end the window early. Trust grants are runtime-only and are cleared on add-on reload, file load, and bridge start.
 - The bridge is off until started and binds to localhost only.
 - Optional bearer token auth is available through add-on preferences.
 - MCP and bridge tool calls are recorded in a local JSONL audit log at `~/.claude_blender/audit.jsonl` by default, with code/token-like arguments redacted.

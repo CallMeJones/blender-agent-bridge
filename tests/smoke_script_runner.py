@@ -21,6 +21,7 @@ from claude_blender import (  # noqa: E402
     bridge_protocol,
     bridge_server,
     build_info,
+    preferences,
     script_runner,
     tool_dispatcher,
 )
@@ -42,9 +43,11 @@ def _cleanup():
 def main():
     checkpoint_dir = tempfile.mkdtemp(prefix="claude-blender-checkpoints-")
     old_audit_path = os.environ.get("CLAUDE_BLENDER_AUDIT_LOG")
+    registered = False
     audit_path = os.path.join(checkpoint_dir, "audit.jsonl")
     os.environ["CLAUDE_BLENDER_AUDIT_LOG"] = audit_path
     claude_blender.register()
+    registered = True
     try:
         context = bpy.context
         state = context.scene.claude_blender
@@ -300,6 +303,43 @@ print("created", obj.name)
         assert script_runner.external_script_trust_active(context, state=state)
         _cleanup()
 
+        smoke_preferences = type(
+            "_SmokePreferences",
+            (),
+            {"checkpoint_dir": checkpoint_dir, "checkpoints_enabled": True},
+        )()
+
+        original_get_preferences = preferences.get_preferences
+        try:
+            preferences.get_preferences = lambda _context: smoke_preferences
+            auto_run = json.loads(
+                tool_dispatcher.execute_tool(
+                    context,
+                    "draft_script",
+                    {
+                        "intent": "Auto-run through active trust",
+                        "expected_changes": "A scene custom property is set",
+                        "risk_level": "low",
+                        "code": "scene['claude_auto_trust_smoke'] = 'ok'\nprint(scene['claude_auto_trust_smoke'])",
+                    },
+                )
+            )
+        finally:
+            preferences.get_preferences = original_get_preferences
+        assert auto_run["ok"], auto_run
+        assert auto_run["auto_ran"] is True, auto_run
+        assert auto_run["auto_run_attempted"] is True, auto_run
+        assert auto_run["requires_user_approval"] is False, auto_run
+        assert auto_run["run_result"]["ok"] is True, auto_run
+        assert auto_run["run_result"]["checkpoint"]["ok"], auto_run
+        auto_checkpoint_path = os.path.abspath(auto_run["run_result"]["checkpoint"]["path"])
+        assert os.path.commonpath([os.path.abspath(checkpoint_dir), auto_checkpoint_path]) == os.path.abspath(
+            checkpoint_dir
+        ), auto_run
+        assert context.scene["claude_auto_trust_smoke"] == "ok"
+        assert not state.pending_script
+        assert script_runner.external_script_trust_active(context, state=state)
+
         trusted_blocked = script_runner.stage_script(
             context,
             intent="Try blocked code during an active trust window",
@@ -313,6 +353,26 @@ print("created", obj.name)
         assert not trusted_blocked_run["ok"], trusted_blocked_run
         assert "blocked" in trusted_blocked_run["message"].lower(), trusted_blocked_run
         assert script_runner.external_script_trust_active(context, state=state)
+        rejected = script_runner.reject_pending_script(context)
+        assert rejected["ok"], rejected
+
+        auto_blocked = json.loads(
+            tool_dispatcher.execute_tool(
+                context,
+                "draft_script",
+                {
+                    "intent": "Try blocked code through active trust",
+                    "expected_changes": "No scene changes should occur",
+                    "risk_level": "high",
+                    "code": "import os\nos.remove('auto_trust_blocked.blend')",
+                },
+            )
+        )
+        assert auto_blocked["ok"], auto_blocked
+        assert auto_blocked["analysis"]["blocked"], auto_blocked
+        assert "auto_ran" not in auto_blocked, auto_blocked
+        assert state.pending_script
+        assert state.pending_script_blocked
         rejected = script_runner.reject_pending_script(context)
         assert rejected["ok"], rejected
 
@@ -433,9 +493,10 @@ print("created", obj.name)
         assert "Checkpoint restored" in state.last_checkpoint_restored_status, state.last_checkpoint_restored_status
 
         _cleanup()
-        claude_blender.unregister()
         print("smoke_script_runner: ok")
     finally:
+        if registered:
+            claude_blender.unregister()
         if old_audit_path is None:
             os.environ.pop("CLAUDE_BLENDER_AUDIT_LOG", None)
         else:

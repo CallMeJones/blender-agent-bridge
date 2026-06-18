@@ -162,7 +162,7 @@ Expose Claude to narrow client tools rather than raw Python first:
 - `create_camera_orbit`: creates a keyframed camera orbit rig around a target object.
 - `commit_preview`: accepts the current live preview changes.
 - `revert_preview`: rolls back the current live preview changes.
-- `draft_script`: stores proposed code without running it.
+- `draft_script`: stores proposed code without running it by default; auto-runs after static checks while an external script trust window is active.
 - `run_approved_script`: only runs code after explicit user approval.
 - `undo_last_action`: calls Blender undo for the last approved execution.
 - `save_checkpoint`: saves a copy of the current `.blend` before risky work.
@@ -226,7 +226,7 @@ Acceptance:
 - Add-on can create and modify Blender objects.
 - Failures show readable errors and do not silently corrupt state.
 
-Status: Initial approval-gated script flow is implemented. Claude can stage generated Python with `draft_script`; the sidebar shows pending script status, risk, intent, expected changes, static issues/warnings, and Run/Reject controls; static checks block obvious risky imports/calls; execution pushes a Blender undo point when possible, saves a timestamped `.blend` checkpoint when enabled, and records stdout/errors in a local Text datablock. Failed scripts can be sent back to Claude with `Repair Script`.
+Status: Initial approval-gated script flow is implemented. Claude can stage generated Python with `draft_script`; the sidebar shows pending script status, risk, intent, expected changes, static issues/warnings, and Run/Reject controls; static checks block obvious risky imports/calls; execution pushes a Blender undo point when possible, saves a timestamped `.blend` checkpoint when enabled, and records stdout/errors in a local Text datablock. Failed scripts can be sent back to Claude with `Repair Script`. When the user grants a runtime external script trust window, `draft_script` auto-runs staged scripts that pass static checks, and `run_approved_script` remains available for already staged scripts.
 Tool-loop calls now have a larger output budget for complete `draft_script.code` payloads, and the dispatcher tolerates common alternate script field names before reporting missing code.
 
 ### Milestone 3.5: Live Preview Transactions
@@ -456,6 +456,25 @@ Acceptance:
 - When Solo is unavailable, the agent continues with local Blender context and local agent memory without blocking the animation workflow.
 - User corrections such as "when I say punchy, I mean fast anticipation and a hard impact" can become reusable future context.
 - Solo memory never contains secrets, raw credentials, API keys, or hidden private content.
+
+#### Milestone 7H: Animation Workflow Orchestration And MCP Client Guidance
+
+Real-client testing showed that a connected MCP client can successfully inspect Blender and iterate with the user, but may still skip the intended Milestone 7 helper workflow and fall back to `draft_script` / `run_approved_script` too early. This produces useful Blender edits, but it bypasses animation briefs, timing charts, preview-safe helper transactions, structured validation, and repair loops.
+
+- Add stronger agent and MCP guidance: for animation requests, prefer `get_animation_scene_context`, `create_animation_brief`, `create_timing_chart`, `block_key_poses`, evaluator tools, and repair-loop tools before `draft_script`.
+- Add a higher-level orchestration tool for common animation workflows, such as `create_animation_from_brief` or a focused `create_progressive_bounce_animation`, that runs the brief -> timing chart -> helper blocking -> validation -> repair planning path internally.
+- Make the orchestrator report whether changes are true live-preview helper edits, checkpoint-backed script edits, or read-only plans, so the client cannot incorrectly claim "commit/revert preview" for arbitrary approved scripts.
+- Add real-client smoke prompts that verify Claude/Codex-style MCP clients choose the helper workflow for common animation requests instead of script-first execution.
+- Use the real bounce test as a fixture: "Make the cube bounce twice over 72 frames, getting smaller each bounce. Check it against the brief and leave it as a preview."
+
+Acceptance:
+
+- For common animation prompts, external MCP clients follow the Milestone 7 helper path before considering arbitrary Python.
+- If a helper path cannot represent the request, the client can escalate to `draft_script`, but the response clearly labels the result as checkpoint-backed rather than live-preview helper state.
+- The orchestrator can produce a pending preview for at least one full start-to-finish animation workflow, then run structured validation and return commit/revert guidance.
+- Real-client testing demonstrates that model behavior matches the intended workflow, not just that individual tools exist.
+
+Status: Planned from real Claude MCP testing. The bridge connection and iterative Blender edits worked, but the client bypassed the intended helper sequence, manually reviewed keyframes, and described approved-script edits as preview state. Next work is tool-choice guidance plus a higher-level orchestration helper that makes the correct Phase 7 path easier than script fallback.
 
 ## Open Questions
 

@@ -511,8 +511,8 @@ TOOL_CONTRACTS = {
         "mutates_scene": True,
     },
     "draft_script": {
-        "description": "Stage generated Blender Python in a Text datablock for explicit user approval",
-        "mutates_scene": False,
+        "description": "Stage generated Blender Python, or auto-run it after static checks when a Blender-side external script trust window is active",
+        "mutates_scene": True,
         "has_side_effects": True,
         "requires_approval": True,
     },

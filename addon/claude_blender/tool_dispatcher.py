@@ -1890,7 +1890,7 @@ def search_blender_docs(context, args):
 
 
 def draft_script(context, args):
-    return script_runner.stage_script(
+    staged = script_runner.stage_script(
         context,
         code=_extract_script_code(args),
         intent=str(args.get("intent") or ""),
@@ -1898,6 +1898,31 @@ def draft_script(context, args):
         risk_level=str(args.get("risk_level") or "medium"),
         target_objects=args.get("target_objects") or [],
     )
+    if not staged.get("ok") or staged.get("analysis", {}).get("blocked"):
+        return staged
+    if not script_runner.external_script_trust_active(context):
+        return staged
+    prefs = preferences.get_preferences(context)
+    run_result = script_runner.run_externally_approved_script(
+        context,
+        "",
+        checkpoint_enabled=bool(getattr(prefs, "checkpoints_enabled", True)),
+        checkpoint_dir=getattr(prefs, "checkpoint_dir", None),
+    )
+    return {
+        "ok": bool(run_result.get("ok")),
+        "message": (
+            "Script staged and auto-ran under active external script trust"
+            if run_result.get("ok")
+            else "Script staged but auto-run failed under active external script trust"
+        ),
+        "auto_ran": bool(run_result.get("ok")),
+        "auto_run_attempted": True,
+        "auto_run_reason": "external_script_trust_active",
+        "staged": staged,
+        "run_result": run_result,
+        "requires_user_approval": False,
+    }
 
 
 def run_approved_script(context, args):

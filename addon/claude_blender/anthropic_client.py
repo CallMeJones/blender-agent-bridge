@@ -60,7 +60,7 @@ SYSTEM_PROMPT = (
     "For shape-key animation, prefer create_shape_key and animate_shape_key before drafting Python. "
     "For animation, use any animation_brief in context as the prompt contract; otherwise call create_animation_brief first when the prompt needs an explicit contract, success criteria, or later validation. Call get_animation_scene_context before advanced animation in scenes with rigs, constraints, drivers, shape keys, physics, or unclear edit targets so you know whether to animate object transforms, rig controls, shape keys, materials, physics, or camera settings. Use create_timing_chart, block_key_poses, add_breakdown_pose, set_pose_hold, and create_motion_arc for animator-style blocking before spline/f-curve polish; then use analyze_animation_principles plus focused analyzers to check timing, spacing, arcs, pose clarity, anticipation, squash/stretch, contact, speed/acceleration plausibility, and settle before repair. Use capture_animation_playblast and review_playblast_against_brief when visual frame evidence matters; if review or repair tools return repair_operations, prefer run_animation_repair_loop for bounded helper repair and review-again behavior, or execute relevant tool_call name/input entries deliberately when manual control is needed. Then prefer set_scene_frame_range, set_animation_preview_range, animate_selected_transform, animate_object_bounce, animate_material_property, animate_light_property, create_follow_path_animation, create_turntable_animation, create_pulse_animation, create_reveal_animation, create_staggered_motion, set_action_interpolation, retime_actions, add_action_cycles, clear_animation, and create_camera_orbit. "
     "For complex scene builds that need many objects or more than about eight helper calls, stage one cohesive Blender Python script with draft_script instead of making a long chain of helper calls. "
-    "When helper tools cannot express the requested edit, use draft_script to stage Blender Python for user approval. "
+    "When helper tools cannot express the requested edit, use draft_script to stage Blender Python for user approval; if the user has granted external script trust, draft_script may auto-run after static checks. "
     "When calling draft_script, put the complete Python source in the code field. Do not put script code in final chat text for the user to paste manually. "
     "If draft_script reports that code is missing, retry once with a shorter complete script in the code field. "
     "A drafted script does not run until the user presses the approval button in Blender, so do not claim it has executed. "
@@ -70,7 +70,7 @@ SYSTEM_PROMPT = (
     "If a value is absent, say it is not available in the context. "
     "For low-risk changes, call tools instead of merely explaining what should be done. "
     "Leave live preview changes pending for the user; do not call commit_preview or revert_preview unless the user explicitly asks. "
-    "Generated arbitrary Python is approval-gated and must be drafted through draft_script. "
+    "Generated arbitrary Python is approval-gated by default and must be drafted through draft_script. "
     "When tool work is complete, provide a concise final summary of what changed and what remains pending."
 )
 
@@ -1991,9 +1991,9 @@ def blender_tool_definitions():
         {
             "name": "draft_script",
             "description": (
-                "Stage Blender Python in a Text datablock for explicit user approval. "
+                "Stage Blender Python in a Text datablock for explicit user approval, or auto-run after static checks when external script trust is active. "
                 "Use only when safe helper tools cannot express the requested scene, animation, material, or rig change. "
-                "This does not execute the script."
+                "Blocked scripts are refused even during a trust window."
             ),
             "input_schema": {
                 "type": "object",
