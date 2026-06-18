@@ -241,6 +241,7 @@ def build_context_bundle(context, *, include_visual=False, capture_dir=None, max
             "get_render_camera_compositor_details",
             "capture_viewport",
             "capture_animation_playblast",
+            "capture_object_inspection_renders",
             "search_blender_docs",
             "select_objects",
             "set_current_frame",

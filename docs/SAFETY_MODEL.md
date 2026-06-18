@@ -36,7 +36,7 @@ Current implementation:
 
 ### Limited Autonomous
 
-Claude can call only allowlisted tools such as `inspect_scene`, `capture_viewport`, `capture_animation_playblast`, `set_object_transform`, or `add_light`. Arbitrary Python stays blocked.
+Claude can call only allowlisted tools such as `inspect_scene`, `capture_viewport`, `capture_animation_playblast`, `capture_object_inspection_renders`, `set_object_transform`, or `add_light`. Arbitrary Python stays blocked.
 
 Use this later for fast iterative workflows.
 

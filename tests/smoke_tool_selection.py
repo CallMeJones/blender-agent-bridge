@@ -134,6 +134,13 @@ def main():
         assert "run_animation_repair_loop" in principles_names, principles_meta
         assert "create_progressive_bounce_animation" in principles_names, principles_meta
 
+        inspection_render_tools, inspection_render_meta = anthropic_client.select_blender_tool_definitions(
+            "Render close-up underside views to inspect landing gear and open bays before repair.",
+            bundle,
+        )
+        inspection_render_names = _names(inspection_render_tools)
+        assert "capture_object_inspection_renders" in inspection_render_names, inspection_render_meta
+
         captured_tool_names = []
 
         def fake_create_message_raw(*, messages, model, tools=None, max_tokens=1024):

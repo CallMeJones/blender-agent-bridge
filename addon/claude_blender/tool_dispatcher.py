@@ -7,7 +7,7 @@ import re
 
 import bpy
 
-from . import animation_analysis, animation_brief, animation_workflow, advanced_helpers, context_bundle, docs_index, live_preview, playblast_capture, preferences, script_runner, viewport_capture, world_model
+from . import animation_analysis, animation_brief, animation_workflow, advanced_helpers, context_bundle, docs_index, inspection_render, live_preview, playblast_capture, preferences, script_runner, viewport_capture, world_model
 
 
 def _float_list(values, length, default):
@@ -52,6 +52,14 @@ def _bounded_int(value, default, *, minimum=1, maximum=100):
     except (TypeError, ValueError):
         result = int(default)
     return max(int(minimum), min(int(maximum), result))
+
+
+def _bounded_float(value, default, *, minimum=0.0, maximum=1000.0):
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        result = float(default)
+    return max(float(minimum), min(float(maximum), result))
 
 
 def _extract_script_code(args):
@@ -2168,6 +2176,24 @@ def capture_animation_playblast(context, args):
     }
 
 
+def capture_object_inspection_renders(context, args):
+    prefs = preferences.get_preferences(context)
+    metadata_result = inspection_render.capture_object_inspection_renders(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        views=_name_list(args.get("views")),
+        frame=args.get("frame"),
+        resolution_x=_bounded_int(args.get("resolution_x"), 800, minimum=64, maximum=4096),
+        resolution_y=_bounded_int(args.get("resolution_y"), 600, minimum=64, maximum=4096),
+        lens=_bounded_float(args.get("lens"), 50.0, minimum=1.0, maximum=300.0),
+        distance_factor=_bounded_float(args.get("distance_factor"), 3.0, minimum=0.5, maximum=20.0),
+        camera_name=str(args.get("camera_name") or "Claude Inspection Camera"),
+        note=str(args.get("note") or args.get("brief") or ""),
+        capture_dir=getattr(prefs, "capture_cache_dir", None),
+    )
+    return metadata_result
+
+
 def search_blender_docs(context, args):
     prefs = preferences.get_preferences(context)
     return docs_index.search_blender_docs(
@@ -2460,6 +2486,7 @@ TOOL_FUNCTIONS = {
     "create_camera_orbit": create_camera_orbit,
     "capture_viewport": capture_viewport,
     "capture_animation_playblast": capture_animation_playblast,
+    "capture_object_inspection_renders": capture_object_inspection_renders,
     "search_blender_docs": search_blender_docs,
     "draft_script": draft_script,
     "run_approved_script": run_approved_script,

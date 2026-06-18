@@ -33,6 +33,7 @@ _MODULE_NAMES = (
     "advanced_helpers",
     "viewport_capture",
     "playblast_capture",
+    "inspection_render",
     "bridge_protocol",
     "bridge_server",
     "docs_index",

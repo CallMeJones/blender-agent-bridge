@@ -157,6 +157,20 @@ RESOURCE_TEMPLATES = [
         "description": "Sampled animation playblast frame PNG resources captured by the running Blender bridge.",
         "mimeType": "image/png",
     },
+    {
+        "uriTemplate": "blender://inspection-renders/{render_id}/metadata",
+        "name": "inspection-render-metadata-resource",
+        "title": "Blender Inspection Render Metadata Resource",
+        "description": "Diagnostic object render metadata with close-up image resource URIs.",
+        "mimeType": "application/json",
+    },
+    {
+        "uriTemplate": "blender://inspection-renders/{render_id}/images/{image_id}",
+        "name": "inspection-render-image-resource",
+        "title": "Blender Inspection Render Image Resource",
+        "description": "Diagnostic close-up object render PNG resources captured by the running Blender bridge.",
+        "mimeType": "image/png",
+    },
 ]
 
 PROMPTS = {
@@ -211,6 +225,7 @@ PROMPTS = {
             "run_animation_workflow to execute the plan, review the result, and leave changes as a preview. "
             "For manual control, follow next_tool_calls in order for brief, scene routing, timing, "
             "helper generation, validation, playblast review, and repair. "
+            "When rendered visual evidence is needed for object details, use capture_object_inspection_renders. "
             "Use draft_script only when the workflow's script_fallback_policy says helpers cannot express the edit."
         ),
     },
@@ -586,7 +601,13 @@ def _tool_category(tool):
         return "script"
     if name in {"commit_preview", "revert_preview"}:
         return "preview"
-    if name.startswith("get_") or name.startswith("list_") or name in {"inspect_scene", "search_blender_docs", "capture_viewport", "capture_animation_playblast"}:
+    if name.startswith("get_") or name.startswith("list_") or name in {
+        "inspect_scene",
+        "search_blender_docs",
+        "capture_viewport",
+        "capture_animation_playblast",
+        "capture_object_inspection_renders",
+    }:
         return "inspect"
     if "material" in name or "shader" in name or name == "set_world_background":
         return "materials"

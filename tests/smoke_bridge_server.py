@@ -19,7 +19,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import bridge_server, playblast_capture, viewport_capture  # noqa: E402
+from claude_blender import bridge_server, inspection_render, playblast_capture, viewport_capture  # noqa: E402
 
 
 def _request_with_pump(fn, timeout=10):
@@ -83,6 +83,7 @@ def main():
         assert "create_product_turntable_setup" in names, names
         assert "organize_scene_for_production" in names, names
         assert "capture_animation_playblast" in names, names
+        assert "capture_object_inspection_renders" in names, names
 
         health = _request_with_pump(lambda: _get(base + "/health"))
         assert health["ok"], health
@@ -101,6 +102,7 @@ def main():
         assert "blender://captures/latest" in uris, resources
         assert "blender://captures/latest/metadata" in uris, resources
         assert "blender://playblasts/latest/metadata" in uris, resources
+        assert "blender://inspection-renders/latest/metadata" in uris, resources
         resource_url = base + "/resource?" + urllib.parse.urlencode({"uri": "blender://scene/status"})
         resource = _request_with_pump(lambda: _get(resource_url))
         assert resource["ok"], resource
@@ -156,6 +158,43 @@ def main():
         frame_resource = playblast_capture.playblast_frame_resource("test-playblast", 1, capture_dir=capture_dir)
         assert frame_resource["mimeType"] == "image/png", frame_resource
         assert frame_resource["blob"], frame_resource
+        render_dir = os.path.join(capture_dir, "inspection-renders", "test-render")
+        os.makedirs(render_dir, exist_ok=True)
+        render_path = os.path.join(render_dir, "cube-front_below.png")
+        shutil.copyfile(capture_path, render_path)
+        inspection_metadata = {
+            "ok": True,
+            "available": True,
+            "render_id": "test-render",
+            "created_at": time.time(),
+            "metadata_uri": "blender://inspection-renders/test-render/metadata",
+            "latest_metadata_uri": "blender://inspection-renders/latest/metadata",
+            "render_dir": render_dir,
+            "images": [
+                {
+                    "image_id": "cube-front_below",
+                    "object": "Cube",
+                    "view": "front_below",
+                    "available": True,
+                    "path": render_path,
+                    "resource_uri": "blender://inspection-renders/test-render/images/cube-front_below",
+                    "size_bytes": os.path.getsize(render_path),
+                    "width": 1,
+                    "height": 1,
+                }
+            ],
+        }
+        with open(os.path.join(render_dir, "metadata.json"), "w", encoding="utf-8") as handle:
+            json.dump(inspection_metadata, handle)
+        latest_render = inspection_render.latest_inspection_render_metadata(capture_dir=capture_dir)
+        assert latest_render["render_id"] == "test-render", latest_render
+        image_resource = inspection_render.inspection_render_image_resource(
+            "test-render",
+            "cube-front_below",
+            capture_dir=capture_dir,
+        )
+        assert image_resource["mimeType"] == "image/png", image_resource
+        assert image_resource["blob"], image_resource
         shutil.rmtree(capture_dir, ignore_errors=True)
 
         stopped = bridge_server.stop_bridge()

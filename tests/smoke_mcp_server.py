@@ -137,6 +137,12 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                             "title": "Latest Animation Playblast Metadata",
                             "mimeType": "application/json",
                         },
+                        {
+                            "uri": "blender://inspection-renders/latest/metadata",
+                            "name": "latest-inspection-render-metadata",
+                            "title": "Latest Object Inspection Render Metadata",
+                            "mimeType": "application/json",
+                        },
                     ],
                 }
             )
@@ -241,6 +247,57 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                     {
                         "ok": True,
                         "uri": "blender://playblasts/test-playblast/frames/1",
+                        "mimeType": "image/png",
+                        "blob": "iVBORw0KGgo=",
+                    }
+                )
+            elif uri == "blender://inspection-renders/latest/metadata":
+                self._send(
+                    {
+                        "ok": True,
+                        "uri": "blender://inspection-renders/latest/metadata",
+                        "mimeType": "application/json",
+                        "text": json.dumps(
+                            {
+                                "ok": True,
+                                "available": True,
+                                "render_id": "test-render",
+                                "metadata_uri": "blender://inspection-renders/test-render/metadata",
+                                "latest_metadata_uri": "blender://inspection-renders/latest/metadata",
+                                "images": [
+                                    {
+                                        "image_id": "cube-front_below",
+                                        "available": True,
+                                        "resource_uri": (
+                                            "blender://inspection-renders/test-render/images/cube-front_below"
+                                        ),
+                                    }
+                                ],
+                            }
+                        ),
+                    }
+                )
+            elif uri == "blender://inspection-renders/test-render/metadata":
+                self._send(
+                    {
+                        "ok": True,
+                        "uri": "blender://inspection-renders/test-render/metadata",
+                        "mimeType": "application/json",
+                        "text": json.dumps(
+                            {
+                                "ok": True,
+                                "available": True,
+                                "render_id": "test-render",
+                                "metadata_uri": "blender://inspection-renders/test-render/metadata",
+                            }
+                        ),
+                    }
+                )
+            elif uri == "blender://inspection-renders/test-render/images/cube-front_below":
+                self._send(
+                    {
+                        "ok": True,
+                        "uri": "blender://inspection-renders/test-render/images/cube-front_below",
                         "mimeType": "image/png",
                         "blob": "iVBORw0KGgo=",
                     }
@@ -751,6 +808,7 @@ def main():
         assert "blender://captures/latest" in uris
         assert "blender://captures/latest/metadata" in uris
         assert "blender://playblasts/latest/metadata" in uris
+        assert "blender://inspection-renders/latest/metadata" in uris
 
         templates = _send(proc, {"jsonrpc": "2.0", "id": 40, "method": "resources/templates/list"})
         template_names = {item["name"] for item in templates["result"]["resourceTemplates"]}
@@ -759,6 +817,8 @@ def main():
         assert "capture-metadata-resource" in template_names, templates
         assert "playblast-metadata-resource" in template_names, templates
         assert "playblast-frame-resource" in template_names, templates
+        assert "inspection-render-metadata-resource" in template_names, templates
+        assert "inspection-render-image-resource" in template_names, templates
 
         prompts = _send(proc, {"jsonrpc": "2.0", "id": 41, "method": "prompts/list"})
         prompt_names = {item["name"] for item in prompts["result"]["prompts"]}
@@ -787,6 +847,7 @@ def main():
         animation_prompt_text = animation_prompt["result"]["messages"][0]["content"]["text"]
         assert "plan_animation_workflow" in animation_prompt_text, animation_prompt
         assert "run_animation_workflow" in animation_prompt_text, animation_prompt
+        assert "capture_object_inspection_renders" in animation_prompt_text, animation_prompt
         assert "draft_script only" in animation_prompt_text, animation_prompt
 
         resource = _send(
@@ -871,6 +932,40 @@ def main():
         playblast_frame = playblast_frame_resource["result"]["contents"][0]
         assert playblast_frame["mimeType"] == "image/png", playblast_frame_resource
         assert playblast_frame["blob"] == "iVBORw0KGgo=", playblast_frame_resource
+        inspection_metadata_resource = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 50,
+                "method": "resources/read",
+                "params": {"uri": "blender://inspection-renders/latest/metadata"},
+            },
+        )
+        inspection_metadata = json.loads(inspection_metadata_resource["result"]["contents"][0]["text"])
+        assert inspection_metadata["metadata_uri"] == "blender://inspection-renders/test-render/metadata", inspection_metadata_resource
+        inspection_exact_metadata_resource = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 51,
+                "method": "resources/read",
+                "params": {"uri": inspection_metadata["metadata_uri"]},
+            },
+        )
+        inspection_exact_metadata = json.loads(inspection_exact_metadata_resource["result"]["contents"][0]["text"])
+        assert inspection_exact_metadata["render_id"] == "test-render", inspection_exact_metadata_resource
+        inspection_image_resource = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 52,
+                "method": "resources/read",
+                "params": {"uri": inspection_metadata["images"][0]["resource_uri"]},
+            },
+        )
+        inspection_image = inspection_image_resource["result"]["contents"][0]
+        assert inspection_image["mimeType"] == "image/png", inspection_image_resource
+        assert inspection_image["blob"] == "iVBORw0KGgo=", inspection_image_resource
         print("smoke_mcp_server: ok")
     finally:
         proc.kill()

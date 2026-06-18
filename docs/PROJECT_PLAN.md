@@ -430,6 +430,7 @@ Status: Partial. Existing read-only validators cover sampled animation state, co
 Candidate tools:
 
 - `capture_animation_playblast`
+- `capture_object_inspection_renders`
 - `review_playblast_against_brief`
 - `repair_animation_from_findings`
 - `run_animation_repair_loop`
@@ -440,7 +441,7 @@ Acceptance:
 - The repair loop preserves successful parts of the animation.
 - The user sees concise review findings and can commit or revert the repaired preview.
 
-Status: Playblast-aware review, repair planning, and bounded repair-loop execution are implemented. `review_playblast_against_brief` normalizes playblast frame evidence, checks frame resource availability, frame coverage, undersampling, compact pixel digests, and visual frame-to-frame motion deltas against the brief, combines that with current animation-state comparison, and returns structured repair operations. `repair_animation_from_findings` maps findings to targeted helper calls with arguments, executable `tool_call` payloads, preview/commit flags, source-finding references, and playblast-derived `target_frames` / `target_frame_range` metadata for missing coverage or static sampled frames. `run_animation_repair_loop` applies a bounded allowlisted subset of those operations through safe helper tools, skips operations that need more planning, optionally requests a fresh playblast after mutating repairs, and re-runs review without bypassing the existing preview commit/revert model.
+Status: Playblast-aware review, repair planning, and bounded repair-loop execution are implemented. `review_playblast_against_brief` normalizes playblast frame evidence, checks frame resource availability, frame coverage, undersampling, compact pixel digests, and visual frame-to-frame motion deltas against the brief, combines that with current animation-state comparison, and returns structured repair operations. `repair_animation_from_findings` maps findings to targeted helper calls with arguments, executable `tool_call` payloads, preview/commit flags, source-finding references, and playblast-derived `target_frames` / `target_frame_range` metadata for missing coverage or static sampled frames. `run_animation_repair_loop` applies a bounded allowlisted subset of those operations through safe helper tools, skips operations that need more planning, optionally requests a fresh playblast after mutating repairs, and re-runs review without bypassing the existing preview commit/revert model. `capture_object_inspection_renders` adds a background-safe visual evidence path for focused object close-ups when the client needs rendered details, such as undersides, open bays, landing gear, occluded parts, or small model defects, without drafting one-off camera/render scripts.
 
 #### Milestone 7G: Optional Solo-Backed Style And Project Memory
 
@@ -466,6 +467,7 @@ Real-client testing showed that a connected MCP client can successfully inspect 
 - Make the orchestrator report whether changes are true live-preview helper edits, checkpoint-backed script edits, or read-only plans, so the client cannot incorrectly claim "commit/revert preview" for arbitrary approved scripts.
 - Add real-client smoke prompts that verify Claude/Codex-style MCP clients choose the helper workflow for common animation requests instead of script-first execution.
 - Use the real bounce test as a fixture: "Make the cube bounce twice over 72 frames, getting smaller each bounce. Check it against the brief and leave it as a preview."
+- Use the aircraft underside/landing-gear inspection case as a visual-evidence fixture: the client should call `capture_object_inspection_renders` for diagnostic renders instead of drafting temporary camera/render Python.
 
 Acceptance:
 
@@ -474,7 +476,7 @@ Acceptance:
 - The orchestrator can produce a pending preview for at least one full start-to-finish animation workflow, then run structured validation and return commit/revert guidance.
 - Real-client testing demonstrates that model behavior matches the intended workflow, not just that individual tools exist.
 
-Status: Orchestration and guidance pass implemented. `plan_animation_workflow` is a read-only Milestone 7 entry point that creates the animation brief, animation-aware scene context, timing chart, ordered helper/evaluator/repair tool-call payloads, and explicit `draft_script` fallback rules. `run_animation_workflow` now executes common helper-backed workflows such as bounce/turntable/reveal/pulse, runs structured evaluator review, optionally captures playblast evidence, optionally applies bounded repair operations, and reports live-preview state, helper gaps, skipped calls, findings, and repair plans. The real bounce fixture now routes through `create_progressive_bounce_animation`, which keys repeated bounce motion plus decreasing scale in a live-preview transaction. The Anthropic system prompt, tool-selection protection, context bundle, bridge contract, and MCP prompt templates now point animation generation/review/repair tasks at this workflow before arbitrary Python. Remaining 7H work is real-client smoke that proves Claude/Codex-style MCP clients follow the helper workflow instead of script-first behavior.
+Status: Orchestration and guidance pass implemented. `plan_animation_workflow` is a read-only Milestone 7 entry point that creates the animation brief, animation-aware scene context, timing chart, ordered helper/evaluator/repair tool-call payloads, and explicit `draft_script` fallback rules. `run_animation_workflow` now executes common helper-backed workflows such as bounce/turntable/reveal/pulse, runs structured evaluator review, optionally captures playblast evidence, optionally applies bounded repair operations, and reports live-preview state, helper gaps, skipped calls, findings, and repair plans. The real bounce fixture now routes through `create_progressive_bounce_animation`, which keys repeated bounce motion plus decreasing scale in a live-preview transaction. The Anthropic system prompt, tool-selection protection, context bundle, bridge contract, and MCP prompt templates now point animation generation/review/repair tasks at this workflow before arbitrary Python. A first-class `capture_object_inspection_renders` tool now covers diagnostic render-to-inspect behavior that real clients previously handled with ad hoc scripts. Remaining 7H work is real-client smoke that proves Claude/Codex-style MCP clients follow the helper workflow and diagnostic evidence tools instead of script-first behavior.
 
 ## Open Questions
 

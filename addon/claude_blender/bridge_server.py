@@ -17,6 +17,7 @@ from . import (
     bridge_protocol,
     build_info,
     context_bundle,
+    inspection_render,
     playblast_capture,
     preferences,
     script_runner,
@@ -178,6 +179,13 @@ def _resources():
             "description": "Metadata and frame resource URIs for the latest sampled animation playblast",
             "mimeType": "application/json",
         },
+        {
+            "uri": inspection_render.LATEST_INSPECTION_RENDER_METADATA_URI,
+            "name": "latest-inspection-render-metadata",
+            "title": "Latest Object Inspection Render Metadata",
+            "description": "Metadata and image resource URIs for the latest diagnostic object renders",
+            "mimeType": "application/json",
+        },
     ]
 
 
@@ -263,6 +271,39 @@ def _read_resource(uri):
             return playblast_capture.playblast_frame_resource(
                 playblast_id,
                 playblast_frame,
+                context=bpy.context,
+                preferred_dir=_capture_cache_dir(),
+            )
+    render_id, render_kind, image_id = inspection_render.parse_inspection_render_resource_uri(uri)
+    if render_id:
+        if render_id == "latest" and render_kind == "metadata":
+            return {
+                "mimeType": "application/json",
+                "text": json.dumps(
+                    inspection_render.latest_inspection_render_metadata(
+                        context=bpy.context,
+                        preferred_dir=_capture_cache_dir(),
+                    ),
+                    indent=2,
+                    sort_keys=True,
+                ),
+            }
+        if render_kind == "metadata":
+            metadata = inspection_render.inspection_render_metadata(
+                render_id,
+                context=bpy.context,
+                preferred_dir=_capture_cache_dir(),
+            )
+            if not metadata.get("available"):
+                return None
+            return {
+                "mimeType": "application/json",
+                "text": json.dumps(metadata, indent=2, sort_keys=True),
+            }
+        if render_kind == "image":
+            return inspection_render.inspection_render_image_resource(
+                render_id,
+                image_id,
                 context=bpy.context,
                 preferred_dir=_capture_cache_dir(),
             )

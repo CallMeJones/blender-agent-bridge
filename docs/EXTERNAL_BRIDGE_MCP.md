@@ -137,10 +137,15 @@ Current resources:
 - `blender://playblasts/latest/metadata`
 - `blender://playblasts/{playblast_id}/metadata`
 - `blender://playblasts/{playblast_id}/frames/{frame}`
+- `blender://inspection-renders/latest/metadata`
+- `blender://inspection-renders/{render_id}/metadata`
+- `blender://inspection-renders/{render_id}/images/{image_id}`
 
 `blender://captures/latest` is scoped to the currently connected Blender bridge and its active project/session. Capture metadata includes the exact `capture_id` resource URIs for repeat reads. By default, saved `.blend` files store captures in a hidden project-local `.claude_blender/captures/<session_id>` folder so separate projects do not overwrite each other. Unsaved or unwritable projects fall back to `~/.claude_blender/captures/<project_id>/<session_id>`. A custom capture cache preference remains a custom base directory and still gets project/session subfolders.
 
 `capture_animation_playblast` captures sampled viewport PNG frames across an animation range when Blender is running with an interactive window. The metadata resource lists exact frame URIs so external clients can inspect timing, spacing, staging, arcs, and contact poses without relying only on keyframe data. `review_playblast_against_brief` also derives compact pixel digests and frame-to-frame motion deltas from available PNGs, then emits `repair_operations` with executable `tool_call` payloads for deliberate follow-up repairs. Those operations include `target_frames` and `target_frame_range` when a visual finding points to specific sampled frames, missing coverage, or a static-looking frame span. `run_animation_workflow` uses that review path after generation, and `run_animation_repair_loop` can apply a bounded allowlisted subset of repair operations, skip under-specified repairs, and re-run review while preserving the preview commit/revert model. In background/headless mode capture fails soft and reports that an interactive window is required.
+
+`capture_object_inspection_renders` renders bounded diagnostic close-ups of named objects from views such as `front_below`, `underside`, and `side`. It is meant for evidence gathering when the client needs to inspect object details before repair, for example open bays, landing gear, underside geometry, occluded parts, or small model defects. The tool writes PNG artifacts into the project/session capture cache, restores render settings and removes its temporary camera, then returns metadata and image resource URIs under `blender://inspection-renders/{render_id}/...`.
 
 ## Prompts
 

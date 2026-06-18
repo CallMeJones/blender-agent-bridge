@@ -221,6 +221,14 @@ TOOL_CONTRACTS = {
         "supports_headless": False,
         "timeout_seconds": 120,
     },
+    "capture_object_inspection_renders": {
+        "description": "Render diagnostic close-up PNGs of named objects from bounded inspection views and expose them as MCP resources",
+        "mutates_scene": False,
+        "has_side_effects": True,
+        "permissions": ["scene:read", "files:write"],
+        "supports_headless": True,
+        "timeout_seconds": 180,
+    },
     "set_selected_location_delta": {
         "description": "Move selected Blender objects by a delta with rollback state",
         "mutates_scene": True,

@@ -18,7 +18,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import anthropic_client, bridge_protocol, context_budget, context_bundle, docs_index, playblast_capture, tool_dispatcher, viewport_capture  # noqa: E402
+from claude_blender import anthropic_client, bridge_protocol, context_budget, context_bundle, docs_index, inspection_render, playblast_capture, tool_dispatcher, viewport_capture  # noqa: E402
 
 
 def main():
@@ -33,10 +33,13 @@ def main():
         assert public["visual_context"]["available"] is False
         assert "capture_viewport" in bundle["available_tools"]
         assert "capture_animation_playblast" in bundle["available_tools"]
+        assert "capture_object_inspection_renders" in bundle["available_tools"]
         assert "capture_viewport" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
         assert "capture_animation_playblast" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
+        assert "capture_object_inspection_renders" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
         assert "capture_viewport" in bridge_protocol.TOOL_CONTRACTS
         assert "capture_animation_playblast" in bridge_protocol.TOOL_CONTRACTS
+        assert "capture_object_inspection_renders" in bridge_protocol.TOOL_CONTRACTS
 
         captured = json.loads(tool_dispatcher.execute_tool(bpy.context, "capture_viewport", {"max_bytes": 512 * 1024}))
         assert captured["ok"] is False, captured
@@ -97,6 +100,80 @@ def main():
         assert resolved_capture_dir["capture_dir"].startswith(
             os.path.join(project_dir, ".claude_blender", "captures")
         ), resolved_capture_dir
+
+        target = bpy.data.objects.get("Cube")
+        if target is None:
+            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, 0.0))
+            target = bpy.context.object
+        scene = bpy.context.scene
+        original_render_state = (
+            scene.camera,
+            scene.frame_current,
+            scene.render.resolution_x,
+            scene.render.resolution_y,
+            scene.render.resolution_percentage,
+            scene.render.image_settings.file_format,
+            scene.render.filepath,
+        )
+        inspection_payload = json.loads(
+            tool_dispatcher.execute_tool(
+                bpy.context,
+                "capture_object_inspection_renders",
+                {
+                    "object_names": [target.name],
+                    "views": ["front_below", "side"],
+                    "frame": 1,
+                    "resolution_x": 64,
+                    "resolution_y": 64,
+                    "camera_name": "Smoke Inspection Camera",
+                    "note": "smoke inspection render",
+                },
+            )
+        )
+        assert inspection_payload["ok"] is True, inspection_payload
+        render_metadata = inspection_payload["inspection_render"]
+        assert render_metadata["image_count"] == 2, render_metadata
+        assert render_metadata["requested_image_count"] == 2, render_metadata
+        assert render_metadata["metadata_uri"].startswith("blender://inspection-renders/"), render_metadata
+        assert os.path.isfile(render_metadata["metadata_path"]), render_metadata
+        assert scene.camera == original_render_state[0], render_metadata
+        assert scene.frame_current == original_render_state[1], render_metadata
+        assert scene.render.resolution_x == original_render_state[2], render_metadata
+        assert scene.render.resolution_y == original_render_state[3], render_metadata
+        assert scene.render.resolution_percentage == original_render_state[4], render_metadata
+        assert scene.render.image_settings.file_format == original_render_state[5], render_metadata
+        assert scene.render.filepath == original_render_state[6], render_metadata
+        assert bpy.data.objects.get("Smoke_Inspection_Camera") is None, render_metadata
+        assert bpy.data.cameras.get("Smoke_Inspection_Camera_Data") is None, render_metadata
+        latest_render = inspection_render.latest_inspection_render_metadata(
+            capture_dir=render_metadata["capture_dir"],
+            context=bpy.context,
+        )
+        assert latest_render["render_id"] == render_metadata["render_id"], latest_render
+        exact_render = inspection_render.inspection_render_metadata(
+            render_metadata["render_id"],
+            capture_dir=render_metadata["capture_dir"],
+            context=bpy.context,
+        )
+        assert exact_render["available"] is True, exact_render
+        for image_item in render_metadata["images"]:
+            assert image_item["available"] is True, image_item
+            assert os.path.isfile(image_item["path"]), image_item
+            parsed_id, parsed_kind, parsed_image = inspection_render.parse_inspection_render_resource_uri(
+                image_item["resource_uri"]
+            )
+            assert parsed_id == render_metadata["render_id"], image_item
+            assert parsed_kind == "image", image_item
+            assert parsed_image == image_item["image_id"], image_item
+            image_resource = inspection_render.inspection_render_image_resource(
+                render_metadata["render_id"],
+                image_item["image_id"],
+                capture_dir=render_metadata["capture_dir"],
+                context=bpy.context,
+            )
+            assert image_resource["mimeType"] == "image/png", image_resource
+            assert image_resource["blob"], image_resource
+
         project_capture_path = os.path.join(resolved_capture_dir["capture_dir"], "viewport-old-project.png")
         os.makedirs(os.path.dirname(project_capture_path), exist_ok=True)
         with open(project_capture_path, "wb") as handle:

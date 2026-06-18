@@ -51,7 +51,7 @@ SYSTEM_PROMPT = (
     "If agent_memory is enabled, treat it as the running project thread so the user can work progressively across prompts. "
     "Use prior goals, attempted steps, and remaining tasks from agent_memory, but treat the current Blender scene context as authoritative if they conflict. "
     "Read context_plan before acting. It explains which scene details were included or omitted to stay within the request budget. "
-    "If omitted details matter, call inspect_scene, get_object_details, get_animation_details, get_animation_scene_context, get_material_node_details, get_geometry_nodes_details, get_shader_nodes_details, get_rigging_details, get_shape_key_details, get_curve_text_details, get_simulation_details, get_collection_layer_details, get_render_camera_compositor_details, capture_viewport, capture_animation_playblast, or search_blender_docs instead of guessing. "
+    "If omitted details matter, call inspect_scene, get_object_details, get_animation_details, get_animation_scene_context, get_material_node_details, get_geometry_nodes_details, get_shader_nodes_details, get_rigging_details, get_shape_key_details, get_curve_text_details, get_simulation_details, get_collection_layer_details, get_render_camera_compositor_details, capture_viewport, capture_animation_playblast, capture_object_inspection_renders, or search_blender_docs instead of guessing. "
     "When target objects are unclear, use list_scene_objects and select_objects before applying selected-object tools. "
     "When the user asks to change the scene, use safe helper tools first so Blender changes immediately. "
     "Use direct Blender data concepts: objects, collections, materials, cameras, lights, actions, keyframes. "
@@ -155,6 +155,40 @@ def blender_tool_definitions():
                         "description": "Short animation intent or prompt contract to store with the playblast metadata.",
                     },
                 },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "capture_object_inspection_renders",
+            "description": "Render diagnostic close-up PNGs of named objects from bounded inspection views, then return metadata plus MCP image resource URIs. Use when visual object details need rendered evidence, such as undersides, side views, occluded parts, or model defects. Cleans up the temporary camera and restores render settings.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "object_names": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Objects or root objects to render. Children are included when computing bounds.",
+                    },
+                    "views": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": ["front_below", "underside", "side", "front", "rear", "top"],
+                        },
+                        "description": "Diagnostic view names. Defaults to front_below and side.",
+                    },
+                    "frame": {"type": "integer", "description": "Frame to render. Defaults to the current frame."},
+                    "resolution_x": {"type": "integer", "description": "PNG width. Defaults to 800."},
+                    "resolution_y": {"type": "integer", "description": "PNG height. Defaults to 600."},
+                    "lens": {"type": "number", "description": "Temporary camera lens in mm. Defaults to 50."},
+                    "distance_factor": {
+                        "type": "number",
+                        "description": "Camera distance as a multiple of target bounding radius. Defaults to 3.",
+                    },
+                    "camera_name": {"type": "string"},
+                    "note": {"type": "string", "description": "Short reason stored in the render metadata."},
+                },
+                "required": ["object_names"],
                 "additionalProperties": False,
             },
         },
@@ -2213,6 +2247,7 @@ _TOOL_GROUPS = {
         "get_render_camera_compositor_details",
         "capture_viewport",
         "capture_animation_playblast",
+        "capture_object_inspection_renders",
         "add_light",
         "add_camera",
         "set_active_camera",
@@ -2249,6 +2284,7 @@ _TOOL_GROUPS = {
         "review_playblast_against_brief",
         "capture_viewport",
         "capture_animation_playblast",
+        "capture_object_inspection_renders",
         "run_animation_workflow",
         "run_animation_repair_loop",
     },
@@ -2368,8 +2404,8 @@ _GROUP_KEYWORDS = {
     "basic_edit": {"make", "create", "add", "move", "scale", "rotate", "transform", "object", "primitive", "empty", "marker", "collection", "duplicate", "copy", "parent", "align", "distribute", "layout", "arrange", "hide", "unhide", "visibility", "visible", "display", "wireframe", "show name", "in front"},
     "materials": {"material", "shader", "color", "colour", "red", "blue", "green", "metal", "metallic", "chrome", "glass", "emission", "glow", "window"},
     "animation": {"animate", "animation", "animation brief", "prompt contract", "success criteria", "timing chart", "key pose", "key poses", "hold", "breakdown", "keyframe", "timeline", "frame", "orbit", "bounce", "driver", "motion", "motion arc", "arc", "follow path", "path", "retime", "interpolation", "easing", "loop", "cycles", "turntable", "pulse", "reveal", "stagger", "playblast", "timing", "spacing", "blocking", "anticipation", "squash", "stretch", "settle", "follow-through", "principles"},
-    "camera_render": {"camera", "render", "light", "lighting", "world", "background", "dof", "depth of field", "lens", "compositor", "resolution", "intensity", "studio", "product stage", "presentation", "turntable"},
-    "deep_inspect": {"inspect", "analyze", "analyse", "summarize", "summary", "details", "world model", "what", "list", "screenshot", "viewport", "visual", "image", "capture", "playblast", "review"},
+    "camera_render": {"camera", "render", "light", "lighting", "world", "background", "dof", "depth of field", "lens", "compositor", "resolution", "intensity", "studio", "product stage", "presentation", "turntable", "close-up", "closeup", "underside"},
+    "deep_inspect": {"inspect", "analyze", "analyse", "summarize", "summary", "details", "world model", "what", "list", "screenshot", "viewport", "visual", "image", "capture", "playblast", "review", "diagnostic", "underside", "gear"},
     "advanced_create": {"geometry nodes", "shape key", "text", "curve", "particle", "armature", "constraint", "rig", "driver", "callout", "dimension", "label", "palette", "swatch", "organize", "collection"},
     "refinement": {"refine", "polish", "smooth", "high poly", "high-poly", "detail", "bevel", "subdivision", "subsurf", "seam", "panel", "dimension", "callout", "stage", "palette", "lighting"},
     "vehicle": {"car", "vehicle", "truck", "wheel", "tire", "tyre", "rim", "headlight", "taillight", "windshield", "door", "grille"},
