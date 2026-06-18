@@ -8,7 +8,7 @@ import time
 
 import bpy
 
-from . import animation_analysis, animation_brief, animation_workflow, advanced_helpers, context_bundle, docs_index, inspection_render, live_preview, playblast_capture, preferences, script_runner, viewport_capture, world_model
+from . import animation_analysis, animation_brief, animation_workflow, advanced_helpers, context_bundle, docs_index, inspection_render, lab_parity, live_preview, playblast_capture, preferences, script_runner, viewport_capture, world_model
 
 
 def _float_list(values, length, default):
@@ -2367,6 +2367,50 @@ def capture_object_inspection_renders(context, args):
     return metadata_result
 
 
+def get_blend_file_diagnostics(context, args):
+    return lab_parity.get_blend_file_diagnostics(
+        context,
+        max_items=_bounded_int(args.get("max_items"), 50, minimum=1, maximum=200),
+    )
+
+
+def get_workspace_layout(context, args):
+    return lab_parity.get_workspace_layout(
+        context,
+        max_workspaces=_bounded_int(args.get("max_workspaces"), 20, minimum=1, maximum=100),
+        max_areas=_bounded_int(args.get("max_areas"), 80, minimum=1, maximum=300),
+    )
+
+
+def jump_to_workspace(context, args):
+    return lab_parity.jump_to_workspace(
+        context,
+        workspace_name=str(args.get("workspace_name") or args.get("name") or ""),
+    )
+
+
+def focus_object_in_viewport(context, args):
+    return lab_parity.focus_object_in_viewport(
+        context,
+        object_name=str(args.get("object_name") or ""),
+        select=bool(args.get("select", True)),
+    )
+
+
+def render_scene_thumbnail(context, args):
+    prefs = preferences.get_preferences(context)
+    return lab_parity.render_scene_thumbnail(
+        context,
+        filepath=str(args.get("filepath") or ""),
+        frame=args.get("frame"),
+        resolution_x=_bounded_int(args.get("resolution_x"), 512, minimum=32, maximum=4096),
+        resolution_y=_bounded_int(args.get("resolution_y"), 512, minimum=32, maximum=4096),
+        camera_name=str(args.get("camera_name") or ""),
+        note=str(args.get("note") or ""),
+        capture_dir=getattr(prefs, "capture_cache_dir", None),
+    )
+
+
 def search_blender_docs(context, args):
     prefs = preferences.get_preferences(context)
     return docs_index.search_blender_docs(
@@ -2694,6 +2738,11 @@ TOOL_FUNCTIONS = {
     "capture_viewport": capture_viewport,
     "capture_animation_playblast": capture_animation_playblast,
     "capture_object_inspection_renders": capture_object_inspection_renders,
+    "get_blend_file_diagnostics": get_blend_file_diagnostics,
+    "get_workspace_layout": get_workspace_layout,
+    "jump_to_workspace": jump_to_workspace,
+    "focus_object_in_viewport": focus_object_in_viewport,
+    "render_scene_thumbnail": render_scene_thumbnail,
     "search_blender_docs": search_blender_docs,
     "draft_script": draft_script,
     "run_approved_script": run_approved_script,

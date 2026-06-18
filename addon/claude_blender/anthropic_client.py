@@ -51,7 +51,7 @@ SYSTEM_PROMPT = (
     "If agent_memory is enabled, treat it as the running project thread so the user can work progressively across prompts. "
     "Use prior goals, attempted steps, and remaining tasks from agent_memory, but treat the current Blender scene context as authoritative if they conflict. "
     "Read context_plan before acting. It explains which scene details were included or omitted to stay within the request budget. "
-    "If omitted details matter, call inspect_scene, get_object_details, get_animation_details, get_animation_scene_context, get_material_node_details, get_geometry_nodes_details, get_shader_nodes_details, get_rigging_details, get_shape_key_details, get_curve_text_details, get_simulation_details, get_collection_layer_details, get_render_camera_compositor_details, capture_viewport, capture_animation_playblast, capture_object_inspection_renders, or search_blender_docs instead of guessing. "
+    "If omitted details matter, call inspect_scene, get_object_details, get_animation_details, get_animation_scene_context, get_material_node_details, get_geometry_nodes_details, get_shader_nodes_details, get_rigging_details, get_shape_key_details, get_curve_text_details, get_simulation_details, get_collection_layer_details, get_render_camera_compositor_details, get_blend_file_diagnostics, get_workspace_layout, capture_viewport, capture_animation_playblast, capture_object_inspection_renders, render_scene_thumbnail, or search_blender_docs instead of guessing. "
     "When target objects are unclear, use list_scene_objects and select_objects before applying selected-object tools. "
     "When the user asks to change the scene, use safe helper tools first so Blender changes immediately. "
     "Use direct Blender data concepts: objects, collections, materials, cameras, lights, actions, keyframes. "
@@ -189,6 +189,70 @@ def blender_tool_definitions():
                     "note": {"type": "string", "description": "Short reason stored in the render metadata."},
                 },
                 "required": ["object_names"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "get_blend_file_diagnostics",
+            "description": "Inspect blend-file health: saved path, backups, missing external files, linked libraries, and data-block usage summaries.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "max_items": {"type": "integer", "description": "Maximum external file/library entries to return."},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "get_workspace_layout",
+            "description": "Return JSON for Blender workspaces, windows, screens, and UI areas. Use before workspace/view navigation or UI diagnostics.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "max_workspaces": {"type": "integer"},
+                    "max_areas": {"type": "integer"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "jump_to_workspace",
+            "description": "Switch the active Blender window to a named workspace/tab. Requires an interactive Blender UI and fails soft in background mode.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "workspace_name": {"type": "string"},
+                },
+                "required": ["workspace_name"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "focus_object_in_viewport",
+            "description": "Frame a named object in the first 3D viewport and optionally select it. Requires an interactive Blender UI and fails soft in background mode.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "object_name": {"type": "string"},
+                    "select": {"type": "boolean", "description": "Select and activate the object before focusing. Defaults to true."},
+                },
+                "required": ["object_name"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "render_scene_thumbnail",
+            "description": "Render a small PNG from the scene camera or a named camera, then return metadata plus exact MCP image resource URIs. Use for render evidence, thumbnails, and client-readable still output.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "filepath": {"type": "string", "description": "Optional PNG output path. Defaults to the project/session capture cache."},
+                    "frame": {"type": "integer", "description": "Frame to render. Defaults to current frame."},
+                    "resolution_x": {"type": "integer", "description": "PNG width. Defaults to 512."},
+                    "resolution_y": {"type": "integer", "description": "PNG height. Defaults to 512."},
+                    "camera_name": {"type": "string", "description": "Optional camera object name. Defaults to active scene camera."},
+                    "note": {"type": "string", "description": "Short reason stored in thumbnail metadata."},
+                },
                 "additionalProperties": False,
             },
         },
@@ -2253,12 +2317,13 @@ _CORE_TOOL_NAMES = {
     "list_scene_objects",
     "get_object_details",
     "search_blender_docs",
+    "get_blend_file_diagnostics",
 }
 
 _FALLBACK_TOOL_NAMES = {"draft_script"}
 
 _TOOL_GROUPS = {
-    "selection": {"select_objects", "set_current_frame"},
+    "selection": {"select_objects", "set_current_frame", "get_workspace_layout", "jump_to_workspace", "focus_object_in_viewport"},
     "basic_edit": {
         "select_objects",
         "set_selected_location_delta",
@@ -2339,6 +2404,7 @@ _TOOL_GROUPS = {
         "capture_viewport",
         "capture_animation_playblast",
         "capture_object_inspection_renders",
+        "render_scene_thumbnail",
         "add_light",
         "add_camera",
         "set_active_camera",
@@ -2353,6 +2419,8 @@ _TOOL_GROUPS = {
         "animate_light_property",
     },
     "deep_inspect": {
+        "get_blend_file_diagnostics",
+        "get_workspace_layout",
         "get_animation_scene_context",
         "get_geometry_nodes_details",
         "get_shader_nodes_details",
@@ -2378,6 +2446,7 @@ _TOOL_GROUPS = {
         "capture_viewport",
         "capture_animation_playblast",
         "capture_object_inspection_renders",
+        "render_scene_thumbnail",
         "run_animation_task",
         "run_animation_workflow",
         "run_animation_repair_loop",
@@ -2502,12 +2571,12 @@ _TOOL_GROUPS = {
 }
 
 _GROUP_KEYWORDS = {
-    "selection": {"select", "selected", "active", "frame", "playhead", "inspect"},
+    "selection": {"select", "selected", "active", "frame", "playhead", "inspect", "workspace", "tab", "focus", "viewport focus"},
     "basic_edit": {"make", "create", "add", "move", "scale", "rotate", "transform", "object", "primitive", "empty", "marker", "collection", "duplicate", "copy", "parent", "align", "distribute", "layout", "arrange", "hide", "unhide", "visibility", "visible", "display", "wireframe", "show name", "in front"},
     "materials": {"material", "shader", "color", "colour", "red", "blue", "green", "metal", "metallic", "chrome", "glass", "emission", "glow", "window"},
     "animation": {"animate", "animation", "animation brief", "prompt contract", "success criteria", "timing chart", "key pose", "key poses", "hold", "breakdown", "keyframe", "timeline", "frame", "orbit", "bounce", "driver", "motion", "motion arc", "arc", "follow path", "path", "retime", "interpolation", "easing", "loop", "cycles", "turntable", "pulse", "reveal", "stagger", "playblast", "timing", "spacing", "blocking", "anticipation", "squash", "stretch", "settle", "follow-through", "principles", "center of mass", "support", "contact sliding"},
-    "camera_render": {"camera", "render", "light", "lighting", "world", "background", "dof", "depth of field", "lens", "compositor", "resolution", "intensity", "studio", "product stage", "presentation", "turntable", "close-up", "closeup", "underside"},
-    "deep_inspect": {"inspect", "analyze", "analyse", "summarize", "summary", "details", "world model", "what", "list", "screenshot", "viewport", "visual", "image", "capture", "playblast", "review", "diagnostic", "underside", "gear"},
+    "camera_render": {"camera", "render", "thumbnail", "still", "light", "lighting", "world", "background", "dof", "depth of field", "lens", "compositor", "resolution", "intensity", "studio", "product stage", "presentation", "turntable", "close-up", "closeup", "underside"},
+    "deep_inspect": {"inspect", "analyze", "analyse", "summarize", "summary", "details", "world model", "what", "list", "screenshot", "viewport", "visual", "image", "capture", "playblast", "review", "diagnostic", "diagnostics", "missing external", "linked library", "linked libraries", "blend file", "data-block", "datablock", "backup", "workspace", "layout json", "underside", "gear"},
     "advanced_create": {"geometry nodes", "shape key", "text", "curve", "particle", "armature", "constraint", "rig", "driver", "callout", "dimension", "label", "palette", "swatch", "organize", "collection"},
     "refinement": {"refine", "polish", "smooth", "high poly", "high-poly", "detail", "bevel", "subdivision", "subsurf", "seam", "panel", "dimension", "callout", "stage", "palette", "lighting"},
     "vehicle": {"car", "vehicle", "truck", "wheel", "tire", "tyre", "rim", "headlight", "taillight", "windshield", "door", "grille"},

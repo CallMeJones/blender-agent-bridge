@@ -119,6 +119,7 @@ TOOL_CATEGORY_LABELS = {
     "preview": "Preview Control",
     "script": "Approval-Gated Python",
     "scene": "Scene Settings",
+    "navigation": "Workspace And View Navigation",
     "other": "Other",
 }
 
@@ -231,6 +232,20 @@ RESOURCE_TEMPLATES = [
         "title": "Blender Inspection Render Image Resource",
         "description": "Diagnostic close-up object render PNG resources captured by the running Blender bridge.",
         "mimeType": "image/png",
+    },
+    {
+        "uriTemplate": "blender://render-thumbnails/{thumbnail_id}",
+        "name": "render-thumbnail-resource",
+        "title": "Blender Render Thumbnail Resource",
+        "description": "Scene thumbnail PNG resources rendered by the running Blender bridge.",
+        "mimeType": "image/png",
+    },
+    {
+        "uriTemplate": "blender://render-thumbnails/{thumbnail_id}/metadata",
+        "name": "render-thumbnail-metadata-resource",
+        "title": "Blender Render Thumbnail Metadata Resource",
+        "description": "Scene thumbnail metadata for a rendered still from the running Blender bridge.",
+        "mimeType": "application/json",
     },
 ]
 
@@ -675,6 +690,8 @@ def _tool_category(tool):
         return "script"
     if name in {"commit_preview", "revert_preview"}:
         return "preview"
+    if name in {"get_workspace_layout", "jump_to_workspace", "focus_object_in_viewport"}:
+        return "navigation"
     if name.startswith("get_") or name.startswith("list_") or name in {
         "inspect_scene",
         "search_blender_docs",

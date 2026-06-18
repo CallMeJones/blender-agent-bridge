@@ -19,7 +19,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import bridge_server, inspection_render, playblast_capture, viewport_capture  # noqa: E402
+from claude_blender import bridge_server, inspection_render, lab_parity, playblast_capture, viewport_capture  # noqa: E402
 
 
 def _request_with_pump(fn, timeout=10):
@@ -84,6 +84,11 @@ def main():
         assert "organize_scene_for_production" in names, names
         assert "capture_animation_playblast" in names, names
         assert "capture_object_inspection_renders" in names, names
+        assert "get_blend_file_diagnostics" in names, names
+        assert "get_workspace_layout" in names, names
+        assert "render_scene_thumbnail" in names, names
+        assert "jump_to_workspace" in names, names
+        assert "focus_object_in_viewport" in names, names
 
         health = _request_with_pump(lambda: _get(base + "/health"))
         assert health["ok"], health
@@ -103,6 +108,8 @@ def main():
         assert "blender://captures/latest/metadata" in uris, resources
         assert "blender://playblasts/latest/metadata" in uris, resources
         assert "blender://inspection-renders/latest/metadata" in uris, resources
+        assert "blender://render-thumbnails/latest" in uris, resources
+        assert "blender://render-thumbnails/latest/metadata" in uris, resources
         resource_url = base + "/resource?" + urllib.parse.urlencode({"uri": "blender://scene/status"})
         resource = _request_with_pump(lambda: _get(resource_url))
         assert resource["ok"], resource
@@ -195,6 +202,32 @@ def main():
         )
         assert image_resource["mimeType"] == "image/png", image_resource
         assert image_resource["blob"], image_resource
+        thumbnail_dir = os.path.join(capture_dir, "render-thumbnails", "test-thumbnail")
+        os.makedirs(thumbnail_dir, exist_ok=True)
+        thumbnail_path = os.path.join(thumbnail_dir, "thumbnail.png")
+        shutil.copyfile(capture_path, thumbnail_path)
+        thumbnail_metadata = {
+            "ok": True,
+            "available": True,
+            "thumbnail_id": "test-thumbnail",
+            "created_at": time.time(),
+            "resource_uri": "blender://render-thumbnails/test-thumbnail",
+            "metadata_uri": "blender://render-thumbnails/test-thumbnail/metadata",
+            "latest_resource_uri": "blender://render-thumbnails/latest",
+            "latest_metadata_uri": "blender://render-thumbnails/latest/metadata",
+            "render_dir": thumbnail_dir,
+            "path": thumbnail_path,
+            "size_bytes": os.path.getsize(thumbnail_path),
+            "width": 1,
+            "height": 1,
+        }
+        with open(os.path.join(thumbnail_dir, "metadata.json"), "w", encoding="utf-8") as handle:
+            json.dump(thumbnail_metadata, handle)
+        latest_thumbnail = lab_parity.latest_render_thumbnail_metadata(capture_dir=capture_dir)
+        assert latest_thumbnail["thumbnail_id"] == "test-thumbnail", latest_thumbnail
+        thumbnail_resource = lab_parity.render_thumbnail_resource("test-thumbnail", capture_dir=capture_dir)
+        assert thumbnail_resource["mimeType"] == "image/png", thumbnail_resource
+        assert thumbnail_resource["blob"], thumbnail_resource
         shutil.rmtree(capture_dir, ignore_errors=True)
 
         stopped = bridge_server.stop_bridge()

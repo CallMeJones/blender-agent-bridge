@@ -249,6 +249,80 @@ TOOL_CONTRACTS = {
         "supports_headless": True,
         "timeout_seconds": 180,
     },
+    "get_blend_file_diagnostics": {
+        "description": "Return blend-file diagnostics for save path, backups, missing external files, linked libraries, and data-block usage summaries",
+        "mutates_scene": False,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "max_items": {"type": "integer", "description": "Maximum external file/library entries to return"},
+            },
+            "additionalProperties": False,
+        },
+    },
+    "get_workspace_layout": {
+        "description": "Return workspace, window, screen, and area layout JSON for the current Blender UI",
+        "mutates_scene": False,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "max_workspaces": {"type": "integer"},
+                "max_areas": {"type": "integer"},
+            },
+            "additionalProperties": False,
+        },
+    },
+    "jump_to_workspace": {
+        "description": "Switch the active interactive Blender window to a named workspace",
+        "mutates_scene": False,
+        "has_side_effects": True,
+        "permissions": ["ui:navigate"],
+        "supports_headless": False,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "workspace_name": {"type": "string"},
+            },
+            "required": ["workspace_name"],
+            "additionalProperties": False,
+        },
+    },
+    "focus_object_in_viewport": {
+        "description": "Frame a named object in the first 3D viewport and optionally select it",
+        "mutates_scene": True,
+        "has_side_effects": True,
+        "permissions": ["ui:navigate", "scene:mutate"],
+        "supports_headless": False,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string"},
+                "select": {"type": "boolean", "description": "Select and activate the object before focusing. Defaults to true."},
+            },
+            "required": ["object_name"],
+            "additionalProperties": False,
+        },
+    },
+    "render_scene_thumbnail": {
+        "description": "Render a small PNG from the scene camera or named camera and expose it as an MCP image resource",
+        "mutates_scene": False,
+        "has_side_effects": True,
+        "permissions": ["scene:read", "files:write"],
+        "supports_headless": True,
+        "timeout_seconds": 180,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "filepath": {"type": "string", "description": "Optional PNG output path. Defaults to the project/session capture cache."},
+                "frame": {"type": "integer", "description": "Frame to render. Defaults to current frame."},
+                "resolution_x": {"type": "integer", "description": "PNG width. Defaults to 512."},
+                "resolution_y": {"type": "integer", "description": "PNG height. Defaults to 512."},
+                "camera_name": {"type": "string", "description": "Optional camera object name. Defaults to the active scene camera."},
+                "note": {"type": "string", "description": "Short reason stored in thumbnail metadata."},
+            },
+            "additionalProperties": False,
+        },
+    },
     "set_selected_location_delta": {
         "description": "Move selected Blender objects by a delta with rollback state",
         "mutates_scene": True,

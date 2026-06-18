@@ -34,6 +34,7 @@ _MODULE_NAMES = (
     "viewport_capture",
     "playblast_capture",
     "inspection_render",
+    "lab_parity",
     "bridge_protocol",
     "bridge_server",
     "docs_index",

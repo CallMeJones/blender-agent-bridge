@@ -18,7 +18,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import anthropic_client, bridge_protocol, context_budget, context_bundle, docs_index, inspection_render, playblast_capture, tool_dispatcher, viewport_capture  # noqa: E402
+from claude_blender import anthropic_client, bridge_protocol, context_budget, context_bundle, docs_index, inspection_render, lab_parity, playblast_capture, tool_dispatcher, viewport_capture  # noqa: E402
 
 
 def main():
@@ -34,12 +34,27 @@ def main():
         assert "capture_viewport" in bundle["available_tools"]
         assert "capture_animation_playblast" in bundle["available_tools"]
         assert "capture_object_inspection_renders" in bundle["available_tools"]
+        assert "get_blend_file_diagnostics" in bundle["available_tools"]
+        assert "get_workspace_layout" in bundle["available_tools"]
+        assert "render_scene_thumbnail" in bundle["available_tools"]
+        assert "jump_to_workspace" in bundle["available_tools"]
+        assert "focus_object_in_viewport" in bundle["available_tools"]
         assert "capture_viewport" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
         assert "capture_animation_playblast" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
         assert "capture_object_inspection_renders" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
+        assert "get_blend_file_diagnostics" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
+        assert "get_workspace_layout" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
+        assert "render_scene_thumbnail" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
+        assert "jump_to_workspace" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
+        assert "focus_object_in_viewport" in {tool["name"] for tool in anthropic_client.blender_tool_definitions()}
         assert "capture_viewport" in bridge_protocol.TOOL_CONTRACTS
         assert "capture_animation_playblast" in bridge_protocol.TOOL_CONTRACTS
         assert "capture_object_inspection_renders" in bridge_protocol.TOOL_CONTRACTS
+        assert "get_blend_file_diagnostics" in bridge_protocol.TOOL_CONTRACTS
+        assert "get_workspace_layout" in bridge_protocol.TOOL_CONTRACTS
+        assert "render_scene_thumbnail" in bridge_protocol.TOOL_CONTRACTS
+        assert "jump_to_workspace" in bridge_protocol.TOOL_CONTRACTS
+        assert "focus_object_in_viewport" in bridge_protocol.TOOL_CONTRACTS
 
         captured = json.loads(tool_dispatcher.execute_tool(bpy.context, "capture_viewport", {"max_bytes": 512 * 1024}))
         assert captured["ok"] is False, captured
@@ -58,6 +73,25 @@ def main():
         assert playblast["playblast"]["available"] is False, playblast
         assert playblast["playblast"]["sampled_frames"] == [1, 5, 8, 12], playblast
         assert "interactive Blender window" in playblast["message"], playblast
+
+        missing_image = bpy.data.images.new("Missing Smoke External Image", width=1, height=1)
+        missing_image.filepath_raw = "//missing-smoke-texture.png"
+        diagnostics = json.loads(
+            tool_dispatcher.execute_tool(bpy.context, "get_blend_file_diagnostics", {"max_items": 20})
+        )
+        assert diagnostics["ok"] is True, diagnostics
+        assert "data_block_summary" in diagnostics, diagnostics
+        assert any(item["collection"] == "images" for item in diagnostics["data_block_summary"]), diagnostics
+        assert any(item["name"] == "Missing Smoke External Image" for item in diagnostics["missing_external_files"]), diagnostics
+        bpy.data.images.remove(missing_image)
+
+        layout = json.loads(tool_dispatcher.execute_tool(bpy.context, "get_workspace_layout", {}))
+        assert layout["ok"] is True, layout
+        assert "workspaces" in layout, layout
+        assert layout["ui_available"] is False, layout
+        jump = json.loads(tool_dispatcher.execute_tool(bpy.context, "jump_to_workspace", {"workspace_name": "Layout"}))
+        assert jump["ok"] is False, jump
+        assert jump["ui_available"] is False, jump
 
         original_has_ui_context = viewport_capture.has_ui_context
         original_capture_viewport_to_file = viewport_capture.capture_viewport_to_file
@@ -145,6 +179,49 @@ def main():
         assert scene.render.filepath == original_render_state[6], render_metadata
         assert bpy.data.objects.get("Smoke_Inspection_Camera") is None, render_metadata
         assert bpy.data.cameras.get("Smoke_Inspection_Camera_Data") is None, render_metadata
+        focus = json.loads(
+            tool_dispatcher.execute_tool(bpy.context, "focus_object_in_viewport", {"object_name": target.name})
+        )
+        assert focus["ok"] is False, focus
+        assert focus["ui_available"] is False, focus
+        thumbnail_path = os.path.join(cache_dir, "smoke-thumbnail.png")
+        thumbnail_payload = json.loads(
+            tool_dispatcher.execute_tool(
+                bpy.context,
+                "render_scene_thumbnail",
+                {
+                    "filepath": thumbnail_path,
+                    "frame": 1,
+                    "resolution_x": 64,
+                    "resolution_y": 64,
+                    "note": "smoke thumbnail render",
+                },
+            )
+        )
+        assert thumbnail_payload["ok"] is True, thumbnail_payload
+        thumbnail = thumbnail_payload["thumbnail"]
+        assert os.path.isfile(thumbnail["path"]), thumbnail
+        assert thumbnail["resource_uri"].startswith("blender://render-thumbnails/"), thumbnail
+        assert thumbnail["metadata_uri"].startswith("blender://render-thumbnails/"), thumbnail
+        assert scene.camera == original_render_state[0], thumbnail
+        assert scene.frame_current == original_render_state[1], thumbnail
+        assert scene.render.resolution_x == original_render_state[2], thumbnail
+        assert scene.render.resolution_y == original_render_state[3], thumbnail
+        assert scene.render.resolution_percentage == original_render_state[4], thumbnail
+        assert scene.render.image_settings.file_format == original_render_state[5], thumbnail
+        assert scene.render.filepath == original_render_state[6], thumbnail
+        latest_thumbnail = lab_parity.latest_render_thumbnail_metadata(
+            capture_dir=thumbnail["capture_dir"],
+            context=bpy.context,
+        )
+        assert latest_thumbnail["thumbnail_id"] == thumbnail["thumbnail_id"], latest_thumbnail
+        thumbnail_resource = lab_parity.render_thumbnail_resource(
+            thumbnail["thumbnail_id"],
+            capture_dir=thumbnail["capture_dir"],
+            context=bpy.context,
+        )
+        assert thumbnail_resource["mimeType"] == "image/png", thumbnail_resource
+        assert thumbnail_resource["blob"], thumbnail_resource
         latest_render = inspection_render.latest_inspection_render_metadata(
             capture_dir=render_metadata["capture_dir"],
             context=bpy.context,

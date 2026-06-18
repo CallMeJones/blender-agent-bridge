@@ -18,6 +18,7 @@ from . import (
     build_info,
     context_bundle,
     inspection_render,
+    lab_parity,
     playblast_capture,
     preferences,
     script_runner,
@@ -186,6 +187,20 @@ def _resources():
             "description": "Metadata and image resource URIs for the latest diagnostic object renders",
             "mimeType": "application/json",
         },
+        {
+            "uri": lab_parity.LATEST_RENDER_THUMBNAIL_URI,
+            "name": "latest-render-thumbnail",
+            "title": "Latest Render Thumbnail",
+            "description": "Latest scene thumbnail PNG rendered by the Blender bridge",
+            "mimeType": "image/png",
+        },
+        {
+            "uri": lab_parity.LATEST_RENDER_THUMBNAIL_METADATA_URI,
+            "name": "latest-render-thumbnail-metadata",
+            "title": "Latest Render Thumbnail Metadata",
+            "description": "Metadata and local path for the latest rendered thumbnail",
+            "mimeType": "application/json",
+        },
     ]
 
 
@@ -304,6 +319,38 @@ def _read_resource(uri):
             return inspection_render.inspection_render_image_resource(
                 render_id,
                 image_id,
+                context=bpy.context,
+                preferred_dir=_capture_cache_dir(),
+            )
+    thumbnail_id, thumbnail_kind = lab_parity.parse_render_thumbnail_resource_uri(uri)
+    if thumbnail_id:
+        if thumbnail_id == "latest" and thumbnail_kind == "metadata":
+            return {
+                "mimeType": "application/json",
+                "text": json.dumps(
+                    lab_parity.latest_render_thumbnail_metadata(
+                        context=bpy.context,
+                        preferred_dir=_capture_cache_dir(),
+                    ),
+                    indent=2,
+                    sort_keys=True,
+                ),
+            }
+        if thumbnail_kind == "metadata":
+            metadata = lab_parity.render_thumbnail_metadata(
+                thumbnail_id,
+                context=bpy.context,
+                preferred_dir=_capture_cache_dir(),
+            )
+            if not metadata.get("available"):
+                return None
+            return {
+                "mimeType": "application/json",
+                "text": json.dumps(metadata, indent=2, sort_keys=True),
+            }
+        if thumbnail_kind == "image":
+            return lab_parity.render_thumbnail_resource(
+                thumbnail_id,
                 context=bpy.context,
                 preferred_dir=_capture_cache_dir(),
             )

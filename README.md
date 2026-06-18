@@ -17,8 +17,11 @@ Recommended GitHub repository name: `blender-agent-bridge`.
 ## Capabilities
 
 - Inspect the active `.blend` file through structured scene, selection, material, animation, rigging, render, camera, compositor, collection, and node-tree summaries.
+- Diagnose blend-file health with save/path/backups, missing external files, linked libraries, and data-block usage summaries.
 - Attach a bounded viewport screenshot when the `Viewport` toggle is enabled, with project/session-scoped local storage and MCP image resources for external clients.
 - Capture sampled animation playblast frames as project/session-scoped MCP image resources so agents can review timing, spacing, staging, arcs, and contact poses.
+- Render camera thumbnails as project/session-scoped MCP image resources for client-readable still evidence.
+- Inspect workspace/window/area layout and use interactive helpers for workspace switching or viewport focus.
 - Let agents sample animation state, analyze f-curve spacing, motion arcs, pose clarity, contact sliding, bbox penetration, camera framing, and compare results against an animation brief before repair.
 - Search cached official Blender Python API and Manual documentation before version-sensitive scripting.
 - Let the in-Blender Claude assistant or external MCP agents call bounded live helper tools for common scene edits such as transforms, primitives, materials, cameras, lights, keyframes, constraints, geometry-node starters, shape keys, particles, text/curves, render settings, lighting presets, material palettes, product/vehicle/character kits, product turntables, and production scene organization.
@@ -34,7 +37,7 @@ Connected agents do not get blanket access to Blender. The in-Blender Claude ass
 
 Viewport images are sent only when the user enables the `Viewport` toggle. The localhost bridge does not call a model provider by itself; external MCP clients decide what to send to their own providers after reading resources or tool results.
 
-Saved `.blend` projects store generated viewport captures and playblast frame sequences under `.claude_blender/captures/<session_id>` by default, while unsaved or unwritable projects fall back to the user cache. Treat these captures as generated runtime artifacts unless you intentionally keep them as visual QA evidence.
+Saved `.blend` projects store generated viewport captures, playblast frame sequences, inspection renders, and render thumbnails under `.claude_blender/captures/<session_id>` by default, while unsaved or unwritable projects fall back to the user cache. Treat these captures as generated runtime artifacts unless you intentionally keep them as visual QA evidence.
 
 See [SECURITY.md](SECURITY.md) and [PRIVACY.md](PRIVACY.md) for the detailed model.
 

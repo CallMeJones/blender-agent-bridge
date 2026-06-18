@@ -144,6 +144,18 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                             "title": "Latest Object Inspection Render Metadata",
                             "mimeType": "application/json",
                         },
+                        {
+                            "uri": "blender://render-thumbnails/latest",
+                            "name": "latest-render-thumbnail",
+                            "title": "Latest Render Thumbnail",
+                            "mimeType": "image/png",
+                        },
+                        {
+                            "uri": "blender://render-thumbnails/latest/metadata",
+                            "name": "latest-render-thumbnail-metadata",
+                            "title": "Latest Render Thumbnail Metadata",
+                            "mimeType": "application/json",
+                        },
                     ],
                 }
             )
@@ -301,6 +313,60 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                         "uri": "blender://inspection-renders/test-render/images/cube-front_below",
                         "mimeType": "image/png",
                         "blob": "iVBORw0KGgo=",
+                    }
+                )
+            elif uri == "blender://render-thumbnails/latest":
+                self._send(
+                    {
+                        "ok": True,
+                        "uri": "blender://render-thumbnails/latest",
+                        "mimeType": "image/png",
+                        "blob": "iVBORw0KGgo=",
+                    }
+                )
+            elif uri == "blender://render-thumbnails/latest/metadata":
+                self._send(
+                    {
+                        "ok": True,
+                        "uri": "blender://render-thumbnails/latest/metadata",
+                        "mimeType": "application/json",
+                        "text": json.dumps(
+                            {
+                                "ok": True,
+                                "available": True,
+                                "thumbnail_id": "test-thumbnail",
+                                "resource_uri": "blender://render-thumbnails/test-thumbnail",
+                                "metadata_uri": "blender://render-thumbnails/test-thumbnail/metadata",
+                                "latest_resource_uri": "blender://render-thumbnails/latest",
+                                "latest_metadata_uri": "blender://render-thumbnails/latest/metadata",
+                            }
+                        ),
+                    }
+                )
+            elif uri == "blender://render-thumbnails/test-thumbnail":
+                self._send(
+                    {
+                        "ok": True,
+                        "uri": "blender://render-thumbnails/test-thumbnail",
+                        "mimeType": "image/png",
+                        "blob": "iVBORw0KGgo=",
+                    }
+                )
+            elif uri == "blender://render-thumbnails/test-thumbnail/metadata":
+                self._send(
+                    {
+                        "ok": True,
+                        "uri": "blender://render-thumbnails/test-thumbnail/metadata",
+                        "mimeType": "application/json",
+                        "text": json.dumps(
+                            {
+                                "ok": True,
+                                "available": True,
+                                "thumbnail_id": "test-thumbnail",
+                                "resource_uri": "blender://render-thumbnails/test-thumbnail",
+                                "metadata_uri": "blender://render-thumbnails/test-thumbnail/metadata",
+                            }
+                        ),
                     }
                 )
             else:
@@ -873,6 +939,8 @@ def main():
         assert "blender://captures/latest/metadata" in uris
         assert "blender://playblasts/latest/metadata" in uris
         assert "blender://inspection-renders/latest/metadata" in uris
+        assert "blender://render-thumbnails/latest" in uris
+        assert "blender://render-thumbnails/latest/metadata" in uris
 
         templates = _send(proc, {"jsonrpc": "2.0", "id": 40, "method": "resources/templates/list"})
         template_names = {item["name"] for item in templates["result"]["resourceTemplates"]}
@@ -883,6 +951,8 @@ def main():
         assert "playblast-frame-resource" in template_names, templates
         assert "inspection-render-metadata-resource" in template_names, templates
         assert "inspection-render-image-resource" in template_names, templates
+        assert "render-thumbnail-resource" in template_names, templates
+        assert "render-thumbnail-metadata-resource" in template_names, templates
 
         prompts = _send(proc, {"jsonrpc": "2.0", "id": 41, "method": "prompts/list"})
         prompt_names = {item["name"] for item in prompts["result"]["prompts"]}
@@ -1030,6 +1100,49 @@ def main():
         inspection_image = inspection_image_resource["result"]["contents"][0]
         assert inspection_image["mimeType"] == "image/png", inspection_image_resource
         assert inspection_image["blob"] == "iVBORw0KGgo=", inspection_image_resource
+        thumbnail_resource = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 53,
+                "method": "resources/read",
+                "params": {"uri": "blender://render-thumbnails/latest"},
+            },
+        )
+        thumbnail_image = thumbnail_resource["result"]["contents"][0]
+        assert thumbnail_image["mimeType"] == "image/png", thumbnail_resource
+        assert thumbnail_image["blob"] == "iVBORw0KGgo=", thumbnail_resource
+        thumbnail_metadata_resource = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 54,
+                "method": "resources/read",
+                "params": {"uri": "blender://render-thumbnails/latest/metadata"},
+            },
+        )
+        thumbnail_metadata = json.loads(thumbnail_metadata_resource["result"]["contents"][0]["text"])
+        assert thumbnail_metadata["metadata_uri"] == "blender://render-thumbnails/test-thumbnail/metadata", thumbnail_metadata_resource
+        thumbnail_exact_resource = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 55,
+                "method": "resources/read",
+                "params": {"uri": thumbnail_metadata["resource_uri"]},
+            },
+        )
+        assert thumbnail_exact_resource["result"]["contents"][0]["blob"] == "iVBORw0KGgo=", thumbnail_exact_resource
+        thumbnail_exact_metadata = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 56,
+                "method": "resources/read",
+                "params": {"uri": thumbnail_metadata["metadata_uri"]},
+            },
+        )
+        assert json.loads(thumbnail_exact_metadata["result"]["contents"][0]["text"])["thumbnail_id"] == "test-thumbnail", thumbnail_exact_metadata
         print("smoke_mcp_server: ok")
     finally:
         proc.kill()
