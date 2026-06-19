@@ -44,6 +44,7 @@ def main():
         assert "validate_render_job_output" in bundle["available_tools"]
         assert "jump_to_workspace" in bundle["available_tools"]
         assert "focus_object_in_viewport" in bundle["available_tools"]
+        assert "inspect_simulation_bake" in bundle["available_tools"]
         assert "capture_viewport" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "capture_animation_playblast" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "capture_object_inspection_renders" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
@@ -57,6 +58,7 @@ def main():
         assert "validate_render_job_output" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "jump_to_workspace" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "focus_object_in_viewport" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "inspect_simulation_bake" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "capture_viewport" in bridge_protocol.TOOL_CONTRACTS
         assert "capture_animation_playblast" in bridge_protocol.TOOL_CONTRACTS
         assert "capture_object_inspection_renders" in bridge_protocol.TOOL_CONTRACTS
@@ -68,6 +70,7 @@ def main():
         assert "cancel_render_job" in bridge_protocol.TOOL_CONTRACTS
         assert "assemble_render_job_video" in bridge_protocol.TOOL_CONTRACTS
         assert "validate_render_job_output" in bridge_protocol.TOOL_CONTRACTS
+        assert "inspect_simulation_bake" in bridge_protocol.TOOL_CONTRACTS
         assert "jump_to_workspace" in bridge_protocol.TOOL_CONTRACTS
         assert "focus_object_in_viewport" in bridge_protocol.TOOL_CONTRACTS
 

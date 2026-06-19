@@ -493,6 +493,45 @@ def main():
         finally:
             bpy.data.objects.remove(support, do_unlink=True)
 
+        bpy.ops.mesh.primitive_cube_add(size=0.2, location=(0.7, -0.7, -0.425))
+        balance_subject = context.object
+        balance_subject.name = "Agent Bridge Balance Subject"
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.0, 0.0, -0.55), rotation=(0.0, 0.0, 0.7853981633974483))
+        rotated_support = context.object
+        rotated_support.name = "Agent Bridge Rotated Support"
+        rotated_support.scale = (2.2, 0.12, 0.05)
+        context.view_layer.update()
+        try:
+            polygon_center = _execute(
+                context,
+                "analyze_center_of_mass",
+                {
+                    "object_names": ["Agent Bridge Balance Subject"],
+                    "support_object_names": ["Agent Bridge Rotated Support"],
+                    "frame_start": 1,
+                    "frame_end": 1,
+                    "sample_step": 1,
+                    "support_margin": 0.0,
+                    "contact_tolerance": 0.05,
+                },
+            )
+            polygon_support = polygon_center["support_samples"][0]
+            assert polygon_support["support_footprint_method"] == "convex_hull_world_bounds", polygon_center
+            assert len(polygon_support["support_footprint_xy"]) >= 4, polygon_center
+            polygon_sample = next(item for item in polygon_center["samples"] if item["object"] == "Agent Bridge Balance Subject")
+            assert polygon_sample["support_available"] is True, polygon_center
+            assert polygon_sample["contact_like"] is True, polygon_center
+            assert polygon_sample["center_within_support"] is False, polygon_center
+            assert any(
+                item.get("requirement") == "center_of_mass"
+                and item.get("evidence", {}).get("support_footprint_method") == "convex_hull_world_bounds"
+                for item in polygon_center["findings"]
+            ), polygon_center
+        finally:
+            for obj in (balance_subject, rotated_support):
+                if obj.name in bpy.data.objects:
+                    bpy.data.objects.remove(obj, do_unlink=True)
+
         framing = _execute(
             context,
             "analyze_camera_framing",

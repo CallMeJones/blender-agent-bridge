@@ -158,6 +158,7 @@ def main():
             "get_shape_key_details",
             "get_curve_text_details",
             "get_simulation_details",
+            "inspect_simulation_bake",
             "get_collection_layer_details",
             "get_render_camera_compositor_details",
         }:
@@ -217,6 +218,23 @@ def main():
         assert cube_simulation["rigid_body"]["mass"] == 2.5, simulations
         assert cube_simulation["particle_systems"][0]["point_cache"], simulations
         assert "compare_animation_to_brief" in simulations["recommended_next_tools"], simulations
+
+        frame_before_simulation_inspect = scene.frame_current
+        simulation_bake = _execute(
+            context,
+            "inspect_simulation_bake",
+            {"object_names": ["Cube"], "frame_start": 1, "frame_end": 24, "sample_count": 4},
+        )
+        assert simulation_bake["mode"] == "sample_evaluated_state", simulation_bake
+        assert simulation_bake["persistent_bake_performed"] is False, simulation_bake
+        assert simulation_bake["sampled_frames"][0] == 1, simulation_bake
+        assert simulation_bake["sampled_frames"][-1] == 24, simulation_bake
+        assert simulation_bake["object_names"] == ["Cube"], simulation_bake
+        assert simulation_bake["frame_samples"], simulation_bake
+        assert simulation_bake["frame_samples"][0]["objects"][0]["name"] == "Cube", simulation_bake
+        assert simulation_bake["object_summaries"][0]["sample_count"] == len(simulation_bake["sampled_frames"]), simulation_bake
+        assert simulation_bake["simulation_details"]["summary"]["rigid_body_object_count"] >= 1, simulation_bake
+        assert scene.frame_current == frame_before_simulation_inspect, simulation_bake
 
         collections = _execute(context, "get_collection_layer_details", {"max_depth": 3})
         assert collections["scene_collection"], collections

@@ -213,6 +213,10 @@ TOOL_CONTRACTS = {
         "description": "Return rigid-body, particle, point-cache, and simulation bake summaries",
         "mutates_scene": False,
     },
+    "inspect_simulation_bake": {
+        "description": "Sample evaluated simulation state across frames and report cache/bake readiness without mutating persistent caches",
+        "mutates_scene": False,
+    },
     "get_collection_layer_details": {
         "description": "Return collection tree, membership, visibility, and view-layer summaries",
         "mutates_scene": False,

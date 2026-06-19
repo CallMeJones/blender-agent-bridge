@@ -240,6 +240,7 @@ def build_context_bundle(context, *, include_visual=False, capture_dir=None, max
             "get_shape_key_details",
             "get_curve_text_details",
             "get_simulation_details",
+            "inspect_simulation_bake",
             "get_collection_layer_details",
             "get_render_camera_compositor_details",
             "get_blend_file_diagnostics",

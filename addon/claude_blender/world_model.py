@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections import Counter
 
 import bpy
@@ -1075,6 +1076,145 @@ def simulation_details(context, *, object_names=None, max_objects=20):
         "recommended_next_tools": sorted(recommended_next_tools),
         "cautions": cautions[:24],
         "note": "Read-only simulation inspection; bake or run simulation intentionally before treating physics-heavy validation as final.",
+    }
+
+
+def _simulation_frame_samples(scene, frame_start=None, frame_end=None, sample_count=8):
+    start = int(frame_start if frame_start is not None else scene.frame_start)
+    end = int(frame_end if frame_end is not None else scene.frame_end)
+    if end < start:
+        start, end = end, start
+    count = max(2, min(48, int(sample_count or 8)))
+    if start == end:
+        return [start]
+    step = (end - start) / max(1, count - 1)
+    frames = [int(round(start + step * index)) for index in range(count)]
+    frames[0] = start
+    frames[-1] = end
+    return sorted(set(frames))
+
+
+def _evaluated_world_bbox(obj, depsgraph):
+    evaluated = obj.evaluated_get(depsgraph) if depsgraph else obj
+    corners = [evaluated.matrix_world @ mathutils.Vector(corner) for corner in getattr(evaluated, "bound_box", [])]
+    if not corners:
+        loc = evaluated.matrix_world.translation
+        corners = [loc]
+    mins = [min(point[index] for point in corners) for index in range(3)]
+    maxs = [max(point[index] for point in corners) for index in range(3)]
+    center = [sum(point[index] for point in corners) / len(corners) for index in range(3)]
+    return mins, maxs, center
+
+
+def _simulation_sample_for_object(obj, depsgraph):
+    evaluated = obj.evaluated_get(depsgraph) if depsgraph else obj
+    mins, maxs, center = _evaluated_world_bbox(obj, depsgraph)
+    return {
+        "name": obj.name,
+        "type": obj.type,
+        "location": _xyz(evaluated.matrix_world.translation),
+        "world_center": _xyz(center),
+        "bbox_min": _xyz(mins),
+        "bbox_max": _xyz(maxs),
+        "dimensions": _xyz([maxs[index] - mins[index] for index in range(3)]),
+        "rigid_body": _rigid_body_detail(obj),
+        "simulation_modifier_count": sum(1 for modifier in getattr(obj, "modifiers", []) if modifier.type in {"PARTICLE_SYSTEM", "FLUID", "CLOTH", "SOFT_BODY", "DYNAMIC_PAINT"}),
+        "particle_system_count": len(getattr(obj, "particle_systems", []) or []),
+    }
+
+
+def inspect_simulation_bake(context, *, object_names=None, frame_start=None, frame_end=None, sample_count=8, max_objects=20):
+    names = set(object_names or [])
+    scene = context.scene
+    candidates = []
+    simulation_types = {"PARTICLE_SYSTEM", "FLUID", "CLOTH", "SOFT_BODY", "DYNAMIC_PAINT"}
+    for obj in scene.objects:
+        if names and obj.name not in names:
+            continue
+        if (
+            getattr(obj, "rigid_body", None)
+            or getattr(obj, "rigid_body_constraint", None)
+            or any(modifier.type in simulation_types for modifier in obj.modifiers)
+            or len(getattr(obj, "particle_systems", []) or [])
+        ):
+            candidates.append(obj)
+        if len(candidates) >= int(max_objects):
+            break
+    missing = sorted(name for name in names if bpy.data.objects.get(name) is None)
+    frames = _simulation_frame_samples(scene, frame_start=frame_start, frame_end=frame_end, sample_count=sample_count)
+    current_frame = int(scene.frame_current)
+    frame_samples = []
+    try:
+        for frame in frames:
+            scene.frame_set(int(frame))
+            context.view_layer.update()
+            depsgraph = context.evaluated_depsgraph_get()
+            frame_samples.append(
+                {
+                    "frame": int(frame),
+                    "objects": [_simulation_sample_for_object(obj, depsgraph) for obj in candidates],
+                }
+            )
+    finally:
+        scene.frame_set(current_frame)
+        context.view_layer.update()
+
+    by_object = {}
+    for frame_sample in frame_samples:
+        for obj_sample in frame_sample["objects"]:
+            item = by_object.setdefault(
+                obj_sample["name"],
+                {
+                    "name": obj_sample["name"],
+                    "type": obj_sample["type"],
+                    "sample_count": 0,
+                    "first_center": obj_sample["world_center"],
+                    "last_center": obj_sample["world_center"],
+                    "max_center_displacement": 0.0,
+                    "z_range": [obj_sample["world_center"]["z"], obj_sample["world_center"]["z"]],
+                },
+            )
+            item["sample_count"] += 1
+            item["last_center"] = obj_sample["world_center"]
+            item["z_range"][0] = min(item["z_range"][0], obj_sample["world_center"]["z"])
+            item["z_range"][1] = max(item["z_range"][1], obj_sample["world_center"]["z"])
+            dx = obj_sample["world_center"]["x"] - item["first_center"]["x"]
+            dy = obj_sample["world_center"]["y"] - item["first_center"]["y"]
+            dz = obj_sample["world_center"]["z"] - item["first_center"]["z"]
+            item["max_center_displacement"] = max(item["max_center_displacement"], round(math.sqrt(dx * dx + dy * dy + dz * dz), 6))
+    summaries = []
+    for item in by_object.values():
+        item["z_range"] = [round(float(item["z_range"][0]), 6), round(float(item["z_range"][1]), 6)]
+        summaries.append(item)
+
+    details = simulation_details(context, object_names=[obj.name for obj in candidates], max_objects=max_objects)
+    world_cache = ((details.get("scene") or {}).get("rigid_body_world") or {}).get("point_cache")
+    unbaked_count = int((details.get("summary") or {}).get("unbaked_cache_count", 0) or 0)
+    recommendations = ["Use these evaluated samples before deciding whether a simulation needs a persistent bake or helper repair."]
+    if unbaked_count:
+        recommendations.append("Cache state is unbaked; treat sampled results as inspection evidence, not final baked output.")
+    if not candidates:
+        recommendations.append("No simulation-capable objects matched the request.")
+    return {
+        "ok": True,
+        "message": f"Inspected evaluated simulation state on {len(candidates)} object(s) across {len(frames)} frame(s)",
+        "mode": "sample_evaluated_state",
+        "persistent_bake_performed": False,
+        "persistent_bake_supported": False,
+        "bake_status": {
+            "requested": False,
+            "performed": False,
+            "reason": "This helper intentionally samples evaluated simulation state and cache metadata without mutating persistent point caches.",
+            "rigid_body_world_cache": world_cache,
+        },
+        "sampled_frames": frames,
+        "object_count": len(candidates),
+        "object_names": [obj.name for obj in candidates],
+        "missing_object_names": missing,
+        "object_summaries": summaries,
+        "frame_samples": frame_samples,
+        "simulation_details": details,
+        "recommendations": recommendations,
     }
 
 

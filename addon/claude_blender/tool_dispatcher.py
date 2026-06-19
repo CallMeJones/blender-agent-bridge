@@ -1435,6 +1435,17 @@ def get_simulation_details(context, args):
     )
 
 
+def inspect_simulation_bake(context, args):
+    return world_model.inspect_simulation_bake(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        frame_start=args.get("frame_start"),
+        frame_end=args.get("frame_end"),
+        sample_count=_bounded_int(args.get("sample_count"), 8, minimum=1, maximum=48),
+        max_objects=_bounded_int(args.get("max_objects"), 20, maximum=80),
+    )
+
+
 def get_collection_layer_details(context, args):
     return world_model.collection_layer_details(
         context,
@@ -2771,6 +2782,7 @@ TOOL_FUNCTIONS = {
     "get_shape_key_details": get_shape_key_details,
     "get_curve_text_details": get_curve_text_details,
     "get_simulation_details": get_simulation_details,
+    "inspect_simulation_bake": inspect_simulation_bake,
     "get_collection_layer_details": get_collection_layer_details,
     "get_render_camera_compositor_details": get_render_camera_compositor_details,
     "select_objects": select_objects,

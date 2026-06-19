@@ -144,6 +144,14 @@ def main():
         assert "run_animation_repair_loop" in principles_names, principles_meta
         assert "create_progressive_bounce_animation" in principles_names, principles_meta
 
+        simulation_tools, simulation_meta = agent_tools.select_blender_tool_definitions(
+            "Inspect the rigid body simulation cache and physics bake before repairing this animation.",
+            bundle,
+        )
+        simulation_names = _names(simulation_tools)
+        assert "get_simulation_details" in simulation_names, simulation_meta
+        assert "inspect_simulation_bake" in simulation_names, simulation_meta
+
         rig_repair_tools, rig_repair_meta = agent_tools.select_blender_tool_definitions(
             "Review the character rig pose clarity, inspect controls, and hold a keyed armature control pose.",
             bundle,

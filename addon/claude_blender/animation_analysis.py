@@ -155,6 +155,83 @@ def _bbox_xy_distance_outside(box, xy, margin=0.0):
     return math.sqrt(dx * dx + dy * dy)
 
 
+def _bbox_world_corners(obj):
+    corners = [obj.matrix_world @ mathutils.Vector(corner) for corner in getattr(obj, "bound_box", [])]
+    if not corners:
+        corners = [obj.matrix_world.translation]
+    return corners
+
+
+def _convex_hull_xy(points):
+    unique = sorted({(round(float(point[0]), 8), round(float(point[1]), 8)) for point in points or []})
+    if len(unique) <= 2:
+        return unique
+
+    def cross(origin, left, right):
+        return (left[0] - origin[0]) * (right[1] - origin[1]) - (left[1] - origin[1]) * (right[0] - origin[0])
+
+    lower = []
+    for point in unique:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], point) <= 0:
+            lower.pop()
+        lower.append(point)
+    upper = []
+    for point in reversed(unique):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], point) <= 0:
+            upper.pop()
+        upper.append(point)
+    return lower[:-1] + upper[:-1]
+
+
+def _point_in_polygon_xy(point, polygon):
+    if len(polygon or []) < 3:
+        return False
+    x = float(point[0])
+    y = float(point[1])
+    inside = False
+    previous_x, previous_y = polygon[-1]
+    for current_x, current_y in polygon:
+        intersects = (current_y > y) != (previous_y > y)
+        if intersects:
+            x_at_y = (previous_x - current_x) * (y - current_y) / ((previous_y - current_y) or 1e-12) + current_x
+            if x < x_at_y:
+                inside = not inside
+        previous_x, previous_y = current_x, current_y
+    return inside
+
+
+def _point_segment_distance_xy(point, start, end):
+    px, py = float(point[0]), float(point[1])
+    sx, sy = float(start[0]), float(start[1])
+    ex, ey = float(end[0]), float(end[1])
+    dx = ex - sx
+    dy = ey - sy
+    length_sq = dx * dx + dy * dy
+    if length_sq <= 1e-12:
+        return math.sqrt((px - sx) ** 2 + (py - sy) ** 2)
+    t = max(0.0, min(1.0, ((px - sx) * dx + (py - sy) * dy) / length_sq))
+    nearest_x = sx + t * dx
+    nearest_y = sy + t * dy
+    return math.sqrt((px - nearest_x) ** 2 + (py - nearest_y) ** 2)
+
+
+def _point_polygon_distance_outside_xy(point, polygon):
+    if not polygon:
+        return 0.0
+    if _point_in_polygon_xy(point, polygon):
+        return 0.0
+    if len(polygon) == 1:
+        return math.sqrt((float(point[0]) - polygon[0][0]) ** 2 + (float(point[1]) - polygon[0][1]) ** 2)
+    return min(_point_segment_distance_xy(point, polygon[index], polygon[(index + 1) % len(polygon)]) for index in range(len(polygon)))
+
+
+def _support_footprint_polygon(supports):
+    points = []
+    for support in supports or []:
+        points.extend((corner[0], corner[1]) for corner in _bbox_world_corners(support))
+    return _convex_hull_xy(points)
+
+
 def _bbox_union(boxes):
     boxes = list(boxes or [])
     if not boxes:
@@ -651,6 +728,7 @@ def analyze_center_of_mass(
     def collect(frame):
         support_boxes = [(support, _bbox_world(support)) for support in supports]
         support_union = _bbox_union([box for _support, box in support_boxes])
+        support_polygon = _support_footprint_polygon(supports)
         support_top_z = max((box[1][2] for _support, box in support_boxes), default=None)
         support_item = {
             "frame": frame,
@@ -659,6 +737,8 @@ def analyze_center_of_mass(
                 [round(float(support_union[0][0]), 6), round(float(support_union[0][1]), 6)],
                 [round(float(support_union[1][0]), 6), round(float(support_union[1][1]), 6)],
             ] if support_union else [],
+            "support_footprint_xy": [[round(float(x), 6), round(float(y), 6)] for x, y in support_polygon],
+            "support_footprint_method": "convex_hull_world_bounds" if len(support_polygon) >= 3 else "axis_aligned_bbox",
             "support_top_z": round(float(support_top_z), 6) if support_top_z is not None else None,
         }
         support_samples.append(support_item)
@@ -666,8 +746,13 @@ def analyze_center_of_mass(
             mins, maxs = _bbox_world(obj)
             center = _world_center(obj)
             contact_like = bool(support_top_z is not None and abs(float(mins[2]) - float(support_top_z)) <= float(contact_tolerance))
-            supported = bool(support_union and _bbox_xy_contains(support_union, (center[0], center[1]), margin=support_margin))
-            outside_distance = _bbox_xy_distance_outside(support_union, (center[0], center[1]), margin=support_margin) if support_union else 0.0
+            if len(support_polygon) >= 3:
+                polygon_distance = _point_polygon_distance_outside_xy((center[0], center[1]), support_polygon)
+                supported = bool(polygon_distance <= float(support_margin or 0.0))
+                outside_distance = polygon_distance
+            else:
+                supported = bool(support_union and _bbox_xy_contains(support_union, (center[0], center[1]), margin=support_margin))
+                outside_distance = _bbox_xy_distance_outside(support_union, (center[0], center[1]), margin=support_margin) if support_union else 0.0
             sample = {
                 "frame": frame,
                 "object": obj.name,
@@ -696,6 +781,8 @@ def analyze_center_of_mass(
                             "support_objects": support_item["support_objects"],
                             "center_xy": sample["center_xy"],
                             "support_union_xy": support_item["support_union_xy"],
+                            "support_footprint_xy": support_item["support_footprint_xy"],
+                            "support_footprint_method": support_item["support_footprint_method"],
                             "outside_support_distance": sample["outside_support_distance"],
                         },
                     }

@@ -75,6 +75,7 @@ Use follow-up tools for detailed data:
 - `get_shape_key_details(object_names, max_objects)`
 - `get_curve_text_details(object_names, max_objects)`
 - `get_simulation_details(object_names, max_objects)`
+- `inspect_simulation_bake(object_names, frame_start, frame_end, sample_count, max_objects)`
 - `get_collection_layer_details(max_depth)`
 - `get_render_camera_compositor_details()`
 - `search_blender_docs(query)`
@@ -90,7 +91,7 @@ This lets external agents ask for more when needed without dumping the whole fil
 - armatures, bones, pose constraints, object constraints, and drivers;
 - mesh shape keys;
 - curve and text object data;
-- rigid-body, particle, point-cache, and simulation bake state;
+- rigid-body, particle, point-cache, evaluated simulation samples, and simulation bake state;
 - collection hierarchy and view layers;
 - render, camera, world, and compositor settings.
 
@@ -239,7 +240,9 @@ Initial helpers:
 
 Helpers should validate inputs and return structured results. External agents can still propose Python for advanced operations, but the default path for common edits should be helper-first.
 
-`get_animation_scene_context` is the first Milestone 7D routing layer. It does not replace deep detail tools; it summarizes likely animation ownership so external agents can choose the right next inspection before editing. It flags rig-driven objects, likely rig control bones, shape-key deformation targets, material or shader animation, object/data/action owners, action slots and keyed channel ranges when available, pose-marker/pose-library candidates, constraints, drivers, NLA tracks, simulation/rigid-body hints, likely contact surfaces, and camera readiness, then returns subject routing with animation-owner recommendations and routing confidence plus recommended detail tools such as `get_rigging_details`, `get_shape_key_details`, `get_animation_details`, `get_simulation_details`, and `get_render_camera_compositor_details`.
+`get_animation_scene_context` is the first Milestone 7D routing layer. It does not replace deep detail tools; it summarizes likely animation ownership so external agents can choose the right next inspection before editing. It flags rig-driven objects, likely rig control bones, shape-key deformation targets, material or shader animation, object/data/action owners, action slots and keyed channel ranges when available, pose-marker/pose-library candidates, constraints, drivers, NLA tracks, simulation/rigid-body hints, likely contact surfaces, and camera readiness, then returns subject routing with animation-owner recommendations and routing confidence plus recommended detail tools such as `get_rigging_details`, `get_shape_key_details`, `get_animation_details`, `get_simulation_details`, `inspect_simulation_bake`, and `get_render_camera_compositor_details`.
+
+`inspect_simulation_bake` is the safe simulation inspection path before an agent reaches for custom Python. It samples evaluated rigid-body/particle/simulation state across a bounded frame range, restores the original scene frame, returns object center/bounds samples, includes `get_simulation_details` cache metadata, and reports that persistent point-cache baking was not performed. This gives the client concrete bake/cache evidence without mutating persistent simulation caches or writing disk caches behind the user's back. `analyze_center_of_mass` uses convex-hull support footprints from support objects' world-space bounds when available, so rotated or narrow support surfaces do not get treated as oversized axis-aligned boxes.
 
 The advanced helpers are intentionally bounded. They create useful starter states and simple edits without exposing arbitrary node graph, rig, or simulation mutation. When an external agent needs a custom geometry-node network, production rig, compositor graph, destructive mesh operation, import/export, or complex simulation setup, it should draft approved Python after inspecting context and docs.
 Reusable refinement templates should stay bounded and composable. Vehicle, product, and character kits inspect bounds, add tasteful primitive/curve/material details, preserve preview rollback, and escalate to approved Python for topology-heavy work.
