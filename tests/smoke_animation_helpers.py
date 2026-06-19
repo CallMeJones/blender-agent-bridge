@@ -29,6 +29,9 @@ ANIMATION_TOOLS = {
     "set_pose_hold",
     "set_rig_pose_hold",
     "set_rig_custom_property_keyframes",
+    "apply_rig_pose_from_action",
+    "apply_rig_action_clip",
+    "offset_rig_limb_controls",
     "create_motion_arc",
     "analyze_motion_arcs",
     "analyze_fcurve_spacing",
@@ -123,6 +126,30 @@ def _write_subject_png(path, *, center_y):
                     pixels.extend([bright, 0.9, 0.1, 1.0])
                 else:
                     pixels.extend([0.04, 0.04, 0.04, 1.0])
+        image.pixels[:] = pixels
+        image.filepath_raw = path
+        image.file_format = "PNG"
+        image.save()
+    finally:
+        bpy.data.images.remove(image)
+
+
+def _write_sampled_playblast_png(path, *, center_x, center_y):
+    width = 320
+    height = 180
+    image = bpy.data.images.new(f"Agent Smoke Playblast {os.path.basename(path)}", width=width, height=height, alpha=True)
+    try:
+        subject_half = 18
+        pixels = []
+        for y in range(height):
+            for x in range(width):
+                is_subject = abs(x - int(center_x)) <= subject_half and abs(y - int(center_y)) <= subject_half
+                if is_subject:
+                    checker = 0.15 if ((x // 6) + (y // 6)) % 2 else 0.0
+                    pixels.extend([min(1.0, 0.82 + checker), 0.72, 0.12, 1.0])
+                else:
+                    stripe = 0.025 if ((x // 24) + (y // 24)) % 2 else 0.0
+                    pixels.extend([0.035 + stripe, 0.04 + stripe, 0.055 + stripe, 1.0])
         image.pixels[:] = pixels
         image.filepath_raw = path
         image.file_format = "PNG"
@@ -772,6 +799,58 @@ def main():
         ), visual_count_review
         assert any(item["tool"] == "create_progressive_bounce_animation" for item in visual_count_review["repair_operations"]), visual_count_review
 
+        sampled_review_frames = []
+        sampled_motion = (
+            (1, 58, 138),
+            (37, 92, 76),
+            (72, 128, 138),
+            (108, 158, 92),
+            (143, 184, 138),
+            (179, 212, 103),
+            (214, 238, 138),
+            (250, 266, 138),
+        )
+        sampled_contract = dict(contract)
+        sampled_contract["timing"] = dict(contract.get("timing") or {})
+        sampled_contract["timing"]["frame_end"] = 250
+        for frame_number, center_x, center_y in sampled_motion:
+            path = os.path.join(visual_dir, f"sampled-review-{frame_number:04d}.png")
+            _write_sampled_playblast_png(path, center_x=center_x, center_y=center_y)
+            sampled_review_frames.append(
+                {
+                    "frame": frame_number,
+                    "captured_scene_frame": frame_number,
+                    "available": True,
+                    "path": path,
+                    "resource_uri": f"blender://playblasts/sampled-review/frames/{frame_number}",
+                    "size_bytes": os.path.getsize(path),
+                    "width": 320,
+                    "height": 180,
+                }
+            )
+        sampled_visual_review = _execute(
+            context,
+            "review_playblast_against_brief",
+            {
+                "prompt": "review this bounce animation for spacing and contact",
+                "brief": sampled_contract,
+                "playblast": {
+                    "available": True,
+                    "playblast_id": "sampled-review",
+                    "sampled_frames": [item[0] for item in sampled_motion],
+                    "frames": sampled_review_frames,
+                },
+            },
+        )
+        sampled_motion_evidence = sampled_visual_review["visual_review"]["motion_evidence"]
+        assert sampled_motion_evidence["digest_frame_count"] == len(sampled_motion), sampled_visual_review
+        assert sampled_motion_evidence["max_grid_delta"] > 0.0, sampled_visual_review
+        assert sampled_visual_review["visual_review"]["image_interpretation"]["interpreted_image_count"] == len(sampled_motion), sampled_visual_review
+        assert all(
+            frame["image_digest"]["available"] is True
+            for frame in sampled_visual_review["visual_review"]["frames"]
+        ), sampled_visual_review
+
         inspection_path = os.path.join(visual_dir, "inspection-front-below.png")
         _write_pattern_png(inspection_path)
         inspection_review = _execute(
@@ -830,12 +909,20 @@ def main():
                 "brief": contract,
             },
         )
-        assert repair_plan["suggested_tool_calls"][0]["tool"] == "set_pose_hold", repair_plan
+        count_repair = next(item for item in repair_plan["repair_operations"] if item["tool"] == "create_progressive_bounce_animation")
+        assert repair_plan["suggested_tool_calls"][0]["tool"] == "create_progressive_bounce_animation", repair_plan
+        assert repair_plan["repair_operations"][0]["tool"] == "create_progressive_bounce_animation", repair_plan
+        assert count_repair["metadata"]["replaces_existing_action"] is True, repair_plan
+        assert count_repair["source_finding_index"] == 2, repair_plan
+        contact_advisory = next(
+            item
+            for item in repair_plan["repair_operations"]
+            if item.get("source_finding_index") == 0 and item["tool"] == "get_rigging_details"
+        )
+        assert contact_advisory["mutates_scene"] is False, repair_plan
+        assert contact_advisory["metadata"]["advisory"] is True, repair_plan
+        assert contact_advisory["metadata"]["needs_user_planning"] is True, repair_plan
         assert any(item["tool"] == "retime_actions" for item in repair_plan["repair_operations"]), repair_plan
-        assert any(item["tool"] == "create_progressive_bounce_animation" for item in repair_plan["repair_operations"]), repair_plan
-        assert repair_plan["repair_operations"][0]["arguments"]["object_names"] == ["Cube"], repair_plan
-        assert repair_plan["repair_operations"][0]["tool_call"]["input"]["object_names"] == ["Cube"], repair_plan
-        assert repair_plan["repair_operations"][0]["source_finding_index"] == 0, repair_plan
 
         rig_create = _execute(
             context,
@@ -1019,20 +1106,31 @@ def main():
             },
         )
         ikfk_operations = ikfk_plan["repair_operations"]
-        assert [item["tool"] for item in ikfk_operations[:3]] == [
+        assert [item["tool"] for item in ikfk_operations[:5]] == [
             "get_rigging_details",
+            "apply_rig_pose_from_action",
             "set_rig_custom_property_keyframes",
+            "offset_rig_limb_controls",
             "set_rig_pose_hold",
         ], ikfk_plan
         assert "set_pose_hold" not in [item["tool"] for item in ikfk_operations], ikfk_plan
-        ikfk_switch = ikfk_operations[1]
+        ikfk_pose = ikfk_operations[1]
+        assert ikfk_pose["arguments"]["armature_name"] == ikfk_rig.name, ikfk_plan
+        assert ikfk_pose["arguments"]["action_name"] == pose_action.name, ikfk_plan
+        assert ikfk_pose["arguments"]["pose_marker"] == "Left Hand Contact Repair", ikfk_plan
+        assert ikfk_pose["arguments"]["bone_names"] == ["CTRL_IK_Hand", "CTRL_Pole_Elbow"], ikfk_plan
+        ikfk_switch = ikfk_operations[2]
         assert ikfk_switch["arguments"]["armature_name"] == ikfk_rig.name, ikfk_plan
         assert {item["property_name"] for item in ikfk_switch["arguments"]["property_targets"]} >= {
             "IK_FK_Arm_L",
             "IK_FK_local",
-            "left_arm_space_switch",
         }, ikfk_plan
-        ikfk_hold = ikfk_operations[2]
+        assert not any(item["property_name"] == "left_arm_space_switch" for item in ikfk_switch["arguments"]["property_targets"]), ikfk_plan
+        ikfk_offset = ikfk_operations[3]
+        assert ikfk_offset["arguments"]["armature_name"] == ikfk_rig.name, ikfk_plan
+        assert {item["bone_name"] for item in ikfk_offset["arguments"]["control_offsets"]} >= {"CTRL_IK_Hand", "CTRL_Pole_Elbow"}, ikfk_plan
+        assert any(item["property_name"] == "left_arm_space_switch" for item in ikfk_offset["arguments"]["property_targets"]), ikfk_plan
+        ikfk_hold = ikfk_operations[4]
         assert ikfk_hold["arguments"]["armature_name"] == ikfk_rig.name, ikfk_plan
         assert ikfk_hold["arguments"]["bone_names"] == ["CTRL_IK_Hand", "CTRL_Pole_Elbow"], ikfk_plan
         assert ikfk_hold["metadata"]["rig_targeting"]["selection_strategy"] == "role_scored", ikfk_plan
@@ -1062,15 +1160,23 @@ def main():
             {
                 "brief": ikfk_brief,
                 "repair_operations": ikfk_operations,
-                "allowed_tools": ["get_rigging_details", "set_rig_custom_property_keyframes", "set_rig_pose_hold"],
+                "allowed_tools": [
+                    "get_rigging_details",
+                    "apply_rig_pose_from_action",
+                    "set_rig_custom_property_keyframes",
+                    "offset_rig_limb_controls",
+                    "set_rig_pose_hold",
+                ],
                 "max_iterations": 1,
-                "max_operations": 3,
+                "max_operations": 5,
                 "recapture_after_mutation": False,
             },
         )
         assert [item["tool"] for item in ikfk_loop["executed_operations"]] == [
             "get_rigging_details",
+            "apply_rig_pose_from_action",
             "set_rig_custom_property_keyframes",
+            "offset_rig_limb_controls",
             "set_rig_pose_hold",
         ], ikfk_loop
         ikfk_fcurve_paths = {fcurve.data_path for fcurve in live_preview._iter_action_fcurves(ikfk_rig.animation_data.action)}
@@ -1080,6 +1186,47 @@ def main():
         assert 'pose.bones["CTRL_Pole_Elbow"].location' in ikfk_fcurve_paths, ikfk_loop
         ikfk_data_fcurve_paths = {fcurve.data_path for fcurve in live_preview._iter_action_fcurves(ikfk_rig.data.animation_data.action)}
         assert '["left_arm_space_switch"]' in ikfk_data_fcurve_paths, ikfk_loop
+        clip_result = _execute(
+            context,
+            "apply_rig_action_clip",
+            {
+                "armature_name": ikfk_rig.name,
+                "action_name": pose_action.name,
+                "frame_start": 20,
+                "frame_end": 28,
+                "interpolation": "CONSTANT",
+            },
+        )
+        assert clip_result["source_action"] == pose_action.name, clip_result
+        assert clip_result["applied_action"] != pose_action.name, clip_result
+        assert ikfk_rig.animation_data.action.name == clip_result["applied_action"], clip_result
+        clip_frames = sorted(
+            round(point.co.x)
+            for fcurve in live_preview._iter_action_fcurves(ikfk_rig.animation_data.action)
+            for point in fcurve.keyframe_points
+        )
+        assert clip_frames[0] == 20 and clip_frames[-1] == 28, clip_result
+        partial_clip_result = _execute(
+            context,
+            "apply_rig_action_clip",
+            {
+                "armature_name": ikfk_rig.name,
+                "action_name": pose_action.name,
+                "source_frame_start": 1,
+                "source_frame_end": 10,
+                "frame_start": 40,
+                "frame_end": 44,
+                "interpolation": "CONSTANT",
+            },
+        )
+        assert partial_clip_result["source_frame_start"] == 1.0, partial_clip_result
+        assert partial_clip_result["source_frame_end"] == 10.0, partial_clip_result
+        partial_clip_frames = sorted(
+            round(point.co.x)
+            for fcurve in live_preview._iter_action_fcurves(ikfk_rig.animation_data.action)
+            for point in fcurve.keyframe_points
+        )
+        assert partial_clip_frames[0] == 40 and partial_clip_frames[-1] == 44, partial_clip_result
         _select_object(context, cube)
 
         retime_disabled_loop = _execute(
@@ -1142,7 +1289,7 @@ def main():
                 "recapture_after_mutation": False,
             },
         )
-        assert repair_loop["executed_operations"][0]["tool"] == "set_pose_hold", repair_loop
+        assert repair_loop["executed_operations"][0]["tool"] == "create_progressive_bounce_animation", repair_loop
         assert repair_loop["executed_operations"][0]["ok"] is True, repair_loop
         assert repair_loop["final_review"]["ok"] is True, repair_loop
         assert repair_loop["mutates_scene"] is True, repair_loop

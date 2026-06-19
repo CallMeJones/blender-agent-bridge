@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import http.client
 import os
 import shutil
 import sys
 import tempfile
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -50,6 +52,12 @@ def _get(url):
         return json.loads(response.read().decode("utf-8"))
 
 
+def _get_with_headers(url, headers):
+    request = urllib.request.Request(url, headers=headers, method="GET")
+    with urllib.request.urlopen(request, timeout=5) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
 def _post(url, payload):
     request = urllib.request.Request(
         url,
@@ -59,6 +67,31 @@ def _post(url, payload):
     )
     with urllib.request.urlopen(request, timeout=5) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def _expect_http_error(fn, expected_status):
+    try:
+        fn()
+    except urllib.error.HTTPError as exc:
+        assert exc.code == expected_status, (expected_status, exc.code, exc.read())
+        return exc
+    raise AssertionError(f"Expected HTTP {expected_status}")
+
+
+def _post_declared_too_large(url):
+    parsed = urllib.parse.urlparse(url)
+    conn = http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=5)
+    try:
+        conn.putrequest("POST", parsed.path)
+        conn.putheader("Content-Type", "application/json")
+        conn.putheader("Content-Length", str(bridge_server.MAX_REQUEST_BODY_BYTES + 1))
+        conn.endheaders()
+        conn.send(b"{}")
+        response = conn.getresponse()
+        body = response.read()
+        return response.status, body
+    finally:
+        conn.close()
 
 
 def main():
@@ -100,6 +133,10 @@ def main():
         assert health["scene"] == bpy.context.scene.name
         assert health["addon_source_hash"] == build_info.source_tree_hash(), health
         assert "Source " in health["build_diagnostics"], health
+        _expect_http_error(
+            lambda: _get_with_headers(base + "/health", {"Origin": "https://example.invalid"}),
+            403,
+        )
 
         objects = _request_with_pump(
             lambda: _post(base + "/tool", {"name": "list_scene_objects", "arguments": {"max_objects": 5}})
@@ -107,6 +144,15 @@ def main():
         assert objects["ok"], objects
         assert objects["result"]["ok"], objects
         assert any(item["name"] == "Cube" for item in objects["result"]["objects"]), objects
+        invalid_args = _request_with_pump(
+            lambda: _post(base + "/tool", {"name": "validate_render_job_output", "arguments": {}})
+        )
+        assert invalid_args["ok"] is False, invalid_args
+        assert invalid_args["result"]["ok"] is False, invalid_args
+        assert "Invalid arguments" in invalid_args["result"]["message"], invalid_args
+        assert any("job_id" in item for item in invalid_args["result"]["schema_errors"]), invalid_args
+        too_large_status, too_large_body = _post_declared_too_large(base + "/tool")
+        assert too_large_status == 413, (too_large_status, too_large_body)
 
         resources = _get(base + "/resources")
         uris = {item["uri"] for item in resources["resources"]}

@@ -21,9 +21,16 @@ TRUNCATED_TEXT = "... [truncated]"
 
 def truncate_text(text, max_chars):
     text = str(text)
-    if len(text) <= int(max_chars):
+    max_chars = int(max_chars)
+    if max_chars <= 0:
+        return ""
+    if len(text) <= max_chars:
         return text
-    keep = max(0, int(max_chars) - len(TRUNCATED_TEXT))
+    # Guarantee the result never exceeds max_chars (a hard budget). When the budget
+    # is too small to fit the truncation marker, hard-slice the original text.
+    if max_chars <= len(TRUNCATED_TEXT):
+        return text[:max_chars]
+    keep = max_chars - len(TRUNCATED_TEXT)
     return f"{text[:keep]}{TRUNCATED_TEXT}"
 
 

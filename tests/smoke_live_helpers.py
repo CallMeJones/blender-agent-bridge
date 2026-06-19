@@ -13,7 +13,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import tool_dispatcher  # noqa: E402
+from claude_blender import live_preview, tool_dispatcher  # noqa: E402
 
 
 def _execute(context, name, args):
@@ -52,6 +52,41 @@ def main():
         "selected": [obj.name for obj in context.selected_objects],
         "active": context.view_layer.objects.active.name if context.view_layer.objects.active else None,
     }
+
+    _execute(context, "create_collection", {"name": "Agent Bridge Orphan Guard Collection"})
+    _execute(context, "link_selected_to_collection", {"collection_name": "Agent Bridge Orphan Guard Collection"})
+    guard_collection = bpy.data.collections["Agent Bridge Orphan Guard Collection"]
+    for collection in list(cube.users_collection):
+        if collection.name != guard_collection.name:
+            collection.objects.unlink(cube)
+    assert len(cube.users_collection) == 1 and cube.users_collection[0].name == guard_collection.name
+    _execute(context, "revert_preview", {})
+    assert "Agent Bridge Orphan Guard Collection" not in bpy.data.collections
+    assert cube.users_collection, "Cube was orphaned out of all scene collections"
+
+    failing_name = "Agent Bridge Failing Preview Object"
+
+    def _failing_preview_helper(fail_context, _args):
+        live_preview.create_primitive(
+            fail_context,
+            primitive_type="CUBE",
+            name=failing_name,
+            location=[5.0, 0.0, 0.0],
+            rotation=[0.0, 0.0, 0.0],
+            scale=[1.0, 1.0, 1.0],
+            label="Failing preview smoke",
+        )
+        raise RuntimeError("intentional preview failure")
+
+    tool_dispatcher.TOOL_FUNCTIONS["_smoke_failing_preview"] = _failing_preview_helper
+    try:
+        failed = json.loads(tool_dispatcher.execute_tool(context, "_smoke_failing_preview", {}))
+    finally:
+        tool_dispatcher.TOOL_FUNCTIONS.pop("_smoke_failing_preview", None)
+    assert not failed["ok"], failed
+    assert failed.get("auto_reverted_preview") is True, failed
+    assert failing_name not in bpy.data.objects, failed
+    assert not scene.claude_blender.pending_preview, scene.claude_blender.pending_preview_summary
 
     created = _execute(
         context,

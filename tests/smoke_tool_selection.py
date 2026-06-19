@@ -169,6 +169,8 @@ def main():
         assert "get_animation_scene_context" in rig_repair_names, rig_repair_meta
         assert "get_rigging_details" in rig_repair_names, rig_repair_meta
         assert "set_rig_pose_hold" in rig_repair_names, rig_repair_meta
+        assert "apply_rig_pose_from_action" in rig_repair_names, rig_repair_meta
+        assert "offset_rig_limb_controls" in rig_repair_names, rig_repair_meta
 
         inspection_render_tools, inspection_render_meta = agent_tools.select_blender_tool_definitions(
             "Render close-up underside views to inspect landing gear and open bays before repair.",

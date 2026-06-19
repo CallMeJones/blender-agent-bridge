@@ -1,10 +1,10 @@
 # Privacy
 
-Blender Agent Bridge is designed to keep project context local unless the user asks an assistant or MCP client to use it.
+Blender Agent Bridge is a local, provider-neutral bridge. **The add-on never contacts an LLM provider itself.** It has no built-in chat, no model client, and no API keys. External MCP clients host the model/provider and decide what to send to it after reading the resources and tool results the bridge exposes.
 
 ## Local Data
 
-The add-on may store local Blender Text datablocks for chat history, transcripts, pending scripts, script logs, repair context, and agent memory. It may also write docs caches, checkpoints, viewport screenshots, sampled playblast frame sequences, and audit logs under user-controlled local paths.
+The add-on may store local Blender Text datablocks for transcripts, pending scripts, script logs, and repair context. It may also write docs caches, checkpoints, viewport screenshots, sampled playblast frame sequences, and audit logs under user-controlled local paths.
 
 Viewport screenshots are generated only when visual context is requested. Sampled animation playblast frames are generated only when `capture_animation_playblast` is called. Saved `.blend` files store captures under a project-local `.claude_blender/captures/<session_id>` folder by default. Unsaved or unwritable projects use the global `~/.claude_blender/captures/<project_id>/<session_id>` fallback, and a custom capture cache preference acts as a custom base directory. Treat project-local captures as generated artifacts unless you intentionally keep them.
 
@@ -16,24 +16,15 @@ The default audit log path is:
 
 Audit entries record tool names, success/failure status, risk labels, and redacted argument summaries. Script/code fields, tokens, keys, passwords, and credential-like fields are redacted.
 
-## Data Sent To Providers
+## Data Leaving The Machine
 
-When the in-Blender Claude assistant calls Anthropic, it can send:
+The add-on does not send your scene, prompts, screenshots, or any other data to a model provider. The only outbound network request the add-on can make is to fetch official Blender documentation when you explicitly build the docs cache (see `Build Docs`); this contacts the Blender documentation hosts only.
 
-- the user prompt;
-- compact scene context;
-- selected tool schemas;
-- docs snippets;
-- agent memory when enabled;
-- viewport screenshots only when the Viewport toggle is enabled.
-- sampled playblast frames only when an agent or user explicitly requests animation capture.
-
-The localhost MCP bridge itself does not call an LLM provider. External MCP clients decide what to send to their own model provider after reading resources or tool results.
+When you start the localhost MCP bridge, it binds to `127.0.0.1` only and exposes scene context, tool contracts, and resources to a connected MCP client on the same machine. **The connected external client — not this add-on — decides what, if anything, to forward to its own model provider.** What that client sends (the user prompt, scene context, docs snippets, viewport screenshots when the Viewport toggle is enabled, sampled playblast frames when capture is requested, etc.) is governed by that client's own privacy policy.
 
 ## User Controls
 
+- Keep the bridge off (it is off by default) until you want an external client to connect; optionally require a bearer token.
 - Keep screenshots off unless visual context is needed, and request playblast capture only when animation review needs visible frames.
-- Use `Clear Memory` for a fresh local agent thread.
-- Use `Reject Script` for unwanted pending Python.
-- Use `Revoke Trust` to end a runtime external script trust preset before it expires.
-- Delete local checkpoint, screenshot, playblast, docs-cache, and audit files from disk when no longer needed.
+- Use `Reject` for unwanted pending Python, and `Revoke Trust` to end a runtime external script trust preset before it expires.
+- Delete local checkpoint, screenshot, playblast, docs-cache, transcript, and audit files from disk when no longer needed.

@@ -72,9 +72,9 @@ User asks for a change. The external agent first inspects context, retrieves doc
 
 User asks, "Make this object red and animate it bouncing." The external agent uses safe helper calls for material and keyframes. The add-on applies each approved helper action to the live scene, updates the viewport/timeline, and keeps a visible preview transaction that can be committed or reverted.
 
-8. Work Progressively Like An Agent
+8. Work Progressively With The Host Agent
 
-User asks a follow-up such as, "now add the lighting pass." The external agent reads the current scene context plus compact `Blender Agent Bridge Memory`, so it can continue the same scene/object/animation goal while treating the open Blender scene as the source of truth.
+User asks a follow-up such as, "now add the lighting pass." The external agent uses its own conversation/session memory plus the current Blender scene context. Blender Agent Bridge supplies fresh scene state and tool results; the external agent remains responsible for long-running conversation memory.
 
 9. Connect From An External Agent
 
@@ -168,8 +168,6 @@ Expose external agents to narrow client tools rather than raw Python first:
 - `run_approved_script`: only runs code after explicit user approval.
 - `undo_last_action`: calls Blender undo for the last approved execution.
 - `save_checkpoint`: saves a copy of the current `.blend` before risky work.
-- `agent_memory`: compact running project context stored locally in `Blender Agent Bridge Memory`.
-
 ## Milestones
 
 ### Milestone 0: Project Skeleton
@@ -197,9 +195,9 @@ Acceptance:
 - Large scenes are summarized without sending full geometry by default.
 - External agents can ask for deeper object/material/animation details through tools instead of guessing.
 
-Status: Initial scene context, per-project agent memory, token-aware context planning, sidebar char/token estimates, and read-only detail retrieval tools are implemented.
+Status: Initial scene context, token-aware context planning, sidebar char/token estimates, and read-only detail retrieval tools are implemented.
 Deep world-model inspection is now available for geometry nodes, shader nodes, rigging/constraints/drivers, shape keys, curves/text, simulations, collection/view-layer organization, render/camera settings, and compositor nodes.
-The sidebar no longer hosts provider chat. It now focuses on bridge status, MCP config, script/action approvals, context capture, memory, docs, and diagnostics.
+The sidebar no longer hosts provider chat. It now focuses on bridge status, MCP config, script/action approvals, context capture, docs, diagnostics, and preview state.
 
 ### Milestone 2: Screenshot/Vision Context
 
@@ -321,7 +319,7 @@ Acceptance:
 
 Milestone 7 should move beyond simple keyframe helpers into an animation workflow that understands the user's intent, applies human animation principles, validates the result, and repairs prompt drift. The goal is not just "make something move"; it is "make the motion satisfy the user's brief in a way an animator would recognize."
 
-Solo can be an optional companion integration for durable memory, style profiles, project knowledge, and correction history, but it should not be required to complete or ship Milestone 7. Blender remains responsible for scene execution, preview/playblast, physics/simulation, and final edits. The core animation workflow should run from Blender scene context and local agent memory alone, with Solo adding cross-session memory when available.
+Solo can be an optional companion integration for durable memory, style profiles, project knowledge, and correction history, but it should not be required to complete or ship Milestone 7. Blender remains responsible for scene execution, preview/playblast, physics/simulation, and final edits. The core animation workflow should run from Blender scene context alone, with the external agent host adding conversation or cross-session memory when available.
 
 #### Milestone 7A: Animation Brief And Prompt Contract
 
@@ -443,20 +441,22 @@ Acceptance:
 
 Status: Playblast- and inspection-render-aware review, repair planning, and bounded repair-loop execution are implemented. `review_playblast_against_brief` normalizes playblast frame evidence, checks frame resource availability, frame coverage, undersampling, compact pixel digests, visual-subject interpretation, visual frame-to-frame motion deltas, and visual repeated-action count hints against the brief, combines that with current animation-state comparison, and returns structured repair operations. `capture_animation_playblast` now forces a frame update/redraw path before each viewport capture and records `captured_scene_frame` so stale visual evidence can be detected. Review-only prompts route to evaluator/review tools even when the brief is too ambiguous for generation. `review_inspection_renders_against_brief` normalizes diagnostic object-render evidence, checks missing/weak required views, includes the same visual-subject interpretation summary, and returns repair operations for focused `capture_object_inspection_renders` recapture when visual-detail evidence is missing or insufficient. `repair_animation_from_findings` maps findings to targeted helper calls with arguments, executable `tool_call` payloads, preview/commit flags, source-finding references, playblast-derived `target_frames` / `target_frame_range` metadata, inspection-render recapture arguments, count-repair bounce helpers, center/support pose holds, rig-control inspection, safe scalar rig-switch keying through `set_rig_custom_property_keyframes`, rig pose holds through `set_rig_pose_hold`, and frame-range retiming suggestions. Rig repair now scores IK/FK/pole controls, constraint-target relationships, limb-region terms, and support/contact terms before choosing pose bones; returns `metadata.rig_targeting`; detects IK/FK and space-switch custom properties; surfaces pose-library/action candidates and planning notes; keys existing scalar switch properties in live preview; and suppresses generic object pose holds when rig controls are the better edit owner. `run_animation_repair_loop` applies a bounded allowlisted subset of those operations through safe helper tools, skips operations that need more planning, optionally requests a fresh playblast after mutating repairs, and re-runs review without bypassing the existing preview commit/revert model. Smoke coverage now includes an IK/FK-style rig with control, pole, pose-library, constraint-target evidence, custom switch-property evidence, role-scored repair targeting, preview-safe switch keying, review-only workflow routing, and playblast frame-advance capture regression coverage. Remaining polish is deeper production-rig repair helpers where a simple control-bone hold may need pose-library application or limb-specific offset/space controls.
 
-#### Milestone 7G: Optional Solo-Backed Style And Project Memory
+#### Milestone 7G: Optional External Style And Project Memory
 
 - Use Solo to remember user animation preferences, style profiles, project-specific animation rules, prior corrections, reusable animation briefs/templates, character/rig facts, and failed interpretations that should not repeat.
-- Treat Solo as a durable companion memory and planning surface around Blender, not as a Blender execution backend.
-- Keep local Blender agent memory for immediate scene/session continuity and use Solo for cross-session project memory.
-- Include privacy and availability states in the UI: connected, unavailable, disabled, or limited.
+- Treat Solo or another host-side memory service as a durable companion memory and planning surface around Blender, not as a Blender execution backend.
+- Keep Blender Agent Bridge focused on fresh scene context and tool execution; conversation/session continuity belongs to the external agent host.
+- Include privacy and availability states in client/tool results when a host memory integration is available: connected, unavailable, disabled, or limited.
 
 Acceptance:
 
 - Milestone 7A-7F can be implemented, tested, and shipped without Solo.
 - When Solo is connected and enabled, the agent can retrieve relevant style/project memory before creating the animation brief.
-- When Solo is unavailable, the agent continues with local Blender context and local agent memory without blocking the animation workflow.
+- When Solo is unavailable, the agent continues with current Blender context without blocking the animation workflow.
 - User corrections such as "when I say punchy, I mean fast anticipation and a hard impact" can become reusable future context.
 - Solo memory never contains secrets, raw credentials, API keys, or hidden private content.
+
+Status: NOT IMPLEMENTED — deferred by design. The add-on stays a provider-neutral bridge and does not integrate any host-side memory service. Durable style/project memory (e.g. Solo) belongs to the external MCP client/host, not to this add-on. Milestones 7A–7F do not depend on it. (The separate private "companion agent runtime / Milestone 8" direction that would have hosted this has been dropped; the bridge does not host an LLM or chat.)
 
 #### Milestone 7H: Animation Workflow Orchestration And MCP Client Guidance
 
@@ -499,4 +499,4 @@ Status: Orchestration, guidance, and routing reliability are implemented in code
 - Screenshot context is controlled by a toggle.
 - User should be able to choose sidebar or floating UI eventually.
 - Live helper changes should show logs/status only, not pause for a plan.
-- Milestone 7 should not require Solo. Solo is an optional durable-memory enhancement for advanced animation style, project rules, reusable briefs, and correction history; Blender remains the execution layer, and the core animation workflow should run without Solo.
+- Milestone 7 should not require Solo. Solo or another host-side memory service is an optional durable-memory enhancement for advanced animation style, project rules, reusable briefs, and correction history; Blender remains the execution layer, and the core animation workflow should run without host memory.

@@ -21,7 +21,6 @@ _MODULE_NAMES = (
     "properties",
     "preferences",
     "context_budget",
-    "agent_memory",
     "context_bundle",
     "context_planner",
     "world_model",

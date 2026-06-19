@@ -10,7 +10,6 @@ import threading
 import bpy
 
 from . import (
-    agent_memory,
     bridge_server,
     build_info,
     context_bundle,
@@ -160,7 +159,6 @@ def _build_context_bundle(context, state, prefs, *, prompt=""):
         capture_dir=getattr(prefs, "capture_cache_dir", None),
         max_screenshot_bytes=getattr(prefs, "max_screenshot_bytes", None),
     )
-    agent_memory.add_to_bundle(bundle, context)
     planned, metadata = context_planner.plan_context_bundle(prompt, bundle)
     _update_context_plan_state(state, metadata)
     return planned
@@ -238,29 +236,18 @@ class CLAUDEBLENDER_OT_undo_last(bpy.types.Operator):
         return {"FINISHED"} if "FINISHED" in result else {"CANCELLED"}
 
 
-class CLAUDEBLENDER_OT_clear_agent_memory(bpy.types.Operator):
-    bl_idname = "claude_blender.clear_agent_memory"
-    bl_label = "Clear Memory"
-    bl_description = "Clear the bridge memory for this Blender scene"
-
-    def execute(self, context):
-        result = agent_memory.clear_memory(context.scene)
-        context.scene.claude_blender.status = result["message"]
-        context.scene.claude_blender.last_response = result["message"]
-        return {"FINISHED"}
-
-
 def _draw_ask_section(layout, state, prefs):
-    ask_box = _draw_section(layout, "Bridge")
+    ask_box = _draw_section(layout, "Connection")
     bridge_running = bridge_server.is_running()
-    _draw_wrapped(ask_box, build_info.diagnostics_summary(), width=46, max_lines=2)
-    ask_box.label(text=f"Bridge: {'On' if bridge_running else 'Off'}")
+    ask_box.label(text=f"{build_info.ADDON_NAME} {build_info.ADDON_VERSION}")
+    ask_box.label(text=f"Bridge {build_info.BRIDGE_VERSION} | MCP {build_info.MCP_SERVER_VERSION}")
+    ask_box.label(text=f"Status: {'On' if bridge_running else 'Off'}")
     bridge_row = ask_box.row(align=True)
     if bridge_running:
         bridge_row.operator("claude_blender.stop_bridge", text="Stop Bridge")
     else:
         bridge_row.operator("claude_blender.start_bridge", text="Start Bridge")
-    bridge_row.operator("claude_blender.copy_mcp_config", text="Copy MCP")
+    bridge_row.operator("claude_blender.copy_mcp_config", text="Copy MCP Config")
     trust_snapshot = script_runner.external_script_trust_snapshot(bpy.context, state=state)
     trust_active = trust_snapshot["active"]
     trust_status = trust_snapshot["status"]
@@ -283,16 +270,15 @@ def _draw_ask_section(layout, state, prefs):
     toggle_row = ask_box.row(align=True)
     toggle_row.prop(state, "include_screenshot", toggle=True)
     toggle_row.prop(state, "live_helpers", toggle=True)
-    toggle_row.prop(state, "agent_memory_enabled", toggle=True)
 
-    ask_box.operator("claude_blender.capture_context", text="Capture Context", icon="VIEWZOOM")
+    ask_box.operator("claude_blender.capture_context", text="Capture Scene Context", icon="VIEWZOOM")
 
     if prefs:
-        ask_box.label(text=f"Execution: {prefs.execution_mode.replace('_', ' ').title()}")
+        ask_box.label(text=f"Mode: {prefs.execution_mode.replace('_', ' ').title()}")
 
 
 def _draw_status_section(layout, state):
-    status_box = _draw_section(layout, "Scene Context")
+    status_box = _draw_section(layout, "Context")
     _draw_field(status_box, "Status", state.status, max_lines=3, empty="Ready")
     if state.last_context_summary:
         _draw_field(status_box, "Context", state.last_context_summary, max_lines=4)
@@ -303,119 +289,8 @@ def _draw_status_section(layout, state):
         _draw_field(status_box, "Items", state.context_plan_items, max_lines=4)
 
 
-def _draw_memory_section(layout, state):
-    memory_box = _draw_section(layout, "Agent Memory")
-    memory_box.prop(state, "agent_memory_enabled", toggle=True)
-    _draw_wrapped(memory_box, state.agent_memory_status, max_lines=2, empty="No agent memory yet")
-    if state.agent_memory_text_name:
-        memory_box.label(text=f"Text: {state.agent_memory_text_name}")
-    row = memory_box.row(align=True)
-    row.enabled = bool(state.agent_memory_text_name)
-    row.operator("claude_blender.clear_agent_memory", icon="TRASH")
-
-
-def _draw_screenshot_section(layout, state):
-    screenshot_box = _draw_section(layout, "Viewport Screenshot")
-    _draw_wrapped(screenshot_box, state.last_screenshot_status, max_lines=3)
-    details = []
-    size = _format_bytes(state.last_screenshot_size)
-    if state.last_screenshot_image_name:
-        details.append(state.last_screenshot_image_name)
-    if size:
-        details.append(size)
-    if state.last_screenshot_path:
-        details.append(os.path.basename(state.last_screenshot_path))
-    if details:
-        _draw_wrapped(screenshot_box, " | ".join(details), max_lines=2)
-
-    row = screenshot_box.row(align=True)
-    row.enabled = state.include_screenshot
-    row.operator("claude_blender.capture_viewport_preview", text="Capture", icon="IMAGE_DATA")
-    open_row = screenshot_box.row(align=True)
-    open_row.enabled = bool(state.last_screenshot_path)
-    open_row.operator("claude_blender.open_last_screenshot", text="Open", icon="FILE_FOLDER")
-
-
-def _draw_preview_section(layout, state):
-    preview = _draw_section(layout, "Live Changes")
-    if state.pending_preview:
-        _draw_field(preview, "Pending", state.pending_preview_label or "Live preview", max_lines=3)
-        if state.pending_preview_summary:
-            _draw_field(preview, "Rollback", state.pending_preview_summary, width=42, max_lines=4)
-        if state.pending_preview_warnings:
-            _draw_field(preview, "Warnings", state.pending_preview_warnings, width=42, max_lines=4)
-        row = preview.row(align=True)
-        row.operator("claude_blender.commit_preview", icon="CHECKMARK")
-        row.operator("claude_blender.revert_preview", icon="LOOP_BACK")
-    else:
-        preview.label(text="No pending live changes")
-        if state.last_preview_summary:
-            _draw_field(preview, "Last Preview", state.last_preview_summary, width=42, max_lines=3)
-        if state.last_preview_warnings:
-            _draw_field(preview, "Last Warnings", state.last_preview_warnings, width=42, max_lines=4)
-    preview.operator("claude_blender.undo_last", text="Undo Last", icon="LOOP_BACK")
-
-
-def _draw_docs_section(layout, state):
-    docs_box = _draw_section(layout, "Docs")
-    _draw_wrapped(docs_box, state.docs_cache_status, max_lines=3)
-    row = docs_box.row(align=True)
-    row.operator("claude_blender.check_docs_cache", text="Check", icon="VIEWZOOM")
-    build_row = row.row(align=True)
-    build_row.enabled = not state.docs_cache_building
-    build = build_row.operator("claude_blender.build_docs_cache", text="Build", icon="FILE_REFRESH")
-    build.force = False
-
-
-def _draw_script_section(layout, state):
-    script_box = _draw_section(layout, "Script Approval")
-    if state.pending_script:
-        _draw_field(script_box, "Status", state.pending_script_status, max_lines=2)
-        if state.pending_script_risk:
-            _draw_field(script_box, "Risk", state.pending_script_risk, max_lines=2)
-        if state.pending_script_text_name:
-            script_box.label(text=f"Text: {state.pending_script_text_name}")
-        if state.pending_script_issues:
-            _draw_field(script_box, "Issues", state.pending_script_issues, width=42, max_lines=4)
-        if state.pending_script_warnings:
-            _draw_field(script_box, "Warnings", state.pending_script_warnings, width=42, max_lines=4)
-        if state.pending_script_intent:
-            _draw_field(script_box, "Intent", state.pending_script_intent, width=42, max_lines=3)
-        if state.pending_script_expected_changes:
-            _draw_field(script_box, "Expected", state.pending_script_expected_changes, width=42, max_lines=4)
-
-        run_row = script_box.row(align=True)
-        run_row.enabled = not state.pending_script_blocked
-        run_row.operator("claude_blender.run_approved_script", icon="PLAY")
-        external_row = script_box.row(align=True)
-        external_row.enabled = not state.pending_script_blocked
-        external_row.operator("claude_blender.approve_external_script_run", icon="KEYINGSET")
-        script_box.operator("claude_blender.reject_script", icon="LOOP_BACK")
-        if state.pending_script_external_approval_status != "No external script approval":
-            _draw_field(script_box, "External Approval", state.pending_script_external_approval_status, width=42, max_lines=2)
-        trust_snapshot = script_runner.external_script_trust_snapshot(bpy.context, state=state)
-        if trust_snapshot["active"] or trust_snapshot["expired"]:
-            _draw_field(script_box, "Trust Window", trust_snapshot["status"], width=42, max_lines=2)
-
-        if state.pending_script_status == "Script failed" or state.last_script_error_summary:
-            if state.last_script_error_summary:
-                _draw_field(script_box, "Last Error", state.last_script_error_summary, width=42, max_lines=4)
-    else:
-        script_box.label(text="No pending script")
-
-    checkpoint = state.last_checkpoint_path or state.last_checkpoint_status
-    if checkpoint and checkpoint != "No script checkpoint yet":
-        _draw_field(script_box, "Checkpoint", checkpoint, width=42, max_lines=3)
-        restore_row = script_box.row(align=True)
-        restore_row.enabled = bool(state.last_checkpoint_path)
-        restore_row.operator("claude_blender.restore_last_checkpoint", icon="FILE_REFRESH")
-    if state.last_checkpoint_restored_path or state.last_checkpoint_restored_status != "No checkpoint restored":
-        restored = state.last_checkpoint_restored_path or state.last_checkpoint_restored_status
-        _draw_field(script_box, "Restored", restored, width=42, max_lines=2)
-
-
 def _draw_action_center(layout, state):
-    actions = _draw_section(layout, "Action Center")
+    actions = _draw_section(layout, "Actions")
     has_action = False
 
     if state.active_tool_name:
@@ -486,12 +361,12 @@ def _draw_action_center(layout, state):
             details.append(os.path.basename(state.last_screenshot_path))
         if details:
             _draw_wrapped(actions, " | ".join(details), max_lines=2)
-    row = actions.row(align=True)
-    row.enabled = state.include_screenshot
-    row.operator("claude_blender.capture_viewport_preview", text="Capture", icon="IMAGE_DATA")
-    open_row = actions.row(align=True)
-    open_row.enabled = bool(state.last_screenshot_path)
-    open_row.operator("claude_blender.open_last_screenshot", text="Open Screenshot", icon="FILE_FOLDER")
+        row = actions.row(align=True)
+        row.enabled = state.include_screenshot
+        row.operator("claude_blender.capture_viewport_preview", text="Capture", icon="IMAGE_DATA")
+        open_row = actions.row(align=True)
+        open_row.enabled = bool(state.last_screenshot_path)
+        open_row.operator("claude_blender.open_last_screenshot", text="Open Screenshot", icon="FILE_FOLDER")
 
     _draw_wrapped(actions, state.docs_cache_status, max_lines=2)
     docs_row = actions.row(align=True)
@@ -510,19 +385,7 @@ def _draw_action_center(layout, state):
         restore_row.operator("claude_blender.restore_last_checkpoint", text="Restore Checkpoint", icon="FILE_REFRESH")
 
     if not has_action and not state.active_tool_name:
-        actions.label(text="No pending agent actions")
-
-
-class CLAUDEBLENDER_OT_copy_last_response(bpy.types.Operator):
-    bl_idname = "claude_blender.copy_last_response"
-    bl_label = "Copy Last Response"
-    bl_description = "Copy the latest bridge response/status to the system clipboard"
-
-    def execute(self, context):
-        state = context.scene.claude_blender
-        context.window_manager.clipboard = state.last_response or ""
-        state.status = "Copied latest response"
-        return {"FINISHED"}
+        actions.label(text="No pending actions")
 
 
 class CLAUDEBLENDER_OT_run_approved_script(bpy.types.Operator):
@@ -854,7 +717,6 @@ class CLAUDEBLENDER_PT_sidebar(bpy.types.Panel):
         _draw_ask_section(layout, state, prefs)
         _draw_action_center(layout, state)
         _draw_status_section(layout, state)
-        _draw_memory_section(layout, state)
 
 
 classes = (
@@ -862,8 +724,6 @@ classes = (
     CLAUDEBLENDER_OT_commit_preview,
     CLAUDEBLENDER_OT_revert_preview,
     CLAUDEBLENDER_OT_undo_last,
-    CLAUDEBLENDER_OT_clear_agent_memory,
-    CLAUDEBLENDER_OT_copy_last_response,
     CLAUDEBLENDER_OT_run_approved_script,
     CLAUDEBLENDER_OT_approve_external_script_run,
     CLAUDEBLENDER_OT_approve_external_script_trust,

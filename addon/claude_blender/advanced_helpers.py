@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import math
+import re
 
 import bpy
 from mathutils import Vector
@@ -2232,6 +2233,93 @@ def _pose_path_values(pose_bone, path):
     return tuple(float(value) for value in getattr(pose_bone, path))
 
 
+_POSE_BONE_DATA_PATH_RE = re.compile(r'^pose\.bones\["((?:\\.|[^"])*)"\]\.([A-Za-z_][A-Za-z0-9_]*)$')
+
+
+def _unescape_data_path_name(name):
+    return str(name or "").replace('\\"', '"').replace("\\\\", "\\")
+
+
+def _pose_bone_data_path(bone_name, path):
+    escaped = str(bone_name).replace("\\", "\\\\").replace('"', '\\"')
+    return f'pose.bones["{escaped}"].{path}'
+
+
+def _parse_pose_bone_data_path(data_path):
+    match = _POSE_BONE_DATA_PATH_RE.match(str(data_path or ""))
+    if not match:
+        return "", ""
+    return _unescape_data_path_name(match.group(1)), match.group(2)
+
+
+def _action_frame_range(action):
+    frames = sorted(
+        {
+            float(point.co.x)
+            for fcurve in (live_preview._iter_action_fcurves(action) if action else [])
+            for point in getattr(fcurve, "keyframe_points", [])
+        }
+    )
+    if not frames:
+        return None, None
+    return frames[0], frames[-1]
+
+
+def _action_pose_marker_frame(action, pose_marker=""):
+    pose_marker = str(pose_marker or "").strip()
+    markers = list(getattr(action, "pose_markers", []) or []) if action else []
+    if pose_marker:
+        for marker in markers:
+            if marker.name == pose_marker or marker.name.lower() == pose_marker.lower():
+                return int(marker.frame), marker.name, ""
+        return None, "", f"Pose marker not found on action {action.name}: {pose_marker}"
+    if markers:
+        marker = markers[0]
+        return int(marker.frame), marker.name, ""
+    start, _end = _action_frame_range(action)
+    if start is None:
+        return None, "", f"Action has no keyframes: {action.name if action else ''}"
+    return int(round(start)), "", ""
+
+
+def _pose_action_channels(action, armature, *, bone_names=None, paths=None):
+    requested_bones = {str(name) for name in (bone_names or []) if str(name).strip()}
+    requested_paths = {
+        RIG_POSE_PATH_ALIASES.get(str(path).strip().lower(), str(path).strip())
+        for path in (paths or [])
+        if str(path).strip()
+    }
+    requested_paths = {path for path in requested_paths if path in RIG_POSE_PATHS}
+    channels = {}
+    bones_seen = set()
+    for fcurve in live_preview._iter_action_fcurves(action):
+        bone_name, path = _parse_pose_bone_data_path(fcurve.data_path)
+        if not bone_name or path not in RIG_POSE_PATHS:
+            continue
+        if requested_bones and bone_name not in requested_bones:
+            continue
+        if requested_paths and path not in requested_paths:
+            continue
+        pose_bone = armature.pose.bones.get(bone_name) if armature.pose else None
+        if not pose_bone:
+            continue
+        bones_seen.add(bone_name)
+        channels.setdefault((bone_name, path), {})[int(fcurve.array_index)] = fcurve
+    missing_bones = sorted(requested_bones - bones_seen) if requested_bones else []
+    return channels, missing_bones
+
+
+def _prepare_rig_application_action(armature, source_action=None):
+    current_action = armature.animation_data.action if armature.animation_data and armature.animation_data.action else None
+    if source_action is not None and current_action == source_action:
+        live_preview._record_object_animation(armature)
+        action = bpy.data.actions.new(name=f"{armature.name} Agent Bridge Rig Pose Preview Action")
+        armature.animation_data_create().action = action
+        live_preview._record_created_id("action", action.name)
+        return action, True
+    return _prepare_transform_action_for_edit(armature)
+
+
 def _resolve_armature_for_pose_hold(context, armature_name=""):
     if armature_name:
         armature = bpy.data.objects.get(str(armature_name))
@@ -2529,6 +2617,364 @@ def set_rig_custom_property_keyframes(
         "armature": armature.name,
         "keyed_properties": keyed,
         "missing_property_targets": missing,
+        "transaction_id": transaction["id"],
+    }
+
+
+def apply_rig_pose_from_action(
+    context,
+    *,
+    armature_name="",
+    action_name="",
+    pose_marker="",
+    source_frame=None,
+    target_frame=None,
+    hold_frames=4,
+    bone_names=None,
+    paths=None,
+    key_pose=True,
+    interpolation="CONSTANT",
+    label="Apply rig pose from action",
+):
+    armature = _resolve_armature_for_pose_hold(context, armature_name)
+    if armature is None:
+        return {"ok": False, "message": "An armature object is required for rig pose application"}
+    if armature.pose is None:
+        return {"ok": False, "message": f"Armature has no pose bones: {armature.name}"}
+    action = bpy.data.actions.get(str(action_name or ""))
+    if action is None:
+        return {"ok": False, "message": f"Action not found: {action_name}", "armature": armature.name}
+    if source_frame is None:
+        source_frame, resolved_marker, marker_error = _action_pose_marker_frame(action, pose_marker)
+        if marker_error:
+            return {"ok": False, "message": marker_error, "armature": armature.name, "action": action.name}
+    else:
+        source_frame = int(source_frame)
+        resolved_marker = str(pose_marker or "")
+    target_frame = int(target_frame if target_frame is not None else context.scene.frame_current)
+    hold_frames = max(0, int(hold_frames or 0))
+    hold_frame = target_frame + hold_frames
+    channels, missing_bones = _pose_action_channels(action, armature, bone_names=bone_names, paths=paths)
+    if not channels:
+        return {
+            "ok": False,
+            "message": "No matching pose-bone channels found in source action",
+            "armature": armature.name,
+            "action": action.name,
+            "missing_bone_names": missing_bones,
+        }
+
+    transaction = live_preview.begin(label, context)
+    scene = context.scene
+    live_preview._record_scene_timeline(scene)
+    if key_pose:
+        scene.frame_start = min(scene.frame_start, target_frame)
+        scene.frame_end = max(scene.frame_end, hold_frame)
+        target_action, created_action = _prepare_rig_application_action(armature, source_action=action)
+    else:
+        target_action = None
+        created_action = False
+    scene.frame_set(target_frame)
+
+    applied = []
+    for bone_name in sorted({item[0] for item in channels}):
+        pose_bone = armature.pose.bones.get(bone_name)
+        if not pose_bone:
+            continue
+        live_preview._record_pose_bone_transform(armature, pose_bone)
+        keyed_paths = []
+        values_by_path = {}
+        paths_for_bone = sorted(path for (candidate_bone, path) in channels if candidate_bone == bone_name)
+        for path in paths_for_bone:
+            fcurves = channels[(bone_name, path)]
+            fallback = _pose_path_values(pose_bone, path)
+            values = []
+            for index, fallback_value in enumerate(fallback):
+                fcurve = fcurves.get(index)
+                values.append(float(fcurve.evaluate(source_frame)) if fcurve else float(fallback_value))
+            setattr(pose_bone, path, values)
+            if key_pose:
+                pose_bone.keyframe_insert(data_path=path, frame=target_frame)
+                if hold_frames:
+                    pose_bone.keyframe_insert(data_path=path, frame=hold_frame)
+                keyed_paths.append(path)
+            values_by_path[path] = [round(float(value), 6) for value in values]
+        applied.append(
+            {
+                "bone": bone_name,
+                "paths": paths_for_bone,
+                "keyed_paths": keyed_paths,
+                "values": values_by_path,
+            }
+        )
+    if key_pose and target_action:
+        _set_action_interpolation(target_action, interpolation)
+    scene.frame_set(target_frame)
+    transaction["applied_steps"].append(
+        {
+            "type": "apply_rig_pose_from_action",
+            "label": label,
+            "armature": armature.name,
+            "source_action": action.name,
+            "pose_marker": resolved_marker,
+            "source_frame": int(source_frame),
+            "target_frame": target_frame,
+            "hold_frame": hold_frame if hold_frames else target_frame,
+            "bone_count": len(applied),
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Applied rig pose from action {action.name} to {len(applied)} bone(s)",
+        "armature": armature.name,
+        "source_action": action.name,
+        "pose_marker": resolved_marker,
+        "source_frame": int(source_frame),
+        "target_frame": target_frame,
+        "hold_frame": hold_frame if hold_frames else target_frame,
+        "hold_frames": hold_frames,
+        "key_pose": bool(key_pose),
+        "target_action": target_action.name if target_action else "",
+        "created_action": bool(created_action),
+        "applied_bones": applied,
+        "missing_bone_names": missing_bones,
+        "transaction_id": transaction["id"],
+    }
+
+
+def apply_rig_action_clip(
+    context,
+    *,
+    armature_name="",
+    action_name="",
+    frame_start=None,
+    frame_end=None,
+    source_frame_start=None,
+    source_frame_end=None,
+    interpolation="",
+    label="Apply rig action clip",
+):
+    armature = _resolve_armature_for_pose_hold(context, armature_name)
+    if armature is None:
+        return {"ok": False, "message": "An armature object is required for rig action application"}
+    source_action = bpy.data.actions.get(str(action_name or ""))
+    if source_action is None:
+        return {"ok": False, "message": f"Action not found: {action_name}", "armature": armature.name}
+    source_start, source_end = _action_frame_range(source_action)
+    if source_start is None or source_end is None:
+        return {"ok": False, "message": f"Action has no keyframes: {source_action.name}", "armature": armature.name}
+    source_start = float(source_frame_start if source_frame_start is not None else source_start)
+    source_end = float(source_frame_end if source_frame_end is not None else source_end)
+    if source_end < source_start:
+        source_start, source_end = source_end, source_start
+    frame_start = int(frame_start if frame_start is not None else context.scene.frame_current)
+    source_duration = max(0.0, source_end - source_start)
+    frame_end = int(frame_end if frame_end is not None else round(frame_start + source_duration))
+    if frame_end < frame_start:
+        frame_start, frame_end = frame_end, frame_start
+    target_duration = max(0.0, float(frame_end - frame_start))
+    scale = (target_duration / source_duration) if source_duration > 0 else 1.0
+
+    transaction = live_preview.begin(label, context)
+    scene = context.scene
+    live_preview._record_scene_timeline(scene)
+    live_preview._record_object_animation(armature)
+    applied_action = source_action.copy()
+    applied_action.name = f"{armature.name} {source_action.name} Applied Preview"
+    live_preview._record_created_id("action", applied_action.name)
+    for fcurve in live_preview._iter_action_fcurves(applied_action):
+        for point in getattr(fcurve, "keyframe_points", []):
+            for attr in ("co", "handle_left", "handle_right"):
+                vec = getattr(point, attr)
+                vec.x = frame_start + (float(vec.x) - source_start) * scale
+        fcurve.update()
+    if interpolation and str(interpolation).upper() in KEYFRAME_INTERPOLATIONS:
+        _set_action_interpolation(applied_action, str(interpolation).upper())
+    armature.animation_data_create().action = applied_action
+    scene.frame_start = min(scene.frame_start, frame_start)
+    scene.frame_end = max(scene.frame_end, frame_end)
+    scene.frame_set(frame_start)
+    transaction["applied_steps"].append(
+        {
+            "type": "apply_rig_action_clip",
+            "label": label,
+            "armature": armature.name,
+            "source_action": source_action.name,
+            "applied_action": applied_action.name,
+            "frame_start": frame_start,
+            "frame_end": frame_end,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Applied action clip {source_action.name} to {armature.name}",
+        "armature": armature.name,
+        "source_action": source_action.name,
+        "applied_action": applied_action.name,
+        "frame_start": frame_start,
+        "frame_end": frame_end,
+        "source_frame_start": source_start,
+        "source_frame_end": source_end,
+        "retime_scale": round(float(scale), 6),
+        "transaction_id": transaction["id"],
+    }
+
+
+def _offset_target_from_bone_names(bone_names, *, location_delta=None, rotation_delta=None, scale_multiplier=None):
+    result = []
+    for bone_name in bone_names or []:
+        item = {"bone_name": str(bone_name)}
+        if location_delta is not None:
+            item["location_delta"] = location_delta
+        if rotation_delta is not None:
+            item["rotation_delta"] = rotation_delta
+        if scale_multiplier is not None:
+            item["scale_multiplier"] = scale_multiplier
+        result.append(item)
+    return result
+
+
+def offset_rig_limb_controls(
+    context,
+    *,
+    armature_name="",
+    control_offsets=None,
+    bone_names=None,
+    location_delta=None,
+    rotation_delta=None,
+    scale_multiplier=None,
+    property_targets=None,
+    frame=None,
+    hold_frames=4,
+    interpolation="BEZIER",
+    label="Offset rig limb controls",
+):
+    armature = _resolve_armature_for_pose_hold(context, armature_name)
+    if armature is None:
+        return {"ok": False, "message": "An armature object is required for rig limb control offsets"}
+    offsets = [item for item in (control_offsets or []) if isinstance(item, dict)]
+    if not offsets and bone_names:
+        offsets = _offset_target_from_bone_names(
+            bone_names,
+            location_delta=location_delta,
+            rotation_delta=rotation_delta,
+            scale_multiplier=scale_multiplier,
+        )
+    property_targets = [target for target in (property_targets or []) if isinstance(target, dict)]
+    if not offsets and not property_targets:
+        return {"ok": False, "message": "control_offsets, bone_names, or property_targets are required"}
+    frame = int(frame if frame is not None else context.scene.frame_current)
+    hold_frames = max(0, int(hold_frames or 0))
+    hold_frame = frame + hold_frames
+    transaction = live_preview.begin(label, context)
+    scene = context.scene
+    live_preview._record_scene_timeline(scene)
+    scene.frame_start = min(scene.frame_start, frame)
+    scene.frame_end = max(scene.frame_end, hold_frame)
+    property_result = {}
+    if property_targets:
+        property_result = set_rig_custom_property_keyframes(
+            context,
+            armature_name=armature.name,
+            property_targets=property_targets,
+            frame=frame,
+            hold_frames=max(1, hold_frames or 1),
+            interpolation="CONSTANT",
+            label=label,
+        )
+    action = None
+    created_action = False
+    applied = []
+    missing = []
+    scene.frame_set(frame)
+    for offset in offsets:
+        bone_name = str(offset.get("bone_name") or "").strip()
+        pose_bone = armature.pose.bones.get(bone_name) if armature.pose else None
+        if not pose_bone:
+            missing.append(bone_name)
+            continue
+        live_preview._record_pose_bone_transform(armature, pose_bone)
+        if action is None:
+            action, created_action = _prepare_transform_action_for_edit(armature)
+        keyed_paths = []
+        before = {
+            "location": [round(float(value), 6) for value in pose_bone.location],
+            "rotation_euler": [round(float(value), 6) for value in pose_bone.rotation_euler],
+            "scale": [round(float(value), 6) for value in pose_bone.scale],
+        }
+        loc_delta = offset.get("location_delta", location_delta)
+        if loc_delta is not None:
+            delta = _coerce_vector(loc_delta, (0.0, 0.0, 0.0))
+            pose_bone.location = [float(pose_bone.location[index]) + float(delta[index]) for index in range(3)]
+            pose_bone.keyframe_insert(data_path="location", frame=frame)
+            if hold_frames:
+                pose_bone.keyframe_insert(data_path="location", frame=hold_frame)
+            keyed_paths.append("location")
+        rot_delta = offset.get("rotation_delta", rotation_delta)
+        if rot_delta is not None:
+            if str(getattr(pose_bone, "rotation_mode", "") or "").upper() == "QUATERNION":
+                missing.append(f"{bone_name}: rotation_delta requires non-quaternion rotation mode")
+            else:
+                delta = _coerce_vector(rot_delta, (0.0, 0.0, 0.0))
+                pose_bone.rotation_euler = [float(pose_bone.rotation_euler[index]) + float(delta[index]) for index in range(3)]
+                pose_bone.keyframe_insert(data_path="rotation_euler", frame=frame)
+                if hold_frames:
+                    pose_bone.keyframe_insert(data_path="rotation_euler", frame=hold_frame)
+                keyed_paths.append("rotation_euler")
+        scale_mult = offset.get("scale_multiplier", scale_multiplier)
+        if scale_mult is not None:
+            multiplier = _coerce_vector(scale_mult, (1.0, 1.0, 1.0))
+            pose_bone.scale = [float(pose_bone.scale[index]) * float(multiplier[index]) for index in range(3)]
+            pose_bone.keyframe_insert(data_path="scale", frame=frame)
+            if hold_frames:
+                pose_bone.keyframe_insert(data_path="scale", frame=hold_frame)
+            keyed_paths.append("scale")
+        if keyed_paths:
+            applied.append(
+                {
+                    "bone": pose_bone.name,
+                    "paths": keyed_paths,
+                    "before": before,
+                    "after": {
+                        "location": [round(float(value), 6) for value in pose_bone.location],
+                        "rotation_euler": [round(float(value), 6) for value in pose_bone.rotation_euler],
+                        "scale": [round(float(value), 6) for value in pose_bone.scale],
+                    },
+                }
+            )
+    if action:
+        _set_action_interpolation(action, interpolation)
+    scene.frame_set(frame)
+    transaction["applied_steps"].append(
+        {
+            "type": "offset_rig_limb_controls",
+            "label": label,
+            "armature": armature.name,
+            "offset_count": len(applied),
+            "property_target_count": len(property_targets),
+            "frame": frame,
+            "hold_frame": hold_frame if hold_frames else frame,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    ok = bool(applied or property_result.get("ok"))
+    return {
+        "ok": ok,
+        "message": f"Applied {len(applied)} rig control offset(s)" if ok else "No rig control offsets were applied",
+        "armature": armature.name,
+        "frame": frame,
+        "hold_frame": hold_frame if hold_frames else frame,
+        "hold_frames": hold_frames,
+        "action": action.name if action else "",
+        "created_action": bool(created_action),
+        "offsets": applied,
+        "property_result": property_result,
+        "missing_controls": missing,
         "transaction_id": transaction["id"],
     }
 

@@ -16,19 +16,6 @@ class CLAUDEBLENDER_PG_scene_state(bpy.types.PropertyGroup):
         description="Apply safe helper changes immediately with revert support",
         default=True,
     )
-    agent_memory_enabled: bpy.props.BoolProperty(
-        name="Memory",
-        description="Expose compact running scene memory to external agents",
-        default=True,
-    )
-    agent_memory_status: bpy.props.StringProperty(
-        name="Memory Status",
-        default="No agent memory yet",
-    )
-    agent_memory_text_name: bpy.props.StringProperty(
-        name="Memory Text",
-        default="Blender Agent Bridge Memory",
-    )
     status: bpy.props.StringProperty(
         name="Status",
         default="Ready",

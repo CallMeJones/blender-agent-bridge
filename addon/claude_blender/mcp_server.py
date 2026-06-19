@@ -62,6 +62,12 @@ ANIMATION_ROUTE_TERMS = {
     "keyframe",
     "keyframes",
     "pose",
+    "rig",
+    "ik",
+    "fk",
+    "space",
+    "limb",
+    "pole",
     "timing",
     "arc",
     "arcs",
@@ -93,6 +99,9 @@ ANIMATION_ROUTE_TOOLS = {
     "capture_animation_playblast",
     "set_rig_pose_hold",
     "set_rig_custom_property_keyframes",
+    "apply_rig_pose_from_action",
+    "apply_rig_action_clip",
+    "offset_rig_limb_controls",
 }
 GENERIC_SELECTED_OBJECT_TOOLS = {
     "set_selected_location_delta",
@@ -756,7 +765,7 @@ def _tool_category(tool):
         return "animation"
     if "geometry" in name or "modifier" in name or "bevel" in name or "subsurf" in name or "shape_key" in name:
         return "geometry"
-    if "rigging" in name or "armature" in name or "constraint" in name or name in {"set_rig_pose_hold", "set_rig_custom_property_keyframes"}:
+    if "rigging" in name or "armature" in name or "constraint" in name or name in {"set_rig_pose_hold", "set_rig_custom_property_keyframes", "apply_rig_pose_from_action", "apply_rig_action_clip", "offset_rig_limb_controls"}:
         return "rigging"
     if "simulation" in name or "particle" in name:
         return "simulation"

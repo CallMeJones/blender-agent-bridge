@@ -26,11 +26,18 @@ def _execute(context, name, args=None):
 def main():
     cache_dir = tempfile.mkdtemp(prefix="claude-blender-render-jobs-")
     claude_blender.register()
-    prefs = preferences.get_preferences(bpy.context)
-    old_capture_dir = getattr(prefs, "capture_cache_dir", "") if prefs else ""
+    original_get_preferences = preferences.get_preferences
+    prefs = type("_SmokePreferences", (), {"capture_cache_dir": cache_dir})()
+    old_bridge_token = os.environ.get("BLENDER_BRIDGE_TOKEN")
+    old_bridge_url = os.environ.get("BLENDER_BRIDGE_URL")
     try:
-        if prefs:
-            prefs.capture_cache_dir = cache_dir
+        preferences.get_preferences = lambda _context: prefs
+
+        os.environ["BLENDER_BRIDGE_TOKEN"] = "secret-token-for-smoke"
+        os.environ["BLENDER_BRIDGE_URL"] = "http://127.0.0.1:8765"
+        child_env = render_jobs._child_env()
+        assert "BLENDER_BRIDGE_TOKEN" not in child_env, child_env
+        assert "BLENDER_BRIDGE_URL" not in child_env, child_env
 
         if bpy.context.scene.camera is None:
             bpy.ops.object.camera_add(location=(0.0, -5.0, 3.0), rotation=(1.1, 0.0, 0.0))
@@ -201,6 +208,49 @@ def main():
         assert restored["status"] == "completed", restored
         assert restored["message"] == "All expected frame files are present", restored
 
+        finished_id = "tracked-finished-reaped"
+        finished_job_dir = os.path.join(status["capture_dir"], "render-jobs", finished_id)
+        os.makedirs(finished_job_dir, exist_ok=True)
+        finished_metadata_path = os.path.join(finished_job_dir, render_jobs.METADATA_FILENAME)
+        with open(finished_metadata_path, "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(
+                {
+                    "ok": True,
+                    "available": True,
+                    "status": "completed",
+                    "job_id": finished_id,
+                    "metadata_path": finished_metadata_path,
+                    "log_path": os.path.join(finished_job_dir, render_jobs.LOG_FILENAME),
+                    "output_kind": "frames",
+                    "total_frames": 0,
+                    "frame_start": 1,
+                    "frame_end": 1,
+                    "message": "Synthetic finished process",
+                },
+                handle,
+                indent=2,
+                sort_keys=True,
+            )
+
+        class FinishedProcess:
+            def __init__(self):
+                self.waited = False
+
+            def poll(self):
+                return 0
+
+            def wait(self, timeout=0):
+                self.waited = True
+                return 0
+
+        finished_process = FinishedProcess()
+        render_jobs._PROCESSES[finished_id] = finished_process
+        finished = render_jobs.render_job_status(finished_id, capture_dir=status["capture_dir"], context=bpy.context)
+        assert finished["status"] == "completed", finished
+        assert finished["returncode"] == 0, finished
+        assert finished_process.waited, finished
+        assert finished_id not in render_jobs._PROCESSES, finished
+
         guarded = _execute(
             bpy.context,
             "draft_script",
@@ -216,8 +266,15 @@ def main():
 
         print("smoke_render_jobs: ok")
     finally:
-        if prefs:
-            prefs.capture_cache_dir = old_capture_dir
+        if old_bridge_token is None:
+            os.environ.pop("BLENDER_BRIDGE_TOKEN", None)
+        else:
+            os.environ["BLENDER_BRIDGE_TOKEN"] = old_bridge_token
+        if old_bridge_url is None:
+            os.environ.pop("BLENDER_BRIDGE_URL", None)
+        else:
+            os.environ["BLENDER_BRIDGE_URL"] = old_bridge_url
+        preferences.get_preferences = original_get_preferences
         claude_blender.unregister()
         shutil.rmtree(cache_dir, ignore_errors=True)
 

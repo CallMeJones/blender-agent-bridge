@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from array import array
 import math
 import os
 import re
@@ -905,8 +906,8 @@ def analyze_center_of_mass(
                         "principle": "weight",
                         "object": obj.name,
                         "frame": frame,
-                        "repair_tool": "set_pose_hold",
-                        "message": "Subject center is outside the support footprint during a contact-like pose.",
+                        "repair_tool": "get_rigging_details",
+                        "message": "Subject center is outside the support footprint during a contact-like pose. Needs a manual corrective re-pose; the automatic loop cannot rebalance it.",
                         "evidence": {
                             "sampled_frames": [frame],
                             "support_objects": support_item["support_objects"],
@@ -1319,6 +1320,21 @@ def _normalize_playblast(context, playblast):
     return playblast_capture.latest_playblast_metadata(context=context)
 
 
+def _image_pixel_values(image, pixel_count):
+    pixel_total = int(pixel_count) * 4
+    if pixel_total <= 0:
+        return []
+    values = array("f", [0.0]) * pixel_total
+    try:
+        image.pixels.foreach_get(values)
+        return values
+    except Exception:
+        try:
+            return list(image.pixels[:])
+        except Exception:
+            return []
+
+
 def _image_digest(path, *, grid_size=4, max_samples=4096):
     if not path or not os.path.isfile(path):
         return {}
@@ -1331,7 +1347,10 @@ def _image_digest(path, *, grid_size=4, max_samples=4096):
         if width <= 0 or height <= 0 or pixel_count <= 0:
             return {"available": False, "note": "Image has no readable pixels"}
 
-        pixels = image.pixels
+        pixels = _image_pixel_values(image, pixel_count)
+        if len(pixels) < pixel_count * 4:
+            return {"available": False, "note": "Image pixel buffer could not be read"}
+
         def pixel_luma_at(x, y):
             offset = (int(y) * width + int(x)) * 4
             return (
@@ -2673,11 +2692,18 @@ def _rig_pose_library_candidates(armature, *, text="", maximum=6):
     return result[: max(1, int(maximum or 1))]
 
 
-def _rig_switch_property_targets(candidates, *, maximum=4):
+def _rig_switch_property_targets(candidates, *, maximum=4, include_roles=None, exclude_roles=None):
+    include_roles = set(include_roles or [])
+    exclude_roles = set(exclude_roles or [])
     targets = []
     for candidate in candidates or []:
         value = candidate.get("value")
         if not isinstance(value, (bool, int, float)):
+            continue
+        roles = set(candidate.get("roles") or [])
+        if include_roles and not (roles & include_roles):
+            continue
+        if exclude_roles and (roles & exclude_roles):
             continue
         targets.append(
             {
@@ -2690,6 +2716,63 @@ def _rig_switch_property_targets(candidates, *, maximum=4):
         if len(targets) >= maximum:
             break
     return targets
+
+
+def _rig_pose_application_arguments(rig_target, *, frame):
+    candidates = rig_target.get("pose_library_candidates") or []
+    if not candidates:
+        return {}
+    candidate = candidates[0]
+    marker = ""
+    matched = candidate.get("matched_pose_markers") or []
+    if matched:
+        marker = str(matched[0])
+    else:
+        pose_markers = candidate.get("pose_markers") or []
+        if pose_markers:
+            marker = str(pose_markers[0].get("name") or "")
+    return {
+        "armature_name": rig_target.get("armature_name", ""),
+        "action_name": candidate.get("name", ""),
+        "pose_marker": marker,
+        "target_frame": int(frame),
+        "hold_frames": 4,
+        "bone_names": rig_target.get("bone_names", []),
+        "interpolation": "CONSTANT",
+        "key_pose": True,
+    }
+
+
+def _rig_limb_control_offsets(rig_target, text="", *, maximum=4):
+    normalized = str(text or "").lower()
+    offsets = []
+    for control in (rig_target.get("selection") or {}).get("selected_controls", []):
+        name = str(control.get("name") or "")
+        roles = set(control.get("roles") or [])
+        regions = set(control.get("regions") or [])
+        if not name:
+            continue
+        location_delta = None
+        if "pole" in roles:
+            location_delta = [0.0, -0.08, 0.0]
+        elif roles & {"ik", "target"}:
+            if "lower_limb" in regions or any(term in normalized for term in ("foot", "ankle", "toe")):
+                location_delta = [0.0, 0.0, 0.035]
+            elif "upper_limb" in regions or any(term in normalized for term in ("hand", "wrist", "elbow")):
+                location_delta = [0.0, 0.0, 0.025]
+        elif "control" in roles and ("drift" in normalized or "space" in normalized):
+            location_delta = [0.0, 0.0, 0.015]
+        if location_delta is None:
+            continue
+        offsets.append(
+            {
+                "bone_name": name,
+                "location_delta": location_delta,
+            }
+        )
+        if len(offsets) >= maximum:
+            break
+    return offsets
 
 
 def _rig_repair_target(context, object_names, *, text=""):
@@ -2818,8 +2901,29 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     metadata=rig_metadata,
                 )
             )
+            pose_arguments = _rig_pose_application_arguments(rig_target, frame=hold_frame)
+            if pose_arguments.get("action_name"):
+                operations.append(
+                    _operation(
+                        "apply_rig_pose_from_action",
+                        "Apply a matching production rig pose-library/action pose before direct control repair.",
+                        arguments=pose_arguments,
+                        source_index=index,
+                        finding=finding,
+                        confidence="medium",
+                        target_frames=target_frames,
+                        target_frame_range=target_frame_range,
+                        metadata=rig_metadata,
+                    )
+                )
             switch_property_targets = _rig_switch_property_targets(
-                rig_target.get("switch_property_candidates", [])
+                rig_target.get("switch_property_candidates", []),
+                exclude_roles={"space"},
+            )
+            space_property_targets = _rig_switch_property_targets(
+                rig_target.get("switch_property_candidates", []),
+                include_roles={"space"},
+                maximum=3,
             )
             if switch_property_targets:
                 operations.append(
@@ -2836,6 +2940,28 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                         source_index=index,
                         finding=finding,
                         confidence="medium",
+                        target_frames=target_frames,
+                        target_frame_range=target_frame_range,
+                        metadata=rig_metadata,
+                    )
+                )
+            limb_offsets = _rig_limb_control_offsets(rig_target, text=text)
+            if limb_offsets or space_property_targets:
+                operations.append(
+                    _operation(
+                        "offset_rig_limb_controls",
+                        "Apply small keyed offsets to selected limb controls and hold detected space-switch properties.",
+                        arguments={
+                            "armature_name": rig_target["armature_name"],
+                            "control_offsets": limb_offsets,
+                            "property_targets": space_property_targets,
+                            "frame": hold_frame,
+                            "hold_frames": 4,
+                            "interpolation": "BEZIER",
+                        },
+                        source_index=index,
+                        finding=finding,
+                        confidence="low" if not limb_offsets else "medium",
                         target_frames=target_frames,
                         target_frame_range=target_frame_range,
                         metadata=rig_metadata,
@@ -2933,6 +3059,7 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                             confidence="high",
                             target_frames=target_frames,
                             target_frame_range=target_frame_range,
+                            metadata={"replaces_existing_action": True},
                         )
                     )
                 else:
@@ -2953,6 +3080,7 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                             confidence="high",
                             target_frames=target_frames,
                             target_frame_range=target_frame_range,
+                            metadata={"replaces_existing_action": True},
                         )
                     )
             else:
@@ -2981,16 +3109,21 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                 )
             )
         if not rig_repair_added and ("center_of_mass" in text or "support footprint" in text or "support" in text):
-            hold_frame = int(finding.get("frame", target_frames[0] if target_frames else frame_start) or frame_start)
+            balance_frame = int(finding.get("frame", target_frames[0] if target_frames else frame_start) or frame_start)
             operations.append(
                 _operation(
-                    "set_pose_hold",
-                    "Hold or re-key the support/contact pose so the subject reads as balanced.",
-                    arguments={"object_names": subject_names, "frame": hold_frame, "hold_frames": 3, "paths": ["location"]},
+                    "get_rigging_details",
+                    "Center of mass sits outside the support footprint. Balancing needs a manual corrective "
+                    "re-pose (move the supporting/contact pose so the center is over the support); the automatic "
+                    "loop cannot compute the correction (re-keying the current pose would not fix it), so this is "
+                    "surfaced as guidance rather than applied.",
+                    arguments={"object_names": subject_names},
                     source_index=index,
                     finding=finding,
+                    confidence="low",
                     target_frames=target_frames,
                     target_frame_range=target_frame_range,
+                    metadata={"advisory": True, "needs_user_planning": True, "balance_frame": balance_frame},
                 )
             )
         if "speed" in text or "acceleration" in text or "motion_physics" in text:
@@ -3031,16 +3164,20 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                 )
             )
         if not rig_repair_added and ("contact" in text or "slide" in text):
-            hold_frame = int(finding.get("frame", target_frames[0] if target_frames else frame_start) or frame_start)
+            contact_frame = int(finding.get("frame", target_frames[0] if target_frames else frame_start) or frame_start)
             operations.append(
                 _operation(
-                    "set_pose_hold",
-                    "Hold or re-key contact poses to reduce sliding and improve weight.",
-                    arguments={"object_names": subject_names, "frame": hold_frame, "hold_frames": 4, "paths": ["location"]},
+                    "get_rigging_details",
+                    "Contact points slide or read as weightless. Planting the contact needs a manual corrective "
+                    "re-pose of the contact frame(s); the automatic loop cannot compute the corrective offset "
+                    "(re-keying the sliding pose would not fix it), so this is surfaced as guidance rather than applied.",
+                    arguments={"object_names": subject_names},
                     source_index=index,
                     finding=finding,
+                    confidence="low",
                     target_frames=target_frames,
                     target_frame_range=target_frame_range,
+                    metadata={"advisory": True, "needs_user_planning": True, "contact_frame": contact_frame},
                 )
             )
         if "settle" in text or "follow" in text or "overshoot" in text:
@@ -3119,6 +3256,10 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                 arguments={"brief": brief, "frame_start": frame_start, "frame_end": frame_end},
             )
         )
+    # Run regenerative repairs (which replace an action) before additive repairs
+    # (breakdowns, interpolation, holds) so a regeneration cannot wipe a repair
+    # applied earlier in the same loop. Stable sort preserves order within groups.
+    operations.sort(key=lambda op: 0 if (op.get("metadata") or {}).get("replaces_existing_action") else 1)
     operations = _dedupe_operations(operations)
     suggestions = []
     for operation in operations:

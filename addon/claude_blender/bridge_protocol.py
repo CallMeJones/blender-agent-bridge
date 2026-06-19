@@ -596,6 +596,21 @@ TOOL_CONTRACTS = {
         "mutates_scene": True,
         "requires_live_preview": True,
     },
+    "apply_rig_pose_from_action": {
+        "description": "Apply/key a sampled pose from an existing rig action or pose-library marker with preview rollback",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
+    "apply_rig_action_clip": {
+        "description": "Copy and assign an existing rig action clip to an armature with preview rollback",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
+    "offset_rig_limb_controls": {
+        "description": "Apply keyed limb-control offsets and optional space-switch keys with preview rollback",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
     "create_motion_arc": {
         "description": "Create preview curve objects that visualize sampled object motion arcs",
         "mutates_scene": True,
@@ -903,6 +918,94 @@ def list_tool_contracts():
             for name, contract in TOOL_CONTRACTS.items()
         },
     }
+
+
+def _schema_types(schema):
+    schema_type = schema.get("type")
+    if isinstance(schema_type, list):
+        return set(str(item) for item in schema_type)
+    if isinstance(schema_type, str):
+        return {schema_type}
+    return set()
+
+
+def _matches_json_type(value, schema_type):
+    if schema_type == "object":
+        return isinstance(value, dict)
+    if schema_type == "array":
+        return isinstance(value, list)
+    if schema_type == "string":
+        return isinstance(value, str)
+    if schema_type == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if schema_type == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if schema_type == "boolean":
+        return isinstance(value, bool)
+    if schema_type == "null":
+        return value is None
+    return True
+
+
+def _integer_schema_value(schema, key):
+    value = schema.get(key)
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    return None
+
+
+def validate_arguments(value, schema, path="$"):
+    """Validate a value against the JSON Schema subset used by this project.
+
+    Dependency-free and bpy-free so both the in-Blender bridge and the
+    standalone stdio MCP server can enforce the same tool contract. Returns a
+    list of human-readable error strings (empty when valid).
+    """
+
+    if not isinstance(schema, dict):
+        return []
+    errors = []
+    schema_types = _schema_types(schema)
+    if schema_types and not any(_matches_json_type(value, item) for item in schema_types):
+        errors.append(f"{path}: expected {', '.join(sorted(schema_types))}")
+        return errors
+    if "enum" in schema and value not in schema.get("enum", []):
+        errors.append(f"{path}: expected one of {schema.get('enum')}")
+        return errors
+    if isinstance(value, dict):
+        properties = schema.get("properties") if isinstance(schema.get("properties"), dict) else {}
+        required = schema.get("required") if isinstance(schema.get("required"), list) else []
+        for key in required:
+            if key not in value:
+                errors.append(f"{path}.{key}: required property is missing")
+        if schema.get("additionalProperties") is False:
+            for key in value:
+                if key not in properties:
+                    errors.append(f"{path}.{key}: additional property is not allowed")
+        for key, child_schema in properties.items():
+            if key in value:
+                errors.extend(validate_arguments(value[key], child_schema, f"{path}.{key}"))
+    if isinstance(value, list):
+        min_items = _integer_schema_value(schema, "minItems")
+        max_items = _integer_schema_value(schema, "maxItems")
+        if min_items is not None and len(value) < min_items:
+            errors.append(f"{path}: expected at least {min_items} item(s)")
+        if max_items is not None and len(value) > max_items:
+            errors.append(f"{path}: expected at most {max_items} item(s)")
+        if isinstance(schema.get("items"), dict):
+            item_schema = schema["items"]
+            for index, item in enumerate(value):
+                errors.extend(validate_arguments(item, item_schema, f"{path}[{index}]"))
+    if isinstance(value, str):
+        min_length = _integer_schema_value(schema, "minLength")
+        max_length = _integer_schema_value(schema, "maxLength")
+        if min_length is not None and len(value) < min_length:
+            errors.append(f"{path}: expected at least {min_length} character(s)")
+        if max_length is not None and len(value) > max_length:
+            errors.append(f"{path}: expected at most {max_length} character(s)")
+    return errors
 
 
 def register():

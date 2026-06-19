@@ -9,9 +9,6 @@ import math
 from . import context_budget
 
 DEFAULT_MAX_CONTEXT_CHARS = 48_000
-SOFT_TARGET_CONTEXT_CHARS = 32_000
-MAX_MEMORY_CHARS = 5_000
-SMALL_MEMORY_CHARS = 2_000
 MAX_SELECTED_FULL = 8
 MAX_SELECTED_SLIM = 16
 
@@ -78,14 +75,6 @@ def _contains_any(prompt, words):
     return any(word in lowered for word in words)
 
 
-def _tail_text(text, max_chars):
-    text = str(text or "").strip()
-    if len(text) <= max_chars:
-        return text
-    keep = max(0, int(max_chars) - 24)
-    return f"[older memory omitted]\n{text[-keep:]}"
-
-
 def _slim_object(obj):
     if not isinstance(obj, dict):
         return obj
@@ -115,15 +104,6 @@ def _plan_selection(selection):
         planned.append({"_truncated_selected_objects": len(selected) - MAX_SELECTED_SLIM})
     selection["selected_objects"] = planned
     return selection
-
-
-def _plan_agent_memory(memory_block, *, max_chars=MAX_MEMORY_CHARS):
-    if not isinstance(memory_block, dict):
-        return memory_block
-    planned = copy.deepcopy(memory_block)
-    if "memory" in planned:
-        planned["memory"] = _tail_text(planned.get("memory"), max_chars)
-    return planned
 
 
 def _plan_animation(animation):
@@ -163,7 +143,6 @@ def _base_plan(prompt, bundle, *, max_context_chars=DEFAULT_MAX_CONTEXT_CHARS):
         "selection_summary": _plan_selection(bundle.get("selection_summary")),
         "active_object_detail": copy.deepcopy(bundle.get("active_object_detail")),
         "visual_context": visual,
-        "agent_memory": _plan_agent_memory(bundle.get("agent_memory")),
         "available_tools": list(bundle.get("available_tools") or []),
         "privacy_redactions": copy.deepcopy(bundle.get("privacy_redactions")),
     }
@@ -177,7 +156,6 @@ def _base_plan(prompt, bundle, *, max_context_chars=DEFAULT_MAX_CONTEXT_CHARS):
             "selection_summary",
             "active_object_detail",
             "visual_context",
-            "agent_memory",
             "available_tools",
         ]
     )
@@ -208,11 +186,6 @@ def plan_context_bundle(prompt, bundle, *, max_context_chars=DEFAULT_MAX_CONTEXT
     planned = _base_plan(prompt, bundle, max_context_chars=max_context_chars)
     public = {key: value for key, value in planned.items() if key != "_attachments"}
     chars = _json_chars(public)
-    if chars > SOFT_TARGET_CONTEXT_CHARS:
-        planned["agent_memory"] = _plan_agent_memory(bundle.get("agent_memory"), max_chars=SMALL_MEMORY_CHARS)
-        planned["context_plan"]["omitted"].append("agent_memory: compacted further to fit soft target")
-        public = {key: value for key, value in planned.items() if key != "_attachments"}
-        chars = _json_chars(public)
     if chars > max_context_chars:
         planned.pop("material_summary", None)
         planned["context_plan"]["omitted"].append("material_summary: removed to fit hard budget")

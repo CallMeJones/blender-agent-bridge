@@ -137,7 +137,7 @@ The search tool returns only top matching snippets and URLs. It never exposes th
 
 ## Context Budgeting
 
-`context_planner.py` first builds a prompt-aware request bundle. It includes the current scene, selection, active object, visual metadata, agent memory, and relevant material/animation summaries when the prompt needs them. It adds a `context_plan` field that tells external clients what was included or omitted, plus a rough `ceil(chars / 4)` token estimate shown in the sidebar.
+`context_planner.py` first builds a prompt-aware request bundle. It includes the current scene, selection, active object, visual metadata, and relevant material/animation summaries when the prompt needs them. It adds a `context_plan` field that tells external clients what was included or omitted, plus a rough `ceil(chars / 4)` token estimate shown in the sidebar.
 
 `context_budget.py` then applies hard text-size guards before context is exposed to clients:
 
@@ -147,7 +147,7 @@ The search tool returns only top matching snippets and URLs. It never exposes th
 - docs search returns at most a small set of snippets;
 - tool results are capped before being returned through the bridge.
 
-This keeps the local docs cache, project memory, screenshots, and large Blender scenes from killing the LLM request with oversized context.
+This keeps the local docs cache, screenshots, and large Blender scenes from killing the LLM request with oversized context.
 
 `agent_tools.select_blender_tool_definitions()` also applies a tool-schema budget. The full tool catalog remains available locally, but compact surfaces can expose a core inspection/docs set plus task-matched groups such as materials, animation, camera/render, geometry nodes, rigging, particles, curves/text, advanced creation, refinement, or vehicle tools.
 

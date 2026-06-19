@@ -1311,6 +1311,12 @@ def commit(context):
     transaction = current_transaction()
     if not transaction or transaction["status"] != "pending":
         return {"ok": False, "message": "No pending preview transaction"}
+    # Capture the committed result as a single Blender undo step so the user can
+    # still Ctrl+Z the agent's changes after committing the preview.
+    try:
+        bpy.ops.ed.undo_push(message=transaction.get("user_request") or "Agent Bridge preview commit")
+    except Exception:
+        pass
     transaction["status"] = "committed"
     manifest = transaction_manifest(transaction)
     summary = _preview_manifest_summary(manifest)
@@ -1737,6 +1743,14 @@ def revert(context):
         elif before.get("kind") == "collection":
             collection = bpy.data.collections.get(before["name"])
             if collection:
+                # Re-home objects that live only in this created collection into the
+                # scene root before removing it, so the object is not orphaned out of
+                # every scene collection (invisible/unselectable) on revert.
+                scene_root = getattr(getattr(context, "scene", None), "collection", None)
+                if scene_root is not None:
+                    for obj in list(collection.objects):
+                        if len(obj.users_collection) <= 1 and scene_root.objects.get(obj.name) is None:
+                            scene_root.objects.link(obj)
                 for parent in list(bpy.data.collections):
                     if parent.children.get(collection.name):
                         parent.children.unlink(collection)

@@ -1065,6 +1065,9 @@ _REPAIR_LOOP_DEFAULT_TOOLS = {
     "set_pose_hold",
     "set_rig_pose_hold",
     "set_rig_custom_property_keyframes",
+    "apply_rig_pose_from_action",
+    "apply_rig_action_clip",
+    "offset_rig_limb_controls",
     "add_breakdown_pose",
     "block_key_poses",
     "create_camera_orbit",
@@ -1127,6 +1130,21 @@ def _repair_operation_blocker(tool, tool_args):
             return "set_rig_custom_property_keyframes requires armature_name"
         if not tool_args.get("property_targets"):
             return "set_rig_custom_property_keyframes requires property_targets"
+    if tool == "apply_rig_pose_from_action":
+        if not tool_args.get("armature_name"):
+            return "apply_rig_pose_from_action requires armature_name"
+        if not tool_args.get("action_name"):
+            return "apply_rig_pose_from_action requires action_name"
+    if tool == "apply_rig_action_clip":
+        if not tool_args.get("armature_name"):
+            return "apply_rig_action_clip requires armature_name"
+        if not tool_args.get("action_name"):
+            return "apply_rig_action_clip requires action_name"
+    if tool == "offset_rig_limb_controls":
+        if not tool_args.get("armature_name"):
+            return "offset_rig_limb_controls requires armature_name"
+        if not (tool_args.get("control_offsets") or tool_args.get("bone_names") or tool_args.get("property_targets")):
+            return "offset_rig_limb_controls requires control_offsets, bone_names, or property_targets"
     if tool == "capture_object_inspection_renders" and not tool_args.get("object_names"):
         return "capture_object_inspection_renders requires object_names"
     if tool in {"animate_object_bounce", "create_progressive_bounce_animation"} and not tool_args.get("object_name"):
@@ -2063,6 +2081,54 @@ def set_rig_custom_property_keyframes(context, args):
     )
 
 
+def apply_rig_pose_from_action(context, args):
+    return advanced_helpers.apply_rig_pose_from_action(
+        context,
+        armature_name=str(args.get("armature_name") or ""),
+        action_name=str(args.get("action_name") or ""),
+        pose_marker=str(args.get("pose_marker") or ""),
+        source_frame=args.get("source_frame"),
+        target_frame=args.get("target_frame") if args.get("target_frame") is not None else args.get("frame"),
+        hold_frames=_bounded_int(args.get("hold_frames"), 4, minimum=0, maximum=60),
+        bone_names=_name_list(args.get("bone_names")),
+        paths=_name_list(args.get("paths")),
+        key_pose=bool(args.get("key_pose", True)),
+        interpolation=str(args.get("interpolation") or "CONSTANT"),
+        label=args.get("label", "Apply rig pose from action"),
+    )
+
+
+def apply_rig_action_clip(context, args):
+    return advanced_helpers.apply_rig_action_clip(
+        context,
+        armature_name=str(args.get("armature_name") or ""),
+        action_name=str(args.get("action_name") or ""),
+        frame_start=args.get("frame_start"),
+        frame_end=args.get("frame_end"),
+        source_frame_start=args.get("source_frame_start"),
+        source_frame_end=args.get("source_frame_end"),
+        interpolation=str(args.get("interpolation") or ""),
+        label=args.get("label", "Apply rig action clip"),
+    )
+
+
+def offset_rig_limb_controls(context, args):
+    return advanced_helpers.offset_rig_limb_controls(
+        context,
+        armature_name=str(args.get("armature_name") or ""),
+        control_offsets=args.get("control_offsets") if isinstance(args.get("control_offsets"), list) else [],
+        bone_names=_name_list(args.get("bone_names")),
+        location_delta=_float_list(args.get("location_delta"), 3, (0.0, 0.0, 0.0)) if args.get("location_delta") is not None else None,
+        rotation_delta=_float_list(args.get("rotation_delta"), 3, (0.0, 0.0, 0.0)) if args.get("rotation_delta") is not None else None,
+        scale_multiplier=_float_list(args.get("scale_multiplier"), 3, (1.0, 1.0, 1.0)) if args.get("scale_multiplier") is not None else None,
+        property_targets=args.get("property_targets") if isinstance(args.get("property_targets"), list) else [],
+        frame=args.get("frame"),
+        hold_frames=_bounded_int(args.get("hold_frames"), 4, minimum=0, maximum=60),
+        interpolation=str(args.get("interpolation") or "BEZIER"),
+        label=args.get("label", "Offset rig limb controls"),
+    )
+
+
 def create_motion_arc(context, args):
     return advanced_helpers.create_motion_arc(
         context,
@@ -2989,6 +3055,9 @@ TOOL_FUNCTIONS = {
     "set_pose_hold": set_pose_hold,
     "set_rig_pose_hold": set_rig_pose_hold,
     "set_rig_custom_property_keyframes": set_rig_custom_property_keyframes,
+    "apply_rig_pose_from_action": apply_rig_pose_from_action,
+    "apply_rig_action_clip": apply_rig_action_clip,
+    "offset_rig_limb_controls": offset_rig_limb_controls,
     "create_motion_arc": create_motion_arc,
     "create_text_object": create_text_object,
     "create_curve_path": create_curve_path,
@@ -3051,10 +3120,33 @@ def execute_tool(context, name, args):
     fn = TOOL_FUNCTIONS.get(name)
     if fn is None:
         return _json_result({"ok": False, "message": f"Unknown Blender tool: {name}"})
+    transaction_before = live_preview.current_transaction()
+    txn_id_before = (
+        transaction_before["id"]
+        if transaction_before and transaction_before.get("status") == "pending"
+        else None
+    )
     try:
         result = fn(context, args or {})
     except Exception as exc:
         result = {"ok": False, "message": f"{type(exc).__name__}: {exc}"}
+        # Auto-revert a transaction this failed call opened, so the scene is not left
+        # half-mutated with a stale "pending" preview. Only revert a transaction that
+        # did not already exist before the call (never unwind the user's prior work).
+        try:
+            current = live_preview.current_transaction()
+            if (
+                current
+                and current.get("status") == "pending"
+                and current.get("id") != txn_id_before
+            ):
+                revert_result = live_preview.revert(context)
+                result["auto_reverted_preview"] = bool(revert_result.get("ok"))
+                warning_summary = revert_result.get("rollback_warning_summary")
+                if warning_summary:
+                    result["auto_revert_warnings"] = warning_summary
+        except Exception:
+            pass
     if isinstance(result, str):
         return result
     result = _attach_preview_change_report(result)

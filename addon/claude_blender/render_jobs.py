@@ -31,6 +31,53 @@ MAX_VIDEO_RESOURCE_BYTES = 25 * 1024 * 1024
 _PROCESSES = {}
 
 
+def _child_env():
+    """Environment for background Blender child processes with bridge secrets removed."""
+    env = dict(os.environ)
+    for key in ("BLENDER_BRIDGE_TOKEN", "BLENDER_BRIDGE_URL"):
+        env.pop(key, None)
+    return env
+
+
+def _pid_alive(pid):
+    """Best-effort cross-platform check that a process id is still running."""
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            STILL_ACTIVE = 259
+            kernel32 = ctypes.windll.kernel32
+            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+            if not handle:
+                return False
+            try:
+                exit_code = wintypes.DWORD()
+                if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                    return False
+                return exit_code.value == STILL_ACTIVE
+            finally:
+                kernel32.CloseHandle(handle)
+        except Exception:
+            return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
 def _safe_id(value, fallback="render-job"):
     safe = "".join(char if char.isalnum() or char in {"-", "_", "."} else "_" for char in str(value or ""))
     safe = safe.strip("._")
@@ -500,7 +547,7 @@ def start_render_job(
         }
         with open(script_path, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(_child_script_text(config))
-        command = [blender_binary, "--background", blend_path, "--python", script_path]
+        command = [blender_binary, "--background", "--factory-startup", blend_path, "--python", script_path]
         log_handle = open(log_path, "w", encoding="utf-8", newline="\n")
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         process = subprocess.Popen(
@@ -510,6 +557,7 @@ def start_render_job(
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
             creationflags=creationflags,
+            env=_child_env(),
         )
         log_handle.close()
         _PROCESSES[render_job_id] = process
@@ -554,6 +602,14 @@ def render_job_status(job_id, *, context=None, preferred_dir=None, capture_dir=N
     if process is not None:
         returncode = process.poll()
         metadata["returncode"] = returncode
+        if returncode is not None:
+            # Reap the finished child and stop tracking it so it does not become a
+            # zombie and _PROCESSES does not grow without bound across a session.
+            try:
+                process.wait(timeout=0)
+            except Exception:
+                pass
+            _PROCESSES.pop(job_id, None)
 
     child_status_path = metadata.get("child_status_path") or ""
     child_status = {}
@@ -586,8 +642,14 @@ def render_job_status(job_id, *, context=None, preferred_dir=None, capture_dir=N
         status = "failed"
         message = message or f"Render process exited with code {returncode}"
     elif process is None and status == "running":
-        status = "unknown"
-        message = "Render process is not tracked by this Blender bridge session"
+        # Process not tracked in this session (e.g. Blender was restarted). Use the
+        # persisted pid to distinguish "still running" from "finished but unrecorded".
+        if _pid_alive(metadata.get("pid")):
+            status = "running"
+            message = message or "Render process still running (recovered across bridge session)"
+        else:
+            status = "unknown"
+            message = "Render process is no longer running and final status was not recorded"
     if metadata.get("output_kind") == "frames" and total and frame_count >= total and status == "unknown":
         status = "completed"
         message = "All expected frame files are present"
@@ -616,6 +678,15 @@ def render_job_status(job_id, *, context=None, preferred_dir=None, capture_dir=N
         video_path = metadata.get("video_path") or ""
         metadata["video_available"] = bool(video_path and os.path.isfile(video_path))
         metadata["video_size_bytes"] = os.path.getsize(video_path) if metadata["video_available"] else int(metadata.get("video_size_bytes") or 0)
+    if status == "unknown" and metadata.get("output_kind") == "video" and metadata.get("video_available"):
+        # Recover a finished video job whose final status was lost (e.g. restart):
+        # the assembled MP4 is present, so treat it as completed.
+        status = "completed"
+        message = "Assembled video output is present"
+        metadata["status"] = status
+        metadata["message"] = message
+        if not metadata.get("completed_at"):
+            metadata["completed_at"] = time.time()
     assembly_log_path = metadata.get("assembly_log_path") or ""
     if assembly_log_path:
         metadata["assembly_log_tail"] = _log_tail(assembly_log_path, max_bytes=4096)
@@ -770,6 +841,7 @@ def assemble_render_job_video(
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
             creationflags=creationflags,
+            env=_child_env(),
         )
         log_handle.close()
         _PROCESSES[job_id] = process

@@ -13,7 +13,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import agent_memory, context_bundle, context_planner, tool_dispatcher  # noqa: E402
+from claude_blender import context_bundle, context_planner, tool_dispatcher  # noqa: E402
 
 
 def _ensure_cube_selected():
@@ -49,11 +49,6 @@ def main():
         cube.keyframe_insert(data_path="location", frame=24)
 
         bundle = context_bundle.build_context_bundle(bpy.context, include_visual=False)
-        agent_memory.add_to_bundle(bundle, bpy.context)
-        bundle["agent_memory"]["memory"] = "\n".join(
-            f"Turn {index}: continue building the scene. {'x' * 180}"
-            for index in range(100)
-        )
         bundle["_attachments"] = {
             "viewport_image": {
                 "type": "image",
@@ -83,7 +78,13 @@ def main():
         assert "context_plan" in planned
         assert metadata["chars"] < 25_000, metadata
         assert metadata["estimated_tokens"] == context_planner.estimate_tokens(metadata["chars"])
-        assert len(planned["agent_memory"]["memory"]) < len(bundle["agent_memory"]["memory"])
+        assert "agent_memory" not in planned
+        selected = planned["selection_summary"]["selected_objects"]
+        assert len(selected) <= 17, selected
+        assert any(
+            "_truncated_selected_objects" in item or "_truncated_items" in item
+            for item in selected
+        ), selected
         assert "animation_summary" in planned or any("animation_summary" in item for item in metadata["omitted"])
         assert "material_summary" in planned or any("material_summary" in item for item in metadata["omitted"])
 

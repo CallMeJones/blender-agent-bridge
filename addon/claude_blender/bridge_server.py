@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 import queue
 import threading
@@ -32,6 +33,17 @@ from . import (
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 REQUEST_TIMEOUT_SECONDS = 60
+# Cap inbound request bodies so a local client cannot exhaust memory.
+MAX_REQUEST_BODY_BYTES = 8 * 1024 * 1024
+# Per-connection socket timeout so a stalled/partial request cannot pin a worker thread.
+REQUEST_READ_TIMEOUT_SECONDS = 30
+# Hostnames accepted in the Host/Origin headers; anything else is a cross-origin or
+# DNS-rebinding attempt against the localhost bridge and is refused.
+ALLOWED_HOST_NAMES = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+class _RequestTooLarge(Exception):
+    """Raised when an inbound request body exceeds MAX_REQUEST_BODY_BYTES."""
 
 _server = None
 _thread = None
@@ -422,6 +434,21 @@ def _execute_tool(payload):
         args = payload.get("input")
     if not isinstance(args, dict):
         args = {}
+    # Defense-in-depth: enforce the tool contract on the raw HTTP path too, not just
+    # on the MCP path, so malformed arguments are rejected before dispatch.
+    input_schema = bridge_protocol.normalized_tool_contract(name).get("input_schema")
+    if isinstance(input_schema, dict):
+        schema_errors = bridge_protocol.validate_arguments(args, input_schema)
+        if schema_errors:
+            return {
+                "ok": False,
+                "result": {
+                    "ok": False,
+                    "message": "Invalid arguments for tool '%s': %s"
+                    % (name, "; ".join(schema_errors[:8])),
+                    "schema_errors": schema_errors[:32],
+                },
+            }
     result_text = tool_dispatcher.execute_tool(bpy.context, name, args)
     try:
         result = json.loads(result_text)
@@ -484,9 +511,28 @@ def _ensure_timer():
 
 class _BridgeHandler(BaseHTTPRequestHandler):
     server_version = "BlenderAgentBridge/0.2"
+    timeout = REQUEST_READ_TIMEOUT_SECONDS
 
     def log_message(self, fmt, *args):
         return
+
+    def _host_origin_allowed(self):
+        host = self.headers.get("Host", "") or ""
+        if host:
+            host_value = host.strip()
+            if host_value.startswith("[") and "]" in host_value:
+                hostname = host_value[1:host_value.find("]")]
+            else:
+                hostname = host_value.rsplit(":", 1)[0]
+            hostname = hostname.strip().lower()
+            if hostname and hostname not in ALLOWED_HOST_NAMES:
+                return False
+        origin = self.headers.get("Origin")
+        if origin:
+            origin_host = (urllib.parse.urlparse(origin).hostname or "").lower()
+            if origin_host not in ALLOWED_HOST_NAMES:
+                return False
+        return True
 
     def _send(self, status, payload):
         data = _json_bytes(payload)
@@ -504,16 +550,26 @@ class _BridgeHandler(BaseHTTPRequestHandler):
         if not token:
             return True
         header = self.headers.get("Authorization", "")
-        return header == f"Bearer {token}"
+        return hmac.compare_digest(header, f"Bearer {token}")
 
     def _read_json(self):
-        length = int(self.headers.get("Content-Length") or 0)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except (TypeError, ValueError):
+            raise _RequestTooLarge("Invalid Content-Length header")
         if length <= 0:
             return {}
+        if length > MAX_REQUEST_BODY_BYTES:
+            raise _RequestTooLarge(
+                f"Request body of {length} bytes exceeds the {MAX_REQUEST_BODY_BYTES}-byte limit"
+            )
         raw = self.rfile.read(length).decode("utf-8")
         return json.loads(raw) if raw.strip() else {}
 
     def do_GET(self):
+        if not self._host_origin_allowed():
+            self._send_error(403, "Forbidden host or origin")
+            return
         if not self._authorized():
             self._send_error(401, "Unauthorized")
             return
@@ -541,6 +597,9 @@ class _BridgeHandler(BaseHTTPRequestHandler):
             self._send_error(500, f"{type(exc).__name__}: {exc}")
 
     def do_POST(self):
+        if not self._host_origin_allowed():
+            self._send_error(403, "Forbidden host or origin")
+            return
         if not self._authorized():
             self._send_error(401, "Unauthorized")
             return
@@ -551,6 +610,8 @@ class _BridgeHandler(BaseHTTPRequestHandler):
                 self._send(200, _call_on_main(lambda: _execute_tool(payload)))
             else:
                 self._send_error(404, f"Unknown endpoint: {parsed.path}")
+        except _RequestTooLarge as exc:
+            self._send_error(413, str(exc))
         except json.JSONDecodeError as exc:
             self._send_error(400, f"Invalid JSON: {exc}")
         except Exception as exc:
