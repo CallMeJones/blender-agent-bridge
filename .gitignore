@@ -5,6 +5,7 @@ venv/
 .codex/
 .dev-session/
 dist/
+public/
 build/
 *.zip
 *.blend1

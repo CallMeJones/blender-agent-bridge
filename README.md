@@ -51,14 +51,26 @@ See [SECURITY.md](SECURITY.md) and [PRIVACY.md](PRIVACY.md) for the detailed mod
 
 ## Install from GitHub
 
-For normal Blender users, install the release ZIP rather than GitHub's generated source archive:
+Best update-friendly path:
+
+1. In Blender, open `Edit > Preferences > Get Extensions`.
+2. Open the repositories menu, choose `Add Remote Repository`, and enter:
+
+   ```text
+   https://callmejones.github.io/blender-agent-bridge/index.json
+   ```
+
+3. Sync/update the repository, search for `Blender Agent Bridge`, and install it.
+4. Enable `Blender Agent Bridge`, then open the 3D View sidebar and use `Start Bridge` / `Copy MCP`.
+
+Manual fallback:
 
 1. Open the [latest GitHub release](https://github.com/CallMeJones/blender-agent-bridge/releases/latest).
 2. Download `claude_blender-<version>.zip` from the release assets.
 3. In Blender, open `Edit > Preferences > Get Extensions`, use `Install from Disk`, and choose the downloaded ZIP.
 4. Enable `Blender Agent Bridge`, then open the 3D View sidebar and use `Start Bridge` / `Copy MCP`.
 
-The `.zip.sha256` file beside the ZIP is a checksum for verifying downloads. Blender's manual documents `Install from Disk` in the [Get Extensions preferences](https://docs.blender.org/manual/en/latest/editors/preferences/extensions.html).
+The `.zip.sha256` file beside the ZIP is a checksum for verifying downloads. Blender's manual documents both static extension repositories and `Install from Disk` in the Extensions preferences.
 
 ## Install from Source
 
