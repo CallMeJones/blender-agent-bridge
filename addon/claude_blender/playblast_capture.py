@@ -10,7 +10,7 @@ import uuid
 
 import bpy
 
-from . import viewport_capture
+from . import live_preview, viewport_capture
 
 
 LATEST_PLAYBLAST_METADATA_URI = "blender://playblasts/latest/metadata"
@@ -207,6 +207,14 @@ def _sample_frames(frame_start, frame_end, max_frames):
     return sorted(set(sampled))
 
 
+def _flush_frame_capture_view(context):
+    live_preview.redraw(context)
+    try:
+        bpy.ops.wm.redraw_timer(type="DRAW_WIN_SWAP", iterations=1)
+    except Exception:
+        pass
+
+
 def capture_animation_playblast(
     context,
     *,
@@ -244,6 +252,7 @@ def capture_animation_playblast(
             filepath = os.path.join(playblast_dir, f"frame-{int(frame_number):04d}.png")
             try:
                 scene.frame_set(frame_number)
+                _flush_frame_capture_view(context)
                 method = viewport_capture.capture_viewport_to_file(context, filepath)
                 frame_metadata, _attachments = viewport_capture.prepare_image_attachment(
                     filepath,
@@ -263,6 +272,7 @@ def capture_animation_playblast(
             frames.append(
                 {
                     "frame": int(frame_number),
+                    "captured_scene_frame": int(scene.frame_current),
                     "available": bool(frame_metadata.get("available")),
                     "path": frame_metadata.get("path", filepath),
                     "resource_uri": _frame_resource_uri(playblast_id, frame_number),

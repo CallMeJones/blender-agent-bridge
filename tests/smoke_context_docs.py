@@ -116,9 +116,44 @@ def main():
 
         original_has_ui_context = viewport_capture.has_ui_context
         original_capture_viewport_to_file = viewport_capture.capture_viewport_to_file
+        playblast_success_dir = tempfile.mkdtemp(prefix="claude-blender-playblast-success-", dir=cache_dir)
         playblast_failure_dir = tempfile.mkdtemp(prefix="claude-blender-playblast-failure-", dir=cache_dir)
+        original_frame = int(bpy.context.scene.frame_current)
         try:
             viewport_capture.has_ui_context = lambda _context: True
+            scene = bpy.context.scene
+            captured_frames = []
+
+            def _write_frame_capture(fake_context, filepath):
+                frame = int(fake_context.scene.frame_current)
+                captured_frames.append(frame)
+                image = bpy.data.images.new(f"Smoke Playblast Frame {frame}", width=1, height=1)
+                try:
+                    red = min(1.0, max(0.0, frame / 10.0))
+                    image.pixels = (red, 0.0, 1.0 - red, 1.0)
+                    image.filepath_raw = filepath
+                    image.file_format = "PNG"
+                    image.save()
+                finally:
+                    if image.name in bpy.data.images:
+                        bpy.data.images.remove(image)
+                return "smoke.frame_capture"
+
+            viewport_capture.capture_viewport_to_file = _write_frame_capture
+            scene.frame_set(9)
+            captured_playblast = playblast_capture.capture_animation_playblast(
+                bpy.context,
+                frame_start=1,
+                frame_end=5,
+                max_frames=3,
+                brief="frame advancement smoke",
+                capture_dir=playblast_success_dir,
+            )
+            assert captured_playblast["ok"] is True, captured_playblast
+            assert captured_frames == [1, 3, 5], captured_playblast
+            assert [frame["captured_scene_frame"] for frame in captured_playblast["frames"]] == [1, 3, 5], captured_playblast
+            assert [frame["frame"] for frame in captured_playblast["frames"]] == [1, 3, 5], captured_playblast
+            assert int(scene.frame_current) == 9, captured_playblast
 
             def _fail_frame_capture(_context, _filepath):
                 raise RuntimeError("synthetic frame failure")
@@ -140,6 +175,11 @@ def main():
         finally:
             viewport_capture.has_ui_context = original_has_ui_context
             viewport_capture.capture_viewport_to_file = original_capture_viewport_to_file
+            try:
+                bpy.context.scene.frame_set(original_frame)
+            except Exception:
+                pass
+            shutil.rmtree(playblast_success_dir, ignore_errors=True)
             shutil.rmtree(playblast_failure_dir, ignore_errors=True)
 
         project_dir = tempfile.mkdtemp(prefix="claude-blender-project-", dir=cache_dir)

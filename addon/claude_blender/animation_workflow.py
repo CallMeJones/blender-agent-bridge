@@ -84,6 +84,41 @@ def _primary_subject(subject_names):
     return subject_names[0] if subject_names else ""
 
 
+def _looks_like_review_prompt(prompt):
+    normalized = str(prompt or "").lower()
+    return any(term in normalized for term in ("review", "check", "inspect", "evaluate", "validate", "analyze", "analyse"))
+
+
+def _looks_like_generation_prompt(prompt):
+    normalized = str(prompt or "").lower()
+    return any(
+        term in normalized
+        for term in (
+            "animate",
+            "make",
+            "create",
+            "build",
+            "block",
+            "add",
+            "keyframe",
+            "turn",
+            "rotate",
+            "move",
+            "reveal",
+            "pulse",
+        )
+    )
+
+
+def _normalize_workflow_mode(prompt, mode):
+    mode = str(mode or "full").strip().lower()
+    if mode not in {"generate", "review", "repair", "full"}:
+        mode = "full"
+    if mode in {"full", "generate"} and _looks_like_review_prompt(prompt) and not _looks_like_generation_prompt(prompt):
+        return "review"
+    return mode
+
+
 def _generation_tool_calls(brief, chart, *, frame_start, frame_end):
     subject_names = _brief_subject_names(brief)
     primary = _primary_subject(subject_names)
@@ -279,9 +314,13 @@ def _review_tool_calls(brief, *, prompt, frame_start, frame_end, playblast=None,
     return calls
 
 
-def _script_fallback_policy(brief, generation_blockers):
+def _script_fallback_policy(brief, generation_blockers, *, mode="full"):
     clarification_needed = bool((brief or {}).get("clarification_needed"))
-    allowed = not clarification_needed
+    review_only = str(mode or "").lower() == "review"
+    allowed = not clarification_needed and not review_only
+    current_blockers = list(generation_blockers)
+    if review_only:
+        current_blockers.append("Review-only workflow: run evaluator/review tools before considering repair or custom script fallback.")
     return {
         "allowed": allowed,
         "allowed_after": [
@@ -310,9 +349,10 @@ def _script_fallback_policy(brief, generation_blockers):
         "not_allowed_for": [
             "Skipping the animation brief or scene routing context.",
             "Skipping validation when the user asked to check the result.",
+            "Replacing a review-only request with script mutation.",
             "Running scripts that fail static checks.",
         ],
-        "current_blockers": list(generation_blockers),
+        "current_blockers": current_blockers,
     }
 
 
@@ -336,9 +376,7 @@ def plan_animation_workflow(
         return {"ok": False, "message": "An animation prompt is required"}
 
     subject_names = _as_string_list(subject_names)
-    mode = str(mode or "full").strip().lower()
-    if mode not in {"generate", "review", "repair", "full"}:
-        mode = "full"
+    mode = _normalize_workflow_mode(prompt, mode)
 
     brief_result = None
     if isinstance(brief, dict):
@@ -397,13 +435,16 @@ def plan_animation_workflow(
     )
 
     clarification_needed = bool(brief_data.get("clarification_needed"))
+    generation_blocked_by_clarification = clarification_needed and mode in {"generate", "full"}
     next_tool_calls = []
-    if not clarification_needed:
+    if not generation_blocked_by_clarification:
         if mode in {"generate", "full"}:
             next_tool_calls.extend(generation_calls)
         if mode in {"review", "repair", "full"}:
             next_tool_calls.extend(review_calls)
-    status = "needs_clarification" if clarification_needed else "ready"
+    status = "needs_clarification" if generation_blocked_by_clarification else "ready"
+    if clarification_needed and mode == "review":
+        status = "ready_for_review"
     if generation_blockers and mode in {"generate", "full"} and not clarification_needed:
         status = "ready_with_helper_gaps"
 
@@ -447,7 +488,7 @@ def plan_animation_workflow(
             result_key="timing_chart",
         ),
     ]
-    if clarification_needed:
+    if generation_blocked_by_clarification:
         steps.append(
             _step(
                 "clarify",
@@ -457,18 +498,19 @@ def plan_animation_workflow(
             )
         )
     else:
-        steps.append(
-            _step(
-                "generate",
-                "recommended_next",
-                "Apply helper-based generation before script fallback",
-                notes=generation_blockers or ["Use the next_tool_calls generation helpers in order."],
+        if mode in {"generate", "full"}:
+            steps.append(
+                _step(
+                    "generate",
+                    "recommended_next",
+                    "Apply helper-based generation before script fallback",
+                    notes=generation_blockers or ["Use the next_tool_calls generation helpers in order."],
+                )
             )
-        )
         steps.append(
             _step(
                 "evaluate",
-                "recommended_after_generation",
+                "recommended_next" if mode == "review" else "recommended_after_generation",
                 "Evaluate keyed data, playblast evidence, and prompt-contract fit",
                 notes=["Use evaluator output findings as input to repair_animation_from_findings or run_animation_repair_loop."],
             )
@@ -485,7 +527,7 @@ def plan_animation_workflow(
         "steps": steps,
         "next_tool_calls": next_tool_calls,
         "generation_blockers": generation_blockers,
-        "script_fallback_policy": _script_fallback_policy(brief_data, generation_blockers),
+        "script_fallback_policy": _script_fallback_policy(brief_data, generation_blockers, mode=mode),
         "mcp_client_guidance": [
             "Call plan_animation_workflow first for animation generation, review, or repair tasks.",
             "Follow next_tool_calls in order; do not call draft_script before the workflow has produced brief, scene context, and timing chart.",

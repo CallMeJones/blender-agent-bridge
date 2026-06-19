@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 
 import bpy
 import mathutils
@@ -51,6 +52,30 @@ RIG_REPAIR_TERMS = {
     "support",
     "weight",
 }
+RIG_CONTROL_NAME_TOKENS = {
+    "ctrl",
+    "control",
+    "ctl",
+    "ik",
+    "fk",
+    "target",
+    "pole",
+    "master",
+    "cog",
+}
+RIG_ROLE_TEXT_TERMS = {
+    "ik": {"ik", "inverse kinematics"},
+    "fk": {"fk", "forward kinematics"},
+    "pole": {"pole", "elbow", "knee"},
+    "target": {"target", "goal", "effector"},
+}
+RIG_REGION_TEXT_TERMS = {
+    "upper_limb": {"arm", "forearm", "elbow", "hand", "wrist", "finger", "shoulder"},
+    "lower_limb": {"leg", "knee", "foot", "feet", "ankle", "toe", "hip"},
+    "spine": {"spine", "chest", "torso", "body", "pelvis", "hip", "hips", "cog"},
+    "head": {"head", "neck", "look", "gaze"},
+}
+RIG_SUPPORT_TEXT_TERMS = {"contact", "slide", "sliding", "support", "weight", "ground", "balance", "center_of_mass"}
 
 
 def _name_list(value):
@@ -59,6 +84,17 @@ def _name_list(value):
     if isinstance(value, str):
         value = [value]
     return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _text_matches_term(normalized, term, tokens=None):
+    term = str(term or "").lower().strip()
+    if not term:
+        return False
+    if " " in term:
+        return term in normalized
+    if tokens is None:
+        tokens = set(re.findall(r"[a-z0-9_]+", normalized))
+    return term in tokens
 
 
 def _bounded_int(value, default, *, minimum=1, maximum=240):
@@ -2129,7 +2165,18 @@ def review_playblast_against_brief(context, *, playblast=None, brief=None, promp
     }
 
 
-def _operation(tool, reason, *, arguments=None, source_index=None, finding=None, confidence="medium", target_frames=None, target_frame_range=None):
+def _operation(
+    tool,
+    reason,
+    *,
+    arguments=None,
+    source_index=None,
+    finding=None,
+    confidence="medium",
+    target_frames=None,
+    target_frame_range=None,
+    metadata=None,
+):
     arguments = arguments or {}
     mutates_scene = tool not in EVIDENCE_COLLECTION_TOOLS and tool not in READ_ONLY_REVIEW_TOOLS
     execution_phase = "repair_preview" if mutates_scene else "planning"
@@ -2152,6 +2199,8 @@ def _operation(tool, reason, *, arguments=None, source_index=None, finding=None,
         operation["target_frame_range"] = [int(target_frame_range[0]), int(target_frame_range[1])]
     if source_index is not None:
         operation["source_finding_index"] = int(source_index)
+    if metadata:
+        operation["metadata"] = metadata
     if finding:
         operation["source_finding"] = {
             "severity": finding.get("severity", ""),
@@ -2236,30 +2285,207 @@ def _finding_views(finding, fallback=None):
     return views or ["front_below", "side"]
 
 
-def _rig_control_bone_names(armature, *, maximum=6):
-    result = []
+def _rig_text_roles(text):
+    normalized = str(text or "").lower()
+    tokens = set(re.findall(r"[a-z0-9_]+", normalized))
+    roles = set()
+    for role, terms in RIG_ROLE_TEXT_TERMS.items():
+        if any(_text_matches_term(normalized, term, tokens) for term in terms):
+            roles.add(role)
+    return roles
+
+
+def _rig_text_regions(text):
+    normalized = str(text or "").lower()
+    tokens = set(re.findall(r"[a-z0-9_]+", normalized))
+    regions = set()
+    for region, terms in RIG_REGION_TEXT_TERMS.items():
+        if any(_text_matches_term(normalized, term, tokens) for term in terms):
+            regions.add(region)
+    return regions
+
+
+def _rig_support_intent(text):
+    normalized = str(text or "").lower()
+    tokens = set(re.findall(r"[a-z0-9_]+", normalized))
+    return any(_text_matches_term(normalized, term, tokens) for term in RIG_SUPPORT_TEXT_TERMS)
+
+
+def _rig_name_regions(name):
+    normalized = str(name or "").lower()
+    regions = set()
+    for region, terms in RIG_REGION_TEXT_TERMS.items():
+        if any(term in normalized for term in terms):
+            regions.add(region)
+    return regions
+
+
+def _append_unique(target, value):
+    if value and value not in target:
+        target.append(value)
+
+
+def _rig_constraint_target_hints(armature):
+    hints = {}
     pose_bones = list(getattr(getattr(armature, "pose", None), "bones", []) or [])
     for pose_bone in pose_bones:
+        driven_regions = _rig_name_regions(pose_bone.name)
+        for constraint in getattr(pose_bone, "constraints", []) or []:
+            constraint_type = str(getattr(constraint, "type", "") or "")
+            target = getattr(constraint, "target", None)
+            subtarget = str(getattr(constraint, "subtarget", "") or "")
+            pole_target = getattr(constraint, "pole_target", None)
+            pole_subtarget = str(getattr(constraint, "pole_subtarget", "") or "")
+            if target == armature and subtarget:
+                item = hints.setdefault(subtarget, {"roles": [], "regions": set(), "reasons": []})
+                _append_unique(item["roles"], "constraint_target")
+                item["regions"].update(driven_regions)
+                _append_unique(item["reasons"], f"{constraint_type.lower()}_target")
+                if constraint_type == "IK":
+                    _append_unique(item["roles"], "ik")
+                    _append_unique(item["roles"], "target")
+            if pole_target == armature and pole_subtarget:
+                item = hints.setdefault(pole_subtarget, {"roles": [], "regions": set(), "reasons": []})
+                _append_unique(item["roles"], "pole")
+                item["regions"].update(driven_regions)
+                _append_unique(item["reasons"], f"{constraint_type.lower()}_pole_target")
+    return hints
+
+
+def _rig_control_candidates(armature):
+    result = []
+    target_hints = _rig_constraint_target_hints(armature)
+    pose_bones = list(getattr(getattr(armature, "pose", None), "bones", []) or [])
+    for index, pose_bone in enumerate(pose_bones):
         data_bone = armature.data.bones.get(pose_bone.name) if armature.data else None
         lower = pose_bone.name.lower()
+        hint = target_hints.get(pose_bone.name, {})
+        reasons = []
+        if any(token in lower for token in RIG_CONTROL_NAME_TOKENS):
+            reasons.append("control_name")
+        if getattr(pose_bone, "custom_shape", None):
+            reasons.append("custom_shape")
+        if data_bone and not data_bone.use_deform:
+            reasons.append("non_deforming_bone")
+        for reason in hint.get("reasons", []):
+            _append_unique(reasons, reason)
         if (
-            "ctrl" in lower
-            or "control" in lower
-            or "ik" in lower
-            or "fk" in lower
-            or "target" in lower
-            or getattr(pose_bone, "custom_shape", None)
-            or (data_bone and not data_bone.use_deform)
+            not reasons
+            and not hint
         ):
-            result.append(pose_bone.name)
-        if len(result) >= maximum:
-            break
+            continue
+        roles = []
+        if "ik" in lower:
+            roles.append("ik")
+        if "fk" in lower:
+            roles.append("fk")
+        if "pole" in lower:
+            roles.append("pole")
+        if "target" in lower:
+            roles.append("target")
+        if any(token in lower for token in ("ctrl", "control", "ctl")):
+            roles.append("control")
+        for role in hint.get("roles", []):
+            _append_unique(roles, role)
+        regions = _rig_name_regions(pose_bone.name)
+        regions.update(hint.get("regions", set()))
+        result.append(
+            {
+                "name": pose_bone.name,
+                "index": index,
+                "roles": roles,
+                "regions": sorted(regions),
+                "reasons": reasons,
+                "use_deform": bool(data_bone.use_deform) if data_bone else None,
+            }
+        )
     if not result:
-        result = [pose_bone.name for pose_bone in pose_bones[:maximum]]
+        for index, pose_bone in enumerate(pose_bones):
+            result.append(
+                {
+                    "name": pose_bone.name,
+                    "index": index,
+                    "roles": [],
+                    "regions": sorted(_rig_name_regions(pose_bone.name)),
+                    "reasons": ["fallback_pose_bone"],
+                    "use_deform": None,
+                }
+            )
     return result
 
 
-def _rig_repair_target(context, object_names):
+def _score_rig_control_candidate(candidate, text):
+    normalized = str(text or "").lower()
+    wanted_roles = _rig_text_roles(normalized)
+    wanted_regions = _rig_text_regions(normalized)
+    support_intent = _rig_support_intent(normalized)
+    roles = set(candidate.get("roles") or [])
+    regions = set(candidate.get("regions") or [])
+    score = 10
+    if "non_deforming_bone" in candidate.get("reasons", []):
+        score += 6
+    if "custom_shape" in candidate.get("reasons", []):
+        score += 5
+    if any(str(reason).endswith("_target") for reason in candidate.get("reasons", [])):
+        score += 8
+    score += 24 * len(roles & wanted_roles)
+    score += 18 * len(regions & wanted_regions)
+    if support_intent:
+        if "lower_limb" in regions:
+            score += 18
+        if roles & {"ik", "target", "pole"}:
+            score += 10
+        if "upper_limb" in regions and any(term in normalized for term in ("hand", "wrist", "finger", "arm", "elbow")):
+            score += 10
+    if "pose" in normalized or "control" in normalized or "rig" in normalized:
+        if roles & {"ik", "fk", "target", "pole", "control"}:
+            score += 4
+    return score
+
+
+def _rig_control_bone_selection(armature, text="", *, maximum=6):
+    candidates = _rig_control_candidates(armature)
+    if not candidates:
+        return {"bone_names": [], "candidate_count": 0, "selected_controls": [], "selection_strategy": "none"}
+    scored = []
+    for candidate in candidates:
+        item = dict(candidate)
+        item["score"] = _score_rig_control_candidate(candidate, text)
+        scored.append(item)
+    scored.sort(key=lambda item: (-int(item.get("score", 0)), int(item.get("index", 0)), item.get("name", "")))
+    targeted = bool(_rig_text_roles(text) or _rig_text_regions(text) or _rig_support_intent(text))
+    if targeted:
+        best_score = int(scored[0].get("score", 0))
+        threshold = max(28, best_score - 18)
+        selected = [item for item in scored if int(item.get("score", 0)) >= threshold][:maximum]
+        strategy = "role_scored"
+    else:
+        selected = scored[:maximum]
+        strategy = "generic_control_fallback"
+    if not selected:
+        selected = scored[:1]
+    return {
+        "bone_names": [item["name"] for item in selected],
+        "candidate_count": len(candidates),
+        "selected_controls": [
+            {
+                "name": item["name"],
+                "score": int(item.get("score", 0)),
+                "roles": item.get("roles", []),
+                "regions": item.get("regions", []),
+                "reasons": item.get("reasons", []),
+            }
+            for item in selected
+        ],
+        "selection_strategy": strategy,
+    }
+
+
+def _rig_control_bone_names(armature, *, maximum=6):
+    return _rig_control_bone_selection(armature, maximum=maximum).get("bone_names", [])
+
+
+def _rig_repair_target(context, object_names, *, text=""):
     seen = set()
     armatures = []
     for name in object_names or []:
@@ -2281,12 +2507,14 @@ def _rig_repair_target(context, object_names):
                 armatures.append(armature)
                 seen.add(armature.name)
     for armature in armatures:
-        bone_names = _rig_control_bone_names(armature)
+        selection = _rig_control_bone_selection(armature, text=text)
+        bone_names = selection.get("bone_names", [])
         if bone_names:
             return {
                 "armature_name": armature.name,
                 "bone_names": bone_names,
                 "source_object_names": list(object_names or []),
+                "selection": selection,
             }
     return {}
 
@@ -2338,9 +2566,19 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
             for key in ("message", "principle", "requirement", "repair_tool", "recommendation")
         ).lower()
         target_object_names = _finding_object_names(finding, subject_names)
-        rig_target = _rig_repair_target(context, target_object_names)
+        rig_target = _rig_repair_target(context, target_object_names, text=text)
+        rig_repair_added = False
         if rig_target and _text_has_rig_repair_terms(text):
             hold_frame = int(finding.get("frame", target_frames[0] if target_frames else frame_start) or frame_start)
+            rig_metadata = {
+                "rig_targeting": {
+                    "armature_name": rig_target["armature_name"],
+                    "source_object_names": rig_target.get("source_object_names", []),
+                    "selection_strategy": rig_target.get("selection", {}).get("selection_strategy", ""),
+                    "candidate_count": rig_target.get("selection", {}).get("candidate_count", 0),
+                    "selected_controls": rig_target.get("selection", {}).get("selected_controls", []),
+                }
+            }
             operations.append(
                 _operation(
                     "get_rigging_details",
@@ -2351,12 +2589,13 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     confidence="high",
                     target_frames=target_frames,
                     target_frame_range=target_frame_range,
+                    metadata=rig_metadata,
                 )
             )
             operations.append(
                 _operation(
                     "set_rig_pose_hold",
-                    "Hold keyed rig control bones so the rig-driven subject reads cleanly at the problem pose.",
+                    "Hold the selected rig controls so the rig-driven subject reads cleanly at the problem pose.",
                     arguments={
                         "armature_name": rig_target["armature_name"],
                         "bone_names": rig_target["bone_names"],
@@ -2369,8 +2608,10 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     confidence="medium",
                     target_frames=target_frames,
                     target_frame_range=target_frame_range,
+                    metadata=rig_metadata,
                 )
             )
+            rig_repair_added = True
         if repair_tool == "capture_animation_playblast" or (
             not repair_tool and ("playblast" in text or ("frame" in text and "unavailable" in text))
         ):
@@ -2490,7 +2731,7 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     target_frame_range=target_frame_range,
                 )
             )
-        if "center_of_mass" in text or "support footprint" in text or "support" in text:
+        if not rig_repair_added and ("center_of_mass" in text or "support footprint" in text or "support" in text):
             hold_frame = int(finding.get("frame", target_frames[0] if target_frames else frame_start) or frame_start)
             operations.append(
                 _operation(
@@ -2540,7 +2781,7 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                     target_frame_range=target_frame_range,
                 )
             )
-        if "contact" in text or "slide" in text:
+        if not rig_repair_added and ("contact" in text or "slide" in text):
             hold_frame = int(finding.get("frame", target_frames[0] if target_frames else frame_start) or frame_start)
             operations.append(
                 _operation(

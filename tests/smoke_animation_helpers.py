@@ -297,6 +297,23 @@ def main():
         assert not scene.claude_blender.pending_preview
         _select_object(context, cube)
 
+        review_task = _execute(
+            context,
+            "run_animation_task",
+            {
+                "prompt": "Review this bounce animation for spacing and contact.",
+            },
+        )
+        assert review_task["invoked_workflow_tool"] == "run_animation_workflow", review_task
+        assert review_task["workflow"]["mode"] == "review", review_task
+        assert review_task["status"] != "needs_clarification", review_task
+        assert review_task["executed"] == [], review_task
+        review_call_names = [call["name"] for call in review_task["workflow"]["next_tool_calls"]]
+        assert "analyze_animation_principles" in review_call_names, review_task
+        assert "review_playblast_against_brief" in review_call_names, review_task
+        assert review_task["review"]["principles"]["ok"] is True, review_task
+        assert review_task["workflow"]["script_fallback_policy"]["allowed"] is False, review_task
+
         ambiguous_workflow = _execute(
             context,
             "plan_animation_workflow",
@@ -894,6 +911,124 @@ def main():
         assert 'pose.bones["CTRL_Main"].location' in rig_fcurve_paths, rig_loop
         assert 'pose.bones["CTRL_Main"].rotation_quaternion' in rig_fcurve_paths, rig_loop
         assert rig_loop["executed_operations"][1]["result"]["bones"][0]["paths"] == ["location", "rotation_quaternion"], rig_loop
+
+        ikfk_create = _execute(
+            context,
+            "create_basic_armature",
+            {
+                "name": "Agent Bridge IKFK Repair Armature",
+                "location": [5.0, 0.0, 0.0],
+                "rotation": [0.0, 0.0, 0.0],
+            },
+        )
+        ikfk_rig = bpy.data.objects[ikfk_create["object"]]
+        _select_object(context, ikfk_rig)
+        bpy.ops.object.mode_set(mode="EDIT")
+        edit_bones = ikfk_rig.data.edit_bones
+        upper = edit_bones[0]
+        upper.name = "DEF_UpperArm"
+        upper.head = (0.0, 0.0, 0.0)
+        upper.tail = (0.0, 0.0, 1.0)
+        upper.use_deform = True
+        forearm = edit_bones.new("DEF_Forearm")
+        forearm.head = upper.tail
+        forearm.tail = (0.0, 0.0, 2.0)
+        forearm.parent = upper
+        forearm.use_connect = True
+        forearm.use_deform = True
+        ik_control = edit_bones.new("CTRL_IK_Hand")
+        ik_control.head = (0.6, 0.0, 2.0)
+        ik_control.tail = (0.6, 0.0, 2.35)
+        ik_control.use_deform = False
+        fk_control = edit_bones.new("CTRL_FK_Forearm")
+        fk_control.head = (-0.55, 0.0, 1.0)
+        fk_control.tail = (-0.55, 0.0, 1.35)
+        fk_control.use_deform = False
+        pole_control = edit_bones.new("CTRL_Pole_Elbow")
+        pole_control.head = (0.0, -0.8, 1.0)
+        pole_control.tail = (0.0, -0.8, 1.35)
+        pole_control.use_deform = False
+        bpy.ops.object.mode_set(mode="POSE")
+        forearm_pose = ikfk_rig.pose.bones.get("DEF_Forearm")
+        if forearm_pose:
+            ik_constraint = forearm_pose.constraints.new(type="IK")
+            ik_constraint.name = "IK Hand Target"
+            ik_constraint.target = ikfk_rig
+            ik_constraint.subtarget = "CTRL_IK_Hand"
+            ik_constraint.pole_target = ikfk_rig
+            ik_constraint.pole_subtarget = "CTRL_Pole_Elbow"
+            ik_constraint.chain_count = 2
+        upper_pose = ikfk_rig.pose.bones.get("DEF_UpperArm")
+        if upper_pose:
+            copy_rotation = upper_pose.constraints.new(type="COPY_ROTATION")
+            copy_rotation.name = "FK Forearm Rotation"
+            copy_rotation.target = ikfk_rig
+            copy_rotation.subtarget = "CTRL_FK_Forearm"
+        for name, offset in (("CTRL_IK_Hand", 0.25), ("CTRL_Pole_Elbow", -0.18), ("CTRL_FK_Forearm", 0.0)):
+            pose_bone = ikfk_rig.pose.bones.get(name)
+            if pose_bone:
+                pose_bone.rotation_mode = "QUATERNION"
+                pose_bone.location.x = offset
+        bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.mesh.primitive_cube_add(size=0.45, location=(5.0, 0.0, 0.0))
+        ikfk_subject = context.object
+        ikfk_subject.name = "Agent Bridge IKFK Repair Subject"
+        ikfk_subject.data.name = "Agent Bridge IKFK Repair Subject Mesh"
+        ikfk_subject.parent = ikfk_rig
+        live_preview._record_created_id("object", ikfk_subject.name)
+        live_preview._record_created_id("mesh", ikfk_subject.data.name)
+        context.view_layer.update()
+        ikfk_brief = {
+            "contract_id": "anim-ikfk-repair-smoke",
+            "subjects": [{"name": ikfk_subject.name}],
+            "subject_names": [ikfk_subject.name],
+            "action": "jump",
+            "timing": {"frame_start": 1, "frame_end": 32},
+        }
+        ikfk_plan = _execute(
+            context,
+            "repair_animation_from_findings",
+            {
+                "findings": [
+                    {
+                        "severity": "warning",
+                        "principle": "pose_clarity",
+                        "requirement": "center_of_mass",
+                        "object": ikfk_subject.name,
+                        "frame": 10,
+                        "message": "Left hand IK contact/support pose needs repair; the elbow pole is drifting.",
+                    }
+                ],
+                "brief": ikfk_brief,
+            },
+        )
+        ikfk_operations = ikfk_plan["repair_operations"]
+        assert [item["tool"] for item in ikfk_operations[:2]] == ["get_rigging_details", "set_rig_pose_hold"], ikfk_plan
+        assert "set_pose_hold" not in [item["tool"] for item in ikfk_operations], ikfk_plan
+        ikfk_hold = ikfk_operations[1]
+        assert ikfk_hold["arguments"]["armature_name"] == ikfk_rig.name, ikfk_plan
+        assert ikfk_hold["arguments"]["bone_names"] == ["CTRL_IK_Hand", "CTRL_Pole_Elbow"], ikfk_plan
+        assert ikfk_hold["metadata"]["rig_targeting"]["selection_strategy"] == "role_scored", ikfk_plan
+        selected_controls = {item["name"]: item for item in ikfk_hold["metadata"]["rig_targeting"]["selected_controls"]}
+        assert {"CTRL_IK_Hand", "CTRL_Pole_Elbow"}.issubset(selected_controls), ikfk_plan
+        assert "ik" in selected_controls["CTRL_IK_Hand"]["roles"], ikfk_plan
+        assert "pole" in selected_controls["CTRL_Pole_Elbow"]["roles"], ikfk_plan
+        ikfk_loop = _execute(
+            context,
+            "run_animation_repair_loop",
+            {
+                "brief": ikfk_brief,
+                "repair_operations": ikfk_operations,
+                "allowed_tools": ["get_rigging_details", "set_rig_pose_hold"],
+                "max_iterations": 1,
+                "max_operations": 2,
+                "recapture_after_mutation": False,
+            },
+        )
+        assert [item["tool"] for item in ikfk_loop["executed_operations"]] == ["get_rigging_details", "set_rig_pose_hold"], ikfk_loop
+        ikfk_fcurve_paths = {fcurve.data_path for fcurve in live_preview._iter_action_fcurves(ikfk_rig.animation_data.action)}
+        assert 'pose.bones["CTRL_IK_Hand"].location' in ikfk_fcurve_paths, ikfk_loop
+        assert 'pose.bones["CTRL_Pole_Elbow"].location' in ikfk_fcurve_paths, ikfk_loop
         _select_object(context, cube)
 
         retime_disabled_loop = _execute(
