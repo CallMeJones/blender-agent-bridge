@@ -81,6 +81,7 @@ $PureTests = @(
   "tests\smoke_context_budget.py",
   "tests\smoke_extension_repository.py",
   "tests\smoke_external_assets.py",
+  "tests\smoke_helper_routing.py",
   "tests\smoke_mcp_server.py",
   "tests\smoke_script_analysis.py"
 )
@@ -100,6 +101,7 @@ What this covers:
 - Context-budget truncation and prompt JSON limits.
 - Static extension repository generation.
 - External asset catalog/cache helpers that do not need Blender imports.
+- Helper-first script routing metadata and recommended-tool drift.
 - Stdio MCP protocol, compact catalog, pagination, prompts, resources, wrappers, and error paths.
 - Static script analysis and risk classification.
 
@@ -738,6 +740,7 @@ Required scenarios:
 - Runtime external script trust allows tokenless runs only while active and only after static checks pass.
 - Trust is cleared on add-on reload, file load, and bridge start.
 - Animation-like script fallback remains blocked until workflow-first routing allows fallback or an explicit helper gap is stated.
+- Common helper-covered script drafts return recommended helper tools, while explicit custom/procedural/helper-gap scripts still use approval/trust.
 - Checkpoints, undo, stdout/stderr logs, error tracebacks, and pending script state are visible.
 - Audit logs redact code/token-like fields and record bridge/MCP tool calls.
 - Commit/revert preview status and rollback warnings are returned and shown.

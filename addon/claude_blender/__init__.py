@@ -15,6 +15,7 @@ _MODULE_NAMES = (
     "world_model",
     "audit_log",
     "script_analysis",
+    "helper_routing",
     "animation_brief",
     "animation_analysis",
     "advanced_helpers",

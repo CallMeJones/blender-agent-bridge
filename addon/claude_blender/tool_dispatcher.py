@@ -9,7 +9,7 @@ import textwrap
 
 import bpy
 
-from . import animation_analysis, animation_brief, animation_workflow, advanced_helpers, asset_jobs, autosave, context_bundle, docs_index, external_assets, inspection_render, lab_parity, live_preview, playblast_capture, preferences, project_files, render_jobs, script_runner, viewport_capture, world_model
+from . import animation_analysis, animation_brief, animation_workflow, advanced_helpers, asset_jobs, autosave, context_bundle, docs_index, external_assets, helper_routing, inspection_render, lab_parity, live_preview, playblast_capture, preferences, project_files, render_jobs, script_runner, viewport_capture, world_model
 
 
 def _float_list(values, length, default):
@@ -62,38 +62,6 @@ _ANIMATION_INTENT_TERMS = {
     "anticipation",
     "contact sliding",
 }
-_ANIMATION_HELPER_GAP_TERMS = {
-    "helper gap",
-    "helpers cannot express",
-    "helper tools cannot express",
-    "workflow cannot express",
-    "no helper can express",
-    "no helper tool can express",
-    "script_fallback_policy",
-    "script fallback policy",
-    "fallback allowed",
-    "requires custom blender python",
-    "requires custom python",
-}
-_HELPER_GAP_TERMS = _ANIMATION_HELPER_GAP_TERMS | {
-    "custom code",
-    "custom script",
-    "custom node",
-    "custom nodes",
-    "custom node network",
-    "custom material",
-    "custom shader",
-    "custom rig",
-    "custom geometry node",
-    "custom geometry nodes",
-    "custom procedural",
-    "procedural script",
-    "procedural material",
-    "procedural shader",
-    "procedural geometry",
-    "no direct helper",
-    "helper fallback approved",
-}
 _RENDER_JOB_INTENT_TERMS = {
     "render animation",
     "full render",
@@ -108,210 +76,6 @@ _RENDER_JOB_INTENT_TERMS = {
     "animation=true",
     "write_still=false",
 }
-_HELPER_FIRST_SCRIPT_RULES = (
-    {
-        "code": "external_asset_workflow_required",
-        "terms": {
-            "poly haven",
-            "polyhaven",
-            "sketchfab",
-            "external asset",
-            "asset download",
-            "download asset",
-            "download model",
-            "import asset",
-            "import model",
-            "import hdri",
-            "import texture",
-            "environment map",
-        },
-        "message": (
-            "Use the external asset discovery, async download/cache job, and queued import helpers before "
-            "drafting Python for asset download or import."
-        ),
-        "recommended_tools": [
-            "search_poly_haven_assets",
-            "search_sketchfab_models",
-            "start_external_asset_download",
-            "get_external_asset_job_status",
-            "start_external_asset_import_job",
-            "get_external_asset_import_job_status",
-        ],
-    },
-    {
-        "code": "project_file_helper_required",
-        "terms": {
-            "save blend",
-            "save as",
-            "save-as",
-            "save copy",
-            "open blend",
-            "open file",
-            "new project",
-            "create project",
-            "bpy.ops.wm.save_as_mainfile",
-            "bpy.ops.wm.open_mainfile",
-            "bpy.ops.wm.read_homefile",
-        },
-        "message": (
-            "Use blend-file lifecycle helpers for save, open, and new-project work so user-confirmed paths, "
-            "discard confirmation, and checkpoint policy stay enforced."
-        ),
-        "recommended_tools": [
-            "get_blend_file_diagnostics",
-            "save_blend_file",
-            "open_blend_file",
-            "create_new_blender_project",
-            "autosave_current_blend_file",
-        ],
-    },
-    {
-        "code": "simulation_helper_required",
-        "terms": {
-            "persistent bake",
-            "point cache",
-            "bpy.ops.ptcache",
-            "bpy.ops.fluid",
-            "bake_all",
-            "free_bake",
-            "free_bake_all",
-        },
-        "message": (
-            "Use simulation inspection and the fixed persistent-bake staging helper before drafting custom "
-            "simulation bake Python."
-        ),
-        "recommended_tools": [
-            "get_simulation_details",
-            "inspect_simulation_bake",
-            "stage_persistent_simulation_bake",
-        ],
-    },
-    {
-        "code": "creation_helper_required",
-        "terms": {
-            "add cube",
-            "create cube",
-            "add sphere",
-            "create sphere",
-            "add primitive",
-            "create primitive",
-            "add empty",
-            "create empty",
-            "add light",
-            "create light",
-            "add camera",
-            "create camera",
-            "add text",
-            "create text",
-            "create curve",
-            "primitive_cube_add",
-            "primitive_uv_sphere_add",
-            "primitive_cone_add",
-            "primitive_cylinder_add",
-            "bpy.ops.object.empty_add",
-            "bpy.ops.object.light_add",
-            "bpy.ops.object.camera_add",
-            "bpy.ops.object.text_add",
-            "bpy.data.objects.new",
-        },
-        "message": (
-            "Use creation helpers for bounded primitives, empties, lights, cameras, text, and curves before "
-            "drafting Python."
-        ),
-        "recommended_tools": [
-            "create_primitive",
-            "create_empty",
-            "add_light",
-            "add_camera",
-            "create_text_object",
-            "create_curve_path",
-        ],
-    },
-    {
-        "code": "material_helper_required",
-        "terms": {
-            "material",
-            "shader",
-            "make it red",
-            "make it blue",
-            "make it green",
-            "base color",
-            "emission",
-            "roughness",
-            "metallic",
-            "diffuse_color",
-            "active_material",
-            "bpy.data.materials",
-            "principled bsdf",
-        },
-        "message": (
-            "Use material and shader helpers before drafting Python for common color, emission, metallic, "
-            "roughness, alpha, or material-assignment changes."
-        ),
-        "recommended_tools": [
-            "assign_material_to_selected",
-            "assign_emission_material_to_selected",
-            "create_shader_material",
-            "get_material_node_details",
-            "get_shader_nodes_details",
-        ],
-    },
-    {
-        "code": "transform_helper_required",
-        "terms": {
-            "move selected",
-            "move cube",
-            "move object",
-            "set location",
-            "change location",
-            "rotate selected",
-            "scale selected",
-            "set transform",
-            ".location",
-            ".rotation_euler",
-            ".scale",
-            "bpy.ops.transform",
-        },
-        "message": (
-            "Use selection and transform helpers before drafting Python for common object location, rotation, "
-            "or scale changes."
-        ),
-        "recommended_tools": [
-            "list_scene_objects",
-            "select_objects",
-            "set_selected_location_delta",
-            "set_selected_transform",
-        ],
-    },
-    {
-        "code": "scene_setting_helper_required",
-        "terms": {
-            "render settings",
-            "set resolution",
-            "frame range",
-            "world background",
-            "camera lens",
-            "depth of field",
-            "scene.render",
-            "scene.frame_start",
-            "scene.frame_end",
-            "scene.world",
-            "camera.data.lens",
-            "light.data.energy",
-        },
-        "message": (
-            "Use render, camera, light, and world helpers before drafting Python for common scene setting changes."
-        ),
-        "recommended_tools": [
-            "set_render_settings",
-            "set_camera_settings",
-            "set_world_background",
-            "add_light",
-            "add_camera",
-            "apply_lighting_preset",
-        ],
-    },
-)
 
 
 def _name_list(value):
@@ -405,49 +169,6 @@ def _looks_like_animation_intent(text):
         if re.search(rf"(?<![a-z0-9_]){pattern}(?![a-z0-9_])", normalized):
             return True
     return False
-
-
-def _contains_guard_term(text, term):
-    normalized = str(text or "").lower()
-    term_text = str(term or "").strip().lower()
-    if not term_text:
-        return False
-    pattern = re.escape(term_text).replace(r"\ ", r"\s+")
-    prefix = r"(?<![a-z0-9_])" if term_text[0].isalnum() else ""
-    suffix = r"(?![a-z0-9_])" if term_text[-1].isalnum() else ""
-    return bool(re.search(f"{prefix}{pattern}{suffix}", normalized))
-
-
-def _contains_any_guard_term(text, terms):
-    return any(_contains_guard_term(text, term) for term in terms)
-
-
-def _has_explicit_animation_helper_gap(text):
-    return _contains_any_guard_term(text, _ANIMATION_HELPER_GAP_TERMS)
-
-
-def _has_explicit_helper_gap(text):
-    return _contains_any_guard_term(text, _HELPER_GAP_TERMS)
-
-
-def _helper_first_script_guard(text):
-    if _has_explicit_helper_gap(text):
-        return None
-    for rule in _HELPER_FIRST_SCRIPT_RULES:
-        if not _contains_any_guard_term(text, rule["terms"]):
-            continue
-        recommended_tools = list(rule["recommended_tools"])
-        return {
-            "ok": False,
-            "blocked": True,
-            "code": rule["code"],
-            "message": rule["message"],
-            "requires_user_approval": False,
-            "explicit_helper_gap_required": True,
-            "recommended_tools": recommended_tools,
-            "recommended_next_step": f"Call {recommended_tools[0]} or another listed helper before retrying draft_script.",
-        }
-    return None
 
 
 def _looks_like_render_job_intent(text):
@@ -3366,7 +3087,7 @@ def draft_script(context, args):
         for key in ("intent", "expected_changes", "brief", "prompt")
     )
     guard_text = "\n".join([intent_text, script_text[:4000]])
-    if _looks_like_render_job_intent(guard_text) and not _has_explicit_animation_helper_gap(guard_text):
+    if _looks_like_render_job_intent(guard_text) and not helper_routing.has_explicit_animation_helper_gap(guard_text):
         return {
             "ok": False,
             "blocked": True,
@@ -3382,7 +3103,7 @@ def draft_script(context, args):
     if (
         _looks_like_animation_intent(guard_text)
         and not _animation_script_fallback_recently_allowed(context)
-        and not _has_explicit_animation_helper_gap(guard_text)
+        and not helper_routing.has_explicit_animation_helper_gap(guard_text)
     ):
         workflow_seen = _animation_workflow_recently_seen(context)
         return {
@@ -3403,7 +3124,7 @@ def draft_script(context, args):
                 "run_animation_task",
             ],
         }
-    helper_first = _helper_first_script_guard(guard_text)
+    helper_first = helper_routing.helper_first_script_guard(guard_text)
     if helper_first:
         return helper_first
     staged = script_runner.stage_script(

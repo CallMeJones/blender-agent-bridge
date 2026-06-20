@@ -4,6 +4,11 @@ from __future__ import annotations
 
 import json
 
+try:
+    from . import helper_routing
+except ImportError:  # Allows direct imports from addon/claude_blender.
+    import helper_routing
+
 
 AGENT_GUIDANCE = (
     "You are an external agent connected to Blender Agent Bridge. Use the provided scene context and Blender tools. "
@@ -3291,64 +3296,6 @@ _GROUP_KEYWORDS = {
     "preview_control": {"commit", "revert", "undo", "cancel preview", "accept preview"},
 }
 
-_SCRIPT_REQUEST_KEYWORDS = {
-    "script",
-    "python",
-    "draft_script",
-    "draft script",
-    "approved script",
-}
-
-_EXPLICIT_SCRIPT_FALLBACK_KEYWORDS = {
-    "custom code",
-    "custom python",
-    "custom blender python",
-    "custom script",
-    "custom node",
-    "custom nodes",
-    "custom node network",
-    "custom material",
-    "custom shader",
-    "custom rig",
-    "custom geometry node",
-    "custom geometry nodes",
-    "custom procedural",
-    "procedural script",
-    "procedural material",
-    "procedural shader",
-    "procedural geometry",
-    "helper gap",
-    "helper tools cannot express",
-    "helpers cannot express",
-    "no helper can express",
-    "no helper tool can express",
-    "requires custom python",
-    "requires custom blender python",
-}
-
-_SCRIPT_FALLBACK_KEYWORDS = _SCRIPT_REQUEST_KEYWORDS | _EXPLICIT_SCRIPT_FALLBACK_KEYWORDS
-
-_HELPER_FIRST_SCRIPT_GROUPS = {
-    "project_files",
-    "selection",
-    "basic_edit",
-    "materials",
-    "animation",
-    "camera_render",
-    "external_assets",
-    "advanced_create",
-    "refinement",
-    "vehicle",
-    "product",
-    "character",
-    "rigging",
-    "curves_text",
-    "particles",
-    "geometry_nodes",
-    "preview_control",
-}
-
-
 def _tool_map():
     return {tool["name"]: tool for tool in blender_tool_definitions()}
 
@@ -3372,17 +3319,6 @@ def _selection_text(prompt, context_bundle):
 
 def _contains_keyword(text, keywords):
     return any(keyword in text for keyword in keywords)
-
-
-def _should_include_draft_script(text, matched_groups):
-    if not _contains_keyword(text, _SCRIPT_FALLBACK_KEYWORDS):
-        return False
-    if _contains_keyword(text, _EXPLICIT_SCRIPT_FALLBACK_KEYWORDS):
-        return True
-    matched = set(matched_groups or [])
-    if matched.intersection(_HELPER_FIRST_SCRIPT_GROUPS):
-        return False
-    return True
 
 
 def _is_continuation_prompt(prompt):
@@ -3412,7 +3348,7 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
                 selected.update(_TOOL_GROUPS[group])
                 matched_groups.append(group)
 
-    if _should_include_draft_script(text, matched_groups):
+    if helper_routing.should_include_draft_script(text, matched_groups):
         selected.update(_FALLBACK_TOOL_NAMES)
 
     if not selected.intersection(TOOL_FUNCTIONS_FOR_MUTATION_COMPAT):

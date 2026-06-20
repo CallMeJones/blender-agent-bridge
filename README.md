@@ -237,6 +237,7 @@ Run pure-Python checks:
 
 ```powershell
 python -m compileall addon\claude_blender tests
+python tests\smoke_helper_routing.py
 python tests\smoke_release_consistency.py
 python tests\smoke_bridge_protocol_validation.py
 python tests\smoke_mcp_server.py
