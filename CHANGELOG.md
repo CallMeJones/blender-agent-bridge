@@ -7,6 +7,7 @@
 - Polished MCP client routing so external asset requests prefer async download/cache jobs and queued import jobs over synchronous fallback tools without misrouting ordinary material texture edits.
 - Added MCP guardrail warnings for synchronous external asset fallback calls and non-dry-run external asset cache cleanup.
 - Expanded MCP guardrail warnings across destructive project-file operations, user-confirmed paths, approval-gated scripts, live-preview mutations, synchronous long-running tools, and background job polling.
+- Hardened MCP guardrail warnings to fall back to local bridge contracts when live tool annotations are sparse, and corrected render-job polling guidance to point at `get_render_job_status`.
 
 ## 0.1.5
 

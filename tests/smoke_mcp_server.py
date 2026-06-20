@@ -828,6 +828,12 @@ def main():
     assert mcp_server._is_external_asset_route_query("download model from asset library")
     assert not mcp_server._is_external_asset_route_query("create a wood texture material on the selected cube")
     assert not mcp_server._is_external_asset_route_query("assign a procedural texture material to the selected cube")
+    sparse_open_warning_codes = {
+        warning["code"]
+        for warning in mcp_server._guardrail_warnings_for_tool({"name": "open_blend_file", "annotations": {}})
+    }
+    assert "destructive_scene_operation" in sparse_open_warning_codes, sparse_open_warning_codes
+    assert "user_confirmed_path_required" in sparse_open_warning_codes, sparse_open_warning_codes
 
     offline_audit_fd, offline_audit_path = tempfile.mkstemp(
         prefix="claude-blender-mcp-offline-audit-",
@@ -1594,6 +1600,13 @@ def main():
         }
         assert render_job_invoke["result"]["isError"] is False, render_job_invoke
         assert "background_job_polling_required" in render_job_warning_codes, render_job_invoke
+        render_job_polling_warning = next(
+            warning
+            for warning in render_job_invoke["result"]["structuredContent"]["guardrail_warnings"]
+            if warning["code"] == "background_job_polling_required"
+        )
+        assert render_job_polling_warning["status_tool"] == "get_render_job_status", render_job_invoke
+        assert render_job_polling_warning["bridge_status_tool"] == "blender_bridge_status", render_job_invoke
 
         with open(audit_path, "r", encoding="utf-8") as handle:
             audit_events = [json.loads(line) for line in handle if line.strip()]

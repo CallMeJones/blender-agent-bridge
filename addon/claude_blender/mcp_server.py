@@ -221,6 +221,11 @@ EXTERNAL_ASSET_ASYNC_WORKFLOW = [
 ]
 CACHE_CLEANUP_WRITE_TOOLS = {"delete_external_asset_job", "prune_external_asset_cache"}
 GUARDRAIL_COMMIT_REVERT_TOOLS = ["commit_preview", "revert_preview"]
+BACKGROUND_JOB_STATUS_TOOLS = {
+    "start_render_job": "get_render_job_status",
+    "start_external_asset_download": "get_external_asset_job_status",
+    "start_external_asset_import_job": "get_external_asset_import_job_status",
+}
 
 TOOL_CATEGORY_LABELS = {
     "inspect": "Scene Inspection",
@@ -852,8 +857,19 @@ def _truthy_env(name):
     return str(os.environ.get(name) or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _tool_annotations(tool):
+    tool = tool if isinstance(tool, dict) else {}
+    annotations = dict(tool.get("annotations") or {})
+    name = str(tool.get("name") or "")
+    if name in bridge_protocol.TOOL_CONTRACTS:
+        defaults = bridge_protocol.mcp_annotations_for_tool(name)
+        defaults.update(annotations)
+        return defaults
+    return annotations
+
+
 def _tool_search_text(tool):
-    annotations = tool.get("annotations") or {}
+    annotations = _tool_annotations(tool)
     schema = tool.get("inputSchema") or {}
     properties = schema.get("properties") if isinstance(schema.get("properties"), dict) else {}
     category = _tool_category(tool)
@@ -965,7 +981,7 @@ def _tool_category(tool):
 
 
 def _tool_summary(tool, *, include_schema=True):
-    annotations = dict(tool.get("annotations") or {})
+    annotations = _tool_annotations(tool)
     category = _tool_category(tool)
     guardrail_warnings = _guardrail_warnings_for_tool(tool)
     summary = {
@@ -1039,7 +1055,7 @@ def _catalog_filters(arguments):
 
 
 def _tool_matches_filters(tool, filters):
-    annotations = tool.get("annotations") or {}
+    annotations = _tool_annotations(tool)
     category = _tool_category(tool)
     if filters["category"] and category != filters["category"]:
         return False
@@ -1139,7 +1155,7 @@ def _catalog_facets(tools):
     risk_levels = {}
     permissions = {}
     for tool in tools:
-        annotations = tool.get("annotations") or {}
+        annotations = _tool_annotations(tool)
         category = _tool_category(tool)
         categories[category] = categories.get(category, 0) + 1
         risk = str(annotations.get("riskLevel") or "unknown")
@@ -1173,7 +1189,7 @@ def _guardrail_warnings_for_tool(tool, arguments=None):
     name = str(tool.get("name") or "")
     arguments_known = isinstance(arguments, dict)
     arguments = arguments if arguments_known else {}
-    annotations = dict(tool.get("annotations") or {})
+    annotations = _tool_annotations(tool)
     warnings = []
     if name in EXTERNAL_ASSET_DIRECT_TOOLS:
         warnings.append(
@@ -1281,7 +1297,14 @@ def _guardrail_warnings_for_tool(tool, arguments=None):
                     "of starting duplicate work."
                 ),
                 "poll_after_seconds": int(timeout_recovery.get("poll_after_seconds") or 5),
-                "status_tool": str(timeout_recovery.get("resource_tool") or timeout_recovery.get("status_tool") or ""),
+                "status_tool": str(
+                    BACKGROUND_JOB_STATUS_TOOLS.get(name)
+                    or timeout_recovery.get("resource_tool")
+                    or timeout_recovery.get("status_tool")
+                    or ""
+                ),
+                "bridge_status_tool": str(timeout_recovery.get("status_tool") or "blender_bridge_status"),
+                "resource_tool": str(timeout_recovery.get("resource_tool") or ""),
             }
         )
     elif annotations.get("longRunningHint"):
@@ -1336,7 +1359,7 @@ def _attach_guardrail_warnings(structured, name, arguments, tool=None):
 def _audit_tool_call(name, arguments, result, *, tool=None):
     try:
         structured = result.get("structuredContent") if isinstance(result, dict) else {}
-        annotations = (tool or {}).get("annotations") or {}
+        annotations = _tool_annotations(tool or {"name": str(name or "")})
         audit_log.append_event(
             "mcp_tool_call",
             source="mcp",
