@@ -3036,6 +3036,41 @@ def import_external_asset_job_result(context, args):
     )
 
 
+def start_external_asset_import_job(context, args):
+    prefs = preferences.get_preferences(context)
+    return asset_jobs.start_external_asset_import_job(
+        context,
+        source_job_id=str(args.get("source_job_id") or args.get("asset_job_id") or args.get("job_id") or ""),
+        manifest_path=str(args.get("manifest_path") or ""),
+        target_object_name=str(args.get("target_object_name") or args.get("object_name") or ""),
+        label=str(args.get("label") or "Import external asset job result"),
+        capture_dir=getattr(prefs, "capture_cache_dir", None),
+    )
+
+
+def get_external_asset_import_job_status(context, args):
+    prefs = preferences.get_preferences(context)
+    job = asset_jobs.external_asset_import_job_status(
+        str(args.get("job_id") or ""),
+        context=context,
+        preferred_dir=getattr(prefs, "capture_cache_dir", None),
+    )
+    return {
+        "ok": bool(job.get("available", False)),
+        "message": "External asset import job status collected" if job.get("available") else job.get("message", "External asset import job was not found"),
+        "asset_import_job": job,
+    }
+
+
+def cancel_external_asset_import_job(context, args):
+    prefs = preferences.get_preferences(context)
+    return asset_jobs.cancel_external_asset_import_job(
+        str(args.get("job_id") or ""),
+        context=context,
+        preferred_dir=getattr(prefs, "capture_cache_dir", None),
+    )
+
+
 def get_external_asset_cache_diagnostics(context, args):
     return external_assets.external_asset_cache_diagnostics(
         cache_dir=str(args.get("cache_dir") or ""),
@@ -3411,6 +3446,9 @@ TOOL_FUNCTIONS = {
     "get_external_asset_job_status": get_external_asset_job_status,
     "cancel_external_asset_job": cancel_external_asset_job,
     "import_external_asset_job_result": import_external_asset_job_result,
+    "start_external_asset_import_job": start_external_asset_import_job,
+    "get_external_asset_import_job_status": get_external_asset_import_job_status,
+    "cancel_external_asset_import_job": cancel_external_asset_import_job,
     "get_external_asset_cache_diagnostics": get_external_asset_cache_diagnostics,
     "draft_script": draft_script,
     "run_approved_script": run_approved_script,

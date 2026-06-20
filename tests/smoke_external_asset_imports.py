@@ -149,6 +149,11 @@ def _wait_asset_job(context, job_id, *, timeout=5.0):
     raise AssertionError(f"Timed out waiting for external asset job {job_id}: {last}")
 
 
+def _run_import_queue_once():
+    result = asset_jobs._process_import_queue()
+    assert result in {None, 0.1}, result
+
+
 def main():
     cache_dir = tempfile.mkdtemp(prefix="bab-import-assets-")
     original_asset_job_mode = os.environ.get(asset_jobs.ASSET_JOB_MODE_ENV)
@@ -242,15 +247,38 @@ def main():
         async_poly_status = _wait_asset_job(bpy.context, async_poly["job_id"])
         assert async_poly_status["asset_job"]["status"] == "completed", async_poly_status
         assert async_poly_status["asset_job"]["manifest_path"], async_poly_status
-        async_poly_import = _execute(
+        async_poly_import_job = _execute(
             bpy.context,
-            "import_external_asset_job_result",
+            "start_external_asset_import_job",
             {"job_id": async_poly["job_id"], "label": "Import async Poly Haven model"},
         )
-        assert async_poly_import["ok"] is True, async_poly_import
-        assert async_poly_import["import_result"]["ok"] is True, async_poly_import
-        assert "SmokeImportedModel" in async_poly_import["import_result"]["imported_objects"], async_poly_import
+        assert async_poly_import_job["ok"] is True, async_poly_import_job
+        assert async_poly_import_job["asset_import_job"]["status"] == "queued", async_poly_import_job
+        _run_import_queue_once()
+        async_poly_import_status = _execute(
+            bpy.context,
+            "get_external_asset_import_job_status",
+            {"job_id": async_poly_import_job["job_id"]},
+        )
+        assert async_poly_import_status["ok"] is True, async_poly_import_status
+        assert async_poly_import_status["asset_import_job"]["status"] == "completed", async_poly_import_status
+        assert async_poly_import_status["asset_import_job"]["import_result"]["ok"] is True, async_poly_import_status
+        assert "SmokeImportedModel" in async_poly_import_status["asset_import_job"]["import_result"]["imported_objects"], async_poly_import_status
         assert live_preview.revert(bpy.context)["ok"] is True
+
+        cancel_import_job = _execute(
+            bpy.context,
+            "start_external_asset_import_job",
+            {"source_job_id": async_poly["job_id"], "label": "Cancel queued Poly Haven import"},
+        )
+        assert cancel_import_job["ok"] is True, cancel_import_job
+        cancelled_import = _execute(
+            bpy.context,
+            "cancel_external_asset_import_job",
+            {"job_id": cancel_import_job["job_id"]},
+        )
+        assert cancelled_import["ok"] is True, cancelled_import
+        assert cancelled_import["asset_import_job"]["status"] == "cancelled", cancelled_import
 
         observed_timeouts.clear()
         async_sketchfab = _execute(

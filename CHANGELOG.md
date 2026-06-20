@@ -11,6 +11,7 @@
 - Added resumable external asset downloads with `.part` files, HTTP Range resume, bounded retry/backoff, and checksum/size revalidation.
 - Added Sketchfab archive extraction quotas for member count, uncompressed bytes, member size, path depth, symlinks, and compression ratio.
 - Added cached-manifest import support so completed asset jobs can be imported without rerunning the download step.
+- Added queued external asset import jobs with start/status/cancel tools so main-thread imports have the same pollable shape as downloads.
 - Hardened asset job metadata writes for Windows polling races and redacted Sketchfab secrets from persisted job metadata.
 
 ## 0.1.2

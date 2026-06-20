@@ -465,6 +465,9 @@ def main():
             "get_external_asset_job_status",
             "cancel_external_asset_job",
             "import_external_asset_job_result",
+            "start_external_asset_import_job",
+            "get_external_asset_import_job_status",
+            "cancel_external_asset_import_job",
             "get_external_asset_cache_diagnostics",
         ):
             assert name in tool_names, name
@@ -483,10 +486,10 @@ def main():
             }:
                 assert "network" in annotations["permissions"], annotations
                 assert annotations["openWorldHint"] is True, annotations
-            if name in {"import_poly_haven_asset", "import_sketchfab_model", "import_external_asset_job_result"}:
+            if name in {"import_poly_haven_asset", "import_sketchfab_model", "import_external_asset_job_result", "start_external_asset_import_job"}:
                 assert annotations["mutatesScene"] is True, annotations
                 assert annotations["requiresLivePreview"] is True, annotations
-            elif name in {"download_poly_haven_asset", "download_sketchfab_model", "start_external_asset_download", "cancel_external_asset_job"}:
+            elif name in {"download_poly_haven_asset", "download_sketchfab_model", "start_external_asset_download", "cancel_external_asset_job", "cancel_external_asset_import_job"}:
                 assert annotations["mutatesScene"] is False, annotations
                 assert annotations["hasSideEffects"] is True, annotations
             else:

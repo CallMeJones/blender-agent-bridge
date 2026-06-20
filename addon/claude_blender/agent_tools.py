@@ -2816,6 +2816,44 @@ def blender_tool_definitions():
             },
         },
         {
+            "name": "start_external_asset_import_job",
+            "description": "Queue a completed external asset download/cache job result for main-thread Blender import. Returns immediately with a pollable import job id.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "source_job_id": {"type": "string", "description": "Completed external asset download/cache job id."},
+                    "manifest_path": {"type": "string", "description": "Optional cached asset manifest path when no source_job_id is supplied."},
+                    "target_object_name": {"type": "string"},
+                    "label": {"type": "string"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "get_external_asset_import_job_status",
+            "description": "Poll an external asset import job for queued/running/completed/failed/cancelled status and import result details.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string"},
+                },
+                "required": ["job_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "cancel_external_asset_import_job",
+            "description": "Cancel a queued external asset import job. Imports already running on Blender's main thread cannot be interrupted safely.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string"},
+                },
+                "required": ["job_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "get_external_asset_cache_diagnostics",
             "description": "Report cached/imported external assets, providers, licenses, source URLs, files, and imported Blender data-block names.",
             "input_schema": {
@@ -3060,6 +3098,9 @@ _TOOL_GROUPS = {
         "get_external_asset_job_status",
         "cancel_external_asset_job",
         "import_external_asset_job_result",
+        "start_external_asset_import_job",
+        "get_external_asset_import_job_status",
+        "cancel_external_asset_import_job",
         "get_external_asset_cache_diagnostics",
     },
     "advanced_create": {
@@ -3425,6 +3466,9 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "get_external_asset_job_status",
     "cancel_external_asset_job",
     "import_external_asset_job_result",
+    "start_external_asset_import_job",
+    "get_external_asset_import_job_status",
+    "cancel_external_asset_import_job",
     "get_external_asset_cache_diagnostics",
     "duplicate_selected_objects",
     "parent_selected_to_empty",

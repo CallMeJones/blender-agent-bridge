@@ -563,6 +563,63 @@ TOOL_CONTRACTS = {
             "additionalProperties": False,
         },
     },
+    "start_external_asset_import_job": {
+        "description": "Queue a completed external asset download/cache job result for main-thread Blender import and return immediately with a pollable import job id",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+        "has_side_effects": True,
+        "returns_background_job": True,
+        "permissions": ["scene:read", "scene:mutate", "preview:write", "files:read", "files:write"],
+        "supports_headless": True,
+        "timeout_seconds": 30,
+        "duration_hint": "Returns quickly; the queued import runs later on Blender's main thread and may briefly keep Blender busy while importers execute.",
+        "timeout_recovery": {
+            "recoverable": True,
+            "poll_after_seconds": 2,
+            "status_tool": "blender_bridge_status",
+            "resource_tool": "get_external_asset_import_job_status",
+            "message": "If startup times out, check bridge status and then poll get_external_asset_import_job_status before starting another import job.",
+        },
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "source_job_id": {"type": "string", "description": "Completed external asset download/cache job id."},
+                "manifest_path": {"type": "string", "description": "Optional cached asset manifest path when no source_job_id is supplied."},
+                "target_object_name": {"type": "string"},
+                "label": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
+    },
+    "get_external_asset_import_job_status": {
+        "description": "Poll an external asset import job for queued, running, completed, failed, or cancelled status",
+        "mutates_scene": False,
+        "permissions": ["files:read"],
+        "supports_headless": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "job_id": {"type": "string"},
+            },
+            "required": ["job_id"],
+            "additionalProperties": False,
+        },
+    },
+    "cancel_external_asset_import_job": {
+        "description": "Cancel a queued external asset import job; imports already running on Blender's main thread cannot be interrupted safely",
+        "mutates_scene": False,
+        "has_side_effects": True,
+        "permissions": ["files:write"],
+        "supports_headless": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "job_id": {"type": "string"},
+            },
+            "required": ["job_id"],
+            "additionalProperties": False,
+        },
+    },
     "get_external_asset_cache_diagnostics": {
         "description": "Report cached/imported external assets, providers, licenses, source URLs, files, and imported Blender data-block names",
         "mutates_scene": False,

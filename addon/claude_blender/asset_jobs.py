@@ -27,8 +27,13 @@ ASSET_JOB_SECRET_PASSWORD_ENV = "BLENDER_AGENT_BRIDGE_ASSET_JOB_MODEL_PASSWORD"
 _PROCESSES = {}
 _THREADS = {}
 _CANCEL_REQUESTS = set()
+_IMPORT_QUEUE = []
+_IMPORT_ACTIVE = set()
+_IMPORT_CANCEL_REQUESTS = set()
+_IMPORT_TIMER_REGISTERED = False
 _LOCK = threading.Lock()
 _METADATA_LOCK = threading.Lock()
+_IMPORT_LOCK = threading.Lock()
 
 
 def _safe_id(value, fallback="asset-job"):
@@ -485,6 +490,105 @@ def _terminate_process(process, timeout=5):
     return process.poll()
 
 
+def _import_queue_contains(job_id):
+    with _IMPORT_LOCK:
+        queued = any(item.get("job_id") == job_id for item in _IMPORT_QUEUE)
+        active = job_id in _IMPORT_ACTIVE
+        cancel_requested = job_id in _IMPORT_CANCEL_REQUESTS
+    return queued, active, cancel_requested
+
+
+def _import_timer_is_registered():
+    try:
+        return bool(bpy.app.timers.is_registered(_process_import_queue))
+    except Exception:
+        return bool(_IMPORT_TIMER_REGISTERED)
+
+
+def _ensure_import_timer():
+    global _IMPORT_TIMER_REGISTERED
+    if _import_timer_is_registered():
+        _IMPORT_TIMER_REGISTERED = True
+        return
+    try:
+        bpy.app.timers.register(_process_import_queue, first_interval=0.1, persistent=True)
+    except TypeError:
+        bpy.app.timers.register(_process_import_queue, first_interval=0.1)
+    _IMPORT_TIMER_REGISTERED = True
+
+
+def _stop_import_timer_if_idle():
+    global _IMPORT_TIMER_REGISTERED
+    with _IMPORT_LOCK:
+        idle = not _IMPORT_QUEUE and not _IMPORT_ACTIVE
+    if not idle:
+        return
+    try:
+        if _import_timer_is_registered():
+            bpy.app.timers.unregister(_process_import_queue)
+    except Exception:
+        pass
+    _IMPORT_TIMER_REGISTERED = False
+
+
+def _process_import_queue():
+    global _IMPORT_TIMER_REGISTERED
+    with _IMPORT_LOCK:
+        if not _IMPORT_QUEUE:
+            _IMPORT_TIMER_REGISTERED = False
+            return None
+        item = _IMPORT_QUEUE.pop(0)
+        job_id = item["job_id"]
+        _IMPORT_ACTIVE.add(job_id)
+        cancelled = job_id in _IMPORT_CANCEL_REQUESTS
+    metadata_path = item["metadata_path"]
+    if cancelled:
+        _update_metadata(
+            metadata_path,
+            ok=False,
+            status="cancelled",
+            completed_at=time.time(),
+            progress=0.0,
+            poll_after_seconds=0,
+            cancel_requested=True,
+            message="External asset import job cancelled before it started",
+        )
+    else:
+        _update_metadata(
+            metadata_path,
+            status="running",
+            started_at=time.time(),
+            progress=0.0,
+            message="External asset import started on Blender main thread",
+        )
+        try:
+            result = external_assets.import_cached_asset(
+                bpy.context,
+                manifest_path=item.get("manifest_path", ""),
+                target_object_name=item.get("target_object_name", ""),
+                label=item.get("label", "") or "Import external asset job result",
+            )
+        except Exception as exc:
+            result = {"ok": False, "message": f"External asset import failed: {type(exc).__name__}: {exc}"}
+        _update_metadata(
+            metadata_path,
+            ok=bool(result.get("ok")),
+            status="completed" if result.get("ok") else "failed",
+            completed_at=time.time(),
+            progress=1.0 if result.get("ok") else 0.0,
+            poll_after_seconds=0,
+            import_result=result,
+            message=result.get("message", "External asset import finished"),
+        )
+    with _IMPORT_LOCK:
+        _IMPORT_ACTIVE.discard(job_id)
+        _IMPORT_CANCEL_REQUESTS.discard(job_id)
+        keep_running = bool(_IMPORT_QUEUE)
+        if not keep_running:
+            _IMPORT_TIMER_REGISTERED = False
+    return 0.1 if keep_running else None
+
+
 def start_external_asset_download(
     context,
     *,
@@ -765,11 +869,185 @@ def import_external_asset_job_result(
     }
 
 
+def start_external_asset_import_job(
+    context,
+    *,
+    source_job_id="",
+    manifest_path="",
+    target_object_name="",
+    label="Import external asset job result",
+    capture_dir=None,
+):
+    source_job = {}
+    manifest_path = str(manifest_path or "").strip()
+    source_job_id = str(source_job_id or "").strip()
+    if source_job_id:
+        source_job = external_asset_job_status(source_job_id, context=context, preferred_dir=capture_dir)
+        if not source_job.get("available"):
+            return {"ok": False, "message": source_job.get("message", "External asset job was not found"), "asset_job": source_job}
+        if source_job.get("status") != "completed" or not source_job.get("manifest_path"):
+            return {
+                "ok": False,
+                "message": "External asset download/cache job is not completed with a cached manifest",
+                "asset_job": source_job,
+            }
+        manifest_path = str(source_job.get("manifest_path") or "")
+    if not manifest_path:
+        return {"ok": False, "message": "source_job_id or manifest_path is required"}
+
+    import_job_id = _job_id()
+    info = _job_root_info(context, preferred_dir=capture_dir, create=True)
+    job_dir = os.path.join(info["asset_job_root"], import_job_id)
+    os.makedirs(job_dir, exist_ok=True)
+    metadata_path = _metadata_path(job_dir)
+    metadata = {
+        "ok": True,
+        "available": True,
+        "status": "queued",
+        "job_id": import_job_id,
+        "source_asset_job_id": source_job_id,
+        "operation": "import_result",
+        "created_at": time.time(),
+        "started_at": 0.0,
+        "completed_at": 0.0,
+        "updated_at": time.time(),
+        "project_id": info.get("project_id", ""),
+        "session_id": info.get("session_id", ""),
+        "storage_scope": info.get("storage_scope", ""),
+        "capture_dir": info.get("capture_dir", ""),
+        "base_dir": info.get("base_dir", ""),
+        "fallback_reason": info.get("fallback_reason", ""),
+        "job_dir": job_dir,
+        "metadata_path": metadata_path,
+        "metadata_uri": _asset_job_uri(import_job_id),
+        "manifest_path": manifest_path,
+        "target_object_name": str(target_object_name or ""),
+        "label": str(label or "Import external asset job result"),
+        "progress": 0.0,
+        "elapsed_seconds": 0,
+        "poll_interval_seconds": DEFAULT_ASSET_JOB_POLL_INTERVAL_SECONDS,
+        "poll_after_seconds": DEFAULT_ASSET_JOB_POLL_INTERVAL_SECONDS,
+        "cancel_requested": False,
+        "import_result": {},
+        "message": "External asset import job queued",
+        "client_guidance": "Poll get_external_asset_import_job_status until completed, failed, or cancelled.",
+    }
+    _write_metadata(metadata_path, metadata)
+    with _IMPORT_LOCK:
+        _IMPORT_QUEUE.append(
+            {
+                "job_id": import_job_id,
+                "metadata_path": metadata_path,
+                "manifest_path": manifest_path,
+                "target_object_name": str(target_object_name or ""),
+                "label": str(label or "Import external asset job result"),
+            }
+        )
+    _ensure_import_timer()
+    status = external_asset_import_job_status(import_job_id, context=context, preferred_dir=capture_dir)
+    return {
+        "ok": True,
+        "message": "External asset import job queued",
+        "job_id": import_job_id,
+        "asset_import_job": status,
+        "source_asset_job": source_job,
+    }
+
+
+def external_asset_import_job_status(job_id, *, context=None, preferred_dir=None, capture_dir=None):
+    metadata = _metadata_for_id(job_id, capture_dir, context=context, preferred_dir=preferred_dir)
+    if not metadata:
+        return {
+            "ok": False,
+            "available": False,
+            "job_id": str(job_id or ""),
+            "metadata_uri": _asset_job_uri(job_id),
+            "message": "External asset import job was not found for this Blender project/session",
+        }
+    job_id = metadata.get("job_id", str(job_id or ""))
+    metadata_path = metadata.get("metadata_path", "")
+    queued, active, cancel_requested = _import_queue_contains(job_id)
+    status = str(metadata.get("status") or "unknown")
+    if status not in {"completed", "failed", "cancelled"}:
+        if queued:
+            status = "queued"
+        elif active:
+            status = "running"
+        elif status in {"queued", "running"}:
+            status = "unknown"
+            metadata["message"] = "External asset import job is no longer queued/running and final status was not recorded"
+    now = time.time()
+    started_at = float(metadata.get("started_at") or 0.0)
+    elapsed = max(0.0, now - started_at) if started_at else 0.0
+    terminal = status in {"completed", "failed", "cancelled"}
+    metadata.update(
+        {
+            "status": status,
+            "ok": bool(metadata.get("ok")) and status == "completed",
+            "elapsed_seconds": int(round(elapsed)),
+            "cancel_requested": bool(cancel_requested),
+            "poll_after_seconds": 0 if terminal else int(metadata.get("poll_interval_seconds") or DEFAULT_ASSET_JOB_POLL_INTERVAL_SECONDS),
+            "updated_at": now,
+        }
+    )
+    if metadata_path:
+        _write_metadata(metadata_path, metadata)
+    return metadata
+
+
+def cancel_external_asset_import_job(job_id, *, context=None, preferred_dir=None, capture_dir=None):
+    metadata = external_asset_import_job_status(job_id, context=context, preferred_dir=preferred_dir, capture_dir=capture_dir)
+    if not metadata.get("available"):
+        return {"ok": False, "message": metadata.get("message", "External asset import job was not found"), "asset_import_job": metadata}
+    status = str(metadata.get("status") or "")
+    if status in {"completed", "failed", "cancelled"}:
+        return {"ok": False, "message": f"External asset import job is already {status}", "asset_import_job": metadata}
+    job_id = metadata.get("job_id", str(job_id or ""))
+    queued_cancelled = None
+    with _IMPORT_LOCK:
+        queued_index = next((index for index, item in enumerate(_IMPORT_QUEUE) if item.get("job_id") == job_id), None)
+        if queued_index is not None:
+            _IMPORT_QUEUE.pop(queued_index)
+            _IMPORT_CANCEL_REQUESTS.discard(job_id)
+            metadata = _update_metadata(
+                metadata.get("metadata_path", ""),
+                ok=False,
+                status="cancelled",
+                completed_at=time.time(),
+                progress=0.0,
+                poll_after_seconds=0,
+                cancel_requested=True,
+                message="External asset import job cancelled before it started",
+            )
+            queued_cancelled = {"ok": True, "message": "External asset import job cancelled", "asset_import_job": metadata}
+        if job_id in _IMPORT_ACTIVE:
+            return {
+                "ok": False,
+                "message": "External asset import is already running on Blender's main thread and cannot be interrupted safely",
+                "asset_import_job": metadata,
+            }
+        if queued_cancelled is None:
+            _IMPORT_CANCEL_REQUESTS.add(job_id)
+    if queued_cancelled is not None:
+        _stop_import_timer_if_idle()
+        return queued_cancelled
+    metadata = _update_metadata(
+        metadata.get("metadata_path", ""),
+        status="cancelled",
+        completed_at=time.time(),
+        poll_after_seconds=0,
+        cancel_requested=True,
+        message="External asset import job cancelled",
+    )
+    return {"ok": True, "message": "External asset import job cancelled", "asset_import_job": metadata}
+
+
 def register():
     pass
 
 
 def unregister():
+    global _IMPORT_TIMER_REGISTERED
     with _LOCK:
         _CANCEL_REQUESTS.update(_THREADS.keys())
         processes = list(_PROCESSES.items())
@@ -777,3 +1055,13 @@ def unregister():
         _terminate_process(process, timeout=2)
     with _LOCK:
         _PROCESSES.clear()
+    with _IMPORT_LOCK:
+        _IMPORT_CANCEL_REQUESTS.update(item.get("job_id") for item in _IMPORT_QUEUE)
+        _IMPORT_QUEUE.clear()
+        _IMPORT_ACTIVE.clear()
+    try:
+        if _import_timer_is_registered():
+            bpy.app.timers.unregister(_process_import_queue)
+    except Exception:
+        pass
+    _IMPORT_TIMER_REGISTERED = False

@@ -794,6 +794,9 @@ def _tool_category(tool):
         "get_external_asset_job_status",
         "cancel_external_asset_job",
         "import_external_asset_job_result",
+        "start_external_asset_import_job",
+        "get_external_asset_import_job_status",
+        "cancel_external_asset_import_job",
         "get_external_asset_cache_diagnostics",
     }:
         return "external_assets"
