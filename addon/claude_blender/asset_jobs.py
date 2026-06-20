@@ -1,0 +1,434 @@
+"""Asynchronous external asset download/cache jobs."""
+
+from __future__ import annotations
+
+import json
+import os
+import threading
+import time
+import uuid
+
+from . import external_assets, viewport_capture
+
+
+METADATA_FILENAME = "metadata.json"
+DEFAULT_ASSET_JOB_POLL_INTERVAL_SECONDS = 2
+
+_THREADS = {}
+_CANCEL_REQUESTS = set()
+_LOCK = threading.Lock()
+_METADATA_LOCK = threading.Lock()
+
+
+def _safe_id(value, fallback="asset-job"):
+    safe = "".join(char if char.isalnum() or char in {"-", "_", "."} else "_" for char in str(value or ""))
+    safe = safe.strip("._")
+    return safe[:80] or fallback
+
+
+def _job_id():
+    return f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
+
+
+def _job_root_info(context=None, *, preferred_dir=None, create=False):
+    capture_info = viewport_capture.resolve_capture_dir(context, preferred_dir=preferred_dir, create=create)
+    root = os.path.join(capture_info["capture_dir"], "asset-jobs")
+    if create:
+        os.makedirs(root, exist_ok=True)
+    return {**capture_info, "asset_job_root": root}
+
+
+def _job_dir_candidates(capture_dir=None, *, context=None, preferred_dir=None):
+    if capture_dir:
+        info = {
+            "capture_dir": capture_dir,
+            "storage_scope": "explicit",
+            "project_id": viewport_capture.project_id(context),
+            "session_id": viewport_capture.capture_session_id(),
+            "base_dir": capture_dir,
+            "fallback_reason": "",
+        }
+        return [{**info, "asset_job_root": os.path.join(capture_dir, "asset-jobs")}]
+    return [
+        {**info, "asset_job_root": os.path.join(info["capture_dir"], "asset-jobs")}
+        for info in viewport_capture.capture_dir_candidates(context=context, preferred_dir=preferred_dir)
+    ]
+
+
+def _metadata_path(job_dir):
+    return os.path.join(job_dir, METADATA_FILENAME)
+
+
+def _write_json(path, payload):
+    temp_path = f"{path}.{threading.get_ident()}.{uuid.uuid4().hex}.tmp"
+    try:
+        with open(temp_path, "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True, default=str)
+        os.replace(temp_path, path)
+    finally:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+    return path
+
+
+def _read_json(path):
+    with open(path, "r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def _read_metadata(path):
+    with _METADATA_LOCK:
+        return _read_json(path)
+
+
+def _write_metadata(path, payload):
+    with _METADATA_LOCK:
+        return _write_json(path, payload)
+
+
+def _metadata_for_id(job_id, capture_dir=None, *, context=None, preferred_dir=None):
+    job_id = _safe_id(job_id, "")
+    if not job_id:
+        return None
+    for info in _job_dir_candidates(capture_dir, context=context, preferred_dir=preferred_dir):
+        path = os.path.join(info["asset_job_root"], job_id, METADATA_FILENAME)
+        if os.path.isfile(path):
+            return _read_metadata(path)
+    return None
+
+
+def _asset_job_uri(job_id):
+    return f"blender://asset-jobs/{_safe_id(job_id)}/metadata"
+
+
+def _bounded_int(value, default, *, minimum, maximum):
+    try:
+        result = int(value)
+    except (TypeError, ValueError):
+        result = int(default)
+    return max(int(minimum), min(int(maximum), result))
+
+
+def _redacted_parameters(provider, args):
+    provider = str(provider or "").strip().lower()
+    args = dict(args or {})
+    if provider == "poly_haven":
+        return {
+            "provider": "poly_haven",
+            "asset_id": str(args.get("asset_id") or ""),
+            "asset_type": str(args.get("asset_type") or ""),
+            "resolution": str(args.get("resolution") or ""),
+            "file_format": str(args.get("file_format") or ""),
+            "map_types": [str(item) for item in args.get("map_types") or []],
+            "include_dependencies": bool(args.get("include_dependencies", True)),
+            "cache_dir": str(args.get("cache_dir") or ""),
+            "timeout": _bounded_int(args.get("timeout"), 60, minimum=1, maximum=300),
+        }
+    return {
+        "provider": "sketchfab",
+        "uid": str(args.get("uid") or ""),
+        "api_token_supplied": bool(str(args.get("api_token") or "").strip()),
+        "token_env_var": str(args.get("token_env_var") or external_assets.SKETCHFAB_TOKEN_ENV_VAR),
+        "model_password_supplied": bool(str(args.get("model_password") or "").strip()),
+        "cache_dir": str(args.get("cache_dir") or ""),
+        "timeout": _bounded_int(args.get("timeout"), 120, minimum=1, maximum=300),
+    }
+
+
+def _manifest_summary(manifest):
+    manifest = manifest if isinstance(manifest, dict) else {}
+    downloaded = [item for item in manifest.get("downloaded_files") or [] if isinstance(item, dict)]
+    extracted = manifest.get("extracted_files") if isinstance(manifest.get("extracted_files"), list) else []
+    return {
+        "ok": bool(manifest.get("ok")),
+        "provider": str(manifest.get("provider") or ""),
+        "asset_id": str(manifest.get("asset_id") or ""),
+        "uid": str(manifest.get("uid") or ""),
+        "asset_type": str(manifest.get("asset_type") or ""),
+        "cache_dir": str(manifest.get("cache_dir") or ""),
+        "manifest_path": str(manifest.get("manifest_path") or ""),
+        "import_file": str(manifest.get("import_file") or ""),
+        "downloaded_file_count": len(downloaded),
+        "extracted_file_count": len(extracted),
+        "import_status": str(manifest.get("import_status") or ""),
+        "message": str(manifest.get("message") or ""),
+    }
+
+
+def _is_cancel_requested(job_id):
+    with _LOCK:
+        return job_id in _CANCEL_REQUESTS
+
+
+def _update_metadata(metadata_path, **updates):
+    with _METADATA_LOCK:
+        try:
+            metadata = _read_json(metadata_path)
+        except Exception:
+            metadata = {}
+        metadata.update(updates)
+        metadata["updated_at"] = time.time()
+        _write_json(metadata_path, metadata)
+        return metadata
+
+
+def _run_download_job(job_id, provider, args, metadata_path):
+    try:
+        _update_metadata(
+            metadata_path,
+            status="running",
+            started_at=time.time(),
+            message=f"{provider.replace('_', ' ').title()} asset download/cache started",
+        )
+        if _is_cancel_requested(job_id):
+            _update_metadata(
+                metadata_path,
+                ok=False,
+                status="cancelled",
+                completed_at=time.time(),
+                progress=0.0,
+                poll_after_seconds=0,
+                message="External asset job cancelled before download started",
+            )
+            return
+        try:
+            if provider == "poly_haven":
+                manifest = external_assets.download_poly_haven_asset(
+                    asset_id=str(args.get("asset_id") or ""),
+                    asset_type=str(args.get("asset_type") or ""),
+                    resolution=str(args.get("resolution") or "2k"),
+                    file_format=str(args.get("file_format") or ""),
+                    map_types=args.get("map_types") if isinstance(args.get("map_types"), list) else None,
+                    include_dependencies=bool(args.get("include_dependencies", True)),
+                    cache_dir=str(args.get("cache_dir") or ""),
+                    timeout=_bounded_int(args.get("timeout"), 60, minimum=1, maximum=300),
+                )
+            elif provider == "sketchfab":
+                manifest = external_assets.download_sketchfab_model(
+                    uid=str(args.get("uid") or ""),
+                    api_token=str(args.get("api_token") or ""),
+                    token_env_var=str(args.get("token_env_var") or external_assets.SKETCHFAB_TOKEN_ENV_VAR),
+                    model_password=str(args.get("model_password") or ""),
+                    cache_dir=str(args.get("cache_dir") or ""),
+                    timeout=_bounded_int(args.get("timeout"), 120, minimum=1, maximum=300),
+                )
+            else:
+                manifest = {"ok": False, "message": f"Unsupported external asset provider: {provider}"}
+        except Exception as exc:
+            manifest = {"ok": False, "message": f"External asset job failed: {type(exc).__name__}: {exc}"}
+
+        cancelled = _is_cancel_requested(job_id)
+        status = "cancelled" if cancelled else ("completed" if manifest.get("ok") else "failed")
+        _update_metadata(
+            metadata_path,
+            ok=bool(manifest.get("ok")) and not cancelled,
+            status=status,
+            completed_at=time.time(),
+            progress=1.0 if manifest.get("ok") and not cancelled else 0.0,
+            poll_after_seconds=0,
+            manifest_path=str(manifest.get("manifest_path") or ""),
+            manifest_summary=_manifest_summary(manifest),
+            message=(
+                "External asset job cancelled after download/cache work returned"
+                if cancelled
+                else str(manifest.get("message") or ("External asset cached" if manifest.get("ok") else "External asset job failed"))
+            ),
+        )
+    finally:
+        with _LOCK:
+            _THREADS.pop(job_id, None)
+            _CANCEL_REQUESTS.discard(job_id)
+
+
+def start_external_asset_download(
+    context,
+    *,
+    provider,
+    job_name="",
+    note="",
+    capture_dir=None,
+    **args,
+):
+    provider = str(provider or "").strip().lower()
+    if provider not in {"poly_haven", "sketchfab"}:
+        return {"ok": False, "message": "provider must be poly_haven or sketchfab"}
+    if provider == "poly_haven" and not str(args.get("asset_id") or "").strip():
+        return {"ok": False, "message": "asset_id is required for Poly Haven jobs"}
+    if provider == "sketchfab" and not str(args.get("uid") or "").strip():
+        return {"ok": False, "message": "uid is required for Sketchfab jobs"}
+
+    job_id = _job_id()
+    info = _job_root_info(context, preferred_dir=capture_dir, create=True)
+    job_dir = os.path.join(info["asset_job_root"], job_id)
+    os.makedirs(job_dir, exist_ok=True)
+    metadata_path = _metadata_path(job_dir)
+    metadata = {
+        "ok": True,
+        "available": True,
+        "status": "starting",
+        "job_id": job_id,
+        "job_name": str(job_name or "")[:120],
+        "note": str(note or "")[:1000],
+        "provider": provider,
+        "operation": "download_cache",
+        "created_at": time.time(),
+        "started_at": 0.0,
+        "completed_at": 0.0,
+        "updated_at": time.time(),
+        "project_id": info.get("project_id", ""),
+        "session_id": info.get("session_id", ""),
+        "storage_scope": info.get("storage_scope", ""),
+        "capture_dir": info.get("capture_dir", ""),
+        "base_dir": info.get("base_dir", ""),
+        "fallback_reason": info.get("fallback_reason", ""),
+        "job_dir": job_dir,
+        "metadata_path": metadata_path,
+        "metadata_uri": _asset_job_uri(job_id),
+        "parameters": _redacted_parameters(provider, args),
+        "manifest_path": "",
+        "manifest_summary": {},
+        "progress": 0.0,
+        "elapsed_seconds": 0,
+        "poll_interval_seconds": DEFAULT_ASSET_JOB_POLL_INTERVAL_SECONDS,
+        "poll_after_seconds": DEFAULT_ASSET_JOB_POLL_INTERVAL_SECONDS,
+        "cancel_requested": False,
+        "message": "External asset job prepared",
+        "client_guidance": (
+            "This job downloads/caches external asset files outside Blender's scene mutation path. "
+            "Poll get_external_asset_job_status, then call import_external_asset_job_result after completion."
+        ),
+    }
+    _write_metadata(metadata_path, metadata)
+
+    thread = threading.Thread(
+        target=_run_download_job,
+        args=(job_id, provider, dict(args), metadata_path),
+        name=f"BlenderAgentBridgeAssetJob-{job_id}",
+        daemon=True,
+    )
+    with _LOCK:
+        _THREADS[job_id] = thread
+    thread.start()
+    status = external_asset_job_status(job_id, context=context, preferred_dir=capture_dir)
+    return {
+        "ok": True,
+        "message": "External asset download/cache job started",
+        "job_id": job_id,
+        "asset_job": status,
+    }
+
+
+def external_asset_job_status(job_id, *, context=None, preferred_dir=None, capture_dir=None):
+    metadata = _metadata_for_id(job_id, capture_dir, context=context, preferred_dir=preferred_dir)
+    if not metadata:
+        return {
+            "ok": False,
+            "available": False,
+            "job_id": str(job_id or ""),
+            "metadata_uri": _asset_job_uri(job_id),
+            "message": "External asset job was not found for this Blender project/session",
+        }
+    job_id = metadata.get("job_id", str(job_id or ""))
+    metadata_path = metadata.get("metadata_path", "")
+    with _LOCK:
+        thread = _THREADS.get(job_id)
+        cancel_requested = job_id in _CANCEL_REQUESTS
+    thread_running = bool(thread and thread.is_alive())
+    now = time.time()
+    terminal_statuses = {"completed", "failed", "cancelled"}
+    with _METADATA_LOCK:
+        try:
+            latest = _read_json(metadata_path) if metadata_path else dict(metadata)
+        except Exception:
+            latest = dict(metadata)
+        stored_status = str(latest.get("status") or "unknown")
+        if stored_status in terminal_statuses:
+            status = stored_status
+        elif thread_running:
+            status = "cancelling" if cancel_requested else "running"
+        elif stored_status in {"starting", "running", "cancelling"}:
+            status = "unknown"
+            latest["message"] = "External asset job is no longer running and final status was not recorded"
+        else:
+            status = stored_status
+
+        started_at = float(latest.get("started_at") or 0.0)
+        elapsed = max(0.0, now - started_at) if started_at else 0.0
+        terminal = status in terminal_statuses
+        latest.update(
+            {
+                "status": status,
+                "ok": bool(latest.get("ok")) and status == "completed",
+                "elapsed_seconds": int(round(elapsed)),
+                "cancel_requested": bool(cancel_requested),
+                "poll_after_seconds": 0 if terminal else int(latest.get("poll_interval_seconds") or DEFAULT_ASSET_JOB_POLL_INTERVAL_SECONDS),
+                "updated_at": now,
+            }
+        )
+        if status == "completed":
+            latest["progress"] = 1.0
+        if metadata_path:
+            _write_json(metadata_path, latest)
+        return latest
+
+
+def cancel_external_asset_job(job_id, *, context=None, preferred_dir=None, capture_dir=None):
+    metadata = external_asset_job_status(job_id, context=context, preferred_dir=preferred_dir, capture_dir=capture_dir)
+    if not metadata.get("available"):
+        return {"ok": False, "message": metadata.get("message", "External asset job was not found"), "asset_job": metadata}
+    status = str(metadata.get("status") or "")
+    if status in {"completed", "failed", "cancelled"}:
+        return {"ok": False, "message": f"External asset job is already {status}", "asset_job": metadata}
+    job_id = metadata.get("job_id", str(job_id or ""))
+    with _LOCK:
+        _CANCEL_REQUESTS.add(job_id)
+    metadata = _update_metadata(
+        metadata.get("metadata_path", ""),
+        status="cancelling",
+        cancel_requested=True,
+        message="Cancellation requested; any in-flight HTTP read may finish before the job stops",
+    )
+    return {"ok": True, "message": "External asset job cancellation requested", "asset_job": metadata}
+
+
+def import_external_asset_job_result(
+    context,
+    *,
+    job_id,
+    target_object_name="",
+    label="Import external asset job result",
+    capture_dir=None,
+):
+    metadata = external_asset_job_status(job_id, context=context, preferred_dir=capture_dir)
+    if not metadata.get("available"):
+        return {"ok": False, "message": metadata.get("message", "External asset job was not found"), "asset_job": metadata}
+    if metadata.get("status") != "completed" or not metadata.get("manifest_path"):
+        return {
+            "ok": False,
+            "message": "External asset job is not completed with a cached manifest",
+            "asset_job": metadata,
+        }
+    result = external_assets.import_cached_asset(
+        context,
+        manifest_path=metadata.get("manifest_path", ""),
+        target_object_name=target_object_name,
+        label=label or "Import external asset job result",
+    )
+    return {
+        "ok": bool(result.get("ok")),
+        "message": result.get("message", "External asset job import finished"),
+        "asset_job": metadata,
+        "import_result": result,
+    }
+
+
+def register():
+    pass
+
+
+def unregister():
+    with _LOCK:
+        _CANCEL_REQUESTS.update(_THREADS.keys())

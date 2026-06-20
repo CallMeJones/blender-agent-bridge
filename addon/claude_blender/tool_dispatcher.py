@@ -9,7 +9,7 @@ import textwrap
 
 import bpy
 
-from . import animation_analysis, animation_brief, animation_workflow, advanced_helpers, autosave, context_bundle, docs_index, external_assets, inspection_render, lab_parity, live_preview, playblast_capture, preferences, project_files, render_jobs, script_runner, viewport_capture, world_model
+from . import animation_analysis, animation_brief, animation_workflow, advanced_helpers, asset_jobs, autosave, context_bundle, docs_index, external_assets, inspection_render, lab_parity, live_preview, playblast_capture, preferences, project_files, render_jobs, script_runner, viewport_capture, world_model
 
 
 def _float_list(values, length, default):
@@ -2978,6 +2978,64 @@ def import_sketchfab_model(context, args):
     )
 
 
+def start_external_asset_download(context, args):
+    prefs = preferences.get_preferences(context)
+    provider = str(args.get("provider") or "").strip().lower()
+    return asset_jobs.start_external_asset_download(
+        context,
+        provider=provider,
+        asset_id=str(args.get("asset_id") or args.get("id") or ""),
+        uid=str(args.get("uid") or ""),
+        asset_type=str(args.get("asset_type") or ""),
+        resolution=str(args.get("resolution") or "2k"),
+        file_format=str(args.get("file_format") or args.get("format") or ""),
+        map_types=_name_list(args.get("map_types")),
+        include_dependencies=bool(args.get("include_dependencies", True)),
+        api_token=str(args.get("api_token") or ""),
+        token_env_var=str(args.get("token_env_var") or external_assets.SKETCHFAB_TOKEN_ENV_VAR),
+        model_password=str(args.get("model_password") or ""),
+        cache_dir=str(args.get("cache_dir") or ""),
+        timeout=_bounded_int(args.get("timeout"), 120 if provider == "sketchfab" else 60, minimum=1, maximum=300),
+        job_name=str(args.get("job_name") or ""),
+        note=str(args.get("note") or ""),
+        capture_dir=getattr(prefs, "capture_cache_dir", None),
+    )
+
+
+def get_external_asset_job_status(context, args):
+    prefs = preferences.get_preferences(context)
+    job = asset_jobs.external_asset_job_status(
+        str(args.get("job_id") or ""),
+        context=context,
+        preferred_dir=getattr(prefs, "capture_cache_dir", None),
+    )
+    return {
+        "ok": bool(job.get("available", False)),
+        "message": "External asset job status collected" if job.get("available") else job.get("message", "External asset job was not found"),
+        "asset_job": job,
+    }
+
+
+def cancel_external_asset_job(context, args):
+    prefs = preferences.get_preferences(context)
+    return asset_jobs.cancel_external_asset_job(
+        str(args.get("job_id") or ""),
+        context=context,
+        preferred_dir=getattr(prefs, "capture_cache_dir", None),
+    )
+
+
+def import_external_asset_job_result(context, args):
+    prefs = preferences.get_preferences(context)
+    return asset_jobs.import_external_asset_job_result(
+        context,
+        job_id=str(args.get("job_id") or ""),
+        target_object_name=str(args.get("target_object_name") or args.get("object_name") or ""),
+        label=str(args.get("label") or "Import external asset job result"),
+        capture_dir=getattr(prefs, "capture_cache_dir", None),
+    )
+
+
 def get_external_asset_cache_diagnostics(context, args):
     return external_assets.external_asset_cache_diagnostics(
         cache_dir=str(args.get("cache_dir") or ""),
@@ -3349,6 +3407,10 @@ TOOL_FUNCTIONS = {
     "search_sketchfab_models": search_sketchfab_models,
     "download_sketchfab_model": download_sketchfab_model,
     "import_sketchfab_model": import_sketchfab_model,
+    "start_external_asset_download": start_external_asset_download,
+    "get_external_asset_job_status": get_external_asset_job_status,
+    "cancel_external_asset_job": cancel_external_asset_job,
+    "import_external_asset_job_result": import_external_asset_job_result,
     "get_external_asset_cache_diagnostics": get_external_asset_cache_diagnostics,
     "draft_script": draft_script,
     "run_approved_script": run_approved_script,

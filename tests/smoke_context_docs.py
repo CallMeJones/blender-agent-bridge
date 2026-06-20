@@ -81,6 +81,10 @@ def main():
         assert "search_sketchfab_models" in bundle["available_tools"]
         assert "download_sketchfab_model" in bundle["available_tools"]
         assert "import_sketchfab_model" in bundle["available_tools"]
+        assert "start_external_asset_download" in bundle["available_tools"]
+        assert "get_external_asset_job_status" in bundle["available_tools"]
+        assert "cancel_external_asset_job" in bundle["available_tools"]
+        assert "import_external_asset_job_result" in bundle["available_tools"]
         assert "get_external_asset_cache_diagnostics" in bundle["available_tools"]
         assert "jump_to_workspace" in bundle["available_tools"]
         assert "set_viewport_view" in bundle["available_tools"]
@@ -111,6 +115,10 @@ def main():
         assert "search_sketchfab_models" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "download_sketchfab_model" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "import_sketchfab_model" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "start_external_asset_download" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "get_external_asset_job_status" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "cancel_external_asset_job" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "import_external_asset_job_result" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "get_external_asset_cache_diagnostics" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "jump_to_workspace" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "set_viewport_view" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
@@ -141,6 +149,10 @@ def main():
         assert "search_sketchfab_models" in bridge_protocol.TOOL_CONTRACTS
         assert "download_sketchfab_model" in bridge_protocol.TOOL_CONTRACTS
         assert "import_sketchfab_model" in bridge_protocol.TOOL_CONTRACTS
+        assert "start_external_asset_download" in bridge_protocol.TOOL_CONTRACTS
+        assert "get_external_asset_job_status" in bridge_protocol.TOOL_CONTRACTS
+        assert "cancel_external_asset_job" in bridge_protocol.TOOL_CONTRACTS
+        assert "import_external_asset_job_result" in bridge_protocol.TOOL_CONTRACTS
         assert "get_external_asset_cache_diagnostics" in bridge_protocol.TOOL_CONTRACTS
         assert "inspect_simulation_bake" in bridge_protocol.TOOL_CONTRACTS
         assert "stage_persistent_simulation_bake" in bridge_protocol.TOOL_CONTRACTS

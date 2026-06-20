@@ -24,6 +24,7 @@ _MODULE_NAMES = (
     "autosave",
     "lab_parity",
     "render_jobs",
+    "asset_jobs",
     "project_files",
     "bridge_protocol",
     "bridge_server",

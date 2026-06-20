@@ -4,6 +4,12 @@
 
 - Nothing yet.
 
+## 0.1.3
+
+- Added asynchronous external asset download/cache jobs for Poly Haven and Sketchfab, with separate polling, cancellation, and main-thread import-result tools.
+- Added cached-manifest import support so completed asset jobs can be imported without rerunning the download step.
+- Hardened asset job metadata writes for Windows polling races and redacted Sketchfab secrets from persisted job metadata.
+
 ## 0.1.2
 
 - Fixed Sketchfab download/import auth for MCP clients by forwarding `SKETCHFAB_API_TOKEN` / `BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN` from the Claude/Codex MCP server environment into Blender as redacted per-call arguments.

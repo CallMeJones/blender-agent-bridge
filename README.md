@@ -17,6 +17,31 @@ Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets
 
 > The project was originally named Claude for Blender. The internal add-on id, Python package, zip name, local paths, and MCP environment variables still use `claude_blender` for compatibility.
 
+## Quick Start
+
+1. Install Blender `5.0.0` or newer.
+2. In Blender, open `Edit > Preferences > Get Extensions`, add this remote repository, then sync and install `Blender Agent Bridge`:
+
+   ```text
+   https://callmejones.github.io/blender-agent-bridge/index.json
+   ```
+
+3. Enable the extension, open the 3D View sidebar, find `Agent Bridge`, and press `Start Bridge`.
+4. Press `Copy MCP`, paste the generated config into Claude Desktop, Claude Code, Codex, Cursor, or another MCP client, then refresh or restart that client.
+5. Ask the client:
+
+   ```text
+   List the objects in the current Blender scene and tell me which Blender Agent Bridge tools are available.
+   ```
+
+6. Try a reversible helper edit:
+
+   ```text
+   Move the selected cube up 1 Blender unit and make it red. Leave the change as a preview.
+   ```
+
+Live helper edits stay pending in Blender until you use `Commit`, `Revert`, or Blender undo. For Sketchfab downloads/imports, add `SKETCHFAB_API_TOKEN` to the copied MCP config `env` block before restarting the MCP client. For generated Python, use Blender's `Run`/`Reject` controls or grant temporary external script trust from the sidebar.
+
 ## Why This Exists
 
 AI agents are getting good at using tools, but Blender needs guardrails. This bridge gives agents real scene context and practical tools without turning Blender into a chat app or storing provider API keys.
@@ -47,10 +72,13 @@ The source `.blend` file and full 1080p videos are not committed here; the repos
 
 - Inspect scenes, selections, materials, animation data, rigs, cameras, render settings, compositor nodes, geometry nodes, collections, shape keys, particles, curves, text, and blend-file health.
 - Read bounded viewport screenshots, sampled animation playblast frames, object inspection renders, render thumbnails, and long-render job resources through MCP.
+- Check `.blend` diagnostics, save or autosave already-bound projects, and open or create project files only from user-confirmed paths.
+- Search Poly Haven and Sketchfab catalogs, cache/import HDRIs, textures, and models, and report source, license, cache, and imported data-block diagnostics.
+- Start external asset download/cache jobs for Poly Haven or Sketchfab, poll or cancel them, then import completed job results from cached manifests.
 - Use animation workflow tools such as `run_animation_task`, `plan_animation_workflow`, `run_animation_workflow`, `review_playblast_against_brief`, and `run_animation_repair_loop`.
 - Apply safe helper edits for transforms, materials, lights, cameras, primitives, keyframes, rigs, constraints, render settings, product stages, character/vehicle kits, geometry-node starters, and scene organization.
 - Start long-running render jobs in a background Blender process, poll progress, assemble PNG sequences into MP4, and validate the output before reporting success.
-- Search cached Blender Python API and Manual docs before using version-sensitive APIs.
+- Search cached Blender Python API and Manual docs before using version-sensitive APIs, and use status/audit resources to spot stale client configs or timed-out work.
 - Stage arbitrary Blender Python into the `Agent Bridge Pending Script` Text datablock when helpers cannot express the task.
 
 ## Safety Model
@@ -61,9 +89,12 @@ Connected agents do not get blanket access to Blender.
 | --- | --- |
 | Safe helper tools | Apply immediately as live preview transactions with `Commit`, `Revert`, and Blender undo support. |
 | Visual capture tools | Store local project/session-scoped screenshots, playblast frames, inspection renders, thumbnails, and render outputs. |
+| Project files | Save-as, save-copy, open, and new-project tools require a user-confirmed path. Autosave only saves an already-bound active `.blend` file in place. |
+| External assets | Poly Haven uses public catalog/file APIs. Sketchfab downloads/imports require a per-call API token or a token inherited by the MCP server environment. Tokens are redacted and not written to job metadata. |
 | Generated Python | Staged into a Text datablock and blocked until approved in Blender, unless runtime-only script trust is active. |
 | External script trust | Optional sidebar preset for iterative sessions. Trust is runtime-only and can be revoked. Blocked scripts remain refused. |
-| Provider/API keys | Not stored in Blender Agent Bridge. External clients bring their own model/provider connection. |
+| Audit and status | Local redacted JSONL audit events and bridge/MCP diagnostics are available through MCP resources and status calls. |
+| Model provider keys | Not stored in Blender Agent Bridge. External clients bring their own model/provider connection. |
 
 See [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), and [docs/SAFETY_MODEL.md](docs/SAFETY_MODEL.md) for the detailed model.
 
@@ -93,6 +124,22 @@ Do not install GitHub's generated "Source code" ZIP as the Blender extension. Us
 
 See [docs/INSTALL_FROM_GITHUB.md](docs/INSTALL_FROM_GITHUB.md) for checksum verification, update steps, troubleshooting, and the maintainer release flow.
 
+## Optional Sketchfab Auth
+
+Poly Haven discovery and imports do not need a token. Sketchfab public search is tokenless, but Sketchfab model download/import tools need an API token.
+
+Add the token to the MCP server config `env` block that your client actually launches, then refresh or restart that MCP client:
+
+```json
+"env": {
+  "SKETCHFAB_API_TOKEN": "your-sketchfab-api-token"
+}
+```
+
+`BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN` is also accepted. For Claude Desktop, Claude Code, Codex, Cursor, and similar MCP clients, the token must be visible to the MCP server process, not just Blender. The MCP server forwards it to Blender as a redacted per-call argument because Blender often does not inherit the client environment.
+
+Use `blender_bridge_status` and check `mcp_external_asset_auth.sketchfab` when debugging a stale config. Use `get_external_asset_cache_diagnostics` to inspect the Blender-side cache and auth view. OAuth is intentionally deferred for now; the supported public path is API-token auth.
+
 ## How It Works
 
 ```mermaid
@@ -103,13 +150,15 @@ flowchart LR
   bridge --> scene["Open .blend scene"]
   bridge --> helpers["Safe helper tools"]
   bridge --> evidence["Viewport, playblast, render resources"]
+  bridge --> assets["External asset cache/jobs"]
+  bridge --> files["Project file lifecycle"]
   bridge --> scripts["Approval-gated Python"]
   helpers --> preview["Live preview transaction"]
   preview --> commit["Commit / Revert / Undo"]
   scripts --> approve["Run / Reject / Trust Session"]
 ```
 
-The MCP surface is compact by default, so clients do not need to load the whole helper catalog into prompt context. They get a small direct surface for status, scene listing, animation workflows, and async render jobs, plus `blender_tool_catalog` / `search_blender_tools` to search compact summaries. Fetch one schema only when needed with `get_blender_tool_schema`, then call it through `invoke_blender_tool`.
+The MCP surface is compact by default, so clients do not need to load the whole helper catalog into prompt context. They get a small direct surface for status, scene listing, `.blend` diagnostics, external asset discovery/jobs, animation workflows, and async render jobs, plus `blender_tool_catalog` / `search_blender_tools` to search compact summaries. Fetch one schema only when needed with `get_blender_tool_schema`, then call it through `invoke_blender_tool`.
 
 Some MCP clients cache tool lists and server configs. After installing a new ZIP, reloading the add-on, or pressing `Copy MCP`, replace the old client config and refresh or restart that MCP client.
 
@@ -139,7 +188,19 @@ Capture close-up inspection renders of the selected vehicle underside, review th
 Render a 1080p playblast as a background job, poll it, assemble the MP4, and validate the output.
 ```
 
-Live helper changes remain pending until you use `Commit`, `Revert`, or Blender undo. Generated Python remains pending until you use `Run`, `Approve External`, `Reject`, or an active trusted session allows it.
+```text
+Search Poly Haven for a sunset HDRI, cache it as an external asset job, poll until it is ready, then import it into the world as a preview.
+```
+
+```text
+Check whether Sketchfab auth is available in this MCP config, then search for a downloadable Falcon 9 model and import it if the token is present.
+```
+
+```text
+Check the current blend-file diagnostics and autosave only if the scene is already saved to a real .blend path.
+```
+
+Live helper changes, including external asset imports, remain pending until you use `Commit`, `Revert`, or Blender undo. Generated Python remains pending until you use `Run`, `Approve External`, `Reject`, or an active trusted session allows it.
 
 ## Install From Source
 
@@ -148,14 +209,14 @@ Build and validate the extension ZIP from the repository root:
 ```powershell
 blender --command extension validate addon\claude_blender
 python scripts\build_extension_zip.py --blender blender
-blender --command extension validate dist\claude_blender-0.1.2.zip
+blender --command extension validate dist\claude_blender-0.1.3.zip
 ```
 
 The build writes:
 
 ```text
-dist/claude_blender-0.1.2.zip
-dist/claude_blender-0.1.2.zip.sha256
+dist/claude_blender-0.1.3.zip
+dist/claude_blender-0.1.3.zip.sha256
 ```
 
 For day-to-day development on Windows, link the checkout into Blender's user extension repository:
@@ -174,6 +235,8 @@ Run pure-Python checks:
 python -m compileall addon\claude_blender tests
 python tests\smoke_mcp_server.py
 python tests\smoke_build_extension_zip.py
+python tests\smoke_audit_log.py
+python tests\smoke_external_assets.py
 ```
 
 Run Blender-background smoke tests when Blender is available:
@@ -183,6 +246,9 @@ Run Blender-background smoke tests when Blender is available:
 & 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python tests\smoke_bridge_server.py
 & 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python tests\smoke_animation_helpers.py
 & 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python tests\smoke_tool_selection.py
+& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python tests\smoke_project_files.py
+& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python tests\smoke_render_jobs.py
+& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python tests\smoke_external_asset_imports.py
 ```
 
 ## Documentation

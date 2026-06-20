@@ -1117,6 +1117,53 @@ def import_poly_haven_asset(
     return {"ok": False, "message": f"Unsupported Poly Haven import type: {resolved_type}", "manifest": manifest}
 
 
+def import_cached_asset(
+    context,
+    *,
+    manifest=None,
+    manifest_path="",
+    target_object_name="",
+    label="Import external asset",
+):
+    if manifest is None:
+        manifest_path = str(manifest_path or "").strip()
+        if not manifest_path:
+            return {"ok": False, "message": "manifest_path is required"}
+        manifest = _read_manifest(manifest_path)
+    if not isinstance(manifest, dict) or not manifest.get("ok"):
+        return {
+            "ok": False,
+            "message": "Cached asset manifest is unavailable or not successful",
+            "manifest": manifest or {},
+        }
+    provider = str(manifest.get("provider") or "").strip().lower()
+    if provider == "poly_haven":
+        resolved_type = manifest.get("asset_type") or "all"
+        if resolved_type == "hdris":
+            return _apply_hdri_world(context, manifest, label=label)
+        if resolved_type == "textures":
+            return _apply_texture_material(context, manifest, target_object_name=target_object_name, label=label)
+        if resolved_type == "models":
+            return _apply_model_import(context, manifest, label=label)
+        return {"ok": False, "message": f"Unsupported Poly Haven import type: {resolved_type}", "manifest": manifest}
+    if provider == "sketchfab":
+        import_file = manifest.get("import_file", "")
+        if import_file:
+            downloaded_files = manifest.setdefault("downloaded_files", [])
+            if not any(str(item.get("path") or "") == str(import_file) for item in downloaded_files if isinstance(item, dict)):
+                downloaded_files.insert(
+                    0,
+                    {
+                        "ok": True,
+                        "path": import_file,
+                        "cached": True,
+                        "logical_path": os.path.relpath(import_file, manifest.get("cache_dir", os.path.dirname(import_file))),
+                    },
+                )
+        return _apply_model_import(context, manifest, label=label)
+    return {"ok": False, "message": f"Unsupported cached asset provider: {provider}", "manifest": manifest}
+
+
 def _api_token_authorization_header(token):
     token = str(token or "").strip()
     lowered = token.lower()

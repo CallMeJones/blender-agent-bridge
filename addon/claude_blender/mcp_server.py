@@ -45,7 +45,7 @@ FULL_TOOL_LIST_ENV = "BLENDER_MCP_FULL_TOOL_LIST"
 DEFAULT_BRIDGE_MAIN_THREAD_TIMEOUT_SECONDS = max(10.0, _env_float("BLENDER_AGENT_BRIDGE_REQUEST_TIMEOUT", "90"))
 BRIDGE_MAIN_THREAD_TIMEOUT_GRACE_SECONDS = 10.0
 MCP_TIMEOUT_GRACE_SECONDS = 15.0
-SKETCHFAB_AUTH_FORWARD_TOOLS = {"download_sketchfab_model", "import_sketchfab_model"}
+SKETCHFAB_AUTH_FORWARD_TOOLS = {"download_sketchfab_model", "import_sketchfab_model", "start_external_asset_download"}
 COMPACT_DIRECT_TOOL_NAMES = (
     "list_scene_objects",
     "plan_animation_workflow",
@@ -790,6 +790,10 @@ def _tool_category(tool):
         "search_sketchfab_models",
         "download_sketchfab_model",
         "import_sketchfab_model",
+        "start_external_asset_download",
+        "get_external_asset_job_status",
+        "cancel_external_asset_job",
+        "import_external_asset_job_result",
         "get_external_asset_cache_diagnostics",
     }:
         return "external_assets"
@@ -1268,6 +1272,8 @@ class BlenderMCPServer:
         return None
 
     def _bridge_tool_arguments(self, name, arguments):
+        if name == "start_external_asset_download" and str((arguments or {}).get("provider") or "").strip().lower() != "sketchfab":
+            return arguments
         if name in SKETCHFAB_AUTH_FORWARD_TOOLS:
             return external_assets.sketchfab_auth_arguments_from_env(arguments)
         return arguments

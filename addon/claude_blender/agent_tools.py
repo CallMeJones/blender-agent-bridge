@@ -2748,6 +2748,74 @@ def blender_tool_definitions():
             },
         },
         {
+            "name": "start_external_asset_download",
+            "description": "Start an asynchronous external asset download/cache job for Poly Haven or Sketchfab. Returns immediately with a job id; poll status before importing.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "provider": {"type": "string", "enum": ["poly_haven", "sketchfab"]},
+                    "asset_id": {"type": "string", "description": "Poly Haven asset id."},
+                    "uid": {"type": "string", "description": "Sketchfab model uid."},
+                    "asset_type": {"type": "string", "enum": ["", "all", "hdris", "textures", "models"]},
+                    "resolution": {"type": "string"},
+                    "file_format": {"type": "string"},
+                    "map_types": {"type": "array", "items": {"type": "string"}},
+                    "include_dependencies": {"type": "boolean"},
+                    "api_token": {"type": "string", "description": "Optional per-call Sketchfab API token. Redacted in audit logs and not persisted to job metadata."},
+                    "token_env_var": {
+                        "type": "string",
+                        "enum": ["SKETCHFAB_API_TOKEN", "BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN"],
+                        "description": "Sketchfab API token environment variable to read when api_token is omitted.",
+                    },
+                    "model_password": {"type": "string"},
+                    "cache_dir": {"type": "string"},
+                    "timeout": {"type": "integer"},
+                    "job_name": {"type": "string"},
+                    "note": {"type": "string"},
+                },
+                "required": ["provider"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "get_external_asset_job_status",
+            "description": "Poll an asynchronous external asset download/cache job for status, cached manifest path, and import readiness.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string"},
+                },
+                "required": ["job_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "cancel_external_asset_job",
+            "description": "Request cancellation of an asynchronous external asset download/cache job. Cancellation is cooperative while HTTP or extraction work is in flight.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string"},
+                },
+                "required": ["job_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "import_external_asset_job_result",
+            "description": "Import a completed external asset download/cache job result into Blender preview using the cached manifest.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string"},
+                    "target_object_name": {"type": "string"},
+                    "label": {"type": "string"},
+                },
+                "required": ["job_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "get_external_asset_cache_diagnostics",
             "description": "Report cached/imported external assets, providers, licenses, source URLs, files, and imported Blender data-block names.",
             "input_schema": {
@@ -2988,6 +3056,10 @@ _TOOL_GROUPS = {
         "search_sketchfab_models",
         "download_sketchfab_model",
         "import_sketchfab_model",
+        "start_external_asset_download",
+        "get_external_asset_job_status",
+        "cancel_external_asset_job",
+        "import_external_asset_job_result",
         "get_external_asset_cache_diagnostics",
     },
     "advanced_create": {
@@ -3349,6 +3421,10 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "search_sketchfab_models",
     "download_sketchfab_model",
     "import_sketchfab_model",
+    "start_external_asset_download",
+    "get_external_asset_job_status",
+    "cancel_external_asset_job",
+    "import_external_asset_job_result",
     "get_external_asset_cache_diagnostics",
     "duplicate_selected_objects",
     "parent_selected_to_empty",

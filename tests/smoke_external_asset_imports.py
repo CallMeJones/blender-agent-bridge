@@ -7,6 +7,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 import urllib.parse
 import zipfile
 
@@ -135,6 +136,19 @@ def _execute(context, name, args):
     return json.loads(tool_dispatcher.execute_tool(context, name, args))
 
 
+def _wait_asset_job(context, job_id, *, timeout=5.0):
+    deadline = time.time() + timeout
+    last = None
+    while time.time() < deadline:
+        last = _execute(context, "get_external_asset_job_status", {"job_id": job_id})
+        assert last["ok"] is True, last
+        status = last["asset_job"]["status"]
+        if status in {"completed", "failed", "cancelled", "unknown"}:
+            return last
+        time.sleep(0.05)
+    raise AssertionError(f"Timed out waiting for external asset job {job_id}: {last}")
+
+
 def main():
     cache_dir = tempfile.mkdtemp(prefix="bab-import-assets-")
     original_fetch_json = external_assets._fetch_json
@@ -206,6 +220,64 @@ def main():
         assert sketchfab["ok"] is True, sketchfab
         assert "SmokeImportedModel" in sketchfab["imported_objects"], sketchfab
         assert observed_timeouts[-2:] == [("fetch_json_with_headers", 300), ("download_file", 300)], observed_timeouts
+        assert live_preview.revert(bpy.context)["ok"] is True
+
+        async_poly = _execute(
+            bpy.context,
+            "start_external_asset_download",
+            {
+                "provider": "poly_haven",
+                "asset_id": "model_one",
+                "asset_type": "models",
+                "resolution": "2k",
+                "file_format": "gltf",
+                "cache_dir": cache_dir,
+                "job_name": "Smoke Poly Haven model",
+            },
+        )
+        assert async_poly["ok"] is True, async_poly
+        assert async_poly["job_id"] == async_poly["asset_job"]["job_id"], async_poly
+        async_poly_status = _wait_asset_job(bpy.context, async_poly["job_id"])
+        assert async_poly_status["asset_job"]["status"] == "completed", async_poly_status
+        assert async_poly_status["asset_job"]["manifest_path"], async_poly_status
+        async_poly_import = _execute(
+            bpy.context,
+            "import_external_asset_job_result",
+            {"job_id": async_poly["job_id"], "label": "Import async Poly Haven model"},
+        )
+        assert async_poly_import["ok"] is True, async_poly_import
+        assert async_poly_import["import_result"]["ok"] is True, async_poly_import
+        assert "SmokeImportedModel" in async_poly_import["import_result"]["imported_objects"], async_poly_import
+        assert live_preview.revert(bpy.context)["ok"] is True
+
+        observed_timeouts.clear()
+        async_sketchfab = _execute(
+            bpy.context,
+            "start_external_asset_download",
+            {
+                "provider": "sketchfab",
+                "uid": "sketchfab_one",
+                "api_token": "smoke-token",
+                "cache_dir": cache_dir,
+                "timeout": 999,
+                "job_name": "Smoke Sketchfab model",
+            },
+        )
+        assert async_sketchfab["ok"] is True, async_sketchfab
+        assert "smoke-token" not in json.dumps(async_sketchfab, sort_keys=True), async_sketchfab
+        async_sketchfab_status = _wait_asset_job(bpy.context, async_sketchfab["job_id"])
+        assert async_sketchfab_status["asset_job"]["status"] == "completed", async_sketchfab_status
+        assert observed_timeouts == [("fetch_json_with_headers", 300), ("download_file", 300)], observed_timeouts
+        status_text = json.dumps(async_sketchfab_status, sort_keys=True)
+        assert "smoke-token" not in status_text, async_sketchfab_status
+        assert async_sketchfab_status["asset_job"]["parameters"]["api_token_supplied"] is True, async_sketchfab_status
+        async_sketchfab_import = _execute(
+            bpy.context,
+            "import_external_asset_job_result",
+            {"job_id": async_sketchfab["job_id"], "label": "Import async Sketchfab model"},
+        )
+        assert async_sketchfab_import["ok"] is True, async_sketchfab_import
+        assert "SmokeImportedModel" in async_sketchfab_import["import_result"]["imported_objects"], async_sketchfab_import
         assert live_preview.revert(bpy.context)["ok"] is True
 
         diagnostics = _execute(bpy.context, "get_external_asset_cache_diagnostics", {"cache_dir": cache_dir})
