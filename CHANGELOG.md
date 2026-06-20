@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Hardened the optional live Pages smoke so it downloads the advertised extension ZIP and verifies the repository index hash and archive size.
+- Updated the release workflow to current Node 24-compatible official GitHub Actions.
 
 ## 0.1.5
 
