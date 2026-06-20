@@ -4,16 +4,27 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import threading
 import time
 import uuid
 
-from . import external_assets, viewport_capture
+import bpy
+
+from . import external_assets, render_jobs, viewport_capture
 
 
 METADATA_FILENAME = "metadata.json"
+CONFIG_FILENAME = "worker-config.json"
+CHILD_STATUS_FILENAME = "child-status.json"
+LOG_FILENAME = "asset-job.log"
+SCRIPT_FILENAME = "asset_job_worker.py"
 DEFAULT_ASSET_JOB_POLL_INTERVAL_SECONDS = 2
+ASSET_JOB_MODE_ENV = "BLENDER_AGENT_BRIDGE_ASSET_JOB_MODE"
+ASSET_JOB_SECRET_TOKEN_ENV = "BLENDER_AGENT_BRIDGE_ASSET_JOB_API_TOKEN"
+ASSET_JOB_SECRET_PASSWORD_ENV = "BLENDER_AGENT_BRIDGE_ASSET_JOB_MODEL_PASSWORD"
 
+_PROCESSES = {}
 _THREADS = {}
 _CANCEL_REQUESTS = set()
 _LOCK = threading.Lock()
@@ -59,6 +70,22 @@ def _metadata_path(job_dir):
     return os.path.join(job_dir, METADATA_FILENAME)
 
 
+def _config_path(job_dir):
+    return os.path.join(job_dir, CONFIG_FILENAME)
+
+
+def _child_status_path(job_dir):
+    return os.path.join(job_dir, CHILD_STATUS_FILENAME)
+
+
+def _script_path(job_dir):
+    return os.path.join(job_dir, SCRIPT_FILENAME)
+
+
+def _log_path(job_dir):
+    return os.path.join(job_dir, LOG_FILENAME)
+
+
 def _write_json(path, payload):
     temp_path = f"{path}.{threading.get_ident()}.{uuid.uuid4().hex}.tmp"
     try:
@@ -77,6 +104,20 @@ def _write_json(path, payload):
 def _read_json(path):
     with open(path, "r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def _log_tail(path, max_bytes=4096):
+    if not path or not os.path.isfile(path):
+        return ""
+    try:
+        with open(path, "rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            size = handle.tell()
+            handle.seek(max(0, size - int(max_bytes)))
+            data = handle.read()
+        return data.decode("utf-8", errors="replace")
+    except OSError:
+        return ""
 
 
 def _read_metadata(path):
@@ -102,6 +143,146 @@ def _metadata_for_id(job_id, capture_dir=None, *, context=None, preferred_dir=No
 
 def _asset_job_uri(job_id):
     return f"blender://asset-jobs/{_safe_id(job_id)}/metadata"
+
+
+def _worker_config_args(provider, args):
+    args = dict(args or {})
+    if provider == "sketchfab":
+        args.pop("api_token", None)
+        args.pop("model_password", None)
+    return args
+
+
+def _child_env(args):
+    env = render_jobs._child_env()
+    token = str((args or {}).get("api_token") or "").strip()
+    password = str((args or {}).get("model_password") or "").strip()
+    if token:
+        env[ASSET_JOB_SECRET_TOKEN_ENV] = token
+    else:
+        env.pop(ASSET_JOB_SECRET_TOKEN_ENV, None)
+    if password:
+        env[ASSET_JOB_SECRET_PASSWORD_ENV] = password
+    else:
+        env.pop(ASSET_JOB_SECRET_PASSWORD_ENV, None)
+    return env
+
+
+def _package_parent():
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _child_script_text(config):
+    config_json = json.dumps(config, sort_keys=True)
+    return f"""\
+from __future__ import annotations
+
+import json
+import os
+import sys
+import time
+import traceback
+import uuid
+
+CONFIG = json.loads({config_json!r})
+
+
+def write_json(path, payload):
+    temp_path = f"{{path}}.{{os.getpid()}}.{{uuid.uuid4().hex}}.tmp"
+    with open(temp_path, "w", encoding="utf-8", newline="\\n") as handle:
+        json.dump(payload, handle, indent=2, sort_keys=True, default=str)
+    os.replace(temp_path, path)
+
+
+def read_json(path):
+    with open(path, "r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def manifest_summary(manifest):
+    manifest = manifest if isinstance(manifest, dict) else {{}}
+    downloaded = [item for item in manifest.get("downloaded_files") or [] if isinstance(item, dict)]
+    extracted = manifest.get("extracted_files") if isinstance(manifest.get("extracted_files"), list) else []
+    return {{
+        "ok": bool(manifest.get("ok")),
+        "provider": str(manifest.get("provider") or ""),
+        "asset_id": str(manifest.get("asset_id") or ""),
+        "uid": str(manifest.get("uid") or ""),
+        "asset_type": str(manifest.get("asset_type") or ""),
+        "cache_dir": str(manifest.get("cache_dir") or ""),
+        "manifest_path": str(manifest.get("manifest_path") or ""),
+        "import_file": str(manifest.get("import_file") or ""),
+        "downloaded_file_count": len(downloaded),
+        "extracted_file_count": len(extracted),
+        "import_status": str(manifest.get("import_status") or ""),
+        "message": str(manifest.get("message") or ""),
+    }}
+
+
+def write_status(status, **updates):
+    path = CONFIG["child_status_path"]
+    try:
+        payload = read_json(path) if os.path.isfile(path) else {{}}
+    except Exception:
+        payload = {{}}
+    payload.update(updates)
+    payload["status"] = status
+    payload["updated_at"] = time.time()
+    write_json(path, payload)
+
+
+try:
+    sys.path.insert(0, CONFIG["package_parent"])
+    from claude_blender import external_assets
+
+    provider = str(CONFIG.get("provider") or "")
+    args = dict(CONFIG.get("args") or {{}})
+    write_status("running", message=f"{{provider.replace('_', ' ').title()}} asset download/cache started")
+    if provider == "poly_haven":
+        manifest = external_assets.download_poly_haven_asset(
+            asset_id=str(args.get("asset_id") or ""),
+            asset_type=str(args.get("asset_type") or ""),
+            resolution=str(args.get("resolution") or "2k"),
+            file_format=str(args.get("file_format") or ""),
+            map_types=args.get("map_types") if isinstance(args.get("map_types"), list) else None,
+            include_dependencies=bool(args.get("include_dependencies", True)),
+            cache_dir=str(args.get("cache_dir") or ""),
+            timeout=int(args.get("timeout") or 60),
+        )
+    elif provider == "sketchfab":
+        manifest = external_assets.download_sketchfab_model(
+            uid=str(args.get("uid") or ""),
+            api_token=os.environ.get({ASSET_JOB_SECRET_TOKEN_ENV!r}, ""),
+            token_env_var=str(args.get("token_env_var") or external_assets.SKETCHFAB_TOKEN_ENV_VAR),
+            model_password=os.environ.get({ASSET_JOB_SECRET_PASSWORD_ENV!r}, ""),
+            cache_dir=str(args.get("cache_dir") or ""),
+            timeout=int(args.get("timeout") or 120),
+        )
+    else:
+        manifest = {{"ok": False, "message": f"Unsupported external asset provider: {{provider}}"}}
+    status = "completed" if manifest.get("ok") else "failed"
+    write_status(
+        status,
+        ok=bool(manifest.get("ok")),
+        completed_at=time.time(),
+        progress=1.0 if manifest.get("ok") else 0.0,
+        poll_after_seconds=0,
+        manifest_path=str(manifest.get("manifest_path") or ""),
+        manifest_summary=manifest_summary(manifest),
+        message=str(manifest.get("message") or ("External asset cached" if manifest.get("ok") else "External asset job failed")),
+    )
+except Exception as exc:
+    write_status(
+        "failed",
+        ok=False,
+        completed_at=time.time(),
+        progress=0.0,
+        poll_after_seconds=0,
+        message=f"External asset worker failed: {{type(exc).__name__}}: {{exc}}",
+        traceback=traceback.format_exc(),
+    )
+    raise
+"""
 
 
 def _bounded_int(value, default, *, minimum, maximum):
@@ -243,6 +424,67 @@ def _run_download_job(job_id, provider, args, metadata_path):
             _CANCEL_REQUESTS.discard(job_id)
 
 
+def _use_in_process_worker():
+    return str(os.environ.get(ASSET_JOB_MODE_ENV) or "").strip().lower() in {"thread", "in-process", "in_process", "inline"}
+
+
+def _start_process_job(job_id, provider, args, metadata):
+    job_dir = metadata["job_dir"]
+    config_path = metadata["config_path"]
+    script_path = metadata["script_path"]
+    log_path = metadata["log_path"]
+    child_status_path = metadata["child_status_path"]
+    config = {
+        "job_id": job_id,
+        "provider": provider,
+        "args": _worker_config_args(provider, args),
+        "package_parent": _package_parent(),
+        "child_status_path": child_status_path,
+    }
+    _write_json(config_path, config)
+    with open(script_path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(_child_script_text(config))
+
+    blender_binary = getattr(bpy.app, "binary_path", "") or "blender"
+    command = [blender_binary, "--background", "--factory-startup", "--python", script_path]
+    log_handle = open(log_path, "w", encoding="utf-8", newline="\n")
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=job_dir,
+            stdout=log_handle,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            creationflags=creationflags,
+            env=_child_env(args),
+        )
+    finally:
+        log_handle.close()
+    with _LOCK:
+        _PROCESSES[job_id] = process
+    return process
+
+
+def _terminate_process(process, timeout=5):
+    if process is None:
+        return None
+    if process.poll() is not None:
+        return process.poll()
+    try:
+        process.terminate()
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        try:
+            process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            pass
+    except Exception:
+        pass
+    return process.poll()
+
+
 def start_external_asset_download(
     context,
     *,
@@ -265,6 +507,11 @@ def start_external_asset_download(
     job_dir = os.path.join(info["asset_job_root"], job_id)
     os.makedirs(job_dir, exist_ok=True)
     metadata_path = _metadata_path(job_dir)
+    config_path = _config_path(job_dir)
+    child_status_path = _child_status_path(job_dir)
+    script_path = _script_path(job_dir)
+    log_path = _log_path(job_dir)
+    worker_type = "in_process_thread" if _use_in_process_worker() else "subprocess"
     metadata = {
         "ok": True,
         "available": True,
@@ -285,9 +532,16 @@ def start_external_asset_download(
         "base_dir": info.get("base_dir", ""),
         "fallback_reason": info.get("fallback_reason", ""),
         "job_dir": job_dir,
+        "config_path": config_path,
+        "script_path": script_path,
+        "log_path": log_path,
+        "child_status_path": child_status_path,
         "metadata_path": metadata_path,
         "metadata_uri": _asset_job_uri(job_id),
         "parameters": _redacted_parameters(provider, args),
+        "worker_type": worker_type,
+        "pid": 0,
+        "returncode": None,
         "manifest_path": "",
         "manifest_summary": {},
         "progress": 0.0,
@@ -303,15 +557,39 @@ def start_external_asset_download(
     }
     _write_metadata(metadata_path, metadata)
 
-    thread = threading.Thread(
-        target=_run_download_job,
-        args=(job_id, provider, dict(args), metadata_path),
-        name=f"BlenderAgentBridgeAssetJob-{job_id}",
-        daemon=True,
-    )
-    with _LOCK:
-        _THREADS[job_id] = thread
-    thread.start()
+    if worker_type == "in_process_thread":
+        thread = threading.Thread(
+            target=_run_download_job,
+            args=(job_id, provider, dict(args), metadata_path),
+            name=f"BlenderAgentBridgeAssetJob-{job_id}",
+            daemon=True,
+        )
+        with _LOCK:
+            _THREADS[job_id] = thread
+        thread.start()
+    else:
+        try:
+            process = _start_process_job(job_id, provider, dict(args), metadata)
+            metadata.update(
+                {
+                    "status": "running",
+                    "started_at": time.time(),
+                    "pid": int(process.pid or 0),
+                    "message": "External asset download/cache job started in a background Blender process",
+                }
+            )
+            _write_metadata(metadata_path, metadata)
+        except Exception as exc:
+            metadata.update(
+                {
+                    "ok": False,
+                    "status": "failed",
+                    "completed_at": time.time(),
+                    "message": f"Failed to start external asset worker: {type(exc).__name__}: {exc}",
+                }
+            )
+            _write_metadata(metadata_path, metadata)
+            return {"ok": False, "message": metadata["message"], "job_id": job_id, "asset_job": metadata}
     status = external_asset_job_status(job_id, context=context, preferred_dir=capture_dir)
     return {
         "ok": True,
@@ -335,8 +613,27 @@ def external_asset_job_status(job_id, *, context=None, preferred_dir=None, captu
     metadata_path = metadata.get("metadata_path", "")
     with _LOCK:
         thread = _THREADS.get(job_id)
+        process = _PROCESSES.get(job_id)
         cancel_requested = job_id in _CANCEL_REQUESTS
+    returncode = None
+    if process is not None:
+        returncode = process.poll()
+        if returncode is not None:
+            try:
+                process.wait(timeout=0)
+            except Exception:
+                pass
+            with _LOCK:
+                _PROCESSES.pop(job_id, None)
     thread_running = bool(thread and thread.is_alive())
+    process_running = bool(process and returncode is None)
+    child_status_path = metadata.get("child_status_path") or ""
+    child_status = {}
+    if os.path.isfile(child_status_path):
+        try:
+            child_status = _read_json(child_status_path)
+        except (OSError, json.JSONDecodeError):
+            child_status = {}
     now = time.time()
     terminal_statuses = {"completed", "failed", "cancelled"}
     with _METADATA_LOCK:
@@ -345,19 +642,42 @@ def external_asset_job_status(job_id, *, context=None, preferred_dir=None, captu
         except Exception:
             latest = dict(metadata)
         stored_status = str(latest.get("status") or "unknown")
-        if stored_status in terminal_statuses:
+        child_status_name = str(child_status.get("status") or "")
+        if child_status:
+            for key in ("ok", "completed_at", "progress", "manifest_path", "manifest_summary", "message", "traceback"):
+                if key in child_status:
+                    latest[key] = child_status[key]
+        if cancel_requested and not thread_running and not process_running:
+            status = "cancelled"
+            latest["ok"] = False
+            latest["message"] = latest.get("message") or "External asset job cancelled"
+        elif child_status_name in terminal_statuses:
+            status = child_status_name
+        elif stored_status in terminal_statuses:
             status = stored_status
-        elif thread_running:
+        elif thread_running or process_running:
             status = "cancelling" if cancel_requested else "running"
-        elif stored_status in {"starting", "running", "cancelling"}:
+        elif returncode == 0 and stored_status not in terminal_statuses:
             status = "unknown"
-            latest["message"] = "External asset job is no longer running and final status was not recorded"
+            latest["message"] = "External asset worker exited before final status was recorded"
+        elif returncode not in {None, 0}:
+            status = "cancelled" if cancel_requested else "failed"
+            latest["message"] = latest.get("message") or f"External asset worker exited with code {returncode}"
+        elif stored_status in {"starting", "running", "cancelling"}:
+            if latest.get("pid") and render_jobs._pid_alive(latest.get("pid")):
+                status = "cancelling" if cancel_requested else "running"
+                latest["message"] = latest.get("message") or "External asset worker still running (recovered across bridge session)"
+            else:
+                status = "unknown"
+                latest["message"] = "External asset job is no longer running and final status was not recorded"
         else:
             status = stored_status
 
         started_at = float(latest.get("started_at") or 0.0)
         elapsed = max(0.0, now - started_at) if started_at else 0.0
         terminal = status in terminal_statuses
+        if terminal and not latest.get("completed_at"):
+            latest["completed_at"] = now
         latest.update(
             {
                 "status": status,
@@ -365,6 +685,8 @@ def external_asset_job_status(job_id, *, context=None, preferred_dir=None, captu
                 "elapsed_seconds": int(round(elapsed)),
                 "cancel_requested": bool(cancel_requested),
                 "poll_after_seconds": 0 if terminal else int(latest.get("poll_interval_seconds") or DEFAULT_ASSET_JOB_POLL_INTERVAL_SECONDS),
+                "returncode": returncode if returncode is not None else latest.get("returncode"),
+                "log_tail": _log_tail(latest.get("log_path") or "", max_bytes=4096),
                 "updated_at": now,
             }
         )
@@ -385,6 +707,24 @@ def cancel_external_asset_job(job_id, *, context=None, preferred_dir=None, captu
     job_id = metadata.get("job_id", str(job_id or ""))
     with _LOCK:
         _CANCEL_REQUESTS.add(job_id)
+        process = _PROCESSES.get(job_id)
+    if process is not None and process.poll() is None:
+        returncode = _terminate_process(process)
+        with _LOCK:
+            _PROCESSES.pop(job_id, None)
+        metadata = _update_metadata(
+            metadata.get("metadata_path", ""),
+            ok=False,
+            status="cancelled",
+            completed_at=time.time(),
+            cancel_requested=True,
+            poll_after_seconds=0,
+            returncode=returncode,
+            message="External asset worker process cancelled",
+        )
+        with _LOCK:
+            _CANCEL_REQUESTS.discard(job_id)
+        return {"ok": True, "message": "External asset job cancelled", "asset_job": metadata}
     metadata = _update_metadata(
         metadata.get("metadata_path", ""),
         status="cancelling",
@@ -432,3 +772,8 @@ def register():
 def unregister():
     with _LOCK:
         _CANCEL_REQUESTS.update(_THREADS.keys())
+        processes = list(_PROCESSES.items())
+    for _job_id, process in processes:
+        _terminate_process(process, timeout=2)
+    with _LOCK:
+        _PROCESSES.clear()

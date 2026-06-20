@@ -7,6 +7,7 @@
 ## 0.1.3
 
 - Added asynchronous external asset download/cache jobs for Poly Haven and Sketchfab, with separate polling, cancellation, and main-thread import-result tools.
+- Moved external asset download/cache jobs into background Blender worker processes by default, with stronger cancellation and an in-process compatibility mode for focused tests.
 - Added cached-manifest import support so completed asset jobs can be imported without rerunning the download step.
 - Hardened asset job metadata writes for Windows polling races and redacted Sketchfab secrets from persisted job metadata.
 

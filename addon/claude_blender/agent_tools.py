@@ -2791,7 +2791,7 @@ def blender_tool_definitions():
         },
         {
             "name": "cancel_external_asset_job",
-            "description": "Request cancellation of an asynchronous external asset download/cache job. Cancellation is cooperative while HTTP or extraction work is in flight.",
+            "description": "Cancel an asynchronous external asset download/cache job. Subprocess jobs are terminated; in-process compatibility jobs stop cooperatively.",
             "input_schema": {
                 "type": "object",
                 "properties": {

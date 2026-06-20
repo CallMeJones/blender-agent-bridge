@@ -530,7 +530,7 @@ TOOL_CONTRACTS = {
         },
     },
     "cancel_external_asset_job": {
-        "description": "Request cancellation of an asynchronous external asset download/cache job",
+        "description": "Cancel an asynchronous external asset download/cache job; subprocess jobs are terminated and in-process compatibility jobs stop cooperatively",
         "mutates_scene": False,
         "has_side_effects": True,
         "permissions": ["files:write"],

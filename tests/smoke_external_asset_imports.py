@@ -18,7 +18,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import external_assets, live_preview, tool_dispatcher  # noqa: E402
+from claude_blender import asset_jobs, external_assets, live_preview, tool_dispatcher  # noqa: E402
 
 observed_timeouts = []
 
@@ -151,10 +151,12 @@ def _wait_asset_job(context, job_id, *, timeout=5.0):
 
 def main():
     cache_dir = tempfile.mkdtemp(prefix="bab-import-assets-")
+    original_asset_job_mode = os.environ.get(asset_jobs.ASSET_JOB_MODE_ENV)
     original_fetch_json = external_assets._fetch_json
     original_fetch_json_with_headers = external_assets._fetch_json_with_headers
     original_download_file = external_assets._download_file
     original_import_model_file = external_assets._import_model_file
+    os.environ[asset_jobs.ASSET_JOB_MODE_ENV] = "thread"
     external_assets._fetch_json = _fake_fetch_json
     external_assets._fetch_json_with_headers = _fake_fetch_json_with_headers
     external_assets._download_file = _fake_download_file
@@ -280,6 +282,23 @@ def main():
         assert "SmokeImportedModel" in async_sketchfab_import["import_result"]["imported_objects"], async_sketchfab_import
         assert live_preview.revert(bpy.context)["ok"] is True
 
+        if original_asset_job_mode is None:
+            os.environ.pop(asset_jobs.ASSET_JOB_MODE_ENV, None)
+        else:
+            os.environ[asset_jobs.ASSET_JOB_MODE_ENV] = original_asset_job_mode
+        subprocess_missing_auth = _execute(
+            bpy.context,
+            "start_external_asset_download",
+            {"provider": "sketchfab", "uid": "subprocess_missing_auth", "cache_dir": cache_dir},
+        )
+        assert subprocess_missing_auth["ok"] is True, subprocess_missing_auth
+        assert subprocess_missing_auth["asset_job"]["worker_type"] == "subprocess", subprocess_missing_auth
+        subprocess_status = _wait_asset_job(bpy.context, subprocess_missing_auth["job_id"], timeout=15.0)
+        assert subprocess_status["asset_job"]["status"] == "failed", subprocess_status
+        assert subprocess_status["asset_job"]["worker_type"] == "subprocess", subprocess_status
+        assert subprocess_status["asset_job"]["pid"], subprocess_status
+        assert "token" in subprocess_status["asset_job"]["message"].lower(), subprocess_status
+
         diagnostics = _execute(bpy.context, "get_external_asset_cache_diagnostics", {"cache_dir": cache_dir})
         assert diagnostics["ok"] is True, diagnostics
         assert diagnostics["asset_count"] >= 4, diagnostics
@@ -293,6 +312,10 @@ def main():
         external_assets._fetch_json_with_headers = original_fetch_json_with_headers
         external_assets._download_file = original_download_file
         external_assets._import_model_file = original_import_model_file
+        if original_asset_job_mode is None:
+            os.environ.pop(asset_jobs.ASSET_JOB_MODE_ENV, None)
+        else:
+            os.environ[asset_jobs.ASSET_JOB_MODE_ENV] = original_asset_job_mode
         shutil.rmtree(cache_dir, ignore_errors=True)
 
 
