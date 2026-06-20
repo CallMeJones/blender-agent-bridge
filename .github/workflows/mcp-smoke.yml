@@ -42,6 +42,7 @@ jobs:
           tests\smoke_audit_log.py
           tests\smoke_build_extension_zip.py
           tests\smoke_extension_repository.py
+          tests\smoke_helper_routing.py
           tests\smoke_release_consistency.py
           tests\smoke_script_analysis.py
           tests\smoke_mcp_server.py
@@ -51,6 +52,9 @@ jobs:
 
       - name: Run script analysis smoke test
         run: python tests\smoke_script_analysis.py
+
+      - name: Run helper routing smoke test
+        run: python tests\smoke_helper_routing.py
 
       - name: Run extension build smoke test
         run: python tests\smoke_build_extension_zip.py
