@@ -42,6 +42,7 @@ jobs:
           tests\smoke_audit_log.py
           tests\smoke_build_extension_zip.py
           tests\smoke_extension_repository.py
+          tests\smoke_release_consistency.py
           tests\smoke_script_analysis.py
           tests\smoke_mcp_server.py
 
@@ -56,6 +57,9 @@ jobs:
 
       - name: Run extension repository smoke test
         run: python tests\smoke_extension_repository.py
+
+      - name: Run release consistency smoke test
+        run: python tests\smoke_release_consistency.py
 
       - name: Run stdio MCP smoke test
         run: python tests\smoke_mcp_server.py

@@ -44,8 +44,8 @@ Do not install GitHub's generated `Source code` ZIP. It is the repository checko
 On Windows, verify a downloaded ZIP with:
 
 ```powershell
-Get-FileHash .\claude_blender-0.1.5.zip -Algorithm SHA256
-Get-Content .\claude_blender-0.1.5.zip.sha256
+Get-FileHash .\claude_blender-<version>.zip -Algorithm SHA256
+Get-Content .\claude_blender-<version>.zip.sha256
 ```
 
 The hash printed by `Get-FileHash` should match the first value in the `.sha256` file.
@@ -89,9 +89,11 @@ The client should use `run_animation_task` or the animation workflow tools befor
 Local release build:
 
 ```powershell
+$Version = python -c "import tomllib; print(tomllib.load(open('addon/claude_blender/blender_manifest.toml','rb'))['version'])"
 blender --command extension validate addon\claude_blender
 python scripts\build_extension_zip.py --blender blender
-blender --command extension validate dist\claude_blender-0.1.5.zip
+blender --command extension validate "dist\claude_blender-$Version.zip"
+python tests\smoke_release_consistency.py
 python tests\smoke_build_extension_zip.py
 python tests\smoke_extension_repository.py
 python scripts\build_extension_repository.py --build-zip --blender blender --repo-dir public
@@ -100,8 +102,9 @@ python scripts\build_extension_repository.py --build-zip --blender blender --rep
 Publish a tagged GitHub release:
 
 ```powershell
-git tag v0.1.5
-git push origin v0.1.5
+$Version = python -c "import tomllib; print(tomllib.load(open('addon/claude_blender/blender_manifest.toml','rb'))['version'])"
+git tag "v$Version"
+git push origin "v$Version"
 ```
 
 The GitHub workflow uploads the packaged ZIP and `.sha256` as release assets. Pushes to `main` build the same static extension repository into `public/` and deploy it to GitHub Pages when Pages is configured to use GitHub Actions.

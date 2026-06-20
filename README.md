@@ -207,16 +207,17 @@ Live helper changes, including external asset imports, remain pending until you 
 Build and validate the extension ZIP from the repository root:
 
 ```powershell
+$Version = python -c "import tomllib; print(tomllib.load(open('addon/claude_blender/blender_manifest.toml','rb'))['version'])"
 blender --command extension validate addon\claude_blender
 python scripts\build_extension_zip.py --blender blender
-blender --command extension validate dist\claude_blender-0.1.5.zip
+blender --command extension validate "dist\claude_blender-$Version.zip"
 ```
 
 The build writes:
 
 ```text
-dist/claude_blender-0.1.5.zip
-dist/claude_blender-0.1.5.zip.sha256
+dist/claude_blender-<version>.zip
+dist/claude_blender-<version>.zip.sha256
 ```
 
 For day-to-day development on Windows, link the checkout into Blender's user extension repository:
@@ -233,12 +234,15 @@ Run pure-Python checks:
 
 ```powershell
 python -m compileall addon\claude_blender tests
+python tests\smoke_release_consistency.py
 python tests\smoke_bridge_protocol_validation.py
 python tests\smoke_mcp_server.py
 python tests\smoke_build_extension_zip.py
 python tests\smoke_audit_log.py
 python tests\smoke_external_assets.py
 ```
+
+Set `BLENDER_AGENT_BRIDGE_LIVE_PAGES_SMOKE=1` before `smoke_release_consistency.py` to also verify the deployed GitHub Pages extension index advertises the current manifest version.
 
 Optional live-network external asset smoke is skipped by default:
 
