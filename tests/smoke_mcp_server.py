@@ -665,6 +665,16 @@ def _assert_compact_tools_visible(proc):
     task_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "run_animation_task")
     assert task_tool["annotations"]["longRunningHint"] is True, task_tool
     assert task_tool["annotations"]["timeoutRecovery"]["resource_tool"] == "get_visual_evidence_resources", task_tool
+    asset_download_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "start_external_asset_download")
+    assert "Default client path" in asset_download_tool["description"], asset_download_tool
+    assert asset_download_tool["annotations"]["returnsBackgroundJob"] is True, asset_download_tool
+    assert asset_download_tool["annotations"]["timeoutRecovery"]["resource_tool"] == "get_external_asset_job_status", asset_download_tool
+    asset_import_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "start_external_asset_import_job")
+    assert "Default client path" in asset_import_tool["description"], asset_import_tool
+    assert asset_import_tool["annotations"]["returnsBackgroundJob"] is True, asset_import_tool
+    assert asset_import_tool["annotations"]["timeoutRecovery"]["resource_tool"] == "get_external_asset_import_job_status", asset_import_tool
+    assert "import_poly_haven_asset" not in names, listed
+    assert "import_sketchfab_model" not in names, listed
     bake_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "stage_persistent_simulation_bake")
     assert bake_tool["annotations"]["requiresApproval"] is True, bake_tool
     assert bake_tool["annotations"]["requiresExplicitOneTimeApproval"] is True, bake_tool
@@ -760,6 +770,8 @@ def _initialize(proc):
     assert initialized["result"]["protocolVersion"] == "2025-06-18", initialized
     assert initialized["result"]["capabilities"]["tools"] == {"listChanged": False}, initialized
     assert initialized["result"]["capabilities"]["prompts"] == {"listChanged": False}, initialized
+    assert "start_external_asset_download" in initialized["result"]["instructions"], initialized
+    assert "start_external_asset_import_job" in initialized["result"]["instructions"], initialized
     proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
     proc.stdin.flush()
     return initialized
@@ -774,6 +786,24 @@ def _assert_animation_search_routes_first(response, *, query):
             assert names.index(generic_name) > names.index("run_animation_workflow"), (query, names)
     if "draft_script" in names:
         assert names.index("draft_script") > names.index("run_animation_workflow"), (query, names)
+
+
+def _assert_external_asset_search_routes_first(response, *, query):
+    tools = response["result"]["structuredContent"]["tools"]
+    names = [tool["name"] for tool in tools]
+    assert names[0] == "start_external_asset_download", (query, names)
+    assert "start_external_asset_import_job" in names[:4], (query, names)
+    assert "get_external_asset_job_status" in names[:5], (query, names)
+    assert "get_external_asset_import_job_status" in names[:6], (query, names)
+    for direct_name in (
+        "download_poly_haven_asset",
+        "import_poly_haven_asset",
+        "download_sketchfab_model",
+        "import_sketchfab_model",
+        "import_external_asset_job_result",
+    ):
+        if direct_name in names:
+            assert names.index(direct_name) > names.index("start_external_asset_import_job"), (query, names)
 
 
 def main():
@@ -874,6 +904,24 @@ def main():
                 },
             )
             _assert_animation_search_routes_first(offline_animation_search, query=query)
+        for query in (
+            "Search Poly Haven for a sunset HDRI and import it into the world.",
+            "Import a downloadable Sketchfab Falcon 9 model if auth is present.",
+            "Cache an external asset model and bring it into the Blender scene.",
+        ):
+            offline_asset_search = _send(
+                offline_proc,
+                {
+                    "jsonrpc": "2.0",
+                    "id": 97,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "search_blender_tools",
+                        "arguments": {"query": query, "limit": 10},
+                    },
+                },
+            )
+            _assert_external_asset_search_routes_first(offline_asset_search, query=query)
         offline_catalog_schema = _send(
             offline_proc,
             {
@@ -1118,6 +1166,24 @@ def main():
                 },
             )
             _assert_animation_search_routes_first(animation_search, query=query)
+        for query in (
+            "Search Poly Haven for a sunset HDRI and import it into the world.",
+            "Import a downloadable Sketchfab Falcon 9 model if auth is present.",
+            "Cache an external asset model and bring it into the Blender scene.",
+        ):
+            asset_search = _send(
+                proc,
+                {
+                    "jsonrpc": "2.0",
+                    "id": 98,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "search_blender_tools",
+                        "arguments": {"query": query, "limit": 10},
+                    },
+                },
+            )
+            _assert_external_asset_search_routes_first(asset_search, query=query)
 
         catalog_search = _send(
             proc,
@@ -1423,6 +1489,7 @@ def main():
         prompt_names = {item["name"] for item in prompts["result"]["prompts"]}
         assert "safe_scene_change" in prompt_names, prompts
         assert "advanced_animation_workflow" in prompt_names, prompts
+        assert "external_asset_workflow" in prompt_names, prompts
 
         prompt = _send(
             proc,
@@ -1448,6 +1515,24 @@ def main():
         assert "run_animation_workflow" in animation_prompt_text, animation_prompt
         assert "capture_object_inspection_renders" in animation_prompt_text, animation_prompt
         assert "draft_script only" in animation_prompt_text, animation_prompt
+        asset_prompt = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 44,
+                "method": "prompts/get",
+                "params": {
+                    "name": "external_asset_workflow",
+                    "arguments": {"goal": "find and import a Poly Haven HDRI"},
+                },
+            },
+        )
+        asset_prompt_text = asset_prompt["result"]["messages"][0]["content"]["text"]
+        assert "start_external_asset_download" in asset_prompt_text, asset_prompt
+        assert "get_external_asset_job_status" in asset_prompt_text, asset_prompt
+        assert "start_external_asset_import_job" in asset_prompt_text, asset_prompt
+        assert "get_external_asset_import_job_status" in asset_prompt_text, asset_prompt
+        assert "synchronous fallback" in asset_prompt_text, asset_prompt
 
         resource = _send(
             proc,

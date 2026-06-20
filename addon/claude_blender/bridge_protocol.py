@@ -353,7 +353,7 @@ TOOL_CONTRACTS = {
         },
     },
     "download_poly_haven_asset": {
-        "description": "Download/cache selected Poly Haven HDRI, texture, or model files plus dependencies with checksum validation",
+        "description": "Synchronous fallback: download/cache selected Poly Haven HDRI, texture, or model files plus dependencies with checksum validation. Prefer start_external_asset_download for normal client workflows.",
         "mutates_scene": False,
         "has_side_effects": True,
         "permissions": ["network", "files:write"],
@@ -376,7 +376,7 @@ TOOL_CONTRACTS = {
         },
     },
     "import_poly_haven_asset": {
-        "description": "Download/cache and import a Poly Haven asset into Blender: HDRIs become a preview world, textures become a material, and models import through Blender importers",
+        "description": "Synchronous fallback: download/cache and import a Poly Haven asset into Blender. For normal client workflows, use start_external_asset_download, poll get_external_asset_job_status, then start_external_asset_import_job.",
         "mutates_scene": True,
         "requires_live_preview": True,
         "has_side_effects": True,
@@ -421,7 +421,7 @@ TOOL_CONTRACTS = {
         },
     },
     "download_sketchfab_model": {
-        "description": "Use a Sketchfab API token to fetch temporary GLTF download info, cache the archive, and extract an importable model file",
+        "description": "Synchronous fallback: use a Sketchfab API token to fetch temporary GLTF download info, cache the archive, and extract an importable model file. Prefer start_external_asset_download for normal client workflows.",
         "mutates_scene": False,
         "has_side_effects": True,
         "permissions": ["network", "files:write"],
@@ -446,7 +446,7 @@ TOOL_CONTRACTS = {
         },
     },
     "import_sketchfab_model": {
-        "description": "Use a Sketchfab API token to cache a downloadable model archive and import the extracted GLTF/GLB file into Blender preview",
+        "description": "Synchronous fallback: use a Sketchfab API token to cache a downloadable model archive and import the extracted GLTF/GLB file into Blender preview. For normal client workflows, use start_external_asset_download, poll get_external_asset_job_status, then start_external_asset_import_job.",
         "mutates_scene": True,
         "requires_live_preview": True,
         "has_side_effects": True,
@@ -473,14 +473,14 @@ TOOL_CONTRACTS = {
         },
     },
     "start_external_asset_download": {
-        "description": "Start an asynchronous external asset download/cache job for Poly Haven or Sketchfab and return immediately with a job id",
+        "description": "Default client path for asset downloads/imports: start an asynchronous external asset download/cache job for Poly Haven or Sketchfab and return immediately with a job id",
         "mutates_scene": False,
         "has_side_effects": True,
         "permissions": ["network", "files:write"],
         "supports_headless": True,
         "returns_background_job": True,
         "timeout_seconds": 30,
-        "duration_hint": "Returns quickly; the background asset job may continue downloading, extracting, and validating cache files.",
+        "duration_hint": "Returns quickly; the background asset job may continue downloading, extracting, and validating cache files. Poll get_external_asset_job_status until completed or failed before starting a queued import.",
         "timeout_recovery": {
             "recoverable": True,
             "poll_after_seconds": 2,
@@ -516,7 +516,7 @@ TOOL_CONTRACTS = {
         },
     },
     "get_external_asset_job_status": {
-        "description": "Poll an asynchronous external asset download/cache job for status, progress, cached manifest path, and import readiness",
+        "description": "Poll an asynchronous external asset download/cache job for status, progress, cached manifest path, and import readiness; when completed, use start_external_asset_import_job for scene import",
         "mutates_scene": False,
         "permissions": ["files:read"],
         "supports_headless": True,
@@ -545,7 +545,7 @@ TOOL_CONTRACTS = {
         },
     },
     "import_external_asset_job_result": {
-        "description": "Import a completed external asset download/cache job result into Blender preview using the cached manifest",
+        "description": "Synchronous fallback: import a completed external asset download/cache job result into Blender preview using the cached manifest. Prefer start_external_asset_import_job for normal client workflows.",
         "mutates_scene": True,
         "requires_live_preview": True,
         "has_side_effects": True,
@@ -564,7 +564,7 @@ TOOL_CONTRACTS = {
         },
     },
     "start_external_asset_import_job": {
-        "description": "Queue a completed external asset download/cache job result for main-thread Blender import and return immediately with a pollable import job id",
+        "description": "Default client path after asset download completion: queue a completed external asset download/cache job result for main-thread Blender import and return immediately with a pollable import job id",
         "mutates_scene": True,
         "requires_live_preview": True,
         "has_side_effects": True,
@@ -572,7 +572,7 @@ TOOL_CONTRACTS = {
         "permissions": ["scene:read", "scene:mutate", "preview:write", "files:read", "files:write"],
         "supports_headless": True,
         "timeout_seconds": 30,
-        "duration_hint": "Returns quickly; the queued import runs later on Blender's main thread and may briefly keep Blender busy while importers execute.",
+        "duration_hint": "Returns quickly; the queued import runs later on Blender's main thread and may briefly keep Blender busy while importers execute. Poll get_external_asset_import_job_status until completed or failed before reporting success.",
         "timeout_recovery": {
             "recoverable": True,
             "poll_after_seconds": 2,
@@ -598,7 +598,7 @@ TOOL_CONTRACTS = {
         },
     },
     "get_external_asset_import_job_status": {
-        "description": "Poll an external asset import job for queued, running, completed, failed, or cancelled status",
+        "description": "Poll a queued external asset import job for queued, running, completed, failed, or cancelled status and import result details",
         "mutates_scene": False,
         "permissions": ["files:read"],
         "supports_headless": True,

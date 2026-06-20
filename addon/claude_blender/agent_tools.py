@@ -18,7 +18,7 @@ AGENT_GUIDANCE = (
     "For shape-key animation, prefer create_shape_key and animate_shape_key before drafting Python. "
     "For quick animation playblasts and visual review, use low-resolution preview defaults unless the user explicitly asks for HD/final/1080p/4K quality. For long-running or high-resolution renders, frame sequences, 1080p/4K previews, or MP4 quality checks, use start_render_job and poll get_render_job_status instead of blocking render_scene_thumbnail, capture tools, or draft_script; report the returned rough estimate/poll interval to the user; use assemble_render_job_video for PNG sequences and validate_render_job_output before reporting success; use cancel_render_job if the user wants to stop it. If a render, playblast, or visual-review tool times out, treat it as recoverable: wait the returned poll_after_seconds, call blender_bridge_status, inspect get_visual_evidence_resources and the audit log, and only rerun if no artifact/result appears. "
     "For persistent simulation/cache bakes or cache-freeing operations, inspect first with get_simulation_details or inspect_simulation_bake, then use stage_persistent_simulation_bake for a fixed approval-gated script. Session-wide external script trust is not enough for bpy.ops.fluid.* or bpy.ops.ptcache.* bake/free operators; they require explicit one-time user approval. Do not hand the user a checkpoint or recovery .blend path unless you just verified that it exists and is restorable through checkpoint metadata, diagnostics, or a filesystem check. "
-    "For external assets, use list_poly_haven_categories and search_poly_haven_assets/search_sketchfab_models for discovery, inspect_poly_haven_asset_files before choosing Poly Haven formats, download_* tools for cache-only work, import_* tools for preview scene imports, and get_external_asset_cache_diagnostics to report cached/imported assets. Sketchfab API tokens must be provided per call or through the MCP server environment, not Blender preferences. "
+    "For external assets, use list_poly_haven_categories and search_poly_haven_assets/search_sketchfab_models for discovery, inspect_poly_haven_asset_files before choosing Poly Haven formats, then use start_external_asset_download for any download/cache or import request. Poll get_external_asset_job_status until completed or failed. For scene import, call start_external_asset_import_job and poll get_external_asset_import_job_status until completed or failed. Use download_poly_haven_asset, import_poly_haven_asset, download_sketchfab_model, import_sketchfab_model, and import_external_asset_job_result only for explicit synchronous fallback/debug cases. Use get_external_asset_cache_diagnostics to report cached/imported assets. Sketchfab API tokens must be provided per call or through the MCP server environment, not Blender preferences. "
     "For animation generation, review, or repair, call run_animation_task for simple prompt-in/task-out use, or call plan_animation_workflow first when you need manual control of the generated workflow. plan_animation_workflow returns the brief, scene routing, timing chart, ordered helper calls, evaluator calls, repair calls, and script fallback rules. For common helper-backed generation, call run_animation_workflow to execute the plan, review the result, optionally capture playblast evidence, and leave changes in preview. Use any animation_brief in context as the prompt contract; otherwise call create_animation_brief first when the prompt needs an explicit contract, success criteria, or later validation. Call get_animation_scene_context before advanced animation in scenes with rigs, constraints, drivers, shape keys, physics, or unclear edit targets so you know whether to animate object transforms, rig controls, shape keys, materials, physics, or camera settings. Use create_timing_chart, block_key_poses, add_breakdown_pose, set_pose_hold, set_rig_pose_hold, get_rig_pose_library_details, apply_rig_pose_from_action, apply_rig_pose_marker, apply_rig_action_clip, offset_rig_limb_controls, set_rig_custom_property_keyframes, and create_motion_arc for animator-style blocking before spline/f-curve polish; use rig pose/action helpers only after identifying armature controls, pose-library candidates, or existing scalar IK/FK/space properties through rig inspection or repair metadata. Then use analyze_animation_principles plus focused analyzers to check timing, spacing, arcs, pose clarity, anticipation, squash/stretch, contact, center-of-mass support, speed/acceleration plausibility, simulation cache readiness, and settle before repair; use inspect_simulation_bake before persistent bake decisions, and use stage_persistent_simulation_bake when the user intentionally wants a persistent point-cache bake. Use capture_animation_playblast and review_playblast_against_brief when visual frame evidence matters; use capture_object_inspection_renders and review_inspection_renders_against_brief when close-up object detail evidence matters; if review or repair tools return repair_operations, prefer run_animation_repair_loop for bounded helper repair and review-again behavior, or execute relevant tool_call name/input entries deliberately when manual control is needed. Then prefer set_scene_frame_range, set_animation_preview_range, animate_selected_transform, animate_object_bounce, create_progressive_bounce_animation, animate_material_property, animate_light_property, create_follow_path_animation, create_turntable_animation, create_pulse_animation, create_reveal_animation, create_staggered_motion, set_action_interpolation, retime_actions, add_action_cycles, clear_animation, and create_camera_orbit. "
     "For complex scene builds that need many objects or more than about eight helper calls, stage one cohesive Blender Python script with draft_script instead of making a long chain of helper calls. "
     "When helper tools cannot express the requested edit, use draft_script to stage Blender Python for user approval; if the user has granted external script trust, draft_script may auto-run after static checks. "
@@ -2650,7 +2650,7 @@ def blender_tool_definitions():
         },
         {
             "name": "download_poly_haven_asset",
-            "description": "Download and cache selected Poly Haven HDRI, texture, or model files with checksum validation. Does not mutate the Blender scene.",
+            "description": "Synchronous fallback: download and cache selected Poly Haven HDRI, texture, or model files with checksum validation. Does not mutate the Blender scene. For normal client workflows, prefer start_external_asset_download and poll get_external_asset_job_status.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -2669,7 +2669,7 @@ def blender_tool_definitions():
         },
         {
             "name": "import_poly_haven_asset",
-            "description": "Download/cache and import a Poly Haven asset into Blender preview. HDRIs create a world, textures create/assign a material, and models use Blender importers.",
+            "description": "Synchronous fallback: download/cache and import a Poly Haven asset into Blender preview. HDRIs create a world, textures create/assign a material, and models use Blender importers. For normal client workflows, use start_external_asset_download, poll get_external_asset_job_status, then start_external_asset_import_job.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -2706,7 +2706,7 @@ def blender_tool_definitions():
         },
         {
             "name": "download_sketchfab_model",
-            "description": "Use a Sketchfab API token to fetch temporary GLTF download info, cache the archive, and extract an importable model file. Does not mutate the Blender scene.",
+            "description": "Synchronous fallback: use a Sketchfab API token to fetch temporary GLTF download info, cache the archive, and extract an importable model file. Does not mutate the Blender scene. For normal client workflows, prefer start_external_asset_download and poll get_external_asset_job_status.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -2727,7 +2727,7 @@ def blender_tool_definitions():
         },
         {
             "name": "import_sketchfab_model",
-            "description": "Use a Sketchfab API token to cache a downloadable model archive and import the extracted GLTF/GLB file into Blender preview.",
+            "description": "Synchronous fallback: use a Sketchfab API token to cache a downloadable model archive and import the extracted GLTF/GLB file into Blender preview. For normal client workflows, use start_external_asset_download, poll get_external_asset_job_status, then start_external_asset_import_job.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -2749,7 +2749,7 @@ def blender_tool_definitions():
         },
         {
             "name": "start_external_asset_download",
-            "description": "Start an asynchronous external asset download/cache job for Poly Haven or Sketchfab. Returns immediately with a job id; poll status before importing.",
+            "description": "Default client path: start an asynchronous external asset download/cache job for Poly Haven or Sketchfab. Use this for any normal asset download/cache or import request. Returns immediately with a job id; poll get_external_asset_job_status until completed or failed, then queue scene import with start_external_asset_import_job.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -2779,7 +2779,7 @@ def blender_tool_definitions():
         },
         {
             "name": "get_external_asset_job_status",
-            "description": "Poll an asynchronous external asset download/cache job for status, cached manifest path, and import readiness.",
+            "description": "Poll an asynchronous external asset download/cache job for status, progress, cached manifest path, and import readiness. When completed and the user wants scene import, call start_external_asset_import_job.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -2803,7 +2803,7 @@ def blender_tool_definitions():
         },
         {
             "name": "import_external_asset_job_result",
-            "description": "Import a completed external asset download/cache job result into Blender preview using the cached manifest.",
+            "description": "Synchronous fallback: import a completed external asset download/cache job result into Blender preview using the cached manifest. For normal client workflows, prefer start_external_asset_import_job and poll get_external_asset_import_job_status.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -2817,7 +2817,7 @@ def blender_tool_definitions():
         },
         {
             "name": "start_external_asset_import_job",
-            "description": "Queue a completed external asset download/cache job result for main-thread Blender import. Returns immediately with a pollable import job id.",
+            "description": "Default client path after a completed asset download/cache job: queue Blender main-thread import and return immediately with a pollable import job id. Poll get_external_asset_import_job_status until completed or failed.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -2837,7 +2837,7 @@ def blender_tool_definitions():
         },
         {
             "name": "get_external_asset_import_job_status",
-            "description": "Poll an external asset import job for queued/running/completed/failed/cancelled status and import result details.",
+            "description": "Poll a queued external asset import job for queued/running/completed/failed/cancelled status and import result details. Use this after start_external_asset_import_job before reporting import success.",
             "input_schema": {
                 "type": "object",
                 "properties": {

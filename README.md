@@ -193,7 +193,7 @@ Search Poly Haven for a sunset HDRI, cache it as an external asset job, poll unt
 ```
 
 ```text
-Check whether Sketchfab auth is available in this MCP config, then search for a downloadable Falcon 9 model and import it if the token is present.
+Check whether Sketchfab auth is available in this MCP config, then search for a downloadable Falcon 9 model, start an external asset download job if the token is present, poll it, queue the import job, and poll until the import completes.
 ```
 
 ```text

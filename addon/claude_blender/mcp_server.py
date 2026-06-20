@@ -59,6 +59,12 @@ COMPACT_DIRECT_TOOL_NAMES = (
     "cancel_render_job",
     "assemble_render_job_video",
     "validate_render_job_output",
+    "start_external_asset_download",
+    "get_external_asset_job_status",
+    "cancel_external_asset_job",
+    "start_external_asset_import_job",
+    "get_external_asset_import_job_status",
+    "cancel_external_asset_import_job",
 )
 CATALOG_TOOL_NAME = "blender_tool_catalog"
 WRAPPER_TOOL_NAMES = {
@@ -134,6 +140,65 @@ SCRIPT_EXPLICIT_TERMS = {
     "helper tools cannot express",
     "helpers cannot express",
     "approved script",
+}
+EXTERNAL_ASSET_ROUTE_TERMS = {
+    "asset",
+    "assets",
+    "asset catalog",
+    "asset library",
+    "asset job",
+    "async asset",
+    "cache asset",
+    "download asset",
+    "download model",
+    "environment map",
+    "external asset",
+    "external assets",
+    "hdri",
+    "hdris",
+    "import asset",
+    "import hdri",
+    "import model",
+    "import texture",
+    "model library",
+    "poly haven",
+    "polyhaven",
+    "queued import",
+    "sketchfab",
+    "texture",
+    "textures",
+}
+EXTERNAL_ASSET_DIRECT_TERMS = {
+    "direct",
+    "direct import",
+    "download_poly_haven_asset",
+    "download_sketchfab_model",
+    "import_external_asset_job_result",
+    "import_poly_haven_asset",
+    "import_sketchfab_model",
+    "legacy",
+    "one-shot",
+    "synchronous",
+    "sync",
+}
+EXTERNAL_ASSET_WORKFLOW_TOOLS = {
+    "search_poly_haven_assets",
+    "inspect_poly_haven_asset_files",
+    "search_sketchfab_models",
+    "start_external_asset_download",
+    "get_external_asset_job_status",
+    "cancel_external_asset_job",
+    "start_external_asset_import_job",
+    "get_external_asset_import_job_status",
+    "cancel_external_asset_import_job",
+    "get_external_asset_cache_diagnostics",
+}
+EXTERNAL_ASSET_DIRECT_TOOLS = {
+    "download_poly_haven_asset",
+    "import_poly_haven_asset",
+    "download_sketchfab_model",
+    "import_sketchfab_model",
+    "import_external_asset_job_result",
 }
 
 TOOL_CATEGORY_LABELS = {
@@ -388,6 +453,29 @@ PROMPTS = {
             "helper generation, validation, playblast review, and repair. "
             "When rendered visual evidence is needed for object details, use capture_object_inspection_renders. "
             "Use draft_script only when the workflow's script_fallback_policy says helpers cannot express the edit."
+        ),
+    },
+    "external_asset_workflow": {
+        "name": "external_asset_workflow",
+        "title": "Use Async External Asset Workflow",
+        "description": "Guide an MCP client through discovery, async download/cache, queued import, and polling for external assets.",
+        "arguments": [
+            {
+                "name": "goal",
+                "description": "The external asset search, cache, or import goal.",
+                "required": True,
+            }
+        ],
+        "template": (
+            "Handle this Blender external asset task through the async job workflow: {goal}\n\n"
+            "Use list_poly_haven_categories, search_poly_haven_assets, inspect_poly_haven_asset_files, "
+            "or search_sketchfab_models for discovery. For any download/cache or import request, call "
+            "start_external_asset_download first, poll get_external_asset_job_status until completed or failed, "
+            "then call start_external_asset_import_job for scene import and poll "
+            "get_external_asset_import_job_status until completed or failed. Use cancel_external_asset_job or "
+            "cancel_external_asset_import_job if the user asks to stop. Treat download_poly_haven_asset, "
+            "import_poly_haven_asset, download_sketchfab_model, import_sketchfab_model, and "
+            "import_external_asset_job_result as synchronous fallback/debug paths, not the normal client workflow."
         ),
     },
     "draft_approved_script": {
@@ -947,9 +1035,13 @@ def _score_tool_match(tool, query):
     category = _tool_category(tool)
     animation_query = _contains_any_phrase(normalized_query, ANIMATION_ROUTE_TERMS)
     explicit_script_query = _contains_any_phrase(normalized_query, SCRIPT_EXPLICIT_TERMS)
+    external_asset_query = _contains_any_phrase(normalized_query, EXTERNAL_ASSET_ROUTE_TERMS)
+    explicit_direct_asset_query = _contains_any_phrase(normalized_query, EXTERNAL_ASSET_DIRECT_TERMS)
     matched_terms = [term for term in terms if term in text]
     if not matched_terms:
         if animation_query and (name in ANIMATION_ROUTE_TOOLS or category == "animation"):
+            score = 25
+        elif external_asset_query and (name in EXTERNAL_ASSET_WORKFLOW_TOOLS or category == "external_assets"):
             score = 25
         else:
             return None
@@ -983,6 +1075,23 @@ def _score_tool_match(tool, query):
             score -= 1000
     elif name == "draft_script" and not explicit_script_query:
         score -= 100
+    if external_asset_query:
+        if name == "start_external_asset_download":
+            score += 1200
+        elif name == "start_external_asset_import_job":
+            score += 1050
+        elif name == "get_external_asset_job_status":
+            score += 900
+        elif name == "get_external_asset_import_job_status":
+            score += 850
+        elif name in {"search_poly_haven_assets", "search_sketchfab_models", "inspect_poly_haven_asset_files"}:
+            score += 600
+        elif name in EXTERNAL_ASSET_WORKFLOW_TOOLS:
+            score += 350
+        elif category == "external_assets":
+            score += 150
+        if name in EXTERNAL_ASSET_DIRECT_TOOLS and not explicit_direct_asset_query:
+            score -= 900
     return score
 
 
@@ -1194,6 +1303,10 @@ class BlenderMCPServer:
                 "Start the bridge inside Blender before using scene tools. By default, this server exposes a compact "
                 "tool surface; use search_blender_tools, get_blender_tool_schema, and invoke_blender_tool for the full "
                 "Blender helper catalog. Mutating tools affect the live scene and may leave preview changes pending. "
+                "For external asset downloads/imports, use the async path by default: start_external_asset_download, "
+                "poll get_external_asset_job_status, then start_external_asset_import_job and poll "
+                "get_external_asset_import_job_status. Treat direct provider download/import tools as synchronous "
+                "fallbacks for explicit direct/debug use. "
                 "If a bridge_timeout occurs, treat it as recoverable: wait the returned poll_after_seconds, call "
                 "blender_bridge_status, then inspect visual evidence resources or audit logs before rerunning work. "
                 "Session-wide external script trust cannot auto-run persistent simulation/cache bake or free operators; "

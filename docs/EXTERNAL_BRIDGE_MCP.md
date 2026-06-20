@@ -242,24 +242,23 @@ Official Blender Lab parity helpers are exposed as direct tools:
 
 External asset helpers are provider-neutral bridge tools. They do not add provider API keys to Blender preferences; Sketchfab download/import takes a per-call `api_token` or reads a Sketchfab-specific token from `SKETCHFAB_API_TOKEN` or `BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN` in the MCP server environment.
 
+For real MCP clients, the normal route is discovery, `start_external_asset_download`, `get_external_asset_job_status` until completion, `start_external_asset_import_job` for scene import, then `get_external_asset_import_job_status` until completion. Direct provider download/import tools remain available as synchronous fallback/debug paths, but clients should not choose them for ordinary asset-import requests.
+
 - `list_poly_haven_categories` lists Poly Haven category slugs for HDRIs, textures, and models.
 - `search_poly_haven_assets` searches Poly Haven's CC0 catalog and returns source/file API URLs.
 - `inspect_poly_haven_asset_files` fetches Poly Haven's per-asset file tree with resolutions, formats, sizes, hashes, and dependency includes.
-- `download_poly_haven_asset` caches selected HDRI, texture, or model files and verifies MD5/size metadata when available.
-- `import_poly_haven_asset` downloads/caches and leaves a preview change: HDRIs create a new world, textures create/assign a material, and models import through Blender's importers.
 - `search_sketchfab_models` searches Sketchfab public models and returns viewer, author, license, thumbnail, and downloadability metadata.
-- `download_sketchfab_model` uses Sketchfab's authenticated download endpoint to cache and extract a GLTF archive.
-- `import_sketchfab_model` imports the extracted Sketchfab GLTF/GLB into Blender preview.
 - `start_external_asset_download` starts a background Poly Haven or Sketchfab cache job and returns a pollable job id.
 - `get_external_asset_job_status` reports download progress, cached manifest paths, logs, and completion state.
 - `start_external_asset_import_job` queues a completed asset job or cached manifest for Blender main-thread import, then `get_external_asset_import_job_status` reports queued/running/completed state.
 - `cancel_external_asset_job`, `cancel_external_asset_import_job`, and `delete_external_asset_job` handle cancellation and job cleanup.
 - `get_external_asset_cache_diagnostics` reports cached/imported providers, licenses, source URLs, file counts, cache paths, and imported Blender data-block names.
 - `prune_external_asset_cache` removes old or oversized cached assets, with dry-run mode by default.
+- `download_poly_haven_asset`, `import_poly_haven_asset`, `download_sketchfab_model`, `import_sketchfab_model`, and `import_external_asset_job_result` are synchronous fallback/debug paths for explicit direct use.
 
 ## Prompts
 
-The MCP server exposes prompt templates for common safe workflows: scene inspection, reversible scene changes, advanced animation workflow planning, and approval-gated Python drafts.
+The MCP server exposes prompt templates for common safe workflows: scene inspection, reversible scene changes, advanced animation workflow planning, async external asset import, and approval-gated Python drafts.
 
 ## Safety
 
