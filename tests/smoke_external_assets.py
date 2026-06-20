@@ -189,6 +189,12 @@ def _md5_bytes(value):
     return hashlib.md5(value).hexdigest()
 
 
+def _write_zip(path, entries):
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, body in entries:
+            archive.writestr(name, body)
+
+
 def main():
     original_fetch_json = external_assets._fetch_json
     original_fetch_json_with_headers = external_assets._fetch_json_with_headers
@@ -394,6 +400,56 @@ def main():
             external_assets.urllib.request.urlopen = original_urlopen
             external_assets.DOWNLOAD_RETRY_BACKOFF_SECONDS = original_backoff
             external_assets._download_file = _fake_download_file
+
+        unsafe_zip = os.path.join(cache_dir, "unsafe.zip")
+        _write_zip(unsafe_zip, [("../evil.gltf", "{}")])
+        unsafe_extract = external_assets._safe_extract_zip(unsafe_zip, os.path.join(cache_dir, "unsafe-out"))
+        assert unsafe_extract["ok"] is False, unsafe_extract
+        assert "Unsafe archive member path" in unsafe_extract["message"], unsafe_extract
+
+        original_zip_limits = {
+            "MAX_ZIP_MEMBER_COUNT": external_assets.MAX_ZIP_MEMBER_COUNT,
+            "MAX_ZIP_EXTRACTED_BYTES": external_assets.MAX_ZIP_EXTRACTED_BYTES,
+            "MAX_ZIP_MEMBER_BYTES": external_assets.MAX_ZIP_MEMBER_BYTES,
+            "MAX_ZIP_PATH_DEPTH": external_assets.MAX_ZIP_PATH_DEPTH,
+            "MAX_ZIP_COMPRESSION_RATIO": external_assets.MAX_ZIP_COMPRESSION_RATIO,
+            "MIN_ZIP_RATIO_CHECK_BYTES": external_assets.MIN_ZIP_RATIO_CHECK_BYTES,
+        }
+        try:
+            member_count_zip = os.path.join(cache_dir, "too-many.zip")
+            _write_zip(member_count_zip, [("a.txt", "a"), ("b.txt", "b")])
+            external_assets.MAX_ZIP_MEMBER_COUNT = 1
+            too_many = external_assets._safe_extract_zip(member_count_zip, os.path.join(cache_dir, "too-many-out"))
+            assert too_many["ok"] is False, too_many
+            assert too_many["member_count"] == 2, too_many
+
+            total_size_zip = os.path.join(cache_dir, "too-large-total.zip")
+            _write_zip(total_size_zip, [("scene.gltf", "12345")])
+            external_assets.MAX_ZIP_MEMBER_COUNT = original_zip_limits["MAX_ZIP_MEMBER_COUNT"]
+            external_assets.MAX_ZIP_EXTRACTED_BYTES = 4
+            too_large_total = external_assets._safe_extract_zip(total_size_zip, os.path.join(cache_dir, "too-large-total-out"))
+            assert too_large_total["ok"] is False, too_large_total
+            assert too_large_total["total_uncompressed_size"] == 5, too_large_total
+
+            deep_zip = os.path.join(cache_dir, "too-deep.zip")
+            _write_zip(deep_zip, [("a/b/scene.gltf", "{}")])
+            external_assets.MAX_ZIP_EXTRACTED_BYTES = original_zip_limits["MAX_ZIP_EXTRACTED_BYTES"]
+            external_assets.MAX_ZIP_PATH_DEPTH = 2
+            too_deep = external_assets._safe_extract_zip(deep_zip, os.path.join(cache_dir, "too-deep-out"))
+            assert too_deep["ok"] is False, too_deep
+            assert "too deep" in too_deep["message"], too_deep
+
+            ratio_zip = os.path.join(cache_dir, "too-compressed.zip")
+            _write_zip(ratio_zip, [("scene.gltf", "0" * 200)])
+            external_assets.MAX_ZIP_PATH_DEPTH = original_zip_limits["MAX_ZIP_PATH_DEPTH"]
+            external_assets.MIN_ZIP_RATIO_CHECK_BYTES = 1
+            external_assets.MAX_ZIP_COMPRESSION_RATIO = 2
+            too_compressed = external_assets._safe_extract_zip(ratio_zip, os.path.join(cache_dir, "too-compressed-out"))
+            assert too_compressed["ok"] is False, too_compressed
+            assert "compression ratio" in too_compressed["message"], too_compressed
+        finally:
+            for key, value in original_zip_limits.items():
+                setattr(external_assets, key, value)
 
         tool_names = {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         for name in (

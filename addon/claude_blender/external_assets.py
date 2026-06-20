@@ -34,6 +34,12 @@ SKETCHFAB_BASE_URL = "https://api.sketchfab.com/v3"
 USER_AGENT = "BlenderAgentBridge/0.1 (+https://github.com/CallMeJones/blender-agent-bridge)"
 DOWNLOAD_RETRY_COUNT = 2
 DOWNLOAD_RETRY_BACKOFF_SECONDS = 0.5
+MAX_ZIP_MEMBER_COUNT = 20_000
+MAX_ZIP_EXTRACTED_BYTES = 4 * 1024 * 1024 * 1024
+MAX_ZIP_MEMBER_BYTES = 2 * 1024 * 1024 * 1024
+MAX_ZIP_PATH_DEPTH = 32
+MAX_ZIP_COMPRESSION_RATIO = 200
+MIN_ZIP_RATIO_CHECK_BYTES = 10 * 1024 * 1024
 POLY_HAVEN_LICENSE = "CC0"
 SKETCHFAB_TOKEN_ENV_VAR = "SKETCHFAB_API_TOKEN"
 SKETCHFAB_BRIDGE_TOKEN_ENV_VAR = "BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN"
@@ -1374,19 +1380,80 @@ def get_sketchfab_model_download_info(
     }
 
 
+def _zip_member_is_symlink(member):
+    mode = (int(getattr(member, "external_attr", 0) or 0) >> 16) & 0o170000
+    return mode == 0o120000
+
+
+def _zip_member_depth(filename):
+    return len([part for part in str(filename or "").replace("\\", "/").split("/") if part and part != "."])
+
+
 def _safe_extract_zip(zip_path, destination):
     os.makedirs(destination, exist_ok=True)
     extracted = []
     destination_abs = os.path.abspath(destination)
     with zipfile.ZipFile(zip_path, "r") as archive:
-        for member in archive.infolist():
+        members = archive.infolist()
+        if len(members) > MAX_ZIP_MEMBER_COUNT:
+            return {
+                "ok": False,
+                "message": "Archive has too many members",
+                "member_count": len(members),
+                "max_member_count": MAX_ZIP_MEMBER_COUNT,
+            }
+        total_uncompressed = 0
+        for member in members:
+            if _zip_member_is_symlink(member):
+                return {"ok": False, "message": f"Archive member is a symlink: {member.filename}"}
+            if _zip_member_depth(member.filename) > MAX_ZIP_PATH_DEPTH:
+                return {
+                    "ok": False,
+                    "message": f"Archive member path is too deep: {member.filename}",
+                    "max_path_depth": MAX_ZIP_PATH_DEPTH,
+                }
+            if int(member.file_size or 0) > MAX_ZIP_MEMBER_BYTES:
+                return {
+                    "ok": False,
+                    "message": f"Archive member is too large: {member.filename}",
+                    "member_size": int(member.file_size or 0),
+                    "max_member_size": MAX_ZIP_MEMBER_BYTES,
+                }
+            total_uncompressed += int(member.file_size or 0)
+            if total_uncompressed > MAX_ZIP_EXTRACTED_BYTES:
+                return {
+                    "ok": False,
+                    "message": "Archive uncompressed size is too large",
+                    "total_uncompressed_size": total_uncompressed,
+                    "max_total_uncompressed_size": MAX_ZIP_EXTRACTED_BYTES,
+                }
+            compressed_size = int(member.compress_size or 0)
+            if compressed_size <= 0 and int(member.file_size or 0) > 0:
+                return {
+                    "ok": False,
+                    "message": f"Archive member has invalid compressed size: {member.filename}",
+                    "member_size": int(member.file_size or 0),
+                    "compressed_size": compressed_size,
+                }
+            if (
+                compressed_size > 0
+                and int(member.file_size or 0) >= MIN_ZIP_RATIO_CHECK_BYTES
+                and (int(member.file_size or 0) / compressed_size) > MAX_ZIP_COMPRESSION_RATIO
+            ):
+                return {
+                    "ok": False,
+                    "message": f"Archive member compression ratio is too high: {member.filename}",
+                    "member_size": int(member.file_size or 0),
+                    "compressed_size": compressed_size,
+                    "max_compression_ratio": MAX_ZIP_COMPRESSION_RATIO,
+                }
             target = os.path.abspath(os.path.join(destination_abs, member.filename))
             if not (target == destination_abs or target.startswith(destination_abs + os.sep)):
                 return {"ok": False, "message": f"Unsafe archive member path: {member.filename}"}
             archive.extract(member, destination_abs)
             if not member.is_dir():
                 extracted.append(target)
-    return {"ok": True, "extracted_files": extracted}
+    return {"ok": True, "extracted_files": extracted, "total_uncompressed_size": total_uncompressed}
 
 
 def _find_importable_model_file(directory):
