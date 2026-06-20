@@ -36,13 +36,24 @@ def main():
         assert "capture_object_inspection_renders" in bundle["available_tools"]
         assert "get_blend_file_diagnostics" in bundle["available_tools"]
         assert "get_workspace_layout" in bundle["available_tools"]
+        assert "get_visual_evidence_resources" in bundle["available_tools"]
         assert "render_scene_thumbnail" in bundle["available_tools"]
         assert "start_render_job" in bundle["available_tools"]
         assert "get_render_job_status" in bundle["available_tools"]
         assert "cancel_render_job" in bundle["available_tools"]
         assert "assemble_render_job_video" in bundle["available_tools"]
         assert "validate_render_job_output" in bundle["available_tools"]
+        assert "list_poly_haven_categories" in bundle["available_tools"]
+        assert "search_poly_haven_assets" in bundle["available_tools"]
+        assert "inspect_poly_haven_asset_files" in bundle["available_tools"]
+        assert "download_poly_haven_asset" in bundle["available_tools"]
+        assert "import_poly_haven_asset" in bundle["available_tools"]
+        assert "search_sketchfab_models" in bundle["available_tools"]
+        assert "download_sketchfab_model" in bundle["available_tools"]
+        assert "import_sketchfab_model" in bundle["available_tools"]
+        assert "get_external_asset_cache_diagnostics" in bundle["available_tools"]
         assert "jump_to_workspace" in bundle["available_tools"]
+        assert "set_viewport_view" in bundle["available_tools"]
         assert "focus_object_in_viewport" in bundle["available_tools"]
         assert "inspect_simulation_bake" in bundle["available_tools"]
         assert "stage_persistent_simulation_bake" in bundle["available_tools"]
@@ -51,13 +62,24 @@ def main():
         assert "capture_object_inspection_renders" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "get_blend_file_diagnostics" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "get_workspace_layout" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "get_visual_evidence_resources" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "render_scene_thumbnail" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "start_render_job" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "get_render_job_status" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "cancel_render_job" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "assemble_render_job_video" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "validate_render_job_output" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "list_poly_haven_categories" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "search_poly_haven_assets" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "inspect_poly_haven_asset_files" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "download_poly_haven_asset" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "import_poly_haven_asset" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "search_sketchfab_models" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "download_sketchfab_model" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "import_sketchfab_model" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "get_external_asset_cache_diagnostics" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "jump_to_workspace" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "set_viewport_view" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "focus_object_in_viewport" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "inspect_simulation_bake" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "stage_persistent_simulation_bake" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
@@ -66,15 +88,26 @@ def main():
         assert "capture_object_inspection_renders" in bridge_protocol.TOOL_CONTRACTS
         assert "get_blend_file_diagnostics" in bridge_protocol.TOOL_CONTRACTS
         assert "get_workspace_layout" in bridge_protocol.TOOL_CONTRACTS
+        assert "get_visual_evidence_resources" in bridge_protocol.TOOL_CONTRACTS
         assert "render_scene_thumbnail" in bridge_protocol.TOOL_CONTRACTS
         assert "start_render_job" in bridge_protocol.TOOL_CONTRACTS
         assert "get_render_job_status" in bridge_protocol.TOOL_CONTRACTS
         assert "cancel_render_job" in bridge_protocol.TOOL_CONTRACTS
         assert "assemble_render_job_video" in bridge_protocol.TOOL_CONTRACTS
         assert "validate_render_job_output" in bridge_protocol.TOOL_CONTRACTS
+        assert "list_poly_haven_categories" in bridge_protocol.TOOL_CONTRACTS
+        assert "search_poly_haven_assets" in bridge_protocol.TOOL_CONTRACTS
+        assert "inspect_poly_haven_asset_files" in bridge_protocol.TOOL_CONTRACTS
+        assert "download_poly_haven_asset" in bridge_protocol.TOOL_CONTRACTS
+        assert "import_poly_haven_asset" in bridge_protocol.TOOL_CONTRACTS
+        assert "search_sketchfab_models" in bridge_protocol.TOOL_CONTRACTS
+        assert "download_sketchfab_model" in bridge_protocol.TOOL_CONTRACTS
+        assert "import_sketchfab_model" in bridge_protocol.TOOL_CONTRACTS
+        assert "get_external_asset_cache_diagnostics" in bridge_protocol.TOOL_CONTRACTS
         assert "inspect_simulation_bake" in bridge_protocol.TOOL_CONTRACTS
         assert "stage_persistent_simulation_bake" in bridge_protocol.TOOL_CONTRACTS
         assert "jump_to_workspace" in bridge_protocol.TOOL_CONTRACTS
+        assert "set_viewport_view" in bridge_protocol.TOOL_CONTRACTS
         assert "focus_object_in_viewport" in bridge_protocol.TOOL_CONTRACTS
 
         captured = json.loads(tool_dispatcher.execute_tool(bpy.context, "capture_viewport", {"max_bytes": 512 * 1024}))
@@ -113,6 +146,9 @@ def main():
         jump = json.loads(tool_dispatcher.execute_tool(bpy.context, "jump_to_workspace", {"workspace_name": "Layout"}))
         assert jump["ok"] is False, jump
         assert jump["ui_available"] is False, jump
+        view_nav = json.loads(tool_dispatcher.execute_tool(bpy.context, "set_viewport_view", {"view": "front"}))
+        assert view_nav["ok"] is False, view_nav
+        assert view_nav["ui_available"] is False, view_nav
 
         original_has_ui_context = viewport_capture.has_ui_context
         original_capture_viewport_to_file = viewport_capture.capture_viewport_to_file
@@ -283,6 +319,16 @@ def main():
         )
         assert thumbnail_resource["mimeType"] == "image/png", thumbnail_resource
         assert thumbnail_resource["blob"], thumbnail_resource
+        evidence = json.loads(
+            tool_dispatcher.execute_tool(bpy.context, "get_visual_evidence_resources", {"include_unavailable": False})
+        )
+        assert evidence["ok"] is True, evidence
+        kinds = {item["kind"] for item in evidence["resources"]}
+        assert {"inspection_render", "render_thumbnail"}.issubset(kinds), evidence
+        for item in evidence["resources"]:
+            assert item["available"] is True, item
+            assert item["metadata_uri"].startswith("blender://"), item
+            assert item["resource_uris"], item
         latest_render = inspection_render.latest_inspection_render_metadata(
             capture_dir=render_metadata["capture_dir"],
             context=bpy.context,

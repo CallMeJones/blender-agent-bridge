@@ -6,11 +6,12 @@ name = "Blender Agent Bridge"
 tagline = "Safe scene bridge for external AI agents"
 maintainer = "Michael"
 type = "add-on"
+website = "https://github.com/CallMeJones/blender-agent-bridge"
 blender_version_min = "5.1.0"
 license = [
   "SPDX:GPL-3.0-or-later",
 ]
 
 [permissions]
-network = "Fetch Blender docs; expose optional localhost MCP bridge"
-files = "Docs, captures, checkpoints, transcripts, and audit logs"
+network = "Docs, asset downloads, and localhost MCP bridge"
+files = "Docs, asset cache, captures, checkpoints, logs"

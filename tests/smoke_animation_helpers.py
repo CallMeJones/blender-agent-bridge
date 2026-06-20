@@ -29,7 +29,9 @@ ANIMATION_TOOLS = {
     "set_pose_hold",
     "set_rig_pose_hold",
     "set_rig_custom_property_keyframes",
+    "get_rig_pose_library_details",
     "apply_rig_pose_from_action",
+    "apply_rig_pose_marker",
     "apply_rig_action_clip",
     "offset_rig_limb_controls",
     "create_motion_arc",
@@ -1154,6 +1156,42 @@ def main():
         ), ikfk_plan
         assert rig_targeting["pose_library_review_required"] is True, ikfk_plan
         assert rig_targeting["planning_notes"], ikfk_plan
+        pose_library_details = _execute(
+            context,
+            "get_rig_pose_library_details",
+            {
+                "armature_name": ikfk_rig.name,
+                "bone_names": ["CTRL_IK_Hand", "CTRL_Pole_Elbow"],
+                "max_actions": 10,
+            },
+        )
+        pose_candidates = {item["name"]: item for item in pose_library_details["candidates"]}
+        assert pose_action.name in pose_candidates, pose_library_details
+        assert pose_candidates[pose_action.name]["applicable"] is True, pose_library_details
+        assert pose_candidates[pose_action.name]["matched_bone_count"] >= 1, pose_library_details
+        assert any(
+            call["tool"] == "apply_rig_pose_marker"
+            and call["arguments"]["pose_marker"] == "Left Hand Contact Repair"
+            for call in pose_library_details["suggested_tool_calls"]
+        ), pose_library_details
+        marker_apply = _execute(
+            context,
+            "apply_rig_pose_marker",
+            {
+                "armature_name": ikfk_rig.name,
+                "pose_marker": "Left Hand Contact Repair",
+                "target_frame": 14,
+                "hold_frames": 2,
+                "bone_names": ["CTRL_IK_Hand"],
+                "paths": ["location"],
+            },
+        )
+        assert marker_apply["ok"] is True, marker_apply
+        assert marker_apply["source_action"] == pose_action.name, marker_apply
+        assert marker_apply["resolved_source_action"] == pose_action.name, marker_apply
+        assert marker_apply["pose_marker"] == "Left Hand Contact Repair", marker_apply
+        assert marker_apply["applied_bones"][0]["bone"] == "CTRL_IK_Hand", marker_apply
+        assert marker_apply["target_frame"] == 14, marker_apply
         ikfk_loop = _execute(
             context,
             "run_animation_repair_loop",

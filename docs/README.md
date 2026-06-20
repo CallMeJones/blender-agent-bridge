@@ -2,6 +2,11 @@
 
 Start with the top-level `README.md`, then use these deeper notes for development, safety, and external MCP setup.
 
+## User And Release Guides
+
+- [INSTALL_FROM_GITHUB.md](INSTALL_FROM_GITHUB.md) - GitHub remote-repository install, manual release ZIP fallback, update steps, troubleshooting, and maintainer release smoke.
+- [RELEASE.md](RELEASE.md) - release build, GitHub Actions, GitHub Pages, and verification checklist.
+
 ## Current Implementation Notes
 
 - Viewport captures are exposed to MCP clients through `blender://captures/latest`, `blender://captures/latest/metadata`, and exact `blender://captures/{capture_id}` resources.

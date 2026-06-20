@@ -11,7 +11,7 @@ import uuid
 
 import bpy
 
-from . import viewport_capture
+from . import inspection_render, playblast_capture, render_jobs, viewport_capture
 
 
 LATEST_RENDER_THUMBNAIL_URI = "blender://render-thumbnails/latest"
@@ -112,6 +112,119 @@ def _write_metadata(metadata):
     with open(path, "w", encoding="utf-8", newline="\n") as handle:
         json.dump(metadata, handle, indent=2, sort_keys=True)
     return path
+
+
+def _compact_path_info(path):
+    path = str(path or "")
+    exists = bool(path and os.path.isfile(path))
+    return {
+        "path": path,
+        "exists": exists,
+        "size_bytes": os.path.getsize(path) if exists else 0,
+    }
+
+
+def _visual_resource_entry(kind, metadata):
+    metadata = dict(metadata or {})
+    available = bool(metadata.get("available"))
+    resource_uris = []
+    metadata_uri = metadata.get("metadata_uri") or ""
+    resource_uri = metadata.get("resource_uri") or metadata.get("exact_resource_uri") or ""
+    if resource_uri:
+        resource_uris.append(resource_uri)
+    if metadata.get("exact_resource_uri") and metadata.get("exact_resource_uri") not in resource_uris:
+        resource_uris.append(metadata["exact_resource_uri"])
+    if kind == "playblast":
+        for frame in metadata.get("frames") or []:
+            if frame.get("resource_uri"):
+                resource_uris.append(frame["resource_uri"])
+    elif kind == "inspection_render":
+        for image in metadata.get("images") or []:
+            if image.get("resource_uri"):
+                resource_uris.append(image["resource_uri"])
+    elif kind == "render_job":
+        for key in ("newest_frame_resource_uri", "log_resource_uri", "video_resource_uri"):
+            value = metadata.get(key) or ""
+            if value:
+                resource_uris.append(value)
+    return {
+        "kind": kind,
+        "available": available,
+        "id": (
+            metadata.get("capture_id")
+            or metadata.get("playblast_id")
+            or metadata.get("render_id")
+            or metadata.get("thumbnail_id")
+            or metadata.get("job_id")
+            or ""
+        ),
+        "metadata_uri": metadata_uri,
+        "latest_metadata_uri": metadata.get("latest_metadata_uri") or metadata_uri,
+        "resource_uris": resource_uris[:80],
+        "path": metadata.get("path") or metadata.get("newest_frame_path") or metadata.get("video_path") or "",
+        "path_info": _compact_path_info(metadata.get("path") or metadata.get("newest_frame_path") or metadata.get("video_path") or ""),
+        "status": metadata.get("status") or "",
+        "note": metadata.get("note") or metadata.get("message") or "",
+        "created_at": float(metadata.get("created_at") or 0.0),
+        "storage_scope": metadata.get("storage_scope") or "",
+        "project_id": metadata.get("project_id") or "",
+        "session_id": metadata.get("session_id") or "",
+        "summary": {
+            "frame_count": int(metadata.get("frame_count") or len(metadata.get("frames") or []) or 0),
+            "image_count": int(metadata.get("image_count") or len(metadata.get("images") or []) or 0),
+            "size_bytes": int(metadata.get("size_bytes") or metadata.get("video_size_bytes") or 0),
+            "width": int(metadata.get("width") or 0),
+            "height": int(metadata.get("height") or 0),
+        },
+    }
+
+
+def get_visual_evidence_resources(context, *, include_unavailable=True, capture_dir=None):
+    """Return a compact inventory of latest visual/render evidence resources."""
+
+    entries = [
+        _visual_resource_entry(
+            "viewport_capture",
+            viewport_capture.latest_capture_metadata(capture_dir, context=context, preferred_dir=capture_dir),
+        ),
+        _visual_resource_entry(
+            "playblast",
+            playblast_capture.latest_playblast_metadata(capture_dir, context=context, preferred_dir=capture_dir),
+        ),
+        _visual_resource_entry(
+            "inspection_render",
+            inspection_render.latest_inspection_render_metadata(capture_dir, context=context, preferred_dir=capture_dir),
+        ),
+        _visual_resource_entry(
+            "render_thumbnail",
+            latest_render_thumbnail_metadata(capture_dir, context=context, preferred_dir=capture_dir),
+        ),
+        _visual_resource_entry(
+            "render_job",
+            render_jobs.latest_render_job_metadata(capture_dir, context=context, preferred_dir=capture_dir),
+        ),
+    ]
+    if not include_unavailable:
+        entries = [entry for entry in entries if entry["available"]]
+    latest_available = [entry for entry in entries if entry["available"]]
+    latest_available.sort(key=lambda entry: entry.get("created_at", 0.0), reverse=True)
+    return {
+        "ok": True,
+        "message": "Visual evidence resources collected",
+        "available_count": len(latest_available),
+        "resource_count": len(entries),
+        "latest_available": latest_available[0] if latest_available else None,
+        "resources": entries,
+        "resource_templates": [
+            "blender://captures/latest",
+            "blender://captures/latest/metadata",
+            "blender://playblasts/latest/metadata",
+            "blender://inspection-renders/latest/metadata",
+            "blender://render-thumbnails/latest",
+            "blender://render-thumbnails/latest/metadata",
+            "blender://render-jobs/latest/metadata",
+        ],
+    }
 
 
 def _metadata_candidates(capture_dir=None, *, context=None, preferred_dir=None):
@@ -528,6 +641,107 @@ def _first_view3d_area(context):
         if region:
             return window, area, region
     return window, None, None
+
+
+def _region_3d_for_area(area):
+    space = getattr(getattr(area, "spaces", None), "active", None)
+    region_3d = getattr(space, "region_3d", None)
+    return space, region_3d
+
+
+def _vec(values, length=3):
+    try:
+        return [round(float(values[index]), 5) for index in range(length)]
+    except Exception:
+        return []
+
+
+def _viewport_area_state(area):
+    space, region_3d = _region_3d_for_area(area)
+    if not space:
+        return {}
+    state = {
+        "area_type": getattr(area, "type", ""),
+        "space_type": getattr(space, "type", ""),
+        "shading_type": getattr(getattr(space, "shading", None), "type", ""),
+        "overlay_visible": bool(getattr(getattr(space, "overlay", None), "show_overlays", False)),
+        "lens": round(float(getattr(space, "lens", 0.0) or 0.0), 5),
+        "clip_start": round(float(getattr(space, "clip_start", 0.0) or 0.0), 5),
+        "clip_end": round(float(getattr(space, "clip_end", 0.0) or 0.0), 5),
+    }
+    if region_3d:
+        state.update(
+            {
+                "view_perspective": getattr(region_3d, "view_perspective", ""),
+                "view_location": _vec(getattr(region_3d, "view_location", []), 3),
+                "view_distance": round(float(getattr(region_3d, "view_distance", 0.0) or 0.0), 5),
+                "view_rotation_quaternion": _vec(getattr(region_3d, "view_rotation", []), 4),
+                "is_perspective": bool(getattr(region_3d, "is_perspective", False)),
+            }
+        )
+    return state
+
+
+def set_viewport_view(context, *, view="front", frame_object_name="", use_orthographic=True):
+    view = str(view or "front").strip().lower()
+    frame_object_name = str(frame_object_name or "").strip()
+    axis_map = {
+        "front": "FRONT",
+        "back": "BACK",
+        "left": "LEFT",
+        "right": "RIGHT",
+        "top": "TOP",
+        "bottom": "BOTTOM",
+    }
+    if view not in set(axis_map) | {"camera", "user"}:
+        return {
+            "ok": False,
+            "message": "view must be one of front, back, left, right, top, bottom, camera, or user",
+            "view": view,
+        }
+    window, area, region = _first_view3d_area(context)
+    if not window or not area or not region:
+        return {
+            "ok": False,
+            "message": "Viewport navigation requires an interactive Blender VIEW_3D area",
+            "ui_available": False,
+            "view": view,
+        }
+    obj = bpy.data.objects.get(frame_object_name) if frame_object_name else None
+    if frame_object_name and obj is None:
+        return {"ok": False, "message": f"Object not found: {frame_object_name}", "view": view}
+    before = _viewport_area_state(area)
+    try:
+        selected = [obj] if obj else list(context.selected_objects)
+        active = obj or context.active_object
+        with context.temp_override(window=window, area=area, region=region, active_object=active, selected_objects=selected):
+            if view == "camera":
+                bpy.ops.view3d.view_camera()
+            elif view != "user":
+                bpy.ops.view3d.view_axis(type=axis_map[view], align_active=False)
+                if use_orthographic:
+                    space, region_3d = _region_3d_for_area(area)
+                    if region_3d:
+                        region_3d.view_perspective = "ORTHO"
+            if obj:
+                bpy.ops.view3d.view_selected(use_all_regions=False)
+    except Exception as exc:
+        return {
+            "ok": False,
+            "message": f"Viewport navigation failed: {type(exc).__name__}: {exc}",
+            "ui_available": True,
+            "view": view,
+            "before": before,
+        }
+    return {
+        "ok": True,
+        "message": f"Viewport set to {view}",
+        "ui_available": True,
+        "view": view,
+        "framed_object": getattr(obj, "name", ""),
+        "before": before,
+        "after": _viewport_area_state(area),
+    }
 
 
 def focus_object_in_viewport(context, *, object_name, select=True):

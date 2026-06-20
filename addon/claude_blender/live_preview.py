@@ -1736,6 +1736,10 @@ def revert(context):
             settings = bpy.data.particles.get(before["name"])
             if settings and settings.users == 0:
                 bpy.data.particles.remove(settings)
+        elif before.get("kind") == "image":
+            image = bpy.data.images.get(before["name"])
+            if image and image.users == 0:
+                bpy.data.images.remove(image)
         elif before.get("kind") == "world":
             world = bpy.data.worlds.get(before["name"])
             if world and world.users == 0:

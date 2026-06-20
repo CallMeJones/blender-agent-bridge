@@ -69,7 +69,7 @@ See [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), and [docs/SAFETY_MODEL
 
 ## Install From GitHub
 
-Best update-friendly path:
+Best update-friendly path: add the GitHub Pages extension repository in Blender.
 
 1. In Blender, open `Edit > Preferences > Get Extensions`.
 2. Open the repositories menu, choose `Add Remote Repository`, and enter:
@@ -82,7 +82,7 @@ Best update-friendly path:
 4. Enable `Blender Agent Bridge`.
 5. Open the 3D View sidebar, find `Agent Bridge`, then use `Start Bridge` and `Copy MCP`.
 
-Manual fallback:
+Manual fallback: download the packaged ZIP from the latest GitHub Release.
 
 1. Open the [latest GitHub release](https://github.com/CallMeJones/blender-agent-bridge/releases/latest).
 2. Download `claude_blender-<version>.zip` from the release assets.
@@ -90,6 +90,8 @@ Manual fallback:
 4. Enable `Blender Agent Bridge`, then use `Start Bridge` and `Copy MCP`.
 
 Do not install GitHub's generated "Source code" ZIP as the Blender extension. Use the release asset or the remote extension repository.
+
+See [docs/INSTALL_FROM_GITHUB.md](docs/INSTALL_FROM_GITHUB.md) for checksum verification, update steps, troubleshooting, and the maintainer release flow.
 
 ## How It Works
 
@@ -184,6 +186,7 @@ Run Blender-background smoke tests when Blender is available:
 ## Documentation
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - architecture and subsystem overview.
+- [docs/INSTALL_FROM_GITHUB.md](docs/INSTALL_FROM_GITHUB.md) - GitHub install, update, and release flow.
 - [docs/CONTEXT_AND_DOCS_ENGINE.md](docs/CONTEXT_AND_DOCS_ENGINE.md) - context planning, docs cache, visual evidence, and prompt budgeting.
 - [docs/LIVE_PREVIEW_LOOP.md](docs/LIVE_PREVIEW_LOOP.md) - reversible live helper transactions.
 - [docs/SAFETY_MODEL.md](docs/SAFETY_MODEL.md) - approval, preview, script, and bridge safety rules.

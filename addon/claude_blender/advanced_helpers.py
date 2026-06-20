@@ -2309,6 +2309,161 @@ def _pose_action_channels(action, armature, *, bone_names=None, paths=None):
     return channels, missing_bones
 
 
+def _action_pose_marker_summaries(action):
+    return [
+        {"name": marker.name, "frame": int(marker.frame)}
+        for marker in list(getattr(action, "pose_markers", []) or [])
+    ]
+
+
+def _rig_pose_action_candidate(action, armature, *, bone_names=None, paths=None):
+    channels, missing_bones = _pose_action_channels(action, armature, bone_names=bone_names, paths=paths)
+    bones = sorted({bone_name for bone_name, _path in channels})
+    channel_paths = sorted({path for _bone_name, path in channels})
+    frame_start, frame_end = _action_frame_range(action)
+    pose_markers = _action_pose_marker_summaries(action)
+    applicable = bool(channels)
+    likely_pose_library = bool(
+        pose_markers
+        or getattr(action, "asset_data", None)
+        or "pose" in action.name.lower()
+        or armature.name.lower() in action.name.lower()
+    )
+    return {
+        "name": action.name,
+        "applicable": applicable,
+        "likely_pose_library": likely_pose_library,
+        "asset_action": bool(getattr(action, "asset_data", None)),
+        "users": int(getattr(action, "users", 0) or 0),
+        "frame_range": [frame_start, frame_end] if frame_start is not None else [],
+        "pose_markers": pose_markers,
+        "matched_bones": bones,
+        "matched_bone_count": len(bones),
+        "matched_channel_paths": channel_paths,
+        "matched_channel_count": len(channels),
+        "missing_bone_names": missing_bones,
+    }
+
+
+def get_rig_pose_library_details(
+    context,
+    *,
+    armature_name="",
+    action_names=None,
+    bone_names=None,
+    paths=None,
+    max_actions=20,
+):
+    armature = _resolve_armature_for_pose_hold(context, armature_name)
+    if armature is None:
+        return {"ok": False, "message": "An armature object is required for rig pose-library details"}
+    requested_actions = [str(name) for name in action_names or [] if str(name).strip()]
+    missing_actions = []
+    if requested_actions:
+        actions = []
+        for name in requested_actions:
+            action = bpy.data.actions.get(name)
+            if action:
+                actions.append(action)
+            else:
+                missing_actions.append(name)
+    else:
+        actions = list(bpy.data.actions)
+    candidates = [
+        _rig_pose_action_candidate(action, armature, bone_names=bone_names, paths=paths)
+        for action in actions
+    ]
+    if not requested_actions:
+        candidates = [
+            item
+            for item in candidates
+            if item["applicable"] or item["likely_pose_library"]
+        ]
+    candidates.sort(
+        key=lambda item: (
+            item["applicable"],
+            item["matched_bone_count"],
+            bool(item["pose_markers"]),
+            item["asset_action"],
+            item["users"],
+        ),
+        reverse=True,
+    )
+    max_actions = max(1, min(100, int(max_actions or 20)))
+    candidates = candidates[:max_actions]
+    suggested_calls = []
+    for candidate in candidates:
+        if candidate["pose_markers"]:
+            for marker in candidate["pose_markers"][:8]:
+                suggested_calls.append(
+                    {
+                        "tool": "apply_rig_pose_marker",
+                        "arguments": {
+                            "armature_name": armature.name,
+                            "action_name": candidate["name"],
+                            "pose_marker": marker["name"],
+                            "target_frame": int(context.scene.frame_current),
+                        },
+                    }
+                )
+        if candidate["frame_range"]:
+            suggested_calls.append(
+                {
+                    "tool": "apply_rig_action_clip",
+                    "arguments": {
+                        "armature_name": armature.name,
+                        "action_name": candidate["name"],
+                        "frame_start": int(context.scene.frame_current),
+                    },
+                }
+            )
+    return {
+        "ok": True,
+        "message": f"Found {len(candidates)} rig pose/action candidate(s)",
+        "armature": armature.name,
+        "candidates": candidates,
+        "candidate_count": len(candidates),
+        "missing_action_names": missing_actions,
+        "suggested_tool_calls": suggested_calls[:50],
+    }
+
+
+def _resolve_pose_marker_source_action(armature, *, action_name="", pose_marker="", bone_names=None, paths=None):
+    action_name = str(action_name or "").strip()
+    pose_marker = str(pose_marker or "").strip()
+    if action_name:
+        action = bpy.data.actions.get(action_name)
+        if action is None:
+            return None, [], f"Action not found: {action_name}"
+        candidate = _rig_pose_action_candidate(action, armature, bone_names=bone_names, paths=paths)
+        return action, [candidate], ""
+    if not pose_marker:
+        return None, [], "action_name or pose_marker is required"
+    candidates = []
+    for action in bpy.data.actions:
+        frame, marker_name, marker_error = _action_pose_marker_frame(action, pose_marker)
+        if marker_error or frame is None:
+            continue
+        candidate = _rig_pose_action_candidate(action, armature, bone_names=bone_names, paths=paths)
+        if not candidate["applicable"]:
+            continue
+        candidate["resolved_marker"] = marker_name
+        candidate["resolved_frame"] = int(frame)
+        candidates.append(candidate)
+    candidates.sort(
+        key=lambda item: (
+            item["matched_bone_count"],
+            item["matched_channel_count"],
+            item["asset_action"],
+            item["users"],
+        ),
+        reverse=True,
+    )
+    if not candidates:
+        return None, [], f"No applicable rig action has pose marker: {pose_marker}"
+    return bpy.data.actions.get(candidates[0]["name"]), candidates, ""
+
+
 def _prepare_rig_application_action(armature, source_action=None):
     current_action = armature.animation_data.action if armature.animation_data and armature.animation_data.action else None
     if source_action is not None and current_action == source_action:
@@ -2742,6 +2897,51 @@ def apply_rig_pose_from_action(
         "missing_bone_names": missing_bones,
         "transaction_id": transaction["id"],
     }
+
+
+def apply_rig_pose_marker(
+    context,
+    *,
+    armature_name="",
+    action_name="",
+    pose_marker="",
+    target_frame=None,
+    hold_frames=4,
+    bone_names=None,
+    paths=None,
+    key_pose=True,
+    interpolation="CONSTANT",
+    label="Apply rig pose marker",
+):
+    armature = _resolve_armature_for_pose_hold(context, armature_name)
+    if armature is None:
+        return {"ok": False, "message": "An armature object is required for rig pose-marker application"}
+    action, candidates, error = _resolve_pose_marker_source_action(
+        armature,
+        action_name=action_name,
+        pose_marker=pose_marker,
+        bone_names=bone_names,
+        paths=paths,
+    )
+    if error:
+        return {"ok": False, "message": error, "armature": armature.name, "candidates": candidates}
+    result = apply_rig_pose_from_action(
+        context,
+        armature_name=armature.name,
+        action_name=action.name,
+        pose_marker=pose_marker,
+        target_frame=target_frame,
+        hold_frames=hold_frames,
+        bone_names=bone_names,
+        paths=paths,
+        key_pose=key_pose,
+        interpolation=interpolation,
+        label=label,
+    )
+    if isinstance(result, dict):
+        result.setdefault("resolved_source_action", action.name)
+        result.setdefault("source_action_candidates", candidates[:10])
+    return result
 
 
 def apply_rig_action_clip(

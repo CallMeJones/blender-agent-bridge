@@ -9,7 +9,7 @@ import textwrap
 
 import bpy
 
-from . import animation_analysis, animation_brief, animation_workflow, advanced_helpers, context_bundle, docs_index, inspection_render, lab_parity, live_preview, playblast_capture, preferences, render_jobs, script_runner, viewport_capture, world_model
+from . import animation_analysis, animation_brief, animation_workflow, advanced_helpers, context_bundle, docs_index, external_assets, inspection_render, lab_parity, live_preview, playblast_capture, preferences, render_jobs, script_runner, viewport_capture, world_model
 
 
 def _float_list(values, length, default):
@@ -1051,6 +1051,7 @@ _REPAIR_LOOP_READ_ONLY_TOOLS = {
     "capture_animation_playblast",
     "capture_object_inspection_renders",
     "create_timing_chart",
+    "get_rig_pose_library_details",
     "get_rigging_details",
     "review_playblast_against_brief",
     "review_inspection_renders_against_brief",
@@ -1066,6 +1067,7 @@ _REPAIR_LOOP_DEFAULT_TOOLS = {
     "set_rig_pose_hold",
     "set_rig_custom_property_keyframes",
     "apply_rig_pose_from_action",
+    "apply_rig_pose_marker",
     "apply_rig_action_clip",
     "offset_rig_limb_controls",
     "add_breakdown_pose",
@@ -1135,6 +1137,11 @@ def _repair_operation_blocker(tool, tool_args):
             return "apply_rig_pose_from_action requires armature_name"
         if not tool_args.get("action_name"):
             return "apply_rig_pose_from_action requires action_name"
+    if tool == "apply_rig_pose_marker":
+        if not tool_args.get("armature_name"):
+            return "apply_rig_pose_marker requires armature_name"
+        if not (tool_args.get("action_name") or tool_args.get("pose_marker")):
+            return "apply_rig_pose_marker requires action_name or pose_marker"
     if tool == "apply_rig_action_clip":
         if not tool_args.get("armature_name"):
             return "apply_rig_action_clip requires armature_name"
@@ -2081,6 +2088,17 @@ def set_rig_custom_property_keyframes(context, args):
     )
 
 
+def get_rig_pose_library_details(context, args):
+    return advanced_helpers.get_rig_pose_library_details(
+        context,
+        armature_name=str(args.get("armature_name") or ""),
+        action_names=_name_list(args.get("action_names")),
+        bone_names=_name_list(args.get("bone_names")),
+        paths=_name_list(args.get("paths")),
+        max_actions=_bounded_int(args.get("max_actions"), 20, minimum=1, maximum=100),
+    )
+
+
 def apply_rig_pose_from_action(context, args):
     return advanced_helpers.apply_rig_pose_from_action(
         context,
@@ -2095,6 +2113,22 @@ def apply_rig_pose_from_action(context, args):
         key_pose=bool(args.get("key_pose", True)),
         interpolation=str(args.get("interpolation") or "CONSTANT"),
         label=args.get("label", "Apply rig pose from action"),
+    )
+
+
+def apply_rig_pose_marker(context, args):
+    return advanced_helpers.apply_rig_pose_marker(
+        context,
+        armature_name=str(args.get("armature_name") or ""),
+        action_name=str(args.get("action_name") or ""),
+        pose_marker=str(args.get("pose_marker") or ""),
+        target_frame=args.get("target_frame") if args.get("target_frame") is not None else args.get("frame"),
+        hold_frames=_bounded_int(args.get("hold_frames"), 4, minimum=0, maximum=60),
+        bone_names=_name_list(args.get("bone_names")),
+        paths=_name_list(args.get("paths")),
+        key_pose=bool(args.get("key_pose", True)),
+        interpolation=str(args.get("interpolation") or "CONSTANT"),
+        label=args.get("label", "Apply rig pose marker"),
     )
 
 
@@ -2650,10 +2684,28 @@ def get_workspace_layout(context, args):
     )
 
 
+def get_visual_evidence_resources(context, args):
+    prefs = preferences.get_preferences(context)
+    return lab_parity.get_visual_evidence_resources(
+        context,
+        include_unavailable=bool(args.get("include_unavailable", True)),
+        capture_dir=getattr(prefs, "capture_cache_dir", None),
+    )
+
+
 def jump_to_workspace(context, args):
     return lab_parity.jump_to_workspace(
         context,
         workspace_name=str(args.get("workspace_name") or args.get("name") or ""),
+    )
+
+
+def set_viewport_view(context, args):
+    return lab_parity.set_viewport_view(
+        context,
+        view=str(args.get("view") or "front"),
+        frame_object_name=str(args.get("frame_object_name") or args.get("object_name") or ""),
+        use_orthographic=bool(args.get("use_orthographic", True)),
     )
 
 
@@ -2758,6 +2810,100 @@ def search_blender_docs(context, args):
         str(args.get("query") or ""),
         cache_dir=getattr(prefs, "docs_cache_dir", None),
         local_first=bool(getattr(prefs, "local_docs_first", True)),
+    )
+
+
+def list_poly_haven_categories(context, args):
+    return external_assets.list_poly_haven_categories(
+        asset_type=str(args.get("asset_type") or "all"),
+        timeout=_bounded_int(args.get("timeout"), 15, minimum=1, maximum=60),
+    )
+
+
+def search_poly_haven_assets(context, args):
+    return external_assets.search_poly_haven_assets(
+        query=str(args.get("query") or ""),
+        asset_type=str(args.get("asset_type") or "all"),
+        category=str(args.get("category") or ""),
+        limit=_bounded_int(args.get("limit"), 20, minimum=1, maximum=50),
+        timeout=_bounded_int(args.get("timeout"), 15, minimum=1, maximum=60),
+    )
+
+
+def inspect_poly_haven_asset_files(context, args):
+    return external_assets.inspect_poly_haven_asset_files(
+        asset_id=str(args.get("asset_id") or args.get("id") or ""),
+        timeout=_bounded_int(args.get("timeout"), 15, minimum=1, maximum=60),
+    )
+
+
+def download_poly_haven_asset(context, args):
+    return external_assets.download_poly_haven_asset(
+        asset_id=str(args.get("asset_id") or args.get("id") or ""),
+        asset_type=str(args.get("asset_type") or ""),
+        resolution=str(args.get("resolution") or "2k"),
+        file_format=str(args.get("file_format") or args.get("format") or ""),
+        map_types=_name_list(args.get("map_types")),
+        include_dependencies=bool(args.get("include_dependencies", True)),
+        cache_dir=str(args.get("cache_dir") or ""),
+        timeout=_bounded_int(args.get("timeout"), 60, minimum=1, maximum=300),
+    )
+
+
+def import_poly_haven_asset(context, args):
+    return external_assets.import_poly_haven_asset(
+        context,
+        asset_id=str(args.get("asset_id") or args.get("id") or ""),
+        asset_type=str(args.get("asset_type") or ""),
+        resolution=str(args.get("resolution") or "2k"),
+        file_format=str(args.get("file_format") or args.get("format") or ""),
+        map_types=_name_list(args.get("map_types")),
+        target_object_name=str(args.get("target_object_name") or args.get("object_name") or ""),
+        cache_dir=str(args.get("cache_dir") or ""),
+        timeout=_bounded_int(args.get("timeout"), 60, minimum=1, maximum=300),
+        label=args.get("label", "Import Poly Haven asset"),
+    )
+
+
+def search_sketchfab_models(context, args):
+    return external_assets.search_sketchfab_models(
+        query=str(args.get("query") or ""),
+        downloadable=bool(args.get("downloadable", True)),
+        staffpicked=args.get("staffpicked") if args.get("staffpicked") is not None else None,
+        animated=args.get("animated") if args.get("animated") is not None else None,
+        limit=_bounded_int(args.get("limit"), 20, minimum=1, maximum=50),
+        timeout=_bounded_int(args.get("timeout"), 15, minimum=1, maximum=60),
+    )
+
+
+def download_sketchfab_model(context, args):
+    return external_assets.download_sketchfab_model(
+        uid=str(args.get("uid") or ""),
+        api_token=str(args.get("api_token") or ""),
+        token_env_var=str(args.get("token_env_var") or external_assets.SKETCHFAB_TOKEN_ENV_VAR),
+        model_password=str(args.get("model_password") or ""),
+        cache_dir=str(args.get("cache_dir") or ""),
+        timeout=_bounded_int(args.get("timeout"), 120, minimum=1, maximum=600),
+    )
+
+
+def import_sketchfab_model(context, args):
+    return external_assets.import_sketchfab_model(
+        context,
+        uid=str(args.get("uid") or ""),
+        api_token=str(args.get("api_token") or ""),
+        token_env_var=str(args.get("token_env_var") or external_assets.SKETCHFAB_TOKEN_ENV_VAR),
+        model_password=str(args.get("model_password") or ""),
+        cache_dir=str(args.get("cache_dir") or ""),
+        timeout=_bounded_int(args.get("timeout"), 120, minimum=1, maximum=600),
+        label=args.get("label", "Import Sketchfab model"),
+    )
+
+
+def get_external_asset_cache_diagnostics(context, args):
+    return external_assets.external_asset_cache_diagnostics(
+        cache_dir=str(args.get("cache_dir") or ""),
+        max_assets=_bounded_int(args.get("max_assets"), 50, minimum=1, maximum=500),
     )
 
 
@@ -3055,7 +3201,9 @@ TOOL_FUNCTIONS = {
     "set_pose_hold": set_pose_hold,
     "set_rig_pose_hold": set_rig_pose_hold,
     "set_rig_custom_property_keyframes": set_rig_custom_property_keyframes,
+    "get_rig_pose_library_details": get_rig_pose_library_details,
     "apply_rig_pose_from_action": apply_rig_pose_from_action,
+    "apply_rig_pose_marker": apply_rig_pose_marker,
     "apply_rig_action_clip": apply_rig_action_clip,
     "offset_rig_limb_controls": offset_rig_limb_controls,
     "create_motion_arc": create_motion_arc,
@@ -3100,7 +3248,9 @@ TOOL_FUNCTIONS = {
     "capture_object_inspection_renders": capture_object_inspection_renders,
     "get_blend_file_diagnostics": get_blend_file_diagnostics,
     "get_workspace_layout": get_workspace_layout,
+    "get_visual_evidence_resources": get_visual_evidence_resources,
     "jump_to_workspace": jump_to_workspace,
+    "set_viewport_view": set_viewport_view,
     "focus_object_in_viewport": focus_object_in_viewport,
     "render_scene_thumbnail": render_scene_thumbnail,
     "start_render_job": start_render_job,
@@ -3109,6 +3259,15 @@ TOOL_FUNCTIONS = {
     "assemble_render_job_video": assemble_render_job_video,
     "validate_render_job_output": validate_render_job_output,
     "search_blender_docs": search_blender_docs,
+    "list_poly_haven_categories": list_poly_haven_categories,
+    "search_poly_haven_assets": search_poly_haven_assets,
+    "inspect_poly_haven_asset_files": inspect_poly_haven_asset_files,
+    "download_poly_haven_asset": download_poly_haven_asset,
+    "import_poly_haven_asset": import_poly_haven_asset,
+    "search_sketchfab_models": search_sketchfab_models,
+    "download_sketchfab_model": download_sketchfab_model,
+    "import_sketchfab_model": import_sketchfab_model,
+    "get_external_asset_cache_diagnostics": get_external_asset_cache_diagnostics,
     "draft_script": draft_script,
     "run_approved_script": run_approved_script,
     "commit_preview": commit_preview,

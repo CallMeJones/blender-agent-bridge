@@ -8,7 +8,7 @@ import json
 AGENT_GUIDANCE = (
     "You are an external agent connected to Blender Agent Bridge. Use the provided scene context and Blender tools. "
     "Read context_plan before acting. It explains which scene details were included or omitted to stay within the request budget. "
-    "If omitted details matter, call inspect_scene, get_object_details, get_animation_details, get_animation_scene_context, get_material_node_details, get_geometry_nodes_details, get_shader_nodes_details, get_rigging_details, get_shape_key_details, get_curve_text_details, get_simulation_details, inspect_simulation_bake, get_collection_layer_details, get_render_camera_compositor_details, get_blend_file_diagnostics, get_workspace_layout, capture_viewport, capture_animation_playblast, capture_object_inspection_renders, render_scene_thumbnail, start_render_job, get_render_job_status, assemble_render_job_video, validate_render_job_output, or search_blender_docs instead of guessing. "
+    "If omitted details matter, call inspect_scene, get_object_details, get_animation_details, get_animation_scene_context, get_material_node_details, get_geometry_nodes_details, get_shader_nodes_details, get_rigging_details, get_shape_key_details, get_curve_text_details, get_simulation_details, inspect_simulation_bake, get_collection_layer_details, get_render_camera_compositor_details, get_blend_file_diagnostics, get_workspace_layout, get_visual_evidence_resources, capture_viewport, capture_animation_playblast, capture_object_inspection_renders, render_scene_thumbnail, start_render_job, get_render_job_status, assemble_render_job_video, validate_render_job_output, or search_blender_docs instead of guessing. "
     "When target objects are unclear, use list_scene_objects and select_objects before applying selected-object tools. "
     "When the user asks to change the scene, use safe helper tools first so Blender changes immediately. "
     "Use direct Blender data concepts: objects, collections, materials, cameras, lights, actions, keyframes. "
@@ -16,7 +16,8 @@ AGENT_GUIDANCE = (
     "For model refinement and production presentation, prefer shade_smooth_selected, add_bevel_and_subsurf, create_wheel_assembly, add_panel_seams, add_window_materials, apply_vehicle_refinement_template, apply_product_refinement_template, apply_character_refinement_template, create_studio_product_stage, add_dimension_callouts, apply_lighting_preset, create_material_palette, create_product_turntable_setup, and organize_scene_for_production when they fit the task. "
     "For shape-key animation, prefer create_shape_key and animate_shape_key before drafting Python. "
     "For long-running or high-resolution renders, playblasts, frame sequences, or MP4 quality checks, use start_render_job and poll get_render_job_status instead of draft_script; use assemble_render_job_video for PNG sequences and validate_render_job_output before reporting success; use cancel_render_job if the user wants to stop it. "
-    "For animation generation, review, or repair, call run_animation_task for simple prompt-in/task-out use, or call plan_animation_workflow first when you need manual control of the generated workflow. plan_animation_workflow returns the brief, scene routing, timing chart, ordered helper calls, evaluator calls, repair calls, and script fallback rules. For common helper-backed generation, call run_animation_workflow to execute the plan, review the result, optionally capture playblast evidence, and leave changes in preview. Use any animation_brief in context as the prompt contract; otherwise call create_animation_brief first when the prompt needs an explicit contract, success criteria, or later validation. Call get_animation_scene_context before advanced animation in scenes with rigs, constraints, drivers, shape keys, physics, or unclear edit targets so you know whether to animate object transforms, rig controls, shape keys, materials, physics, or camera settings. Use create_timing_chart, block_key_poses, add_breakdown_pose, set_pose_hold, set_rig_pose_hold, apply_rig_pose_from_action, apply_rig_action_clip, offset_rig_limb_controls, set_rig_custom_property_keyframes, and create_motion_arc for animator-style blocking before spline/f-curve polish; use rig pose/action helpers only after identifying armature controls, pose-library candidates, or existing scalar IK/FK/space properties through rig inspection or repair metadata. Then use analyze_animation_principles plus focused analyzers to check timing, spacing, arcs, pose clarity, anticipation, squash/stretch, contact, center-of-mass support, speed/acceleration plausibility, simulation cache readiness, and settle before repair; use inspect_simulation_bake before persistent bake decisions, and use stage_persistent_simulation_bake when the user intentionally wants a persistent point-cache bake. Use capture_animation_playblast and review_playblast_against_brief when visual frame evidence matters; use capture_object_inspection_renders and review_inspection_renders_against_brief when close-up object detail evidence matters; if review or repair tools return repair_operations, prefer run_animation_repair_loop for bounded helper repair and review-again behavior, or execute relevant tool_call name/input entries deliberately when manual control is needed. Then prefer set_scene_frame_range, set_animation_preview_range, animate_selected_transform, animate_object_bounce, create_progressive_bounce_animation, animate_material_property, animate_light_property, create_follow_path_animation, create_turntable_animation, create_pulse_animation, create_reveal_animation, create_staggered_motion, set_action_interpolation, retime_actions, add_action_cycles, clear_animation, and create_camera_orbit. "
+    "For external assets, use list_poly_haven_categories and search_poly_haven_assets/search_sketchfab_models for discovery, inspect_poly_haven_asset_files before choosing Poly Haven formats, download_* tools for cache-only work, import_* tools for preview scene imports, and get_external_asset_cache_diagnostics to report cached/imported assets. Sketchfab tokens must be provided per call or through an environment variable, not Blender preferences. "
+    "For animation generation, review, or repair, call run_animation_task for simple prompt-in/task-out use, or call plan_animation_workflow first when you need manual control of the generated workflow. plan_animation_workflow returns the brief, scene routing, timing chart, ordered helper calls, evaluator calls, repair calls, and script fallback rules. For common helper-backed generation, call run_animation_workflow to execute the plan, review the result, optionally capture playblast evidence, and leave changes in preview. Use any animation_brief in context as the prompt contract; otherwise call create_animation_brief first when the prompt needs an explicit contract, success criteria, or later validation. Call get_animation_scene_context before advanced animation in scenes with rigs, constraints, drivers, shape keys, physics, or unclear edit targets so you know whether to animate object transforms, rig controls, shape keys, materials, physics, or camera settings. Use create_timing_chart, block_key_poses, add_breakdown_pose, set_pose_hold, set_rig_pose_hold, get_rig_pose_library_details, apply_rig_pose_from_action, apply_rig_pose_marker, apply_rig_action_clip, offset_rig_limb_controls, set_rig_custom_property_keyframes, and create_motion_arc for animator-style blocking before spline/f-curve polish; use rig pose/action helpers only after identifying armature controls, pose-library candidates, or existing scalar IK/FK/space properties through rig inspection or repair metadata. Then use analyze_animation_principles plus focused analyzers to check timing, spacing, arcs, pose clarity, anticipation, squash/stretch, contact, center-of-mass support, speed/acceleration plausibility, simulation cache readiness, and settle before repair; use inspect_simulation_bake before persistent bake decisions, and use stage_persistent_simulation_bake when the user intentionally wants a persistent point-cache bake. Use capture_animation_playblast and review_playblast_against_brief when visual frame evidence matters; use capture_object_inspection_renders and review_inspection_renders_against_brief when close-up object detail evidence matters; if review or repair tools return repair_operations, prefer run_animation_repair_loop for bounded helper repair and review-again behavior, or execute relevant tool_call name/input entries deliberately when manual control is needed. Then prefer set_scene_frame_range, set_animation_preview_range, animate_selected_transform, animate_object_bounce, create_progressive_bounce_animation, animate_material_property, animate_light_property, create_follow_path_animation, create_turntable_animation, create_pulse_animation, create_reveal_animation, create_staggered_motion, set_action_interpolation, retime_actions, add_action_cycles, clear_animation, and create_camera_orbit. "
     "For complex scene builds that need many objects or more than about eight helper calls, stage one cohesive Blender Python script with draft_script instead of making a long chain of helper calls. "
     "When helper tools cannot express the requested edit, use draft_script to stage Blender Python for user approval; if the user has granted external script trust, draft_script may auto-run after static checks. "
     "When calling draft_script, put the complete Python source in the code field. Do not put script code in final chat text for the user to paste manually. "
@@ -151,6 +152,20 @@ def blender_tool_definitions():
             },
         },
         {
+            "name": "get_visual_evidence_resources",
+            "description": "Return a compact inventory of latest MCP-readable viewport captures, playblasts, inspection renders, render thumbnails, and render jobs. Use when an agent needs to know what visual/render evidence exists and which resource URIs can be read.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "include_unavailable": {
+                        "type": "boolean",
+                        "description": "Include resource families with no latest artifact yet. Defaults to true.",
+                    },
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "jump_to_workspace",
             "description": "Switch the active Blender window to a named workspace/tab. Requires an interactive Blender UI and fails soft in background mode.",
             "input_schema": {
@@ -159,6 +174,19 @@ def blender_tool_definitions():
                     "workspace_name": {"type": "string"},
                 },
                 "required": ["workspace_name"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "set_viewport_view",
+            "description": "Set the first 3D viewport to an axis, camera, or user view and optionally frame an object. Requires an interactive Blender UI and fails soft in background mode.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "view": {"type": "string", "enum": ["front", "back", "left", "right", "top", "bottom", "camera", "user"]},
+                    "frame_object_name": {"type": "string", "description": "Optional object to frame after changing view."},
+                    "use_orthographic": {"type": "boolean", "description": "Use orthographic axis views when possible. Defaults to true."},
+                },
                 "additionalProperties": False,
             },
         },
@@ -1713,6 +1741,28 @@ def blender_tool_definitions():
             },
         },
         {
+            "name": "get_rig_pose_library_details",
+            "description": "Inspect rig-compatible pose-library/action candidates for an armature, including pose markers, matched bones/channels, frame ranges, and suggested apply calls. Use before applying production rig poses or clips.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "armature_name": {"type": "string"},
+                    "action_names": {"type": "array", "items": {"type": "string"}},
+                    "bone_names": {"type": "array", "items": {"type": "string"}},
+                    "paths": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": ["location", "rotation_euler", "rotation_quaternion", "rotation_axis_angle", "scale"],
+                        },
+                    },
+                    "max_actions": {"type": "integer"},
+                },
+                "required": ["armature_name"],
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "apply_rig_pose_from_action",
             "description": "Sample an existing rig action or pose-library marker and apply/key that pose onto matching armature controls. Use for production rigs after get_rigging_details surfaces pose_library_candidates. Applies immediately with preview revert support.",
             "input_schema": {
@@ -1738,6 +1788,34 @@ def blender_tool_definitions():
                     "label": {"type": "string"},
                 },
                 "required": ["armature_name", "action_name"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "apply_rig_pose_marker",
+            "description": "Resolve a rig pose-library marker to the best matching source action, then apply/key it onto matching armature controls. Use when the marker name is known but the source action may be ambiguous. Applies immediately with preview revert support.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "armature_name": {"type": "string"},
+                    "action_name": {"type": "string"},
+                    "pose_marker": {"type": "string"},
+                    "target_frame": {"type": "integer"},
+                    "frame": {"type": "integer"},
+                    "hold_frames": {"type": "integer"},
+                    "bone_names": {"type": "array", "items": {"type": "string"}},
+                    "paths": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": ["location", "rotation_euler", "rotation_quaternion", "rotation_axis_angle", "scale"],
+                        },
+                    },
+                    "key_pose": {"type": "boolean"},
+                    "interpolation": {"type": "string"},
+                    "label": {"type": "string"},
+                },
+                "required": ["armature_name"],
                 "additionalProperties": False,
             },
         },
@@ -2437,6 +2515,157 @@ def blender_tool_definitions():
             },
         },
         {
+            "name": "list_poly_haven_categories",
+            "description": "List Poly Haven catalog categories for HDRIs, textures, and models. Returns metadata only; it does not download or import assets.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "asset_type": {"type": "string", "enum": ["all", "hdris", "textures", "models"]},
+                    "timeout": {"type": "integer", "description": "HTTP timeout in seconds. Defaults to 15."},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "search_poly_haven_assets",
+            "description": "Search Poly Haven's CC0 asset catalog and return source URLs plus API file URLs. Returns metadata only; it does not download or import assets.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Optional local text filter over returned asset names, ids, and categories."},
+                    "asset_type": {"type": "string", "enum": ["all", "hdris", "textures", "models"]},
+                    "category": {"type": "string", "description": "Optional Poly Haven category slug."},
+                    "limit": {"type": "integer", "description": "Maximum assets to return. Defaults to 20, max 50."},
+                    "timeout": {"type": "integer", "description": "HTTP timeout in seconds. Defaults to 15."},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "inspect_poly_haven_asset_files",
+            "description": "Fetch and summarize the available Poly Haven files for one asset, including resolutions, formats, sizes, hashes, and include dependencies. Does not download or import.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "asset_id": {"type": "string"},
+                    "timeout": {"type": "integer"},
+                },
+                "required": ["asset_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "download_poly_haven_asset",
+            "description": "Download and cache selected Poly Haven HDRI, texture, or model files with checksum validation. Does not mutate the Blender scene.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "asset_id": {"type": "string"},
+                    "asset_type": {"type": "string", "enum": ["", "all", "hdris", "textures", "models"]},
+                    "resolution": {"type": "string"},
+                    "file_format": {"type": "string"},
+                    "map_types": {"type": "array", "items": {"type": "string"}},
+                    "include_dependencies": {"type": "boolean"},
+                    "cache_dir": {"type": "string"},
+                    "timeout": {"type": "integer"},
+                },
+                "required": ["asset_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "import_poly_haven_asset",
+            "description": "Download/cache and import a Poly Haven asset into Blender preview. HDRIs create a world, textures create/assign a material, and models use Blender importers.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "asset_id": {"type": "string"},
+                    "asset_type": {"type": "string", "enum": ["", "all", "hdris", "textures", "models"]},
+                    "resolution": {"type": "string"},
+                    "file_format": {"type": "string"},
+                    "map_types": {"type": "array", "items": {"type": "string"}},
+                    "target_object_name": {"type": "string"},
+                    "cache_dir": {"type": "string"},
+                    "timeout": {"type": "integer"},
+                    "label": {"type": "string"},
+                },
+                "required": ["asset_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "search_sketchfab_models",
+            "description": "Search Sketchfab's public model catalog and return viewer, author, license, thumbnail, and downloadability metadata. Returns metadata only; it does not download or import assets.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "downloadable": {"type": "boolean", "description": "Filter for downloadable models. Defaults to true."},
+                    "staffpicked": {"type": "boolean"},
+                    "animated": {"type": "boolean"},
+                    "limit": {"type": "integer", "description": "Maximum models to return. Defaults to 20, max 50."},
+                    "timeout": {"type": "integer", "description": "HTTP timeout in seconds. Defaults to 15."},
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "download_sketchfab_model",
+            "description": "Use a Sketchfab API token to fetch temporary GLTF download info, cache the archive, and extract an importable model file. Does not mutate the Blender scene.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "uid": {"type": "string"},
+                    "api_token": {"type": "string", "description": "Optional per-call Sketchfab API token. Redacted in audit logs."},
+                    "token_env_var": {
+                        "type": "string",
+                        "enum": ["SKETCHFAB_API_TOKEN", "BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN"],
+                        "description": "Sketchfab-specific environment variable to read when api_token is omitted. Defaults to SKETCHFAB_API_TOKEN.",
+                    },
+                    "model_password": {"type": "string"},
+                    "cache_dir": {"type": "string"},
+                    "timeout": {"type": "integer"},
+                },
+                "required": ["uid"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "import_sketchfab_model",
+            "description": "Use a Sketchfab API token to cache a downloadable model archive and import the extracted GLTF/GLB file into Blender preview.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "uid": {"type": "string"},
+                    "api_token": {"type": "string", "description": "Optional per-call Sketchfab API token. Redacted in audit logs."},
+                    "token_env_var": {
+                        "type": "string",
+                        "enum": ["SKETCHFAB_API_TOKEN", "BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN"],
+                        "description": "Sketchfab-specific environment variable to read when api_token is omitted. Defaults to SKETCHFAB_API_TOKEN.",
+                    },
+                    "model_password": {"type": "string"},
+                    "cache_dir": {"type": "string"},
+                    "timeout": {"type": "integer"},
+                    "label": {"type": "string"},
+                },
+                "required": ["uid"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "get_external_asset_cache_diagnostics",
+            "description": "Report cached/imported external assets, providers, licenses, source URLs, files, and imported Blender data-block names.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "cache_dir": {"type": "string"},
+                    "max_assets": {"type": "integer"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "draft_script",
             "description": (
                 "Stage Blender Python in a Text datablock for explicit user approval, or auto-run after static checks when external script trust is active. "
@@ -2499,7 +2728,7 @@ _CORE_TOOL_NAMES = {
 _FALLBACK_TOOL_NAMES = {"draft_script"}
 
 _TOOL_GROUPS = {
-    "selection": {"select_objects", "set_current_frame", "get_workspace_layout", "jump_to_workspace", "focus_object_in_viewport"},
+    "selection": {"select_objects", "set_current_frame", "get_workspace_layout", "jump_to_workspace", "set_viewport_view", "focus_object_in_viewport"},
     "basic_edit": {
         "select_objects",
         "set_selected_location_delta",
@@ -2573,7 +2802,9 @@ _TOOL_GROUPS = {
         "set_pose_hold",
         "set_rig_pose_hold",
         "set_rig_custom_property_keyframes",
+        "get_rig_pose_library_details",
         "apply_rig_pose_from_action",
+        "apply_rig_pose_marker",
         "apply_rig_action_clip",
         "offset_rig_limb_controls",
         "create_motion_arc",
@@ -2583,6 +2814,7 @@ _TOOL_GROUPS = {
     },
     "camera_render": {
         "get_render_camera_compositor_details",
+        "get_visual_evidence_resources",
         "capture_viewport",
         "capture_animation_playblast",
         "capture_object_inspection_renders",
@@ -2608,6 +2840,7 @@ _TOOL_GROUPS = {
     "deep_inspect": {
         "get_blend_file_diagnostics",
         "get_workspace_layout",
+        "get_visual_evidence_resources",
         "get_animation_scene_context",
         "get_geometry_nodes_details",
         "get_shader_nodes_details",
@@ -2645,6 +2878,17 @@ _TOOL_GROUPS = {
         "run_animation_workflow",
         "run_animation_repair_loop",
     },
+    "external_assets": {
+        "list_poly_haven_categories",
+        "search_poly_haven_assets",
+        "inspect_poly_haven_asset_files",
+        "download_poly_haven_asset",
+        "import_poly_haven_asset",
+        "search_sketchfab_models",
+        "download_sketchfab_model",
+        "import_sketchfab_model",
+        "get_external_asset_cache_diagnostics",
+    },
     "advanced_create": {
         "create_shader_material",
         "add_geometry_nodes_modifier",
@@ -2675,7 +2919,9 @@ _TOOL_GROUPS = {
         "set_pose_hold",
         "set_rig_pose_hold",
         "set_rig_custom_property_keyframes",
+        "get_rig_pose_library_details",
         "apply_rig_pose_from_action",
+        "apply_rig_pose_marker",
         "apply_rig_action_clip",
         "offset_rig_limb_controls",
         "create_motion_arc",
@@ -2759,7 +3005,9 @@ _TOOL_GROUPS = {
         "get_rigging_details",
         "set_rig_pose_hold",
         "set_rig_custom_property_keyframes",
+        "get_rig_pose_library_details",
         "apply_rig_pose_from_action",
+        "apply_rig_pose_marker",
         "apply_rig_action_clip",
         "offset_rig_limb_controls",
         "create_basic_armature",
@@ -2773,12 +3021,13 @@ _TOOL_GROUPS = {
 }
 
 _GROUP_KEYWORDS = {
-    "selection": {"select", "selected", "active", "frame", "playhead", "inspect", "workspace", "tab", "focus", "viewport focus"},
+    "selection": {"select", "selected", "active", "frame", "playhead", "inspect", "workspace", "tab", "focus", "viewport focus", "front view", "top view", "camera view"},
     "basic_edit": {"make", "create", "add", "move", "scale", "rotate", "transform", "object", "primitive", "empty", "marker", "collection", "duplicate", "copy", "parent", "align", "distribute", "layout", "arrange", "hide", "unhide", "visibility", "visible", "display", "wireframe", "show name", "in front"},
     "materials": {"material", "shader", "color", "colour", "red", "blue", "green", "metal", "metallic", "chrome", "glass", "emission", "glow", "window"},
     "animation": {"animate", "animation", "animation brief", "prompt contract", "success criteria", "timing chart", "key pose", "key poses", "hold", "breakdown", "keyframe", "timeline", "frame", "orbit", "bounce", "driver", "motion", "motion arc", "arc", "follow path", "path", "retime", "interpolation", "easing", "loop", "cycles", "turntable", "pulse", "reveal", "stagger", "playblast", "timing", "spacing", "blocking", "anticipation", "squash", "stretch", "settle", "follow-through", "principles", "center of mass", "support", "contact sliding", "simulation", "physics bake", "persistent bake"},
-    "camera_render": {"camera", "render", "render job", "quality check", "thumbnail", "still", "mp4", "video assembly", "assemble video", "validate render", "1080p", "4k", "frame sequence", "samples", "light", "lighting", "world", "background", "dof", "depth of field", "lens", "compositor", "resolution", "intensity", "studio", "product stage", "presentation", "close-up", "closeup", "underside"},
-    "deep_inspect": {"inspect", "analyze", "analyse", "summarize", "summary", "details", "world model", "what", "list", "screenshot", "viewport", "visual", "image", "capture", "playblast", "review", "diagnostic", "diagnostics", "missing external", "linked library", "linked libraries", "blend file", "data-block", "datablock", "backup", "workspace", "layout json", "underside", "gear"},
+    "camera_render": {"camera", "render", "render job", "render output", "output resource", "quality check", "thumbnail", "still", "mp4", "video assembly", "assemble video", "validate render", "1080p", "4k", "frame sequence", "samples", "light", "lighting", "world", "background", "dof", "depth of field", "lens", "compositor", "resolution", "intensity", "studio", "product stage", "presentation", "close-up", "closeup", "underside"},
+    "deep_inspect": {"inspect", "analyze", "analyse", "summarize", "summary", "details", "world model", "what", "list", "screenshot", "viewport", "visual", "visual evidence", "evidence resource", "resource uri", "image", "capture", "playblast", "review", "diagnostic", "diagnostics", "missing external", "linked library", "linked libraries", "blend file", "data-block", "datablock", "backup", "workspace", "layout json", "underside", "gear"},
+    "external_assets": {"asset", "assets", "asset catalog", "asset library", "external asset", "external assets", "asset cache", "cache diagnostics", "poly haven", "polyhaven", "sketchfab", "hdri", "hdris", "environment map", "texture", "textures", "model library", "download model", "download asset", "import model", "import asset", "import hdri", "import texture", "sketchfab uid"},
     "advanced_create": {"geometry nodes", "shape key", "text", "curve", "particle", "armature", "constraint", "rig", "driver", "callout", "dimension", "label", "palette", "swatch", "organize", "collection"},
     "refinement": {"refine", "polish", "smooth", "high poly", "high-poly", "detail", "bevel", "subdivision", "subsurf", "seam", "panel", "dimension", "callout", "stage", "palette", "lighting"},
     "vehicle": {"car", "vehicle", "truck", "wheel", "tire", "tyre", "rim", "headlight", "taillight", "windshield", "door", "grille"},
@@ -2868,7 +3117,7 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
     budget = max(4000, int(max_schema_chars or TOOL_SCHEMA_CHAR_BUDGET))
     protected = set(_CORE_TOOL_NAMES)
     for group in matched_groups:
-        if group in {"vehicle", "product", "character", "refinement", "camera_render", "rigging", "curves_text", "particles", "geometry_nodes"}:
+        if group in {"vehicle", "product", "character", "refinement", "camera_render", "rigging", "curves_text", "particles", "geometry_nodes", "external_assets"}:
             protected.update(_TOOL_GROUPS.get(group, set()))
     if "animation" in matched_groups:
         protected.update(
@@ -2884,7 +3133,9 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
                 "set_pose_hold",
                 "set_rig_pose_hold",
                 "set_rig_custom_property_keyframes",
+                "get_rig_pose_library_details",
                 "apply_rig_pose_from_action",
+                "apply_rig_pose_marker",
                 "apply_rig_action_clip",
                 "offset_rig_limb_controls",
                 "create_motion_arc",
@@ -2982,10 +3233,21 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "set_pose_hold",
     "set_rig_pose_hold",
     "set_rig_custom_property_keyframes",
+    "get_rig_pose_library_details",
     "apply_rig_pose_from_action",
+    "apply_rig_pose_marker",
     "apply_rig_action_clip",
     "offset_rig_limb_controls",
     "create_motion_arc",
+    "list_poly_haven_categories",
+    "search_poly_haven_assets",
+    "inspect_poly_haven_asset_files",
+    "download_poly_haven_asset",
+    "import_poly_haven_asset",
+    "search_sketchfab_models",
+    "download_sketchfab_model",
+    "import_sketchfab_model",
+    "get_external_asset_cache_diagnostics",
     "duplicate_selected_objects",
     "parent_selected_to_empty",
     "align_selected_objects",

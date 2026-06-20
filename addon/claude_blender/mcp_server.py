@@ -99,7 +99,9 @@ ANIMATION_ROUTE_TOOLS = {
     "capture_animation_playblast",
     "set_rig_pose_hold",
     "set_rig_custom_property_keyframes",
+    "get_rig_pose_library_details",
     "apply_rig_pose_from_action",
+    "apply_rig_pose_marker",
     "apply_rig_action_clip",
     "offset_rig_limb_controls",
 }
@@ -134,6 +136,7 @@ TOOL_CATEGORY_LABELS = {
     "script": "Approval-Gated Python",
     "scene": "Scene Settings",
     "navigation": "Workspace And View Navigation",
+    "external_assets": "External Asset Catalogs",
     "other": "Other",
 }
 
@@ -742,7 +745,19 @@ def _tool_category(tool):
         return "script"
     if name in {"commit_preview", "revert_preview"}:
         return "preview"
-    if name in {"get_workspace_layout", "jump_to_workspace", "focus_object_in_viewport"}:
+    if name in {
+        "list_poly_haven_categories",
+        "search_poly_haven_assets",
+        "inspect_poly_haven_asset_files",
+        "download_poly_haven_asset",
+        "import_poly_haven_asset",
+        "search_sketchfab_models",
+        "download_sketchfab_model",
+        "import_sketchfab_model",
+        "get_external_asset_cache_diagnostics",
+    }:
+        return "external_assets"
+    if name in {"get_workspace_layout", "jump_to_workspace", "set_viewport_view", "focus_object_in_viewport"}:
         return "navigation"
     if name in {"start_render_job", "get_render_job_status", "cancel_render_job", "assemble_render_job_video", "validate_render_job_output"}:
         return "camera_render"
@@ -752,6 +767,7 @@ def _tool_category(tool):
         "capture_viewport",
         "capture_animation_playblast",
         "capture_object_inspection_renders",
+        "get_visual_evidence_resources",
         "review_inspection_renders_against_brief",
     }:
         return "inspect"
@@ -765,7 +781,7 @@ def _tool_category(tool):
         return "animation"
     if "geometry" in name or "modifier" in name or "bevel" in name or "subsurf" in name or "shape_key" in name:
         return "geometry"
-    if "rigging" in name or "armature" in name or "constraint" in name or name in {"set_rig_pose_hold", "set_rig_custom_property_keyframes", "apply_rig_pose_from_action", "apply_rig_action_clip", "offset_rig_limb_controls"}:
+    if "rigging" in name or "armature" in name or "constraint" in name or name in {"set_rig_pose_hold", "set_rig_custom_property_keyframes", "get_rig_pose_library_details", "apply_rig_pose_from_action", "apply_rig_pose_marker", "apply_rig_action_clip", "offset_rig_limb_controls"}:
         return "rigging"
     if "simulation" in name or "particle" in name:
         return "simulation"

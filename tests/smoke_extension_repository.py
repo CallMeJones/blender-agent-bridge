@@ -23,6 +23,15 @@ def main():
     repo_dir = tempfile.mkdtemp(prefix="agent-bridge-repo-")
     try:
         package = build_extension_zip.build_extension(dist_dir=dist_dir)
+        stale_zip = os.path.join(repo_dir, f"{build_info.ADDON_ID}-0.0.0.zip")
+        stale_sha = f"{stale_zip}.sha256"
+        unrelated_zip = os.path.join(repo_dir, "other_extension-0.0.0.zip")
+        with open(stale_zip, "wb") as handle:
+            handle.write(b"stale")
+        with open(stale_sha, "w", encoding="utf-8") as handle:
+            handle.write("stale\n")
+        with open(unrelated_zip, "wb") as handle:
+            handle.write(b"unrelated")
         result = build_extension_repository.build_repository(
             zip_path=package["path"],
             repo_dir=repo_dir,
@@ -43,7 +52,23 @@ def main():
         assert entry["archive_url"] == f"./{os.path.basename(package['path'])}", entry
         assert entry["archive_hash"] == f"sha256:{package['sha256']}", entry
         assert entry["archive_size"] == os.path.getsize(package["path"]), entry
+        assert entry["website"] == "https://github.com/CallMeJones/blender-agent-bridge", entry
         assert "network" in entry["permissions"], entry
+        assert not os.path.exists(stale_zip), result
+        assert not os.path.exists(stale_sha), result
+        assert os.path.exists(unrelated_zip), result
+        with open(result["html_path"], "r", encoding="utf-8") as handle:
+            html = handle.read()
+        assert "https://callmejones.github.io/blender-agent-bridge/index.json" in html, html
+        assert "https://github.com/CallMeJones/blender-agent-bridge/releases/latest" in html, html
+        assert "Install from Disk" in html, html
+
+        same_file = build_extension_repository.build_repository(
+            zip_path=result["zip_path"],
+            repo_dir=repo_dir,
+        )
+        assert same_file["ok"], same_file
+        assert same_file["zip_path"] == result["zip_path"], same_file
 
         absolute = build_extension_repository.build_repository(
             zip_path=package["path"],

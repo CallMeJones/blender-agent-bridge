@@ -180,7 +180,21 @@ Official Blender Lab parity helpers are exposed as direct tools:
 - `get_blend_file_diagnostics` reports save path state, backup files, missing external file paths, linked libraries, and data-block usage summaries.
 - `get_workspace_layout` returns workspace/window/screen/area JSON for UI diagnostics.
 - `jump_to_workspace` switches the interactive Blender UI to a named workspace and fails soft in background mode.
+- `set_viewport_view` switches the first interactive 3D viewport to an axis, camera, or user view and can frame a named object.
 - `focus_object_in_viewport` frames a named object in the first 3D viewport and optionally selects it; it also fails soft when no interactive 3D view exists.
+- `get_visual_evidence_resources` summarizes latest viewport captures, playblasts, inspection renders, render thumbnails, and render jobs with MCP resource URIs.
+
+External asset helpers are provider-neutral bridge tools. They do not add provider API keys to Blender preferences; Sketchfab download/import takes a per-call `api_token` or reads a Sketchfab-specific token from `SKETCHFAB_API_TOKEN` or `BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN` in the MCP server environment.
+
+- `list_poly_haven_categories` lists Poly Haven category slugs for HDRIs, textures, and models.
+- `search_poly_haven_assets` searches Poly Haven's CC0 catalog and returns source/file API URLs.
+- `inspect_poly_haven_asset_files` fetches Poly Haven's per-asset file tree with resolutions, formats, sizes, hashes, and dependency includes.
+- `download_poly_haven_asset` caches selected HDRI, texture, or model files and verifies MD5/size metadata when available.
+- `import_poly_haven_asset` downloads/caches and leaves a preview change: HDRIs create a new world, textures create/assign a material, and models import through Blender's importers.
+- `search_sketchfab_models` searches Sketchfab public models and returns viewer, author, license, thumbnail, and downloadability metadata.
+- `download_sketchfab_model` uses Sketchfab's authenticated download endpoint to cache and extract a GLTF archive.
+- `import_sketchfab_model` imports the extracted Sketchfab GLTF/GLB into Blender preview.
+- `get_external_asset_cache_diagnostics` reports cached/imported providers, licenses, source URLs, file counts, cache paths, and imported Blender data-block names.
 
 ## Prompts
 
