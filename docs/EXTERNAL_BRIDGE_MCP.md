@@ -19,7 +19,7 @@ The add-on owns all Blender reads/writes. The MCP server is a small stdlib Pytho
 
 ## Start The Bridge
 
-1. Install and enable the latest `claude_blender-0.1.2.zip`.
+1. Install and enable the latest `claude_blender-<version>.zip` release asset.
 2. Open the add-on sidebar in the 3D View.
 3. In `External Bridge`, press `Start`.
 4. Optional: set `Bridge Token` in add-on preferences before starting.

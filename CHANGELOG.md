@@ -4,6 +4,14 @@
 
 - Nothing yet.
 
+## 0.1.5
+
+- Fixed the queued external asset import job schema so MCP and bridge validation accept `source_job_id`, the legacy `job_id` alias, or `manifest_path` before dispatch.
+- Moved the subprocess external asset worker into a real `asset_job_worker` module instead of generating the full worker body per job.
+- Added deterministic Blender-background smoke coverage for subprocess asset downloads completing successfully and feeding queued main-thread imports.
+- Allowed loopback-only provider fixture URLs to run under Blender's offline external-access gate while keeping normal Poly Haven and Sketchfab URLs guarded.
+- Updated external asset job docs, release docs, and package metadata for the 0.1.5 release.
+
 ## 0.1.4
 
 - Added asynchronous external asset download/cache jobs for Poly Haven and Sketchfab, with separate polling, cancellation, and main-thread import-result tools.
