@@ -29,9 +29,13 @@ except ImportError:
     user_paths = None
 
 
-POLY_HAVEN_BASE_URL = "https://api.polyhaven.com"
-POLY_HAVEN_SITE_URL = "https://polyhaven.com"
-SKETCHFAB_BASE_URL = "https://api.sketchfab.com/v3"
+def _env_url(name, default):
+    return str(os.environ.get(name) or default).rstrip("/")
+
+
+POLY_HAVEN_BASE_URL = _env_url("BLENDER_AGENT_BRIDGE_POLY_HAVEN_BASE_URL", "https://api.polyhaven.com")
+POLY_HAVEN_SITE_URL = _env_url("BLENDER_AGENT_BRIDGE_POLY_HAVEN_SITE_URL", "https://polyhaven.com")
+SKETCHFAB_BASE_URL = _env_url("BLENDER_AGENT_BRIDGE_SKETCHFAB_BASE_URL", "https://api.sketchfab.com/v3")
 USER_AGENT = "BlenderAgentBridge/0.1 (+https://github.com/CallMeJones/blender-agent-bridge)"
 DOWNLOAD_RETRY_COUNT = 2
 DOWNLOAD_RETRY_BACKOFF_SECONDS = 0.5
@@ -134,7 +138,17 @@ def _default_cache_dir():
     return os.path.join(os.path.expanduser("~"), ".claude_blender", "assets")
 
 
-def _online_access_error(provider="external asset"):
+def _is_loopback_url(url):
+    try:
+        host = (urllib.parse.urlparse(str(url or "")).hostname or "").lower()
+    except Exception:
+        return False
+    return host in {"localhost", "::1"} or host.startswith("127.")
+
+
+def _online_access_error(provider="external asset", url=""):
+    if _is_loopback_url(url):
+        return None
     if bpy is None or bool(getattr(bpy.app, "online_access", True)):
         return None
     overridden = bool(getattr(bpy.app, "online_access_overriden", False))
@@ -152,7 +166,7 @@ def _online_access_error(provider="external asset"):
 
 
 def _fetch_json(url, *, timeout=15):
-    offline_error = _online_access_error("External asset metadata")
+    offline_error = _online_access_error("External asset metadata", url=url)
     if offline_error:
         raise RuntimeError(offline_error["message"])
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
@@ -162,7 +176,7 @@ def _fetch_json(url, *, timeout=15):
 
 
 def _fetch_json_with_headers(url, *, headers=None, timeout=15):
-    offline_error = _online_access_error("External asset metadata")
+    offline_error = _online_access_error("External asset metadata", url=url)
     if offline_error:
         raise RuntimeError(offline_error["message"])
     merged = {"User-Agent": USER_AGENT, "Accept": "application/json"}
@@ -323,7 +337,7 @@ def _download_file(url, destination, *, expected_md5="", expected_size=None, hea
     max_attempts = max(1, DOWNLOAD_RETRY_COUNT + 1)
     for attempt in range(1, max_attempts + 1):
         attempts = attempt
-        offline_error = _online_access_error("External asset file")
+        offline_error = _online_access_error("External asset file", url=url)
         if offline_error:
             offline_error["url"] = str(url)
             offline_error["path"] = destination

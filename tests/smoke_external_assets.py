@@ -357,6 +357,8 @@ def main():
         assert offline_download["ok"] is False, offline_download
         assert offline_download["error_type"] == "online_access_disabled", offline_download
         assert offline_download["online_access_overridden"] is True, offline_download
+        assert external_assets._online_access_error("External asset metadata", url="http://127.0.0.1:9/files/model") is None
+        assert external_assets._online_access_error("External asset metadata", url="http://localhost:9/files/model") is None
         external_assets.bpy = original_bpy
 
         original_urlopen = external_assets.urllib.request.urlopen

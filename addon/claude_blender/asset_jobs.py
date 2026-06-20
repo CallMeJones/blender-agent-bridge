@@ -19,7 +19,7 @@ METADATA_FILENAME = "metadata.json"
 CONFIG_FILENAME = "worker-config.json"
 CHILD_STATUS_FILENAME = "child-status.json"
 LOG_FILENAME = "asset-job.log"
-SCRIPT_FILENAME = "asset_job_worker.py"
+SCRIPT_FILENAME = "asset_job_launcher.py"
 DEFAULT_ASSET_JOB_POLL_INTERVAL_SECONDS = 2
 ASSET_JOB_MODE_ENV = "BLENDER_AGENT_BRIDGE_ASSET_JOB_MODE"
 ASSET_JOB_SECRET_TOKEN_ENV = "BLENDER_AGENT_BRIDGE_ASSET_JOB_API_TOKEN"
@@ -178,139 +178,17 @@ def _package_parent():
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def _child_script_text(config):
-    config_json = json.dumps(config, sort_keys=True)
+def _child_script_text(config_path, package_parent):
     return f"""\
 from __future__ import annotations
 
-import json
-import os
 import sys
-import time
-import traceback
-import uuid
 
-CONFIG = json.loads({config_json!r})
+sys.path.insert(0, {package_parent!r})
 
+from claude_blender.asset_job_worker import main
 
-def write_json(path, payload):
-    temp_path = f"{{path}}.{{os.getpid()}}.{{uuid.uuid4().hex}}.tmp"
-    with open(temp_path, "w", encoding="utf-8", newline="\\n") as handle:
-        json.dump(payload, handle, indent=2, sort_keys=True, default=str)
-    os.replace(temp_path, path)
-
-
-def read_json(path):
-    with open(path, "r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def manifest_summary(manifest):
-    manifest = manifest if isinstance(manifest, dict) else {{}}
-    downloaded = [item for item in manifest.get("downloaded_files") or [] if isinstance(item, dict)]
-    extracted = manifest.get("extracted_files") if isinstance(manifest.get("extracted_files"), list) else []
-    return {{
-        "ok": bool(manifest.get("ok")),
-        "provider": str(manifest.get("provider") or ""),
-        "asset_id": str(manifest.get("asset_id") or ""),
-        "uid": str(manifest.get("uid") or ""),
-        "asset_type": str(manifest.get("asset_type") or ""),
-        "cache_dir": str(manifest.get("cache_dir") or ""),
-        "manifest_path": str(manifest.get("manifest_path") or ""),
-        "import_file": str(manifest.get("import_file") or ""),
-        "downloaded_file_count": len(downloaded),
-        "extracted_file_count": len(extracted),
-        "import_status": str(manifest.get("import_status") or ""),
-        "message": str(manifest.get("message") or ""),
-    }}
-
-
-def write_status(status, **updates):
-    path = CONFIG["child_status_path"]
-    try:
-        payload = read_json(path) if os.path.isfile(path) else {{}}
-    except Exception:
-        payload = {{}}
-    payload.update(updates)
-    payload["status"] = status
-    payload["updated_at"] = time.time()
-    write_json(path, payload)
-
-
-def progress_callback(update):
-    update = update if isinstance(update, dict) else {{}}
-    expected = int(update.get("expected_size") or 0)
-    downloaded = int(update.get("bytes_downloaded") or 0)
-    progress = round(min(0.99, max(0.0, downloaded / expected)), 4) if expected else 0.0
-    write_status(
-        "running",
-        phase=str(update.get("phase") or "download"),
-        current_url=str(update.get("url") or ""),
-        current_file=str(update.get("path") or ""),
-        partial_path=str(update.get("partial_path") or ""),
-        bytes_downloaded=downloaded,
-        expected_size_bytes=expected,
-        current_file_progress=progress,
-        progress=progress,
-        attempt=int(update.get("attempt") or 0),
-        resumed=bool(update.get("resumed", False)),
-        message="External asset download/cache in progress",
-    )
-
-
-try:
-    sys.path.insert(0, CONFIG["package_parent"])
-    from claude_blender import external_assets
-
-    provider = str(CONFIG.get("provider") or "")
-    args = dict(CONFIG.get("args") or {{}})
-    write_status("running", message=f"{{provider.replace('_', ' ').title()}} asset download/cache started")
-    if provider == "poly_haven":
-        manifest = external_assets.download_poly_haven_asset(
-            asset_id=str(args.get("asset_id") or ""),
-            asset_type=str(args.get("asset_type") or ""),
-            resolution=str(args.get("resolution") or "2k"),
-            file_format=str(args.get("file_format") or ""),
-            map_types=args.get("map_types") if isinstance(args.get("map_types"), list) else None,
-            include_dependencies=bool(args.get("include_dependencies", True)),
-            cache_dir=str(args.get("cache_dir") or ""),
-            timeout=int(args.get("timeout") or 60),
-            progress_callback=progress_callback,
-        )
-    elif provider == "sketchfab":
-        manifest = external_assets.download_sketchfab_model(
-            uid=str(args.get("uid") or ""),
-            api_token=os.environ.get({ASSET_JOB_SECRET_TOKEN_ENV!r}, ""),
-            token_env_var=str(args.get("token_env_var") or external_assets.SKETCHFAB_TOKEN_ENV_VAR),
-            model_password=os.environ.get({ASSET_JOB_SECRET_PASSWORD_ENV!r}, ""),
-            cache_dir=str(args.get("cache_dir") or ""),
-            timeout=int(args.get("timeout") or 120),
-            progress_callback=progress_callback,
-        )
-    else:
-        manifest = {{"ok": False, "message": f"Unsupported external asset provider: {{provider}}"}}
-    status = "completed" if manifest.get("ok") else "failed"
-    write_status(
-        status,
-        ok=bool(manifest.get("ok")),
-        completed_at=time.time(),
-        progress=1.0 if manifest.get("ok") else 0.0,
-        poll_after_seconds=0,
-        manifest_path=str(manifest.get("manifest_path") or ""),
-        manifest_summary=manifest_summary(manifest),
-        message=str(manifest.get("message") or ("External asset cached" if manifest.get("ok") else "External asset job failed")),
-    )
-except Exception as exc:
-    write_status(
-        "failed",
-        ok=False,
-        completed_at=time.time(),
-        progress=0.0,
-        poll_after_seconds=0,
-        message=f"External asset worker failed: {{type(exc).__name__}}: {{exc}}",
-        traceback=traceback.format_exc(),
-    )
-    raise
+raise SystemExit(main({config_path!r}))
 """
 
 
@@ -497,7 +375,7 @@ def _start_process_job(job_id, provider, args, metadata):
     }
     _write_json(config_path, config)
     with open(script_path, "w", encoding="utf-8", newline="\n") as handle:
-        handle.write(_child_script_text(config))
+        handle.write(_child_script_text(config_path, config["package_parent"]))
 
     blender_binary = getattr(bpy.app, "binary_path", "") or "blender"
     command = [blender_binary, "--background", "--factory-startup", "--python", script_path]
@@ -715,7 +593,7 @@ def start_external_asset_download(
         "message": "External asset job prepared",
         "client_guidance": (
             "This job downloads/caches external asset files outside Blender's scene mutation path. "
-            "Poll get_external_asset_job_status, then call import_external_asset_job_result after completion."
+            "Poll get_external_asset_job_status, then call start_external_asset_import_job after completion."
         ),
     }
     _write_metadata(metadata_path, metadata)

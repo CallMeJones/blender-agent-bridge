@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import http.server
 import os
 import shutil
 import sys
 import tempfile
+import threading
 import time
 import urllib.parse
 import zipfile
@@ -21,6 +24,8 @@ import claude_blender  # noqa: E402
 from claude_blender import asset_jobs, external_assets, live_preview, tool_dispatcher  # noqa: E402
 
 observed_timeouts = []
+SUBPROCESS_MODEL_BYTES = b'{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[]}]}'
+SUBPROCESS_MODEL_MD5 = hashlib.md5(SUBPROCESS_MODEL_BYTES).hexdigest()
 
 
 def _make_png(path):
@@ -142,6 +147,56 @@ def _fake_import_model_file(filepath):
     return {"ok": True}
 
 
+def _start_poly_haven_fixture_server():
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, _format, *args):
+            pass
+
+        def _send_json(self, payload):
+            body = json.dumps(payload).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _send_bytes(self, body, content_type):
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            path = urllib.parse.urlparse(self.path).path
+            base_url = f"http://{self.server.server_address[0]}:{self.server.server_address[1]}"
+            if path == "/files/subprocess_model":
+                self._send_json(
+                    {
+                        "gltf": {
+                            "1k": {
+                                "gltf": {
+                                    "url": f"{base_url}/downloads/subprocess_model.gltf",
+                                    "md5": SUBPROCESS_MODEL_MD5,
+                                    "size": len(SUBPROCESS_MODEL_BYTES),
+                                }
+                            }
+                        }
+                    }
+                )
+                return
+            if path == "/downloads/subprocess_model.gltf":
+                self._send_bytes(SUBPROCESS_MODEL_BYTES, "model/gltf+json")
+                return
+            self.send_response(404)
+            self.end_headers()
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, name="PolyHavenFixtureServer", daemon=True)
+    thread.start()
+    return server, thread, f"http://{server.server_address[0]}:{server.server_address[1]}"
+
+
 def _execute(context, name, args):
     return json.loads(tool_dispatcher.execute_tool(context, name, args))
 
@@ -167,10 +222,13 @@ def _run_import_queue_once():
 def main():
     cache_dir = tempfile.mkdtemp(prefix="bab-import-assets-")
     original_asset_job_mode = os.environ.get(asset_jobs.ASSET_JOB_MODE_ENV)
+    original_poly_haven_base_url = os.environ.get("BLENDER_AGENT_BRIDGE_POLY_HAVEN_BASE_URL")
     original_fetch_json = external_assets._fetch_json
     original_fetch_json_with_headers = external_assets._fetch_json_with_headers
     original_download_file = external_assets._download_file
     original_import_model_file = external_assets._import_model_file
+    fixture_server = None
+    fixture_thread = None
     os.environ[asset_jobs.ASSET_JOB_MODE_ENV] = "thread"
     external_assets._fetch_json = _fake_fetch_json
     external_assets._fetch_json_with_headers = _fake_fetch_json_with_headers
@@ -348,6 +406,45 @@ def main():
             os.environ.pop(asset_jobs.ASSET_JOB_MODE_ENV, None)
         else:
             os.environ[asset_jobs.ASSET_JOB_MODE_ENV] = original_asset_job_mode
+        fixture_server, fixture_thread, fixture_base_url = _start_poly_haven_fixture_server()
+        os.environ["BLENDER_AGENT_BRIDGE_POLY_HAVEN_BASE_URL"] = fixture_base_url
+        subprocess_poly = _execute(
+            bpy.context,
+            "start_external_asset_download",
+            {
+                "provider": "poly_haven",
+                "asset_id": "subprocess_model",
+                "asset_type": "models",
+                "resolution": "1k",
+                "file_format": "gltf",
+                "cache_dir": cache_dir,
+                "job_name": "Smoke subprocess Poly Haven model",
+            },
+        )
+        assert subprocess_poly["ok"] is True, subprocess_poly
+        assert subprocess_poly["asset_job"]["worker_type"] == "subprocess", subprocess_poly
+        subprocess_poly_status = _wait_asset_job(bpy.context, subprocess_poly["job_id"], timeout=45.0)
+        assert subprocess_poly_status["asset_job"]["status"] == "completed", subprocess_poly_status
+        assert subprocess_poly_status["asset_job"]["worker_type"] == "subprocess", subprocess_poly_status
+        assert subprocess_poly_status["asset_job"]["pid"], subprocess_poly_status
+        assert subprocess_poly_status["asset_job"]["manifest_path"], subprocess_poly_status
+        assert subprocess_poly_status["asset_job"]["manifest_summary"]["ok"] is True, subprocess_poly_status
+        subprocess_poly_import = _execute(
+            bpy.context,
+            "start_external_asset_import_job",
+            {"source_job_id": subprocess_poly["job_id"], "label": "Import subprocess Poly Haven model"},
+        )
+        assert subprocess_poly_import["ok"] is True, subprocess_poly_import
+        _run_import_queue_once()
+        subprocess_poly_import_status = _execute(
+            bpy.context,
+            "get_external_asset_import_job_status",
+            {"job_id": subprocess_poly_import["job_id"]},
+        )
+        assert subprocess_poly_import_status["asset_import_job"]["status"] == "completed", subprocess_poly_import_status
+        assert subprocess_poly_import_status["asset_import_job"]["import_result"]["ok"] is True, subprocess_poly_import_status
+        assert live_preview.revert(bpy.context)["ok"] is True
+
         subprocess_missing_auth = _execute(
             bpy.context,
             "start_external_asset_download",
@@ -370,10 +467,19 @@ def main():
             claude_blender.unregister()
         except Exception:
             pass
+        if fixture_server is not None:
+            fixture_server.shutdown()
+            fixture_server.server_close()
+        if fixture_thread is not None:
+            fixture_thread.join(timeout=1.0)
         external_assets._fetch_json = original_fetch_json
         external_assets._fetch_json_with_headers = original_fetch_json_with_headers
         external_assets._download_file = original_download_file
         external_assets._import_model_file = original_import_model_file
+        if original_poly_haven_base_url is None:
+            os.environ.pop("BLENDER_AGENT_BRIDGE_POLY_HAVEN_BASE_URL", None)
+        else:
+            os.environ["BLENDER_AGENT_BRIDGE_POLY_HAVEN_BASE_URL"] = original_poly_haven_base_url
         if original_asset_job_mode is None:
             os.environ.pop(asset_jobs.ASSET_JOB_MODE_ENV, None)
         else:
