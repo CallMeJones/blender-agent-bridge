@@ -88,7 +88,9 @@ def main():
         assert "start_external_asset_import_job" in bundle["available_tools"]
         assert "get_external_asset_import_job_status" in bundle["available_tools"]
         assert "cancel_external_asset_import_job" in bundle["available_tools"]
+        assert "delete_external_asset_job" in bundle["available_tools"]
         assert "get_external_asset_cache_diagnostics" in bundle["available_tools"]
+        assert "prune_external_asset_cache" in bundle["available_tools"]
         assert "jump_to_workspace" in bundle["available_tools"]
         assert "set_viewport_view" in bundle["available_tools"]
         assert "focus_object_in_viewport" in bundle["available_tools"]
@@ -125,7 +127,9 @@ def main():
         assert "start_external_asset_import_job" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "get_external_asset_import_job_status" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "cancel_external_asset_import_job" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "delete_external_asset_job" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "get_external_asset_cache_diagnostics" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "prune_external_asset_cache" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "jump_to_workspace" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "set_viewport_view" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "focus_object_in_viewport" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
@@ -162,7 +166,9 @@ def main():
         assert "start_external_asset_import_job" in bridge_protocol.TOOL_CONTRACTS
         assert "get_external_asset_import_job_status" in bridge_protocol.TOOL_CONTRACTS
         assert "cancel_external_asset_import_job" in bridge_protocol.TOOL_CONTRACTS
+        assert "delete_external_asset_job" in bridge_protocol.TOOL_CONTRACTS
         assert "get_external_asset_cache_diagnostics" in bridge_protocol.TOOL_CONTRACTS
+        assert "prune_external_asset_cache" in bridge_protocol.TOOL_CONTRACTS
         assert "inspect_simulation_bake" in bridge_protocol.TOOL_CONTRACTS
         assert "stage_persistent_simulation_bake" in bridge_protocol.TOOL_CONTRACTS
         assert "jump_to_workspace" in bridge_protocol.TOOL_CONTRACTS

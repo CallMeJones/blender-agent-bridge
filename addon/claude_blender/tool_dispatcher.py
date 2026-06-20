@@ -3071,10 +3071,30 @@ def cancel_external_asset_import_job(context, args):
     )
 
 
+def delete_external_asset_job(context, args):
+    prefs = preferences.get_preferences(context)
+    return asset_jobs.delete_external_asset_job(
+        str(args.get("job_id") or ""),
+        context=context,
+        preferred_dir=getattr(prefs, "capture_cache_dir", None),
+        dry_run=bool(args.get("dry_run", True)),
+    )
+
+
 def get_external_asset_cache_diagnostics(context, args):
     return external_assets.external_asset_cache_diagnostics(
         cache_dir=str(args.get("cache_dir") or ""),
         max_assets=_bounded_int(args.get("max_assets"), 50, minimum=1, maximum=500),
+    )
+
+
+def prune_external_asset_cache(context, args):
+    return external_assets.prune_external_asset_cache(
+        cache_dir=str(args.get("cache_dir") or ""),
+        max_age_days=_bounded_int(args.get("max_age_days"), 0, minimum=0, maximum=36500),
+        max_total_bytes=_bounded_int(args.get("max_total_bytes"), 0, minimum=0, maximum=10 * 1024 * 1024 * 1024 * 1024),
+        dry_run=bool(args.get("dry_run", True)),
+        include_imported=bool(args.get("include_imported", False)),
     )
 
 
@@ -3449,7 +3469,9 @@ TOOL_FUNCTIONS = {
     "start_external_asset_import_job": start_external_asset_import_job,
     "get_external_asset_import_job_status": get_external_asset_import_job_status,
     "cancel_external_asset_import_job": cancel_external_asset_import_job,
+    "delete_external_asset_job": delete_external_asset_job,
     "get_external_asset_cache_diagnostics": get_external_asset_cache_diagnostics,
+    "prune_external_asset_cache": prune_external_asset_cache,
     "draft_script": draft_script,
     "run_approved_script": run_approved_script,
     "commit_preview": commit_preview,

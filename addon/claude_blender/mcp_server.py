@@ -797,7 +797,9 @@ def _tool_category(tool):
         "start_external_asset_import_job",
         "get_external_asset_import_job_status",
         "cancel_external_asset_import_job",
+        "delete_external_asset_job",
         "get_external_asset_cache_diagnostics",
+        "prune_external_asset_cache",
     }:
         return "external_assets"
     if name in {"get_workspace_layout", "jump_to_workspace", "set_viewport_view", "focus_object_in_viewport"}:

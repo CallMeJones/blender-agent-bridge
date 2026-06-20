@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import threading
 import time
@@ -1040,6 +1041,78 @@ def cancel_external_asset_import_job(job_id, *, context=None, preferred_dir=None
         message="External asset import job cancelled",
     )
     return {"ok": True, "message": "External asset import job cancelled", "asset_import_job": metadata}
+
+
+def delete_external_asset_job(job_id, *, context=None, preferred_dir=None, capture_dir=None, dry_run=True):
+    metadata = _metadata_for_id(job_id, capture_dir, context=context, preferred_dir=preferred_dir)
+    if not metadata:
+        return {
+            "ok": False,
+            "message": "External asset job was not found for this Blender project/session",
+            "job_id": str(job_id or ""),
+            "dry_run": bool(dry_run),
+        }
+    job_id = metadata.get("job_id", str(job_id or ""))
+    if metadata.get("operation") == "import_result":
+        metadata = external_asset_import_job_status(job_id, context=context, preferred_dir=preferred_dir, capture_dir=capture_dir)
+    else:
+        metadata = external_asset_job_status(job_id, context=context, preferred_dir=preferred_dir, capture_dir=capture_dir)
+    queued, active, _cancel_requested = _import_queue_contains(job_id)
+    with _LOCK:
+        thread = _THREADS.get(job_id)
+        process = _PROCESSES.get(job_id)
+    running = bool((thread and thread.is_alive()) or (process and process.poll() is None) or queued or active)
+    status = str(metadata.get("status") or "")
+    if running or status not in {"completed", "failed", "cancelled"}:
+        return {
+            "ok": False,
+            "message": "Only completed, failed, or cancelled external asset jobs can be deleted",
+            "asset_job": metadata,
+            "dry_run": bool(dry_run),
+        }
+    job_dir = os.path.abspath(str(metadata.get("job_dir") or ""))
+    roots = [
+        os.path.abspath(info["asset_job_root"])
+        for info in _job_dir_candidates(capture_dir, context=context, preferred_dir=preferred_dir)
+    ]
+    if not job_dir or not any(job_dir == root or job_dir.startswith(root + os.sep) for root in roots):
+        return {
+            "ok": False,
+            "message": "Refusing to delete external asset job outside known job roots",
+            "asset_job": metadata,
+            "job_dir": job_dir,
+            "dry_run": bool(dry_run),
+        }
+    size = 0
+    for root, _dirs, files in os.walk(job_dir):
+        for filename in files:
+            try:
+                size += os.path.getsize(os.path.join(root, filename))
+            except OSError:
+                pass
+    if not dry_run:
+        try:
+            shutil.rmtree(job_dir)
+        except Exception as exc:
+            return {
+                "ok": False,
+                "message": f"External asset job delete failed: {type(exc).__name__}: {exc}",
+                "dry_run": False,
+                "job_id": job_id,
+                "job_dir": job_dir,
+                "bytes": size,
+            }
+    return {
+        "ok": True,
+        "message": "External asset job delete dry run complete" if dry_run else "External asset job deleted",
+        "dry_run": bool(dry_run),
+        "job_id": job_id,
+        "operation": metadata.get("operation", ""),
+        "status": status,
+        "job_dir": job_dir,
+        "bytes": size,
+        "deleted": not bool(dry_run),
+    }
 
 
 def register():

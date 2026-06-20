@@ -317,6 +317,27 @@ def main():
         assert diagnostics["provider_counts"]["poly_haven"] >= 3, diagnostics
         assert diagnostics["provider_counts"]["sketchfab"] >= 1, diagnostics
 
+        prune_dry_run = external_assets.prune_external_asset_cache(
+            cache_dir=cache_dir,
+            max_total_bytes=1,
+            dry_run=True,
+            include_imported=True,
+        )
+        assert prune_dry_run["ok"] is True, prune_dry_run
+        assert prune_dry_run["dry_run"] is True, prune_dry_run
+        assert prune_dry_run["candidate_count"] >= 1, prune_dry_run
+        assert prune_dry_run["deleted_count"] == 0, prune_dry_run
+
+        prune_actual = external_assets.prune_external_asset_cache(
+            cache_dir=cache_dir,
+            max_total_bytes=1,
+            dry_run=False,
+            include_imported=True,
+        )
+        assert prune_actual["ok"] is True, prune_actual
+        assert prune_actual["dry_run"] is False, prune_actual
+        assert prune_actual["deleted_count"] >= 1, prune_actual
+
         external_assets._download_file = original_download_file
         external_assets.bpy = _FakeOfflineBpy()
         offline_download = external_assets._download_file(
@@ -468,7 +489,9 @@ def main():
             "start_external_asset_import_job",
             "get_external_asset_import_job_status",
             "cancel_external_asset_import_job",
+            "delete_external_asset_job",
             "get_external_asset_cache_diagnostics",
+            "prune_external_asset_cache",
         ):
             assert name in tool_names, name
             assert name in bridge_protocol.TOOL_CONTRACTS, name
@@ -489,7 +512,7 @@ def main():
             if name in {"import_poly_haven_asset", "import_sketchfab_model", "import_external_asset_job_result", "start_external_asset_import_job"}:
                 assert annotations["mutatesScene"] is True, annotations
                 assert annotations["requiresLivePreview"] is True, annotations
-            elif name in {"download_poly_haven_asset", "download_sketchfab_model", "start_external_asset_download", "cancel_external_asset_job", "cancel_external_asset_import_job"}:
+            elif name in {"download_poly_haven_asset", "download_sketchfab_model", "start_external_asset_download", "cancel_external_asset_job", "cancel_external_asset_import_job", "delete_external_asset_job", "prune_external_asset_cache"}:
                 assert annotations["mutatesScene"] is False, annotations
                 assert annotations["hasSideEffects"] is True, annotations
             else:

@@ -279,6 +279,26 @@ def main():
         )
         assert cancelled_import["ok"] is True, cancelled_import
         assert cancelled_import["asset_import_job"]["status"] == "cancelled", cancelled_import
+        delete_dry_run = _execute(
+            bpy.context,
+            "delete_external_asset_job",
+            {"job_id": cancel_import_job["job_id"], "dry_run": True},
+        )
+        assert delete_dry_run["ok"] is True, delete_dry_run
+        assert delete_dry_run["deleted"] is False, delete_dry_run
+        delete_actual = _execute(
+            bpy.context,
+            "delete_external_asset_job",
+            {"job_id": cancel_import_job["job_id"], "dry_run": False},
+        )
+        assert delete_actual["ok"] is True, delete_actual
+        assert delete_actual["deleted"] is True, delete_actual
+        deleted_status = _execute(
+            bpy.context,
+            "get_external_asset_import_job_status",
+            {"job_id": cancel_import_job["job_id"]},
+        )
+        assert deleted_status["ok"] is False, deleted_status
 
         observed_timeouts.clear()
         async_sketchfab = _execute(

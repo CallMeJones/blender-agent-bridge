@@ -620,6 +620,22 @@ TOOL_CONTRACTS = {
             "additionalProperties": False,
         },
     },
+    "delete_external_asset_job": {
+        "description": "Delete completed, failed, or cancelled external asset job metadata/log files; dry-run by default",
+        "mutates_scene": False,
+        "has_side_effects": True,
+        "permissions": ["files:write"],
+        "supports_headless": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "job_id": {"type": "string"},
+                "dry_run": {"type": "boolean"},
+            },
+            "required": ["job_id"],
+            "additionalProperties": False,
+        },
+    },
     "get_external_asset_cache_diagnostics": {
         "description": "Report cached/imported external assets, providers, licenses, source URLs, files, and imported Blender data-block names",
         "mutates_scene": False,
@@ -630,6 +646,24 @@ TOOL_CONTRACTS = {
             "properties": {
                 "cache_dir": {"type": "string"},
                 "max_assets": {"type": "integer"},
+            },
+            "additionalProperties": False,
+        },
+    },
+    "prune_external_asset_cache": {
+        "description": "Preview or delete old/excess external asset cache directories by age or total size; dry-run by default",
+        "mutates_scene": False,
+        "has_side_effects": True,
+        "permissions": ["files:read", "files:write"],
+        "supports_headless": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "cache_dir": {"type": "string"},
+                "max_age_days": {"type": "integer"},
+                "max_total_bytes": {"type": "integer"},
+                "dry_run": {"type": "boolean"},
+                "include_imported": {"type": "boolean"},
             },
             "additionalProperties": False,
         },

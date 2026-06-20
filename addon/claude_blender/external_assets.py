@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import calendar
 import os
 import re
 import shutil
@@ -1629,4 +1630,112 @@ def external_asset_cache_diagnostics(*, cache_dir="", max_assets=50):
         "provider_counts": provider_counts,
         "total_cached_bytes": total_bytes,
         "assets": assets,
+    }
+
+
+def _directory_size(path):
+    total = 0
+    for root, _dirs, files in os.walk(path):
+        for filename in files:
+            full_path = os.path.join(root, filename)
+            try:
+                total += os.path.getsize(full_path)
+            except OSError:
+                pass
+    return total
+
+
+def _manifest_epoch(manifest, fallback_path=""):
+    value = str(manifest.get("updated_at") or manifest.get("created_at") or "")
+    try:
+        parsed = time.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+        return calendar.timegm(parsed)
+    except Exception:
+        try:
+            return os.path.getmtime(fallback_path)
+        except OSError:
+            return 0.0
+
+
+def _cache_asset_records(root):
+    records = []
+    for current_root, _dirs, files in os.walk(root):
+        if "asset_manifest.json" not in files:
+            continue
+        manifest_path = os.path.join(current_root, "asset_manifest.json")
+        manifest = _read_manifest(manifest_path)
+        size = _directory_size(current_root)
+        records.append(
+            {
+                "provider": str(manifest.get("provider") or "unknown"),
+                "asset_id": str(manifest.get("asset_id") or manifest.get("uid") or ""),
+                "asset_type": str(manifest.get("asset_type") or ""),
+                "cache_dir": current_root,
+                "manifest_path": manifest_path,
+                "import_status": str(manifest.get("import_status") or ""),
+                "size": size,
+                "updated_epoch": _manifest_epoch(manifest, manifest_path),
+            }
+        )
+    return records
+
+
+def prune_external_asset_cache(*, cache_dir="", max_age_days=0, max_total_bytes=0, dry_run=True, include_imported=False):
+    root = _cache_root(cache_dir)
+    records = _cache_asset_records(root)
+    total_bytes = sum(int(item.get("size") or 0) for item in records)
+    now = time.time()
+    candidates_by_path = {}
+    max_age_seconds = max(0, int(float(max_age_days or 0) * 86400))
+    for record in records:
+        if not include_imported and record.get("import_status") == "imported":
+            continue
+        if max_age_seconds and record.get("updated_epoch") and now - float(record["updated_epoch"]) >= max_age_seconds:
+            candidates_by_path[record["cache_dir"]] = {**record, "reason": "older_than_max_age"}
+
+    max_total_bytes = max(0, int(max_total_bytes or 0))
+    projected_total = total_bytes
+    if max_total_bytes and projected_total > max_total_bytes:
+        for record in sorted(records, key=lambda item: float(item.get("updated_epoch") or 0.0)):
+            if projected_total <= max_total_bytes:
+                break
+            if not include_imported and record.get("import_status") == "imported":
+                continue
+            existing = candidates_by_path.get(record["cache_dir"])
+            reason = "over_max_total_bytes" if existing is None else f"{existing['reason']},over_max_total_bytes"
+            candidates_by_path[record["cache_dir"]] = {**record, "reason": reason}
+            projected_total -= int(record.get("size") or 0)
+
+    candidates = sorted(candidates_by_path.values(), key=lambda item: (float(item.get("updated_epoch") or 0.0), item.get("cache_dir", "")))
+    deleted = []
+    errors = []
+    reclaimed = 0
+    root_abs = os.path.abspath(root)
+    for record in candidates:
+        path = os.path.abspath(record["cache_dir"])
+        if not (path == root_abs or path.startswith(root_abs + os.sep)):
+            errors.append({"path": path, "message": "Refusing to delete path outside asset cache root"})
+            continue
+        if dry_run:
+            continue
+        try:
+            shutil.rmtree(path)
+            deleted.append(record)
+            reclaimed += int(record.get("size") or 0)
+        except Exception as exc:
+            errors.append({"path": path, "message": f"{type(exc).__name__}: {exc}"})
+
+    return {
+        "ok": not errors,
+        "message": "External asset cache prune dry run complete" if dry_run else "External asset cache prune complete",
+        "dry_run": bool(dry_run),
+        "cache_dir": root,
+        "asset_count": len(records),
+        "total_bytes": total_bytes,
+        "candidate_count": len(candidates),
+        "candidates": candidates,
+        "deleted_count": len(deleted),
+        "deleted": deleted,
+        "reclaimed_bytes": reclaimed,
+        "errors": errors,
     }

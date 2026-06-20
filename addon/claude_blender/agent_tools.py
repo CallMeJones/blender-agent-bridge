@@ -2854,6 +2854,19 @@ def blender_tool_definitions():
             },
         },
         {
+            "name": "delete_external_asset_job",
+            "description": "Delete completed, failed, or cancelled external asset job metadata/log files. Dry-run by default.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string"},
+                    "dry_run": {"type": "boolean"},
+                },
+                "required": ["job_id"],
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "get_external_asset_cache_diagnostics",
             "description": "Report cached/imported external assets, providers, licenses, source URLs, files, and imported Blender data-block names.",
             "input_schema": {
@@ -2861,6 +2874,21 @@ def blender_tool_definitions():
                 "properties": {
                     "cache_dir": {"type": "string"},
                     "max_assets": {"type": "integer"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "prune_external_asset_cache",
+            "description": "Preview or delete old/excess external asset cache directories by age or total size. Dry-run by default.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "cache_dir": {"type": "string"},
+                    "max_age_days": {"type": "integer"},
+                    "max_total_bytes": {"type": "integer"},
+                    "dry_run": {"type": "boolean"},
+                    "include_imported": {"type": "boolean"},
                 },
                 "additionalProperties": False,
             },
@@ -3101,7 +3129,9 @@ _TOOL_GROUPS = {
         "start_external_asset_import_job",
         "get_external_asset_import_job_status",
         "cancel_external_asset_import_job",
+        "delete_external_asset_job",
         "get_external_asset_cache_diagnostics",
+        "prune_external_asset_cache",
     },
     "advanced_create": {
         "create_shader_material",
@@ -3469,7 +3499,9 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "start_external_asset_import_job",
     "get_external_asset_import_job_status",
     "cancel_external_asset_import_job",
+    "delete_external_asset_job",
     "get_external_asset_cache_diagnostics",
+    "prune_external_asset_cache",
     "duplicate_selected_objects",
     "parent_selected_to_empty",
     "align_selected_objects",
