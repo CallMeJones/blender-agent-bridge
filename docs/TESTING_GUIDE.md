@@ -681,7 +681,16 @@ import_poly_haven_asset
 search_sketchfab_models
 download_sketchfab_model
 import_sketchfab_model
+start_external_asset_download
+get_external_asset_job_status
+cancel_external_asset_job
+import_external_asset_job_result
+start_external_asset_import_job
+get_external_asset_import_job_status
+cancel_external_asset_import_job
+delete_external_asset_job
 get_external_asset_cache_diagnostics
+prune_external_asset_cache
 ```
 
 Owner tests:
@@ -695,9 +704,10 @@ Required scenarios:
 - Poly Haven search and file-tree inspection handle network success, timeout, unavailable assets, hash/size metadata, and license/source reporting.
 - Download helpers cache files and verify MD5/size when available.
 - Import helpers leave preview changes and record imported data-block names.
+- Async asset download jobs run through the default subprocess worker, publish progress/final manifests, and can feed queued import jobs.
 - Sketchfab public search works without tokens for public metadata.
 - Sketchfab download/import only uses per-call `api_token` or `SKETCHFAB_API_TOKEN` / `BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN`.
-- Cache diagnostics do not expose secrets.
+- Cache diagnostics and job status do not expose secrets.
 
 ### Script Safety, Approval, Trust, Audit, Preview
 

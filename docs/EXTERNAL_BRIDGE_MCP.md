@@ -250,7 +250,12 @@ External asset helpers are provider-neutral bridge tools. They do not add provid
 - `search_sketchfab_models` searches Sketchfab public models and returns viewer, author, license, thumbnail, and downloadability metadata.
 - `download_sketchfab_model` uses Sketchfab's authenticated download endpoint to cache and extract a GLTF archive.
 - `import_sketchfab_model` imports the extracted Sketchfab GLTF/GLB into Blender preview.
+- `start_external_asset_download` starts a background Poly Haven or Sketchfab cache job and returns a pollable job id.
+- `get_external_asset_job_status` reports download progress, cached manifest paths, logs, and completion state.
+- `start_external_asset_import_job` queues a completed asset job or cached manifest for Blender main-thread import, then `get_external_asset_import_job_status` reports queued/running/completed state.
+- `cancel_external_asset_job`, `cancel_external_asset_import_job`, and `delete_external_asset_job` handle cancellation and job cleanup.
 - `get_external_asset_cache_diagnostics` reports cached/imported providers, licenses, source URLs, file counts, cache paths, and imported Blender data-block names.
+- `prune_external_asset_cache` removes old or oversized cached assets, with dry-run mode by default.
 
 ## Prompts
 
