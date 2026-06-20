@@ -2728,6 +2728,7 @@ def render_scene_thumbnail(context, args):
         camera_name=str(args.get("camera_name") or ""),
         note=str(args.get("note") or ""),
         capture_dir=getattr(prefs, "capture_cache_dir", None),
+        allow_blocking_render=bool(args.get("allow_blocking_render", False)),
     )
 
 

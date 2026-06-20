@@ -133,6 +133,24 @@ def main():
         assert health["scene"] == bpy.context.scene.name
         assert health["addon_source_hash"] == build_info.source_tree_hash(), health
         assert "Source " in health["build_diagnostics"], health
+        bridge_server._begin_active_operation("capture_animation_playblast", {"max_frames": 12}, 120)
+        try:
+            busy_health = _get(base + "/health")
+            assert busy_health["ok"] is True, busy_health
+            assert busy_health["bridge_busy"] is True, busy_health
+            assert busy_health["recoverable"] is True, busy_health
+            assert busy_health["active_tool_name"] == "capture_animation_playblast", busy_health
+            assert busy_health["active_operation"]["tool"] == "capture_animation_playblast", busy_health
+            assert busy_health["poll_after_seconds"] >= 1, busy_health
+            assert "recover" in busy_health["message"], busy_health
+        finally:
+            bridge_server._finish_active_operation("capture_animation_playblast", ok=True, message="synthetic done")
+        timeout_payload = bridge_server._timeout_payload("capture_animation_playblast", 120)["result"]
+        assert timeout_payload["recoverable"] is True, timeout_payload
+        assert timeout_payload["request_may_still_be_running"] is True, timeout_payload
+        assert timeout_payload["result_may_be_lost_after_client_timeout"] is True, timeout_payload
+        assert timeout_payload["status_tool"] == "blender_bridge_status", timeout_payload
+        assert timeout_payload["resource_tool"] == "get_visual_evidence_resources", timeout_payload
         _expect_http_error(
             lambda: _get_with_headers(base + "/health", {"Origin": "https://example.invalid"}),
             403,

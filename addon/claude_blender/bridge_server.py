@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import os
 import queue
 import threading
 import time
@@ -32,7 +33,8 @@ from . import (
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
-REQUEST_TIMEOUT_SECONDS = 60
+REQUEST_TIMEOUT_GRACE_SECONDS = 10
+STATUS_PROBE_TIMEOUT_SECONDS = 2
 # Cap inbound request bodies so a local client cannot exhaust memory.
 MAX_REQUEST_BODY_BYTES = 8 * 1024 * 1024
 # Per-connection socket timeout so a stalled/partial request cannot pin a worker thread.
@@ -40,6 +42,16 @@ REQUEST_READ_TIMEOUT_SECONDS = 30
 # Hostnames accepted in the Host/Origin headers; anything else is a cross-origin or
 # DNS-rebinding attempt against the localhost bridge and is refused.
 ALLOWED_HOST_NAMES = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def _env_int(name, default):
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return int(default)
+
+
+REQUEST_TIMEOUT_SECONDS = max(10, _env_int("BLENDER_AGENT_BRIDGE_REQUEST_TIMEOUT", "90"))
 
 
 class _RequestTooLarge(Exception):
@@ -50,6 +62,9 @@ _thread = None
 _requests = queue.Queue()
 _timer_registered = False
 _lock = threading.Lock()
+_operation_lock = threading.Lock()
+_active_operation = {}
+_last_operation = {}
 
 
 def _json_bytes(payload):
@@ -60,11 +75,148 @@ def _public_context():
     return context_bundle.public_bundle(context_bundle.build_context_bundle(bpy.context))
 
 
+def _operation_recovery_guidance(name):
+    try:
+        contract = bridge_protocol.normalized_tool_contract(str(name or ""))
+    except Exception:
+        contract = {}
+    recovery = contract.get("timeout_recovery") if isinstance(contract.get("timeout_recovery"), dict) else {}
+    recommended_tool = str(recovery.get("recommended_tool") or "")
+    if not recommended_tool and any(term in str(name or "") for term in ("render", "playblast", "thumbnail")):
+        recommended_tool = "start_render_job"
+    return {
+        "recoverable": bool(recovery.get("recoverable", True)),
+        "poll_after_seconds": int(recovery.get("poll_after_seconds") or 5),
+        "status_tool": str(recovery.get("status_tool") or "blender_bridge_status"),
+        "resource_tool": str(recovery.get("resource_tool") or "get_visual_evidence_resources"),
+        "recommended_tool": recommended_tool,
+        "message": str(
+            recovery.get("message")
+            or "Wait briefly, call blender_bridge_status, then inspect latest resources or audit logs before rerunning."
+        ),
+    }
+
+
+def _operation_snapshot(operation):
+    if not isinstance(operation, dict) or not operation:
+        return {}
+    started_monotonic = float(operation.get("started_monotonic", 0.0) or 0.0)
+    elapsed = max(0.0, time.monotonic() - started_monotonic) if started_monotonic else 0.0
+    timeout_seconds = int(operation.get("timeout_seconds", 0) or 0)
+    snapshot = {
+        "tool": str(operation.get("tool") or ""),
+        "started_at": float(operation.get("started_at", 0.0) or 0.0),
+        "elapsed_seconds": int(round(elapsed)),
+        "timeout_seconds": timeout_seconds,
+        "request_may_still_be_running": bool(operation.get("request_may_still_be_running", True)),
+        "result_may_be_lost_after_client_timeout": True,
+        "duration_hint": str(operation.get("duration_hint") or ""),
+        "recovery": dict(operation.get("recovery") or {}),
+    }
+    if operation.get("completed_at"):
+        snapshot["completed_at"] = float(operation.get("completed_at", 0.0) or 0.0)
+        snapshot["ok"] = bool(operation.get("ok", False))
+        snapshot["message"] = str(operation.get("message") or "")
+        snapshot["request_may_still_be_running"] = False
+    if timeout_seconds:
+        snapshot["timeout_exceeded"] = elapsed >= float(timeout_seconds)
+    return snapshot
+
+
+def _active_operation_status():
+    with _operation_lock:
+        return _operation_snapshot(dict(_active_operation))
+
+
+def _last_operation_status():
+    with _operation_lock:
+        return _operation_snapshot(dict(_last_operation))
+
+
+def _begin_active_operation(name, args, timeout_seconds):
+    global _active_operation
+    try:
+        contract = bridge_protocol.normalized_tool_contract(str(name or ""))
+    except Exception:
+        contract = {}
+    operation = {
+        "tool": str(name or ""),
+        "started_at": time.time(),
+        "started_monotonic": time.monotonic(),
+        "timeout_seconds": int(timeout_seconds or 0),
+        "request_may_still_be_running": True,
+        "duration_hint": str(contract.get("duration_hint") or ""),
+        "recovery": _operation_recovery_guidance(name),
+        "arguments": audit_log.summarize_arguments(args),
+    }
+    with _operation_lock:
+        _active_operation = operation
+    return operation
+
+
+def _finish_active_operation(name, *, ok=False, message=""):
+    global _active_operation, _last_operation
+    with _operation_lock:
+        operation = dict(_active_operation)
+        if operation.get("tool") != str(name or ""):
+            return
+        operation["completed_at"] = time.time()
+        operation["ok"] = bool(ok)
+        operation["message"] = str(message or "")
+        _last_operation = operation
+        _active_operation = {}
+
+
+def _busy_scene_status(message=""):
+    active = _active_operation_status()
+    last = _last_operation_status()
+    recovery = active.get("recovery") or _operation_recovery_guidance(active.get("tool", ""))
+    diagnostics = build_info.diagnostics_dict(bridge_url=bridge_url())
+    tool = str(active.get("tool") or "")
+    return {
+        "ok": True,
+        "bridge_url": bridge_url(),
+        "bridge_version": bridge_protocol.BRIDGE_VERSION,
+        "addon_id": diagnostics["addon_id"],
+        "addon_name": diagnostics["addon_name"],
+        "addon_version": diagnostics["addon_version"],
+        "addon_path": diagnostics["addon_path"],
+        "addon_source_hash": diagnostics["addon_source_hash"],
+        "expected_addon_source_hash": diagnostics["expected_addon_source_hash"],
+        "addon_source_hash_match": diagnostics["addon_source_hash_match"],
+        "addon_source_hash_status": diagnostics["addon_source_hash_status"],
+        "addon_source_hash_message": diagnostics["addon_source_hash_message"],
+        "mcp_server_version": diagnostics["mcp_server_version"],
+        "mcp_server_path": diagnostics["mcp_server_path"],
+        "mcp_config_version": diagnostics["mcp_config_version"],
+        "build_diagnostics": build_info.diagnostics_summary(),
+        "bridge_busy": True,
+        "recoverable": True,
+        "active_tool_name": tool,
+        "active_operation": active,
+        "last_operation": last,
+        "poll_after_seconds": int(recovery.get("poll_after_seconds") or 5),
+        "recovery_hint": str(recovery.get("message") or ""),
+        "message": message
+        or (
+            f"Blender is busy running '{tool}' on the main thread. "
+            "The bridge is reachable and should recover when the operation completes."
+            if tool
+            else "Blender main thread did not answer the status probe. The bridge is reachable and may recover after the active Blender operation completes."
+        ),
+        "mcp_client_refresh_hint": (
+            "Restart or refresh the MCP client if newly added Blender tools are missing from its callable tool list."
+        ),
+    }
+
+
 def _scene_status():
     bundle = context_bundle.build_context_bundle(bpy.context)
     state = getattr(bpy.context.scene, "claude_blender", None)
     trust = script_runner.external_script_trust_snapshot(bpy.context, state=state) if state else {}
     url = bridge_url() or (getattr(state, "bridge_url", "") if state else "")
+    active = _active_operation_status()
+    last = _last_operation_status()
     diagnostics = build_info.diagnostics_dict(
         bridge_url=url,
         blender_version=".".join(str(part) for part in bpy.app.version),
@@ -88,6 +240,13 @@ def _scene_status():
         "mcp_config_version": diagnostics["mcp_config_version"],
         "build_diagnostics": build_info.diagnostics_summary(),
         "scene": bpy.context.scene.name,
+        "bridge_busy": bool(active),
+        "recoverable": bool(active),
+        "active_tool_name": str(active.get("tool") or ""),
+        "active_operation": active,
+        "last_operation": last,
+        "poll_after_seconds": int((active.get("recovery") or {}).get("poll_after_seconds") or 0),
+        "recovery_hint": str((active.get("recovery") or {}).get("message") or ""),
         "context_summary": context_bundle.summarize_for_status(bundle),
         "ui_status": getattr(state, "status", "") if state else "",
         "pending_preview": bool(getattr(state, "pending_preview", False)) if state else False,
@@ -449,27 +608,76 @@ def _execute_tool(payload):
                     "schema_errors": schema_errors[:32],
                 },
             }
-    result_text = tool_dispatcher.execute_tool(bpy.context, name, args)
+    ok = False
+    result = {}
+    _begin_active_operation(name, args, _tool_timeout_seconds(name))
     try:
-        result = json.loads(result_text)
-    except json.JSONDecodeError:
-        result = {"ok": True, "text": result_text}
-    ok = bool(result.get("ok", True))
+        result_text = tool_dispatcher.execute_tool(bpy.context, name, args)
+        try:
+            result = json.loads(result_text)
+        except json.JSONDecodeError:
+            result = {"ok": True, "text": result_text}
+        ok = bool(result.get("ok", True))
+        try:
+            contract = bridge_protocol.normalized_tool_contract(name)
+            audit_log.append_event(
+                "bridge_tool_call",
+                source="bridge",
+                tool_name=name,
+                ok=ok,
+                risk_level=contract.get("risk_level", ""),
+                mutates_scene=bool(contract.get("mutates_scene", False)),
+                requires_approval=bool(contract.get("requires_approval", False)),
+                arguments=audit_log.summarize_arguments(args),
+            )
+        except Exception:
+            pass
+        return {"ok": ok, "result": result}
+    finally:
+        message = result.get("message", "") if isinstance(result, dict) else ""
+        _finish_active_operation(name, ok=ok, message=message)
+
+
+def _tool_timeout_seconds(name):
     try:
-        contract = bridge_protocol.normalized_tool_contract(name)
-        audit_log.append_event(
-            "bridge_tool_call",
-            source="bridge",
-            tool_name=name,
-            ok=ok,
-            risk_level=contract.get("risk_level", ""),
-            mutates_scene=bool(contract.get("mutates_scene", False)),
-            requires_approval=bool(contract.get("requires_approval", False)),
-            arguments=audit_log.summarize_arguments(args),
-        )
+        contract = bridge_protocol.normalized_tool_contract(str(name or ""))
+        timeout = int(contract.get("timeout_seconds") or REQUEST_TIMEOUT_SECONDS)
     except Exception:
-        pass
-    return {"ok": ok, "result": result}
+        timeout = REQUEST_TIMEOUT_SECONDS
+    return max(REQUEST_TIMEOUT_SECONDS, timeout + REQUEST_TIMEOUT_GRACE_SECONDS)
+
+
+def _timeout_payload(name, timeout):
+    name = str(name or "")
+    render_like = any(term in name for term in ("render", "playblast", "thumbnail"))
+    active = _active_operation_status()
+    last = _last_operation_status()
+    recovery = _operation_recovery_guidance(name)
+    return {
+        "ok": False,
+        "result": {
+            "ok": False,
+            "code": "bridge_main_thread_timeout",
+            "message": (
+                f"Blender did not finish tool '{name or '(unknown)'}' within {int(timeout)}s. "
+                "The operation may still be running on Blender's main thread; wait for Blender to become responsive, "
+                "then call blender_bridge_status or get_visual_evidence_resources. For long renders/playblasts, "
+                "use start_render_job and poll get_render_job_status instead of blocking preview/render tools."
+            ),
+            "tool": name,
+            "timeout_seconds": int(timeout),
+            "request_may_still_be_running": True,
+            "result_may_be_lost_after_client_timeout": True,
+            "recoverable": True,
+            "poll_after_seconds": int(recovery.get("poll_after_seconds") or 5),
+            "status_tool": str(recovery.get("status_tool") or "blender_bridge_status"),
+            "resource_tool": str(recovery.get("resource_tool") or "get_visual_evidence_resources"),
+            "recommended_tool": str(recovery.get("recommended_tool") or ("start_render_job" if render_like else "")),
+            "recovery_hint": str(recovery.get("message") or ""),
+            "active_operation": active,
+            "last_operation": last,
+        },
+    }
 
 
 def _call_on_main(fn, timeout=REQUEST_TIMEOUT_SECONDS):
@@ -577,7 +785,19 @@ class _BridgeHandler(BaseHTTPRequestHandler):
         query = urllib.parse.parse_qs(parsed.query)
         try:
             if parsed.path == "/health":
-                self._send(200, _call_on_main(_scene_status))
+                if _active_operation_status():
+                    self._send(200, _busy_scene_status())
+                else:
+                    try:
+                        self._send(200, _call_on_main(_scene_status, timeout=STATUS_PROBE_TIMEOUT_SECONDS))
+                    except TimeoutError:
+                        self._send(
+                            200,
+                            _busy_scene_status(
+                                "Blender main thread did not answer the status probe quickly. "
+                                "A render, playblast, script, or manual Blender operation may still be running."
+                            ),
+                        )
             elif parsed.path == "/tools":
                 self._send(200, {"ok": True, "tools": _tool_definitions()})
             elif parsed.path == "/contracts":
@@ -604,12 +824,29 @@ class _BridgeHandler(BaseHTTPRequestHandler):
             self._send_error(401, "Unauthorized")
             return
         parsed = urllib.parse.urlparse(self.path)
+        payload = {}
         try:
             payload = self._read_json()
             if parsed.path == "/tool":
-                self._send(200, _call_on_main(lambda: _execute_tool(payload)))
+                tool_name = str(payload.get("name") or "") if isinstance(payload, dict) else ""
+                timeout = _tool_timeout_seconds(tool_name)
+                self._send(200, _call_on_main(lambda: _execute_tool(payload), timeout=timeout))
             else:
                 self._send_error(404, f"Unknown endpoint: {parsed.path}")
+        except TimeoutError:
+            tool_name = str(payload.get("name") or "") if isinstance(payload, dict) else ""
+            try:
+                audit_log.append_event(
+                    "bridge_tool_timeout",
+                    source="bridge",
+                    tool_name=tool_name,
+                    timeout_seconds=_tool_timeout_seconds(tool_name),
+                    active_operation=_active_operation_status(),
+                    recovery=_operation_recovery_guidance(tool_name),
+                )
+            except Exception:
+                pass
+            self._send(504, _timeout_payload(tool_name, _tool_timeout_seconds(tool_name)))
         except _RequestTooLarge as exc:
             self._send_error(413, str(exc))
         except json.JSONDecodeError as exc:

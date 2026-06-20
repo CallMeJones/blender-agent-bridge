@@ -27,6 +27,7 @@ BLEND_COPY_FILENAME = "render_job.blend"
 FRAME_PREFIX = "frame_"
 MAX_FRAME_RESOURCE_BYTES = 20 * 1024 * 1024
 MAX_VIDEO_RESOURCE_BYTES = 25 * 1024 * 1024
+DEFAULT_RENDER_POLL_INTERVAL_SECONDS = 5
 
 _PROCESSES = {}
 
@@ -224,6 +225,53 @@ def _normalize_output_kind(value):
     if normalized not in {"frames", "video"}:
         return "frames"
     return normalized
+
+
+def _duration_label(seconds):
+    try:
+        seconds = int(round(float(seconds)))
+    except (TypeError, ValueError):
+        seconds = 0
+    if seconds <= 0:
+        return "unknown"
+    if seconds < 90:
+        return f"about {seconds}s"
+    minutes = int(round(seconds / 60.0))
+    if minutes < 90:
+        return f"about {minutes} min"
+    hours = minutes / 60.0
+    return f"about {hours:.1f} hr"
+
+
+def _rough_estimated_seconds(total_frames, resolution_x, resolution_y, resolution_percentage, samples):
+    """Very rough render estimate for user messaging, corrected by live frame rate later."""
+
+    try:
+        frame_count = max(1, int(total_frames))
+        width = max(16, int(resolution_x))
+        height = max(16, int(resolution_y))
+        pct = max(1, min(100, int(resolution_percentage))) / 100.0
+        sample_count = max(1, int(samples))
+    except (TypeError, ValueError):
+        return 0
+    megapixels = (width * height * pct * pct) / 1_000_000.0
+    per_frame = max(0.25, 0.35 * max(0.1, megapixels) * (sample_count / 64.0))
+    return max(1, int(round(frame_count * per_frame)))
+
+
+def _poll_interval_seconds(total_frames, estimated_seconds):
+    try:
+        frame_count = int(total_frames)
+        estimated = float(estimated_seconds or 0)
+    except (TypeError, ValueError):
+        return DEFAULT_RENDER_POLL_INTERVAL_SECONDS
+    if frame_count <= 4 or estimated < 20:
+        return 1
+    if estimated < 180:
+        return 3
+    if estimated < 900:
+        return 5
+    return 10
 
 
 def _copy_current_blend(blend_path):
@@ -477,6 +525,19 @@ def start_render_job(
     blender_binary = getattr(bpy.app, "binary_path", "") or "blender"
     fps_value = _bounded_int(fps, getattr(scene.render, "fps", 24) or 24, minimum=1, maximum=240)
 
+    resolution_x_value = _bounded_int(resolution_x, 1920, minimum=16, maximum=8192)
+    resolution_y_value = _bounded_int(resolution_y, 1080, minimum=16, maximum=8192)
+    resolution_percentage_value = _bounded_int(resolution_percentage, 100, minimum=1, maximum=100)
+    samples_value = _bounded_int(samples, 64, minimum=1, maximum=4096)
+    estimated_seconds = _rough_estimated_seconds(
+        total_frames,
+        resolution_x_value,
+        resolution_y_value,
+        resolution_percentage_value,
+        samples_value,
+    )
+    poll_interval = _poll_interval_seconds(total_frames, estimated_seconds)
+
     metadata = {
         "ok": True,
         "available": True,
@@ -512,10 +573,23 @@ def start_render_job(
         "frame_end": end,
         "total_frames": total_frames,
         "fps": fps_value,
-        "resolution_x": _bounded_int(resolution_x, 1920, minimum=16, maximum=8192),
-        "resolution_y": _bounded_int(resolution_y, 1080, minimum=16, maximum=8192),
-        "resolution_percentage": _bounded_int(resolution_percentage, 100, minimum=1, maximum=100),
-        "samples": _bounded_int(samples, 64, minimum=1, maximum=4096),
+        "resolution_x": resolution_x_value,
+        "resolution_y": resolution_y_value,
+        "resolution_percentage": resolution_percentage_value,
+        "samples": samples_value,
+        "estimated_seconds": estimated_seconds,
+        "estimated_duration": _duration_label(estimated_seconds),
+        "estimated_seconds_remaining": estimated_seconds,
+        "estimated_time_remaining": _duration_label(estimated_seconds),
+        "elapsed_seconds": 0,
+        "frames_per_second": 0.0,
+        "poll_interval_seconds": poll_interval,
+        "poll_after_seconds": poll_interval,
+        "timeout_safe": True,
+        "client_guidance": (
+            "This render runs in a background Blender process. Poll get_render_job_status "
+            f"about every {poll_interval}s, then assemble/validate video output when needed."
+        ),
         "camera_name": str(camera_name or "")[:120],
         "pid": 0,
         "returncode": None,
@@ -566,7 +640,10 @@ def start_render_job(
                 "status": "running",
                 "started_at": time.time(),
                 "pid": int(process.pid or 0),
-                "message": "Render job started in a background Blender process",
+                "message": (
+                    "Render job started in a background Blender process; rough estimate "
+                    f"{_duration_label(estimated_seconds)}"
+                ),
             }
         )
         _write_json(metadata["metadata_path"], metadata)
@@ -656,17 +733,36 @@ def render_job_status(job_id, *, context=None, preferred_dir=None, capture_dir=N
 
     if status in {"completed", "failed", "cancelled"} and not metadata.get("completed_at"):
         metadata["completed_at"] = time.time()
+    now = time.time()
+    started_at = float(metadata.get("started_at") or 0.0)
+    elapsed = max(0.0, now - started_at) if started_at else 0.0
+    frames_per_second = round(frame_count / elapsed, 4) if frame_count and elapsed > 0.0 else 0.0
+    estimated_remaining = 0
+    if status in {"completed", "failed", "cancelled"}:
+        estimated_remaining = 0
+    elif total and metadata.get("output_kind") == "frames" and frame_count and frames_per_second > 0.0:
+        estimated_remaining = int(round(max(0, total - frame_count) / frames_per_second))
+    elif metadata.get("estimated_seconds") and elapsed:
+        estimated_remaining = int(round(max(0.0, float(metadata.get("estimated_seconds") or 0.0) - elapsed)))
+    poll_interval = _poll_interval_seconds(total, metadata.get("estimated_seconds") or estimated_remaining)
+
     metadata.update(
         {
             "status": status,
             "message": message,
             "frame_count": frame_count,
             "progress": round((frame_count / total), 4) if total and metadata.get("output_kind") == "frames" else (1.0 if status == "completed" else 0.0),
+            "elapsed_seconds": int(round(elapsed)),
+            "frames_per_second": frames_per_second,
+            "estimated_seconds_remaining": estimated_remaining,
+            "estimated_time_remaining": _duration_label(estimated_remaining),
+            "poll_interval_seconds": poll_interval,
+            "poll_after_seconds": poll_interval if status == "running" else 0,
             "newest_frame": newest[0] if newest else None,
             "newest_frame_path": newest[1] if newest else "",
             "newest_frame_resource_uri": _frame_resource_uri(job_id, newest[0]) if newest else "",
             "returncode": returncode if returncode is not None else metadata.get("returncode"),
-            "updated_at": time.time(),
+            "updated_at": now,
             "log_tail": _log_tail(metadata.get("log_path") or "", max_bytes=4096),
         }
     )

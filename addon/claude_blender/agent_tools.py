@@ -15,7 +15,7 @@ AGENT_GUIDANCE = (
     "For scene building and layout, prefer create_primitive, create_empty, duplicate_selected_objects, parent_selected_to_empty, align_selected_objects, distribute_selected_objects, set_object_visibility, set_object_display, assign_material_to_selected, assign_emission_material_to_selected, create_shader_material, create_text_object, create_curve_path, create_collection, link_selected_to_collection, add_light, add_camera, add_modifier_to_selected, add_geometry_nodes_modifier, add_track_to_constraint, add_copy_transform_constraint, create_basic_armature, add_particle_system_to_selected, set_render_settings, set_camera_settings, and set_world_background. "
     "For model refinement and production presentation, prefer shade_smooth_selected, add_bevel_and_subsurf, create_wheel_assembly, add_panel_seams, add_window_materials, apply_vehicle_refinement_template, apply_product_refinement_template, apply_character_refinement_template, create_studio_product_stage, add_dimension_callouts, apply_lighting_preset, create_material_palette, create_product_turntable_setup, and organize_scene_for_production when they fit the task. "
     "For shape-key animation, prefer create_shape_key and animate_shape_key before drafting Python. "
-    "For long-running or high-resolution renders, playblasts, frame sequences, or MP4 quality checks, use start_render_job and poll get_render_job_status instead of draft_script; use assemble_render_job_video for PNG sequences and validate_render_job_output before reporting success; use cancel_render_job if the user wants to stop it. "
+    "For long-running or high-resolution renders, playblasts, frame sequences, 1080p/4K previews, or MP4 quality checks, use start_render_job and poll get_render_job_status instead of blocking render_scene_thumbnail, capture tools, or draft_script; report the returned rough estimate/poll interval to the user; use assemble_render_job_video for PNG sequences and validate_render_job_output before reporting success; use cancel_render_job if the user wants to stop it. If a render, playblast, or visual-review tool times out, treat it as recoverable: wait the returned poll_after_seconds, call blender_bridge_status, inspect get_visual_evidence_resources and the audit log, and only rerun if no artifact/result appears. "
     "For external assets, use list_poly_haven_categories and search_poly_haven_assets/search_sketchfab_models for discovery, inspect_poly_haven_asset_files before choosing Poly Haven formats, download_* tools for cache-only work, import_* tools for preview scene imports, and get_external_asset_cache_diagnostics to report cached/imported assets. Sketchfab tokens must be provided per call or through an environment variable, not Blender preferences. "
     "For animation generation, review, or repair, call run_animation_task for simple prompt-in/task-out use, or call plan_animation_workflow first when you need manual control of the generated workflow. plan_animation_workflow returns the brief, scene routing, timing chart, ordered helper calls, evaluator calls, repair calls, and script fallback rules. For common helper-backed generation, call run_animation_workflow to execute the plan, review the result, optionally capture playblast evidence, and leave changes in preview. Use any animation_brief in context as the prompt contract; otherwise call create_animation_brief first when the prompt needs an explicit contract, success criteria, or later validation. Call get_animation_scene_context before advanced animation in scenes with rigs, constraints, drivers, shape keys, physics, or unclear edit targets so you know whether to animate object transforms, rig controls, shape keys, materials, physics, or camera settings. Use create_timing_chart, block_key_poses, add_breakdown_pose, set_pose_hold, set_rig_pose_hold, get_rig_pose_library_details, apply_rig_pose_from_action, apply_rig_pose_marker, apply_rig_action_clip, offset_rig_limb_controls, set_rig_custom_property_keyframes, and create_motion_arc for animator-style blocking before spline/f-curve polish; use rig pose/action helpers only after identifying armature controls, pose-library candidates, or existing scalar IK/FK/space properties through rig inspection or repair metadata. Then use analyze_animation_principles plus focused analyzers to check timing, spacing, arcs, pose clarity, anticipation, squash/stretch, contact, center-of-mass support, speed/acceleration plausibility, simulation cache readiness, and settle before repair; use inspect_simulation_bake before persistent bake decisions, and use stage_persistent_simulation_bake when the user intentionally wants a persistent point-cache bake. Use capture_animation_playblast and review_playblast_against_brief when visual frame evidence matters; use capture_object_inspection_renders and review_inspection_renders_against_brief when close-up object detail evidence matters; if review or repair tools return repair_operations, prefer run_animation_repair_loop for bounded helper repair and review-again behavior, or execute relevant tool_call name/input entries deliberately when manual control is needed. Then prefer set_scene_frame_range, set_animation_preview_range, animate_selected_transform, animate_object_bounce, create_progressive_bounce_animation, animate_material_property, animate_light_property, create_follow_path_animation, create_turntable_animation, create_pulse_animation, create_reveal_animation, create_staggered_motion, set_action_interpolation, retime_actions, add_action_cycles, clear_animation, and create_camera_orbit. "
     "For complex scene builds that need many objects or more than about eight helper calls, stage one cohesive Blender Python script with draft_script instead of making a long chain of helper calls. "
@@ -72,7 +72,7 @@ def blender_tool_definitions():
         },
         {
             "name": "capture_animation_playblast",
-            "description": "Capture sampled viewport frames across an animation range and return playblast metadata plus MCP frame resource URIs for visual animation review. Requires an interactive Blender window and fails soft in background mode.",
+            "description": "Capture sampled viewport frames across an animation range and return playblast metadata plus MCP frame resource URIs for visual animation review. Requires an interactive Blender window and fails soft in background mode. This is synchronous and roughly 1 second per sampled frame; if it times out, wait and check blender_bridge_status/latest playblast metadata before recapturing.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -96,7 +96,7 @@ def blender_tool_definitions():
         },
         {
             "name": "capture_object_inspection_renders",
-            "description": "Render diagnostic close-up PNGs of named objects from bounded inspection views, then return metadata plus MCP image resource URIs. Use when visual object details need rendered evidence, such as undersides, side views, occluded parts, or model defects. Cleans up the temporary camera and restores render settings.",
+            "description": "Render diagnostic close-up PNGs of named objects from bounded inspection views, then return metadata plus MCP image resource URIs. Use when visual object details need rendered evidence, such as undersides, side views, occluded parts, or model defects. This is synchronous and may take a few seconds per object/view; if it times out, wait and check blender_bridge_status/latest inspection-render metadata before recapturing.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -205,7 +205,7 @@ def blender_tool_definitions():
         },
         {
             "name": "render_scene_thumbnail",
-            "description": "Render a small PNG from the scene camera or a named camera, then return metadata plus exact MCP image resource URIs. Use for render evidence, thumbnails, and client-readable still output.",
+            "description": "Render a small PNG from the scene camera or a named camera, then return metadata plus exact MCP image resource URIs. Use for render evidence, thumbnails, and client-readable still output. Large synchronous renders are guarded; use start_render_job for timeout-safe high-resolution output.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -215,13 +215,14 @@ def blender_tool_definitions():
                     "resolution_y": {"type": "integer", "description": "PNG height. Defaults to 512."},
                     "camera_name": {"type": "string", "description": "Optional camera object name. Defaults to active scene camera."},
                     "note": {"type": "string", "description": "Short reason stored in thumbnail metadata."},
+                    "allow_blocking_render": {"type": "boolean", "description": "Allow a large synchronous still render. Defaults to false; large previews should use start_render_job."},
                 },
                 "additionalProperties": False,
             },
         },
         {
             "name": "start_render_job",
-            "description": "Start a long-running render or playblast job in a background Blender process and return immediately with a job id. Use for 1080p/4K, high-sample, full-frame-range renders, frame sequences, or MP4 quality checks instead of draft_script.",
+            "description": "Start a long-running render or playblast job in a background Blender process and return immediately with a job id, rough ETA, and polling guidance. Use for 1080p/4K, high-sample, full-frame-range renders, frame sequences, or MP4 quality checks instead of blocking render tools or draft_script.",
             "input_schema": {
                 "type": "object",
                 "properties": {

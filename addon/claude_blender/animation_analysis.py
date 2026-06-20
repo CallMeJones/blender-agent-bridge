@@ -18,6 +18,7 @@ VISUAL_MOTION_DELTA_THRESHOLD = 0.01
 VISUAL_SUBJECT_MIN_COVERAGE = 0.01
 VISUAL_SUBJECT_TINY_COVERAGE = 0.04
 VISUAL_CROP_EDGE_MARGIN = 0.02
+VISUAL_DIGEST_MAX_TOTAL_PIXELS = 2_000_000
 INSPECTION_DETAIL_KEYWORDS = {
     "bay",
     "bays",
@@ -1335,7 +1336,11 @@ def _image_pixel_values(image, pixel_count):
             return []
 
 
-def _image_digest(path, *, grid_size=4, max_samples=4096):
+def _new_visual_digest_budget():
+    return {"remaining_pixels": int(VISUAL_DIGEST_MAX_TOTAL_PIXELS), "skipped_count": 0}
+
+
+def _image_digest(path, *, grid_size=4, max_samples=4096, budget=None):
     if not path or not os.path.isfile(path):
         return {}
     image = None
@@ -1346,6 +1351,23 @@ def _image_digest(path, *, grid_size=4, max_samples=4096):
         pixel_count = width * height
         if width <= 0 or height <= 0 or pixel_count <= 0:
             return {"available": False, "note": "Image has no readable pixels"}
+        if budget is not None:
+            remaining_pixels = int(budget.get("remaining_pixels", VISUAL_DIGEST_MAX_TOTAL_PIXELS) or 0)
+            if pixel_count > remaining_pixels:
+                budget["skipped_count"] = int(budget.get("skipped_count", 0) or 0) + 1
+                return {
+                    "available": False,
+                    "skipped": True,
+                    "note": (
+                        "Image pixel inspection skipped to keep visual review responsive: "
+                        f"{pixel_count} pixels would exceed remaining review budget of {max(0, remaining_pixels)}."
+                    ),
+                    "width": width,
+                    "height": height,
+                    "pixel_count": int(pixel_count),
+                    "remaining_pixel_budget": max(0, int(remaining_pixels)),
+                }
+            budget["remaining_pixels"] = max(0, remaining_pixels - pixel_count)
 
         pixels = _image_pixel_values(image, pixel_count)
         if len(pixels) < pixel_count * 4:
@@ -1718,6 +1740,7 @@ def _playblast_frame_evidence(playblast):
     evidence = []
     findings = []
     frames = playblast.get("frames") or []
+    digest_budget = _new_visual_digest_budget()
     for frame in frames:
         frame_number = int(frame.get("frame", 0) or 0)
         path = str(frame.get("path") or "")
@@ -1738,18 +1761,28 @@ def _playblast_frame_evidence(playblast):
             "note": str(frame.get("note") or ""),
         }
         if available and path:
-            digest = _image_digest(path)
+            digest = _image_digest(path, budget=digest_budget)
             if digest:
                 item["image_digest"] = digest
                 if not digest.get("available"):
+                    skipped = bool(digest.get("skipped"))
                     findings.append(
                         _finding(
-                            "warning",
-                            "A playblast frame is available but its image pixels could not be inspected.",
+                            "info" if skipped else "warning",
+                            (
+                                "A playblast frame is available but pixel inspection was skipped to keep visual review responsive."
+                                if skipped
+                                else "A playblast frame is available but its image pixels could not be inspected."
+                            ),
                             principle="visual_review",
                             frame=frame_number,
                             repair_tool="capture_animation_playblast",
-                            evidence={"path": path, "note": digest.get("note", "")},
+                            evidence={
+                                "path": path,
+                                "note": digest.get("note", ""),
+                                "pixel_count": digest.get("pixel_count"),
+                                "remaining_pixel_budget": digest.get("remaining_pixel_budget"),
+                            },
                         )
                     )
                 elif digest.get("mean_alpha", 1.0) <= 0.01:
@@ -1848,6 +1881,7 @@ def _required_inspection_views(brief, prompt):
 def _inspection_render_evidence(metadata):
     evidence = []
     findings = []
+    digest_budget = _new_visual_digest_budget()
     for image_item in metadata.get("images") or []:
         path = str(image_item.get("path") or "")
         file_exists = bool(path and os.path.isfile(path))
@@ -1866,18 +1900,30 @@ def _inspection_render_evidence(metadata):
             "note": str(image_item.get("note") or ""),
         }
         if available and path:
-            digest = _image_digest(path)
+            digest = _image_digest(path, budget=digest_budget)
             if digest:
                 item["image_digest"] = digest
                 if not digest.get("available"):
+                    skipped = bool(digest.get("skipped"))
                     findings.append(
                         _finding(
-                            "warning",
-                            "An inspection render is available but its image pixels could not be inspected.",
+                            "info" if skipped else "warning",
+                            (
+                                "An inspection render is available but pixel inspection was skipped to keep visual-detail review responsive."
+                                if skipped
+                                else "An inspection render is available but its image pixels could not be inspected."
+                            ),
                             principle="visual_detail_review",
                             object_name=item["object"],
                             repair_tool="capture_object_inspection_renders",
-                            evidence={"path": path, "image_id": item["image_id"], "view": item["view"], "note": digest.get("note", "")},
+                            evidence={
+                                "path": path,
+                                "image_id": item["image_id"],
+                                "view": item["view"],
+                                "note": digest.get("note", ""),
+                                "pixel_count": digest.get("pixel_count"),
+                                "remaining_pixel_budget": digest.get("remaining_pixel_budget"),
+                            },
                         )
                     )
                 elif digest.get("mean_alpha", 1.0) <= 0.01:

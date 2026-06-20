@@ -16,6 +16,7 @@ from . import inspection_render, playblast_capture, render_jobs, viewport_captur
 
 LATEST_RENDER_THUMBNAIL_URI = "blender://render-thumbnails/latest"
 LATEST_RENDER_THUMBNAIL_METADATA_URI = "blender://render-thumbnails/latest/metadata"
+MAX_BLOCKING_THUMBNAIL_PIXELS = 1280 * 720
 METADATA_FILENAME = "metadata.json"
 THUMBNAIL_FILENAME = "thumbnail.png"
 
@@ -45,6 +46,13 @@ DATA_COLLECTION_NAMES = (
     "worlds",
     "workspaces",
 )
+
+
+def _thumbnail_sample_count(scene):
+    engine = str(getattr(scene.render, "engine", "") or "")
+    if engine == "CYCLES":
+        return int(getattr(getattr(scene, "cycles", None), "samples", 64) or 64)
+    return int(getattr(getattr(scene, "eevee", None), "taa_render_samples", 64) or 64)
 
 EXTERNAL_FILE_COLLECTION_NAMES = (
     "images",
@@ -794,6 +802,7 @@ def render_scene_thumbnail(
     camera_name="",
     note="",
     capture_dir=None,
+    allow_blocking_render=False,
 ):
     scene = context.scene
     camera = bpy.data.objects.get(str(camera_name or "")) if str(camera_name or "").strip() else scene.camera
@@ -809,6 +818,47 @@ def render_scene_thumbnail(
             },
         }
 
+    target_frame = int(frame if frame is not None else scene.frame_current)
+    bounded_resolution_x = max(32, min(4096, int(resolution_x)))
+    bounded_resolution_y = max(32, min(4096, int(resolution_y)))
+    pixel_count = bounded_resolution_x * bounded_resolution_y
+    estimated_seconds = render_jobs._rough_estimated_seconds(
+        1,
+        bounded_resolution_x,
+        bounded_resolution_y,
+        100,
+        _thumbnail_sample_count(scene),
+    )
+    estimated_duration = render_jobs._duration_label(estimated_seconds)
+    if pixel_count > MAX_BLOCKING_THUMBNAIL_PIXELS and not bool(allow_blocking_render):
+        return {
+            "ok": False,
+            "message": (
+                "Large still renders are guarded because synchronous render_scene_thumbnail can block the bridge. "
+                "Use start_render_job for timeout-safe render previews, or pass allow_blocking_render=true for an intentional one-off still. "
+                f"Rough synchronous estimate: {estimated_duration}."
+            ),
+            "code": "render_job_recommended",
+            "recommended_tool": "start_render_job",
+            "suggested_arguments": {
+                "frame_start": target_frame,
+                "frame_end": target_frame,
+                "resolution_x": bounded_resolution_x,
+                "resolution_y": bounded_resolution_y,
+                "resolution_percentage": 100,
+                "output_kind": "frames",
+                "camera_name": camera.name,
+                "job_name": "thumbnail render preview",
+                "note": str(note or "Render preview requested through render_scene_thumbnail")[:1000],
+            },
+            "pixel_count": pixel_count,
+            "max_blocking_pixels": MAX_BLOCKING_THUMBNAIL_PIXELS,
+            "estimated_seconds": estimated_seconds,
+            "estimated_duration": estimated_duration,
+            "poll_after_seconds": render_jobs.DEFAULT_RENDER_POLL_INTERVAL_SECONDS,
+            "timeout_safe": False,
+        }
+
     thumbnail_id = _thumbnail_id()
     capture_info = _render_root_info(context, preferred_dir=capture_dir, create=True)
     render_dir = os.path.join(capture_info["render_thumbnail_root"], thumbnail_id)
@@ -820,7 +870,6 @@ def render_scene_thumbnail(
     else:
         path = os.path.join(render_dir, THUMBNAIL_FILENAME)
 
-    target_frame = int(frame if frame is not None else scene.frame_current)
     original = {
         "frame": int(scene.frame_current),
         "camera": scene.camera,
@@ -855,13 +904,22 @@ def render_scene_thumbnail(
         "size_bytes": 0,
         "width": 0,
         "height": 0,
+        "estimated_seconds": estimated_seconds,
+        "estimated_duration": estimated_duration,
+        "poll_after_seconds": render_jobs.DEFAULT_RENDER_POLL_INTERVAL_SECONDS,
+        "timeout_safe": False,
+        "client_guidance": (
+            "This thumbnail render runs synchronously on Blender's main thread. "
+            f"Rough expected duration is {estimated_duration}. "
+            "For high-resolution or long renders, use start_render_job and poll get_render_job_status."
+        ),
         "note": str(note or "")[:1000],
     }
     try:
         scene.frame_set(target_frame)
         scene.camera = camera
-        scene.render.resolution_x = max(32, min(4096, int(resolution_x)))
-        scene.render.resolution_y = max(32, min(4096, int(resolution_y)))
+        scene.render.resolution_x = bounded_resolution_x
+        scene.render.resolution_y = bounded_resolution_y
         scene.render.resolution_percentage = 100
         scene.render.image_settings.file_format = "PNG"
         scene.render.filepath = path

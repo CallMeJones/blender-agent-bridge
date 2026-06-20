@@ -207,6 +207,10 @@ def main():
             assert [frame["captured_scene_frame"] for frame in captured_playblast["frames"]] == [1, 3, 5], captured_playblast
             assert [frame["frame"] for frame in captured_playblast["frames"]] == [1, 3, 5], captured_playblast
             assert int(scene.frame_current) == 9, captured_playblast
+            assert captured_playblast["estimated_seconds"] >= 2, captured_playblast
+            assert captured_playblast["poll_after_seconds"] >= 1, captured_playblast
+            assert captured_playblast["timeout_safe"] is False, captured_playblast
+            assert "synchronously" in captured_playblast["client_guidance"], captured_playblast
 
             def _fail_frame_capture(_context, _filepath):
                 raise RuntimeError("synthetic frame failure")
@@ -282,6 +286,10 @@ def main():
         render_metadata = inspection_payload["inspection_render"]
         assert render_metadata["image_count"] == 2, render_metadata
         assert render_metadata["requested_image_count"] == 2, render_metadata
+        assert render_metadata["estimated_seconds"] >= 2, render_metadata
+        assert render_metadata["poll_after_seconds"] >= 1, render_metadata
+        assert render_metadata["timeout_safe"] is False, render_metadata
+        assert "synchronously" in render_metadata["client_guidance"], render_metadata
         assert render_metadata["metadata_uri"].startswith("blender://inspection-renders/"), render_metadata
         assert os.path.isfile(render_metadata["metadata_path"]), render_metadata
         assert scene.camera == original_render_state[0], render_metadata

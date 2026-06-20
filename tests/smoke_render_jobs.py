@@ -45,6 +45,19 @@ def main():
             bpy.ops.object.camera_add(location=(0.0, -5.0, 3.0), rotation=(1.1, 0.0, 0.0))
             bpy.context.scene.camera = bpy.context.object
 
+        guarded_thumbnail = _execute(
+            bpy.context,
+            "render_scene_thumbnail",
+            {"resolution_x": 1920, "resolution_y": 1080, "note": "guard high-res blocking thumbnail"},
+        )
+        assert guarded_thumbnail["ok"] is False, guarded_thumbnail
+        assert guarded_thumbnail["code"] == "render_job_recommended", guarded_thumbnail
+        assert guarded_thumbnail["recommended_tool"] == "start_render_job", guarded_thumbnail
+        assert guarded_thumbnail["suggested_arguments"]["frame_start"] == bpy.context.scene.frame_current, guarded_thumbnail
+        assert guarded_thumbnail["estimated_seconds"] >= 1, guarded_thumbnail
+        assert guarded_thumbnail["estimated_duration"], guarded_thumbnail
+        assert guarded_thumbnail["poll_after_seconds"] >= 1, guarded_thumbnail
+
         started = _execute(
             bpy.context,
             "start_render_job",
@@ -64,6 +77,10 @@ def main():
         job_id = job["job_id"]
         assert job["status"] in {"running", "completed"}, job
         assert job["metadata_uri"].startswith("blender://render-jobs/"), job
+        assert job["timeout_safe"] is True, job
+        assert job["estimated_seconds"] >= 1, job
+        assert job["poll_after_seconds"] >= 0, job
+        assert "background Blender process" in job["client_guidance"], job
 
         status = job
         deadline = time.time() + RENDER_JOB_SMOKE_TIMEOUT_SECONDS
@@ -78,6 +95,8 @@ def main():
         assert status["status"] == "completed", status
         assert status["frame_count"] == 2, status
         assert status["progress"] == 1.0, status
+        assert status["elapsed_seconds"] >= 0, status
+        assert status["estimated_seconds_remaining"] == 0, status
         assert os.path.isfile(status["newest_frame_path"]), status
 
         exact = render_jobs.render_job_status(job_id, capture_dir=status["capture_dir"], context=bpy.context)

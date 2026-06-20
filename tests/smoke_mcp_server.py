@@ -25,13 +25,16 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         return
 
-    def _send(self, payload):
+    def _send_status(self, status, payload):
         data = json.dumps(payload).encode("utf-8")
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _send(self, payload):
+        self._send_status(200, payload)
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -454,6 +457,27 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or 0)
         payload = json.loads(self.rfile.read(length).decode("utf-8"))
         if self.path == "/tool":
+            arguments = payload.get("arguments") if isinstance(payload.get("arguments"), dict) else {}
+            if payload.get("name") == "start_render_job" and arguments.get("job_name") == "force_timeout_504":
+                self._send_status(
+                    504,
+                    {
+                        "ok": False,
+                        "result": {
+                            "ok": False,
+                            "code": "bridge_main_thread_timeout",
+                            "message": "Synthetic bridge timeout",
+                            "tool": "start_render_job",
+                            "timeout_seconds": 45,
+                            "request_may_still_be_running": True,
+                            "recoverable": True,
+                            "poll_after_seconds": 5,
+                            "status_tool": "blender_bridge_status",
+                            "resource_tool": "get_visual_evidence_resources",
+                        },
+                    },
+                )
+                return
             self._send(
                 {
                     "ok": True,
@@ -510,6 +534,9 @@ def _assert_compact_tools_visible(proc):
     assert "mcp_server_source_hash" in status_properties, status_tool
     assert "addon_mcp_source_hash_match" in status_properties, status_tool
     assert "source_hash_status" in status_properties, status_tool
+    assert "bridge_busy" in status_properties, status_tool
+    assert "active_operation" in status_properties, status_tool
+    assert "poll_after_seconds" in status_properties, status_tool
     scene_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "list_scene_objects")
     assert scene_tool["outputSchema"]["type"] == "object", scene_tool
     catalog_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "blender_tool_catalog")
@@ -523,6 +550,13 @@ def _assert_compact_tools_visible(proc):
     render_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "start_render_job")
     assert "output_kind" in render_tool["inputSchema"]["properties"], render_tool
     assert render_tool["annotations"]["riskLevel"] == "read", render_tool
+    assert render_tool["annotations"]["returnsBackgroundJob"] is True, render_tool
+    assert render_tool["annotations"]["timeoutSeconds"] == 30, render_tool
+    assert render_tool["annotations"]["durationHint"], render_tool
+    assert render_tool["annotations"]["timeoutRecovery"]["status_tool"] == "blender_bridge_status", render_tool
+    task_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "run_animation_task")
+    assert task_tool["annotations"]["longRunningHint"] is True, task_tool
+    assert task_tool["annotations"]["timeoutRecovery"]["resource_tool"] == "get_visual_evidence_resources", task_tool
     assemble_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "assemble_render_job_video")
     assert assemble_tool["inputSchema"]["required"] == ["job_id"], assemble_tool
     validate_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "validate_render_job_output")
@@ -787,6 +821,30 @@ def main():
         assert status_content["mcp_server_source_hash"] == build_info.source_tree_hash(), status_call
         assert status_content["addon_mcp_source_hash_match"] is True, status_call
         assert status_content["source_hash_status"] == "match", status_call
+        timeout_call = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 29,
+                "method": "tools/call",
+                "params": {
+                    "name": "start_render_job",
+                    "arguments": {
+                        "frame_start": 1,
+                        "frame_end": 1,
+                        "job_name": "force_timeout_504",
+                    },
+                },
+            },
+        )
+        timeout_content = timeout_call["result"]["structuredContent"]
+        assert timeout_call["result"]["isError"] is True, timeout_call
+        assert timeout_content["code"] == "bridge_timeout", timeout_call
+        assert timeout_content["data"]["recoverable"] is True, timeout_call
+        assert timeout_content["data"]["request_may_still_be_running"] is True, timeout_call
+        assert timeout_content["data"]["status_tool"] == "blender_bridge_status", timeout_call
+        assert timeout_content["data"]["resource_tool"] == "get_visual_evidence_resources", timeout_call
+        assert timeout_content["data"]["poll_after_seconds"] == 5, timeout_call
 
         full_audit_fd, full_audit_path = tempfile.mkstemp(
             prefix="claude-blender-mcp-full-audit-",

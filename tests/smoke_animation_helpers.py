@@ -15,7 +15,16 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import animation_brief, agent_tools, bridge_protocol, context_bundle, live_preview, script_runner, tool_dispatcher  # noqa: E402
+from claude_blender import (  # noqa: E402
+    agent_tools,
+    animation_analysis,
+    animation_brief,
+    bridge_protocol,
+    context_bundle,
+    live_preview,
+    script_runner,
+    tool_dispatcher,
+)
 
 
 ANIMATION_TOOLS = {
@@ -852,6 +861,39 @@ def main():
             frame["image_digest"]["available"] is True
             for frame in sampled_visual_review["visual_review"]["frames"]
         ), sampled_visual_review
+
+        original_digest_budget = animation_analysis.VISUAL_DIGEST_MAX_TOTAL_PIXELS
+        try:
+            animation_analysis.VISUAL_DIGEST_MAX_TOTAL_PIXELS = 100_000
+            budgeted_visual_review = _execute(
+                context,
+                "review_playblast_against_brief",
+                {
+                    "prompt": "review this bounce animation for spacing and contact",
+                    "brief": sampled_contract,
+                    "playblast": {
+                        "available": True,
+                        "playblast_id": "sampled-review-budgeted",
+                        "sampled_frames": [item[0] for item in sampled_motion],
+                        "frames": sampled_review_frames,
+                    },
+                },
+            )
+        finally:
+            animation_analysis.VISUAL_DIGEST_MAX_TOTAL_PIXELS = original_digest_budget
+        budgeted_frames = budgeted_visual_review["visual_review"]["frames"]
+        skipped_digests = [
+            frame.get("image_digest") or {}
+            for frame in budgeted_frames
+            if (frame.get("image_digest") or {}).get("skipped")
+        ]
+        assert budgeted_visual_review["visual_review"]["motion_evidence"]["digest_frame_count"] == 1, budgeted_visual_review
+        assert skipped_digests, budgeted_visual_review
+        assert all(digest.get("available") is False for digest in skipped_digests), budgeted_visual_review
+        assert any(
+            "pixel inspection was skipped" in item.get("message", "")
+            for item in budgeted_visual_review["findings"]
+        ), budgeted_visual_review
 
         inspection_path = os.path.join(visual_dir, "inspection-front-below.png")
         _write_pattern_png(inspection_path)

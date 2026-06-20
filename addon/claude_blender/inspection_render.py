@@ -241,6 +241,45 @@ def _image_size(path):
                 pass
 
 
+def _duration_label(seconds):
+    try:
+        seconds = int(round(float(seconds)))
+    except (TypeError, ValueError):
+        seconds = 0
+    if seconds <= 0:
+        return "unknown"
+    if seconds < 90:
+        return f"about {seconds}s"
+    minutes = int(round(seconds / 60.0))
+    return f"about {minutes} min"
+
+
+def _estimated_render_seconds(image_count, resolution_x, resolution_y):
+    try:
+        count = max(1, int(image_count))
+        width = max(64, int(resolution_x))
+        height = max(64, int(resolution_y))
+    except (TypeError, ValueError):
+        count = 1
+        width = 800
+        height = 600
+    megapixels = (width * height) / 1_000_000.0
+    per_image = max(2.0, 3.0 * max(0.1, megapixels))
+    return max(2, int(round(count * per_image)))
+
+
+def _poll_interval_seconds(estimated_seconds):
+    try:
+        estimated = int(round(float(estimated_seconds)))
+    except (TypeError, ValueError):
+        estimated = 0
+    if estimated <= 10:
+        return 2
+    if estimated <= 60:
+        return 5
+    return 10
+
+
 def _view_list(views):
     if isinstance(views, str):
         requested = [views]
@@ -286,6 +325,9 @@ def capture_object_inspection_renders(
         return {"ok": False, "message": "No object names were provided for inspection renders"}
 
     requested_views = _view_list(views)
+    requested_image_count = len(names) * len(requested_views)
+    estimated_seconds = _estimated_render_seconds(requested_image_count, resolution_x, resolution_y)
+    poll_interval = _poll_interval_seconds(estimated_seconds)
     render_id = _render_id()
     capture_info = _render_root_info(context, preferred_dir=capture_dir, create=True)
     render_dir = os.path.join(capture_info["inspection_render_root"], render_id)
@@ -396,9 +438,18 @@ def capture_object_inspection_renders(
         "views": requested_views,
         "image_count": len(available_images),
         "requested_image_count": len(images),
+        "estimated_seconds": estimated_seconds,
+        "estimated_duration": _duration_label(estimated_seconds),
+        "poll_after_seconds": poll_interval,
+        "timeout_safe": False,
         "resource_type": "png_inspection_renders",
         "note": str(note or "")[:1000],
         "images": images,
+        "client_guidance": (
+            "Inspection renders run synchronously on Blender's main thread. "
+            f"Rough expected duration was {_duration_label(estimated_seconds)} for {requested_image_count} image(s). "
+            "If an MCP client times out, wait, call blender_bridge_status, then inspect latest inspection-render metadata before recapturing."
+        ),
     }
     metadata["metadata_path"] = _metadata_path(render_dir)
     _write_metadata(metadata)

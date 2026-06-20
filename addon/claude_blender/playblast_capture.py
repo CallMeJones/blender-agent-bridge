@@ -207,6 +207,39 @@ def _sample_frames(frame_start, frame_end, max_frames):
     return sorted(set(sampled))
 
 
+def _duration_label(seconds):
+    try:
+        seconds = int(round(float(seconds)))
+    except (TypeError, ValueError):
+        seconds = 0
+    if seconds <= 0:
+        return "unknown"
+    if seconds < 90:
+        return f"about {seconds}s"
+    minutes = int(round(seconds / 60.0))
+    return f"about {minutes} min"
+
+
+def _estimated_capture_seconds(frame_count):
+    try:
+        count = max(1, int(frame_count))
+    except (TypeError, ValueError):
+        count = DEFAULT_MAX_FRAMES
+    return max(2, int(round(count * 1.25)))
+
+
+def _poll_interval_seconds(estimated_seconds):
+    try:
+        estimated = int(round(float(estimated_seconds)))
+    except (TypeError, ValueError):
+        estimated = 0
+    if estimated <= 10:
+        return 2
+    if estimated <= 60:
+        return 5
+    return 10
+
+
 def _flush_frame_capture_view(context):
     live_preview.redraw(context)
     try:
@@ -229,6 +262,8 @@ def capture_animation_playblast(
     start = int(frame_start if frame_start is not None else scene.frame_start)
     end = int(frame_end if frame_end is not None else scene.frame_end)
     sampled_frames = _sample_frames(start, end, max_frames)
+    estimated_seconds = _estimated_capture_seconds(len(sampled_frames))
+    poll_interval = _poll_interval_seconds(estimated_seconds)
     if not viewport_capture.has_ui_context(context):
         return {
             "ok": False,
@@ -237,6 +272,14 @@ def capture_animation_playblast(
             "frame_start": start,
             "frame_end": end,
             "sampled_frames": sampled_frames,
+            "estimated_seconds": estimated_seconds,
+            "estimated_duration": _duration_label(estimated_seconds),
+            "poll_after_seconds": poll_interval,
+            "timeout_safe": False,
+            "client_guidance": (
+                "Synchronous sampled viewport playblast capture can block the bridge while frames are captured. "
+                "If an MCP client times out, wait, call blender_bridge_status, then inspect latest playblast metadata."
+            ),
             "note": "Animation playblast capture requires an interactive Blender window",
         }
 
@@ -309,10 +352,19 @@ def capture_animation_playblast(
         "sampled_frames": sampled_frames,
         "frame_count": len(available_frames),
         "requested_frame_count": len(sampled_frames),
+        "estimated_seconds": estimated_seconds,
+        "estimated_duration": _duration_label(estimated_seconds),
+        "poll_after_seconds": poll_interval,
+        "timeout_safe": False,
         "capture_method": method,
         "brief": str(brief or "")[:1000],
         "resource_type": "png_frame_sequence",
         "frames": frames,
+        "client_guidance": (
+            "This sampled playblast ran synchronously on Blender's main thread. "
+            f"Rough expected duration was {_duration_label(estimated_seconds)} for {len(sampled_frames)} sampled frame(s). "
+            "If an MCP client times out during capture, wait, call blender_bridge_status, then inspect latest playblast metadata before recapturing."
+        ),
         "review_hints": [
             "Compare sampled frames against the requested animation brief.",
             "Check staging, silhouettes, arcs, timing spacing, contact points, and camera framing.",

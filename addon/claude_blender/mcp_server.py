@@ -26,6 +26,13 @@ except ImportError:  # Allows direct execution as addon/claude_blender/mcp_serve
         import bridge_protocol
 
 
+def _env_float(name, default):
+    try:
+        return float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return float(default)
+
+
 PROTOCOL_VERSION = "2025-06-18"
 SUPPORTED_PROTOCOL_VERSIONS = (PROTOCOL_VERSION,)
 SERVER_NAME = "blender-agent-bridge"
@@ -34,6 +41,9 @@ DEFAULT_BRIDGE_URL = "http://127.0.0.1:8765"
 DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 100
 FULL_TOOL_LIST_ENV = "BLENDER_MCP_FULL_TOOL_LIST"
+DEFAULT_BRIDGE_MAIN_THREAD_TIMEOUT_SECONDS = max(10.0, _env_float("BLENDER_AGENT_BRIDGE_REQUEST_TIMEOUT", "90"))
+BRIDGE_MAIN_THREAD_TIMEOUT_GRACE_SECONDS = 10.0
+MCP_TIMEOUT_GRACE_SECONDS = 15.0
 COMPACT_DIRECT_TOOL_NAMES = (
     "list_scene_objects",
     "plan_animation_workflow",
@@ -177,6 +187,13 @@ STATUS_OUTPUT_SCHEMA = {
         "mcp_config_version": {"type": "string"},
         "build_diagnostics": {"type": "string"},
         "scene": {"type": "string"},
+        "bridge_busy": {"type": "boolean"},
+        "recoverable": {"type": "boolean"},
+        "poll_after_seconds": {"type": "integer"},
+        "active_tool_name": {"type": "string"},
+        "active_operation": {"type": "object"},
+        "last_operation": {"type": "object"},
+        "recovery_hint": {"type": "string"},
         "external_script_trust": {"type": "boolean"},
         "external_script_trust_status": {"type": "string"},
         "external_script_trust_expires_at": {"type": "number"},
@@ -811,6 +828,11 @@ def _tool_summary(tool, *, include_schema=True):
         "has_side_effects": bool(annotations.get("hasSideEffects", False)),
         "requires_approval": bool(annotations.get("requiresApproval", False)),
         "requires_live_preview": bool(annotations.get("requiresLivePreview", False)),
+        "timeout_seconds": int(annotations.get("timeoutSeconds", 0) or 0),
+        "long_running": bool(annotations.get("longRunningHint", False)),
+        "returns_background_job": bool(annotations.get("returnsBackgroundJob", False)),
+        "duration_hint": str(annotations.get("durationHint", "") or ""),
+        "timeout_recovery": dict(annotations.get("timeoutRecovery") or {}),
     }
     if include_schema:
         summary["input_schema"] = tool.get("inputSchema") or {}
@@ -981,6 +1003,50 @@ def _audit_tool_call(name, arguments, result, *, tool=None):
         _stderr(f"audit warning: {exc}")
 
 
+class BridgeTimeoutError(RuntimeError):
+    def __init__(self, message, *, data=None):
+        super().__init__(message)
+        self.data = dict(data or {})
+
+
+def _bridge_timeout_for_tool(name):
+    try:
+        contract = bridge_protocol.normalized_tool_contract(str(name or ""))
+        contract_timeout = float(contract.get("timeout_seconds") or 30)
+    except Exception:
+        contract_timeout = 30.0
+    bridge_timeout = max(
+        DEFAULT_BRIDGE_MAIN_THREAD_TIMEOUT_SECONDS,
+        contract_timeout + BRIDGE_MAIN_THREAD_TIMEOUT_GRACE_SECONDS,
+    )
+    return max(30.0, bridge_timeout + MCP_TIMEOUT_GRACE_SECONDS)
+
+
+def _timeout_recovery_data(tool_name="", request_timeout=0):
+    tool_name = str(tool_name or "")
+    contract = bridge_protocol.normalized_tool_contract(tool_name) if tool_name else {}
+    recovery = dict(contract.get("timeout_recovery") or {})
+    recommended_tool = str(recovery.get("recommended_tool") or "")
+    if not recommended_tool and any(term in tool_name for term in ("render", "playblast", "thumbnail")):
+        recommended_tool = "start_render_job"
+    return {
+        "tool": tool_name,
+        "recoverable": True,
+        "request_may_still_be_running": True,
+        "result_may_be_lost_after_client_timeout": True,
+        "timeout_seconds": int(round(float(request_timeout or 0))),
+        "poll_after_seconds": int(recovery.get("poll_after_seconds") or 5),
+        "status_tool": str(recovery.get("status_tool") or "blender_bridge_status"),
+        "resource_tool": str(recovery.get("resource_tool") or "get_visual_evidence_resources"),
+        "recommended_tool": recommended_tool,
+        "duration_hint": str(contract.get("duration_hint") or ""),
+        "recovery_hint": str(
+            recovery.get("message")
+            or "Wait briefly, call blender_bridge_status, then inspect latest resources/audit logs before rerunning."
+        ),
+    }
+
+
 class BridgeClient:
     def __init__(self, base_url, token="", timeout=30):
         self.base_url = str(base_url or DEFAULT_BRIDGE_URL).rstrip("/")
@@ -1007,7 +1073,7 @@ class BridgeClient:
         except OSError as exc:
             raise RuntimeError(f"Bridge unavailable at {self.base_url}: {exc}") from exc
 
-    def post(self, path, payload):
+    def post(self, path, payload, *, timeout=None):
         headers = self._headers()
         headers["Content-Type"] = "application/json"
         request = urllib.request.Request(
@@ -1016,13 +1082,49 @@ class BridgeClient:
             headers=headers,
             method="POST",
         )
+        request_timeout = max(float(timeout if timeout is not None else self.timeout), self.timeout)
         try:
-            with urllib.request.urlopen(request, timeout=max(self.timeout, 65.0)) as response:
+            with urllib.request.urlopen(request, timeout=request_timeout) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
+            if exc.code == 504:
+                data = _timeout_recovery_data(
+                    str((payload or {}).get("name") or ""),
+                    request_timeout,
+                )
+                try:
+                    detail_payload = json.loads(detail)
+                    if isinstance(detail_payload, dict):
+                        result_payload = detail_payload.get("result")
+                        if isinstance(result_payload, dict):
+                            data.update(result_payload)
+                        else:
+                            data.update(detail_payload)
+                except json.JSONDecodeError:
+                    data["bridge_detail"] = detail[:1000]
+                raise BridgeTimeoutError(
+                    f"Bridge HTTP 504 after {request_timeout:.0f}s: {data.get('message') or detail}",
+                    data=data,
+                ) from exc
             raise RuntimeError(f"Bridge HTTP {exc.code}: {detail}") from exc
+        except TimeoutError as exc:
+            data = _timeout_recovery_data(str((payload or {}).get("name") or ""), request_timeout)
+            raise BridgeTimeoutError(
+                f"Bridge request timed out after {request_timeout:.0f}s. "
+                "The Blender operation may still be running; wait for Blender to become responsive. "
+                "Call blender_bridge_status, then inspect latest visual evidence resources or audit logs before rerunning.",
+                data=data,
+            ) from exc
         except OSError as exc:
+            if "timed out" in str(exc).lower():
+                data = _timeout_recovery_data(str((payload or {}).get("name") or ""), request_timeout)
+                raise BridgeTimeoutError(
+                    f"Bridge request timed out after {request_timeout:.0f}s. "
+                    "The Blender operation may still be running; wait for Blender to become responsive. "
+                    "Call blender_bridge_status, then inspect latest visual evidence resources or audit logs before rerunning.",
+                    data=data,
+                ) from exc
             raise RuntimeError(f"Bridge unavailable at {self.base_url}: {exc}") from exc
 
 
@@ -1054,7 +1156,9 @@ class BlenderMCPServer:
                 "Connects MCP-capable AI clients to the running Blender scene through the Blender Agent Bridge localhost service. "
                 "Start the bridge inside Blender before using scene tools. By default, this server exposes a compact "
                 "tool surface; use search_blender_tools, get_blender_tool_schema, and invoke_blender_tool for the full "
-                "Blender helper catalog. Mutating tools affect the live scene and may leave preview changes pending."
+                "Blender helper catalog. Mutating tools affect the live scene and may leave preview changes pending. "
+                "If a bridge_timeout occurs, treat it as recoverable: wait the returned poll_after_seconds, call "
+                "blender_bridge_status, then inspect visual evidence resources or audit logs before rerunning work."
             ),
         }
 
@@ -1190,7 +1294,15 @@ class BlenderMCPServer:
             _audit_tool_call(name, arguments, result, tool=tool)
             return result
         try:
-            response = self.bridge.post("/tool", {"name": name, "arguments": arguments})
+            response = self.bridge.post(
+                "/tool",
+                {"name": name, "arguments": arguments},
+                timeout=_bridge_timeout_for_tool(name),
+            )
+        except BridgeTimeoutError as exc:
+            result = _tool_error(str(exc), code="bridge_timeout", data=getattr(exc, "data", {}))
+            _audit_tool_call(name, arguments, result, tool=tool)
+            return result
         except Exception as exc:
             result = _tool_error(str(exc), code="bridge_unavailable")
             _audit_tool_call(name, arguments, result, tool=tool)
@@ -1288,7 +1400,13 @@ class BlenderMCPServer:
                 data={"target": target_name, "errors": validation_errors},
             )
         try:
-            response = self.bridge.post("/tool", {"name": target_name, "arguments": target_args})
+            response = self.bridge.post(
+                "/tool",
+                {"name": target_name, "arguments": target_args},
+                timeout=_bridge_timeout_for_tool(target_name),
+            )
+        except BridgeTimeoutError as exc:
+            return _tool_error(str(exc), code="bridge_timeout", data=getattr(exc, "data", {}))
         except Exception as exc:
             return _tool_error(str(exc), code="bridge_unavailable")
         result = response.get("result", response)
@@ -1303,6 +1421,19 @@ class BlenderMCPServer:
 
     def _augment_bridge_status(self, status):
         status = dict(status or {})
+        message = str(status.get("message") or "")
+        timed_out = "timed out" in message.lower() or "timeout" in message.lower()
+        if timed_out and not status.get("bridge_busy"):
+            status["bridge_busy"] = True
+            status["recoverable"] = True
+            status["poll_after_seconds"] = int(status.get("poll_after_seconds") or 5)
+            status["recovery_hint"] = (
+                "The bridge HTTP server is reachable but Blender did not answer the status probe in time. "
+                "A main-thread operation may still be running; wait, then retry blender_bridge_status before rerunning tools."
+            )
+        elif status.get("bridge_busy"):
+            status["recoverable"] = bool(status.get("recoverable", True))
+            status["poll_after_seconds"] = int(status.get("poll_after_seconds") or 5)
         mcp_source_hash = build_info.source_tree_hash()
         addon_source_hash = str(status.get("addon_source_hash") or "").strip()
         config_source_hash = build_info.expected_source_hash_from_env()

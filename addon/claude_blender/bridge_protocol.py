@@ -82,6 +82,15 @@ TOOL_CONTRACTS = {
     "run_animation_workflow": {
         "description": "Execute a helper-backed Milestone 7 animation workflow, run structured review, and optionally apply bounded repair operations while leaving changes in preview",
         "mutates_scene": True,
+        "long_running": True,
+        "duration_hint": "Usually seconds for helper-only animation; can take longer when capture_playblast or repair recapture is enabled.",
+        "timeout_recovery": {
+            "recoverable": True,
+            "poll_after_seconds": 5,
+            "status_tool": "blender_bridge_status",
+            "resource_tool": "get_visual_evidence_resources",
+            "message": "If the client times out, wait briefly, check bridge status, then inspect visual evidence resources and audit logs before rerunning.",
+        },
         "input_schema": {
             "type": "object",
             "properties": {
@@ -112,6 +121,15 @@ TOOL_CONTRACTS = {
     "run_animation_task": {
         "description": "One-input animation task wrapper that routes the prompt through the Milestone 7 planner/runner workflow before any script fallback",
         "mutates_scene": True,
+        "long_running": True,
+        "duration_hint": "Usually seconds for helper-backed animation; can take longer when the workflow captures or reviews visual evidence.",
+        "timeout_recovery": {
+            "recoverable": True,
+            "poll_after_seconds": 5,
+            "status_tool": "blender_bridge_status",
+            "resource_tool": "get_visual_evidence_resources",
+            "message": "If the client times out, wait briefly, check bridge status, then inspect visual evidence resources and audit logs before rerunning.",
+        },
         "input_schema": {
             "type": "object",
             "properties": {
@@ -168,10 +186,26 @@ TOOL_CONTRACTS = {
     "review_playblast_against_brief": {
         "description": "Review playblast metadata, compact pixel motion evidence, and current animation state against a prompt contract",
         "mutates_scene": False,
+        "duration_hint": "Normally a few seconds. Oversized image batches are pixel-budgeted and may skip extra frame inspection to keep the bridge responsive.",
+        "timeout_recovery": {
+            "recoverable": True,
+            "poll_after_seconds": 5,
+            "status_tool": "blender_bridge_status",
+            "resource_tool": "get_visual_evidence_resources",
+            "message": "If review times out, wait for the bridge to become responsive, inspect the latest playblast metadata/audit log, and rerun with fewer or smaller frames if needed.",
+        },
     },
     "review_inspection_renders_against_brief": {
         "description": "Review diagnostic object render metadata and image evidence against a prompt contract",
         "mutates_scene": False,
+        "duration_hint": "Normally a few seconds. Oversized image batches are pixel-budgeted and may skip extra image inspection to keep the bridge responsive.",
+        "timeout_recovery": {
+            "recoverable": True,
+            "poll_after_seconds": 5,
+            "status_tool": "blender_bridge_status",
+            "resource_tool": "get_visual_evidence_resources",
+            "message": "If review times out, wait for the bridge to become responsive, inspect the latest inspection-render metadata/audit log, and rerun with fewer or smaller images if needed.",
+        },
     },
     "repair_animation_from_findings": {
         "description": "Create targeted non-mutating repair operations with executable helper tool-call payloads",
@@ -180,6 +214,15 @@ TOOL_CONTRACTS = {
     "run_animation_repair_loop": {
         "description": "Apply bounded animation repair operations and re-run playblast/brief review",
         "mutates_scene": True,
+        "long_running": True,
+        "duration_hint": "Usually seconds to a minute depending on repair count and whether playblast recapture is enabled.",
+        "timeout_recovery": {
+            "recoverable": True,
+            "poll_after_seconds": 5,
+            "status_tool": "blender_bridge_status",
+            "resource_tool": "get_visual_evidence_resources",
+            "message": "If the client times out, wait briefly, check bridge status, then inspect visual evidence resources and audit logs before rerunning repairs.",
+        },
     },
     "create_progressive_bounce_animation": {
         "description": "Create repeated bounce keyframes plus decreasing scale keys for one object",
@@ -432,6 +475,15 @@ TOOL_CONTRACTS = {
         "has_side_effects": True,
         "permissions": ["scene:read", "files:write"],
         "supports_headless": False,
+        "long_running": True,
+        "duration_hint": "Synchronous viewport capture; rough estimate is about 1 second per sampled frame, with the default 12 frames often around 10-20 seconds on large scenes.",
+        "timeout_recovery": {
+            "recoverable": True,
+            "poll_after_seconds": 5,
+            "status_tool": "blender_bridge_status",
+            "resource_tool": "get_visual_evidence_resources",
+            "message": "If the MCP client times out, the playblast may still finish. Wait, check bridge status, then read latest playblast metadata or audit logs before recapturing.",
+        },
         "timeout_seconds": 120,
     },
     "capture_object_inspection_renders": {
@@ -440,6 +492,15 @@ TOOL_CONTRACTS = {
         "has_side_effects": True,
         "permissions": ["scene:read", "files:write"],
         "supports_headless": True,
+        "long_running": True,
+        "duration_hint": "Synchronous still renders; rough estimate is a few seconds per object/view at 800x600 and more for heavy scenes or high resolutions.",
+        "timeout_recovery": {
+            "recoverable": True,
+            "poll_after_seconds": 5,
+            "status_tool": "blender_bridge_status",
+            "resource_tool": "get_visual_evidence_resources",
+            "message": "If the MCP client times out, inspection renders may still finish. Wait, check bridge status, then read latest inspection-render metadata or audit logs before rerendering.",
+        },
         "timeout_seconds": 180,
     },
     "get_blend_file_diagnostics": {
@@ -529,6 +590,16 @@ TOOL_CONTRACTS = {
         "has_side_effects": True,
         "permissions": ["scene:read", "files:write"],
         "supports_headless": True,
+        "long_running": True,
+        "duration_hint": "Small guarded still renders are usually seconds. Large synchronous renders are blocked by default; use start_render_job for timeout-safe high-resolution output.",
+        "timeout_recovery": {
+            "recoverable": True,
+            "poll_after_seconds": 5,
+            "status_tool": "blender_bridge_status",
+            "resource_tool": "get_visual_evidence_resources",
+            "recommended_tool": "start_render_job",
+            "message": "If the MCP client times out, wait, check bridge status, then inspect latest render-thumbnail metadata or use start_render_job for a timeout-safe rerun.",
+        },
         "timeout_seconds": 180,
         "input_schema": {
             "type": "object",
@@ -539,16 +610,26 @@ TOOL_CONTRACTS = {
                 "resolution_y": {"type": "integer", "description": "PNG height. Defaults to 512."},
                 "camera_name": {"type": "string", "description": "Optional camera object name. Defaults to the active scene camera."},
                 "note": {"type": "string", "description": "Short reason stored in thumbnail metadata."},
+                "allow_blocking_render": {"type": "boolean", "description": "Allow a large synchronous still render. Defaults to false; large previews should use start_render_job."},
             },
             "additionalProperties": False,
         },
     },
     "start_render_job": {
-        "description": "Start a long-running background Blender render job and return immediately with a job id for status polling",
+        "description": "Start a long-running background Blender render job and return immediately with a job id, rough ETA, and status polling guidance",
         "mutates_scene": False,
         "has_side_effects": True,
         "permissions": ["scene:read", "files:write", "process:start"],
         "supports_headless": True,
+        "returns_background_job": True,
+        "duration_hint": "Returns quickly, then the background render may run from seconds to hours. Use the returned estimated_duration and poll_after_seconds.",
+        "timeout_recovery": {
+            "recoverable": True,
+            "poll_after_seconds": 5,
+            "status_tool": "blender_bridge_status",
+            "resource_tool": "get_visual_evidence_resources",
+            "message": "If startup times out, check bridge status and latest render-job metadata before starting another job.",
+        },
         "timeout_seconds": 30,
         "input_schema": {
             "type": "object",
@@ -1096,6 +1177,10 @@ def normalized_tool_contract(name, contract=None):
         "supports_headless": bool(raw.get("supports_headless", not raw.get("mutates_scene", False))),
         "risk_level": risk_level,
         "timeout_seconds": int(raw.get("timeout_seconds") or DEFAULT_TOOL_TIMEOUT_SECONDS),
+        "long_running": bool(raw.get("long_running", False)),
+        "returns_background_job": bool(raw.get("returns_background_job", False)),
+        "duration_hint": str(raw.get("duration_hint") or ""),
+        "timeout_recovery": raw.get("timeout_recovery") if isinstance(raw.get("timeout_recovery"), dict) else {},
         "permissions": _permissions(raw),
         "output_schema": raw.get("output_schema") or DEFAULT_OUTPUT_SCHEMA,
     }
@@ -1121,6 +1206,11 @@ def mcp_annotations_for_tool(name):
         "requiresLivePreview": bool(contract["requires_live_preview"]),
         "riskLevel": contract["risk_level"],
         "permissions": list(contract["permissions"]),
+        "timeoutSeconds": int(contract["timeout_seconds"]),
+        "longRunningHint": bool(contract.get("long_running", False)),
+        "returnsBackgroundJob": bool(contract.get("returns_background_job", False)),
+        "durationHint": str(contract.get("duration_hint") or ""),
+        "timeoutRecovery": dict(contract.get("timeout_recovery") or {}),
         "readOnlyHint": not side_effects,
         "destructiveHint": destructive,
         "idempotentHint": False,
