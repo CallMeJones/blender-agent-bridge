@@ -1042,6 +1042,15 @@ TOOL_CONTRACTS = {
         "has_side_effects": True,
         "permissions": ["files:read", "files:write", "process:start"],
         "supports_headless": True,
+        "returns_background_job": True,
+        "duration_hint": "Returns quickly after starting MP4 assembly in a background Blender process. Poll get_render_job_status until the render job returns to a terminal state with video availability.",
+        "timeout_recovery": {
+            "recoverable": True,
+            "poll_after_seconds": 5,
+            "status_tool": "blender_bridge_status",
+            "resource_tool": "get_render_job_status",
+            "message": "If startup times out, check bridge status and then poll get_render_job_status before starting another assembly job.",
+        },
         "timeout_seconds": 30,
         "input_schema": {
             "type": "object",

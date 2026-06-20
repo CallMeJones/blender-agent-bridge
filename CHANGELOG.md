@@ -8,6 +8,7 @@
 - Added MCP guardrail warnings for synchronous external asset fallback calls and non-dry-run external asset cache cleanup.
 - Expanded MCP guardrail warnings across destructive project-file operations, user-confirmed paths, approval-gated scripts, live-preview mutations, synchronous long-running tools, and background job polling.
 - Hardened MCP guardrail warnings to fall back to local bridge contracts when live tool annotations are sparse, and corrected render-job polling guidance to point at `get_render_job_status`.
+- Filled sparse MCP tool annotations from local bridge contracts and marked MP4 assembly as a pollable background render job.
 
 ## 0.1.5
 

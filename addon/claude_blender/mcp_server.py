@@ -223,6 +223,7 @@ CACHE_CLEANUP_WRITE_TOOLS = {"delete_external_asset_job", "prune_external_asset_
 GUARDRAIL_COMMIT_REVERT_TOOLS = ["commit_preview", "revert_preview"]
 BACKGROUND_JOB_STATUS_TOOLS = {
     "start_render_job": "get_render_job_status",
+    "assemble_render_job_video": "get_render_job_status",
     "start_external_asset_download": "get_external_asset_job_status",
     "start_external_asset_import_job": "get_external_asset_import_job_status",
 }
@@ -644,6 +645,7 @@ def _normalize_tool_definition(tool):
     result.setdefault("inputSchema", result.pop("input_schema", {"type": "object"}))
     result.setdefault("outputSchema", GENERIC_OUTPUT_SCHEMA)
     result.setdefault("annotations", {})
+    result["annotations"] = _tool_annotations(result)
     return result
 
 

@@ -646,6 +646,8 @@ def _assert_compact_tools_visible(proc):
     assert "poll_after_seconds" in status_properties, status_tool
     scene_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "list_scene_objects")
     assert scene_tool["outputSchema"]["type"] == "object", scene_tool
+    assert scene_tool["annotations"]["riskLevel"] == "read", scene_tool
+    assert "scene:read" in scene_tool["annotations"]["permissions"], scene_tool
     catalog_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "blender_tool_catalog")
     assert catalog_tool["annotations"]["riskLevel"] == "dynamic", catalog_tool
     assert "invoke" in catalog_tool["inputSchema"]["properties"]["action"]["enum"], catalog_tool
@@ -684,6 +686,8 @@ def _assert_compact_tools_visible(proc):
     assert "requires_explicit_one_time_approval" in bake_tool["outputSchema"]["properties"], bake_tool
     assemble_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "assemble_render_job_video")
     assert assemble_tool["inputSchema"]["required"] == ["job_id"], assemble_tool
+    assert assemble_tool["annotations"]["returnsBackgroundJob"] is True, assemble_tool
+    assert assemble_tool["annotations"]["timeoutRecovery"]["resource_tool"] == "get_render_job_status", assemble_tool
     validate_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "validate_render_job_output")
     assert validate_tool["annotations"]["readOnlyHint"] is True, validate_tool
     invoke_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "invoke_blender_tool")
@@ -1382,6 +1386,19 @@ def main():
         )
         assert catalog_schema["result"]["structuredContent"]["tool"]["name"] == "run_approved_script", catalog_schema
 
+        sparse_scene_schema = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 261,
+                "method": "tools/call",
+                "params": {"name": "get_blender_tool_schema", "arguments": {"name": "list_scene_objects"}},
+            },
+        )
+        sparse_scene_tool = sparse_scene_schema["result"]["structuredContent"]["tool"]
+        assert sparse_scene_tool["annotations"]["riskLevel"] == "read", sparse_scene_schema
+        assert "scene:read" in sparse_scene_tool["annotations"]["permissions"], sparse_scene_schema
+
         called = _send(
             proc,
             {
@@ -1607,6 +1624,26 @@ def main():
         )
         assert render_job_polling_warning["status_tool"] == "get_render_job_status", render_job_invoke
         assert render_job_polling_warning["bridge_status_tool"] == "blender_bridge_status", render_job_invoke
+
+        assemble_video_invoke = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 39,
+                "method": "tools/call",
+                "params": {
+                    "name": "invoke_blender_tool",
+                    "arguments": {"name": "assemble_render_job_video", "arguments": {"job_id": "render-job-1"}},
+                },
+            },
+        )
+        assemble_video_warning = next(
+            warning
+            for warning in assemble_video_invoke["result"]["structuredContent"]["guardrail_warnings"]
+            if warning["code"] == "background_job_polling_required"
+        )
+        assert assemble_video_invoke["result"]["isError"] is False, assemble_video_invoke
+        assert assemble_video_warning["status_tool"] == "get_render_job_status", assemble_video_invoke
 
         with open(audit_path, "r", encoding="utf-8") as handle:
             audit_events = [json.loads(line) for line in handle if line.strip()]
