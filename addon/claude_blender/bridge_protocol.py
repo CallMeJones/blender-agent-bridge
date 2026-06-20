@@ -583,11 +583,17 @@ TOOL_CONTRACTS = {
         "input_schema": {
             "type": "object",
             "properties": {
+                "job_id": {"type": "string", "description": "Legacy alias for source_job_id."},
                 "source_job_id": {"type": "string", "description": "Completed external asset download/cache job id."},
                 "manifest_path": {"type": "string", "description": "Optional cached asset manifest path when no source_job_id is supplied."},
                 "target_object_name": {"type": "string"},
                 "label": {"type": "string"},
             },
+            "anyOf": [
+                {"required": ["source_job_id"]},
+                {"required": ["job_id"]},
+                {"required": ["manifest_path"]},
+            ],
             "additionalProperties": False,
         },
     },
@@ -1651,6 +1657,25 @@ def validate_arguments(value, schema, path="$"):
     if "enum" in schema and value not in schema.get("enum", []):
         errors.append(f"{path}: expected one of {schema.get('enum')}")
         return errors
+    for combiner in ("anyOf", "oneOf"):
+        variants = schema.get(combiner)
+        if not isinstance(variants, list):
+            continue
+        matches = 0
+        first_variant_errors = []
+        for variant in variants:
+            if not isinstance(variant, dict):
+                continue
+            variant_errors = validate_arguments(value, variant, path)
+            if not variant_errors:
+                matches += 1
+            elif not first_variant_errors:
+                first_variant_errors = variant_errors
+        if combiner == "anyOf" and matches < 1:
+            detail = f"; first variant: {first_variant_errors[0]}" if first_variant_errors else ""
+            errors.append(f"{path}: expected to match at least one schema in anyOf{detail}")
+        if combiner == "oneOf" and matches != 1:
+            errors.append(f"{path}: expected to match exactly one schema in oneOf; matched {matches}")
     if isinstance(value, dict):
         properties = schema.get("properties") if isinstance(schema.get("properties"), dict) else {}
         required = schema.get("required") if isinstance(schema.get("required"), list) else []

@@ -2821,11 +2821,17 @@ def blender_tool_definitions():
             "input_schema": {
                 "type": "object",
                 "properties": {
+                    "job_id": {"type": "string", "description": "Legacy alias for source_job_id."},
                     "source_job_id": {"type": "string", "description": "Completed external asset download/cache job id."},
                     "manifest_path": {"type": "string", "description": "Optional cached asset manifest path when no source_job_id is supplied."},
                     "target_object_name": {"type": "string"},
                     "label": {"type": "string"},
                 },
+                "anyOf": [
+                    {"required": ["source_job_id"]},
+                    {"required": ["job_id"]},
+                    {"required": ["manifest_path"]},
+                ],
                 "additionalProperties": False,
             },
         },

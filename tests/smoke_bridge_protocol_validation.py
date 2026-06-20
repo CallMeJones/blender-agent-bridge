@@ -72,6 +72,22 @@ def test_real_contract_schema_smoke():
     assert bridge_protocol.validate_arguments({}, schema), "missing job_id should fail"
 
 
+def test_anyof_requires_one_import_source():
+    schema = bridge_protocol.normalized_tool_contract("start_external_asset_import_job")["input_schema"]
+    assert bridge_protocol.validate_arguments({"source_job_id": "job-1"}, schema) == []
+    assert bridge_protocol.validate_arguments({"job_id": "job-1"}, schema) == []
+    assert bridge_protocol.validate_arguments({"manifest_path": "C:/cache/manifest.json"}, schema) == []
+    assert bridge_protocol.validate_arguments({}, schema), "missing source job or manifest path should fail"
+
+
+def test_oneof_rejects_ambiguous_value():
+    schema = {"oneOf": [{"type": "integer"}, {"type": "boolean"}]}
+    assert bridge_protocol.validate_arguments(1, schema) == []
+    assert bridge_protocol.validate_arguments(True, schema) == []
+    errors = bridge_protocol.validate_arguments(1.5, schema)
+    assert any("oneOf" in item for item in errors), errors
+
+
 def main():
     test_valid_passes()
     test_missing_required()
@@ -81,6 +97,8 @@ def main():
     test_maxitems_rejected()
     test_bool_not_accepted_as_integer()
     test_real_contract_schema_smoke()
+    test_anyof_requires_one_import_source()
+    test_oneof_rejects_ambiguous_value()
     print("smoke_bridge_protocol_validation: ok")
 
 
