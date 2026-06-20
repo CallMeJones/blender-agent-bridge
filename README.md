@@ -42,6 +42,8 @@ Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets
 
 Live helper edits stay pending in Blender until you use `Commit`, `Revert`, or Blender undo. For Sketchfab downloads/imports, add `SKETCHFAB_API_TOKEN` to the copied MCP config `env` block before restarting the MCP client. For generated Python, use Blender's `Run`/`Reject` controls or grant temporary external script trust from the sidebar.
 
+After connecting, MCP results may include `guardrail_warnings`. These are advisory client-routing hints, not failures: follow them toward async external asset jobs, queued imports, background render/MP4 polling, user-confirmed file paths, approval-gated scripts, and preview commit/revert controls.
+
 ## Why This Exists
 
 AI agents are getting good at using tools, but Blender needs guardrails. This bridge gives agents real scene context and practical tools without turning Blender into a chat app or storing provider API keys.
@@ -94,6 +96,7 @@ Connected agents do not get blanket access to Blender.
 | Generated Python | Staged into a Text datablock and blocked until approved in Blender, unless runtime-only script trust is active. |
 | External script trust | Optional sidebar preset for iterative sessions. Trust is runtime-only and can be revoked. Blocked scripts remain refused. |
 | Audit and status | Local redacted JSONL audit events and bridge/MCP diagnostics are available through MCP resources and status calls. |
+| MCP guardrail warnings | Advisory hints in catalog, schema, and tool results steer clients toward async jobs, queued imports, user-confirmed paths, approval gates, dry-run cleanup, preview commit/revert, and background-job polling. |
 | Model provider keys | Not stored in Blender Agent Bridge. External clients bring their own model/provider connection. |
 
 See [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), and [docs/SAFETY_MODEL.md](docs/SAFETY_MODEL.md) for the detailed model.
@@ -158,7 +161,7 @@ flowchart LR
   scripts --> approve["Run / Reject / Trust Session"]
 ```
 
-The MCP surface is compact by default, so clients do not need to load the whole helper catalog into prompt context. They get a small direct surface for status, scene listing, `.blend` diagnostics, external asset discovery/jobs, animation workflows, and async render jobs, plus `blender_tool_catalog` / `search_blender_tools` to search compact summaries. Fetch one schema only when needed with `get_blender_tool_schema`, then call it through `invoke_blender_tool`.
+The MCP surface is compact by default, so clients do not need to load the whole helper catalog into prompt context. They get a small direct surface for status, scene listing, `.blend` diagnostics, external asset discovery/jobs, animation workflows, and async render jobs, plus `blender_tool_catalog` / `search_blender_tools` to search compact summaries. Fetch one schema only when needed with `get_blender_tool_schema`, then call it through `invoke_blender_tool`. When a result includes `guardrail_warnings`, treat them as routing and recovery hints before retrying direct fallback tools.
 
 Some MCP clients cache tool lists and server configs. After installing a new ZIP, reloading the add-on, or pressing `Copy MCP`, replace the old client config and refresh or restart that MCP client.
 
