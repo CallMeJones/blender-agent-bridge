@@ -239,6 +239,15 @@ python tests\smoke_audit_log.py
 python tests\smoke_external_assets.py
 ```
 
+Optional live-network external asset smoke is skipped by default:
+
+```powershell
+$env:BLENDER_AGENT_BRIDGE_LIVE_EXTERNAL_ASSET_SMOKE='1'
+python tests\smoke_external_assets_live.py
+```
+
+Set `BLENDER_AGENT_BRIDGE_LIVE_EXTERNAL_ASSET_DOWNLOAD=1` to also download small assets. Sketchfab download smoke additionally requires `SKETCHFAB_API_TOKEN` or `BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN` plus `BLENDER_AGENT_BRIDGE_LIVE_SKETCHFAB_UID`.
+
 Run Blender-background smoke tests when Blender is available:
 
 ```powershell
