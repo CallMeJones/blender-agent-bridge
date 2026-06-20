@@ -806,6 +806,14 @@ def _assert_external_asset_search_routes_first(response, *, query):
             assert names.index(direct_name) > names.index("start_external_asset_import_job"), (query, names)
 
 
+def _assert_material_texture_search_avoids_asset_route(response, *, query):
+    tools = response["result"]["structuredContent"]["tools"]
+    names = [tool["name"] for tool in tools]
+    categories = [tool["category"] for tool in tools]
+    assert names[0] != "start_external_asset_download", (query, names)
+    assert all(category != "external_assets" for category in categories[:6]), (query, names, categories)
+
+
 def main():
     _assert_legacy_status_hashes_are_unknown()
     assert not mcp_server._contains_any_phrase(
@@ -816,6 +824,10 @@ def main():
         "Make the selected cube bounce twice",
         mcp_server.ANIMATION_ROUTE_TERMS,
     )
+    assert mcp_server._is_external_asset_route_query("import texture from Poly Haven")
+    assert mcp_server._is_external_asset_route_query("download model from asset library")
+    assert not mcp_server._is_external_asset_route_query("create a wood texture material on the selected cube")
+    assert not mcp_server._is_external_asset_route_query("assign a procedural texture material to the selected cube")
 
     offline_audit_fd, offline_audit_path = tempfile.mkstemp(
         prefix="claude-blender-mcp-offline-audit-",
@@ -922,6 +934,23 @@ def main():
                 },
             )
             _assert_external_asset_search_routes_first(offline_asset_search, query=query)
+        for query in (
+            "Create a wood texture material on the selected cube.",
+            "Assign a procedural texture material to the selected cube.",
+        ):
+            offline_material_search = _send(
+                offline_proc,
+                {
+                    "jsonrpc": "2.0",
+                    "id": 98,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "search_blender_tools",
+                        "arguments": {"query": query, "limit": 10},
+                    },
+                },
+            )
+            _assert_material_texture_search_avoids_asset_route(offline_material_search, query=query)
         offline_catalog_schema = _send(
             offline_proc,
             {
@@ -1184,6 +1213,23 @@ def main():
                 },
             )
             _assert_external_asset_search_routes_first(asset_search, query=query)
+        for query in (
+            "Create a wood texture material on the selected cube.",
+            "Assign a procedural texture material to the selected cube.",
+        ):
+            material_search = _send(
+                proc,
+                {
+                    "jsonrpc": "2.0",
+                    "id": 99,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "search_blender_tools",
+                        "arguments": {"query": query, "limit": 10},
+                    },
+                },
+            )
+            _assert_material_texture_search_avoids_asset_route(material_search, query=query)
 
         catalog_search = _send(
             proc,

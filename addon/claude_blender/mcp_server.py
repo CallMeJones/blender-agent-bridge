@@ -141,30 +141,43 @@ SCRIPT_EXPLICIT_TERMS = {
     "helpers cannot express",
     "approved script",
 }
-EXTERNAL_ASSET_ROUTE_TERMS = {
-    "asset",
-    "assets",
+EXTERNAL_ASSET_STRONG_ROUTE_TERMS = {
     "asset catalog",
     "asset library",
     "asset job",
     "async asset",
-    "cache asset",
-    "download asset",
-    "download model",
     "environment map",
     "external asset",
     "external assets",
     "hdri",
     "hdris",
-    "import asset",
-    "import hdri",
-    "import model",
-    "import texture",
     "model library",
     "poly haven",
     "polyhaven",
     "queued import",
     "sketchfab",
+}
+EXTERNAL_ASSET_ACTION_TERMS = {
+    "cache",
+    "cached",
+    "caching",
+    "download",
+    "downloads",
+    "downloading",
+    "fetch",
+    "import",
+    "imports",
+    "importing",
+    "search",
+}
+EXTERNAL_ASSET_OBJECT_TERMS = {
+    "asset",
+    "assets",
+    "environment map",
+    "hdri",
+    "hdris",
+    "model",
+    "models",
     "texture",
     "textures",
 }
@@ -863,6 +876,18 @@ def _contains_any_phrase(text, phrases):
     return False
 
 
+def _is_external_asset_route_query(text):
+    normalized = str(text or "").strip().lower()
+    if not normalized:
+        return False
+    if _contains_any_phrase(normalized, EXTERNAL_ASSET_STRONG_ROUTE_TERMS):
+        return True
+    return _contains_any_phrase(normalized, EXTERNAL_ASSET_ACTION_TERMS) and _contains_any_phrase(
+        normalized,
+        EXTERNAL_ASSET_OBJECT_TERMS,
+    )
+
+
 def _tool_category(tool):
     name = str((tool or {}).get("name") or "").lower()
     if name in {"draft_script", "run_approved_script"}:
@@ -1035,7 +1060,7 @@ def _score_tool_match(tool, query):
     category = _tool_category(tool)
     animation_query = _contains_any_phrase(normalized_query, ANIMATION_ROUTE_TERMS)
     explicit_script_query = _contains_any_phrase(normalized_query, SCRIPT_EXPLICIT_TERMS)
-    external_asset_query = _contains_any_phrase(normalized_query, EXTERNAL_ASSET_ROUTE_TERMS)
+    external_asset_query = _is_external_asset_route_query(normalized_query)
     explicit_direct_asset_query = _contains_any_phrase(normalized_query, EXTERNAL_ASSET_DIRECT_TERMS)
     matched_terms = [term for term in terms if term in text]
     if not matched_terms:
@@ -1092,6 +1117,8 @@ def _score_tool_match(tool, query):
             score += 150
         if name in EXTERNAL_ASSET_DIRECT_TOOLS and not explicit_direct_asset_query:
             score -= 900
+    elif category == "external_assets" and not explicit_direct_asset_query:
+        score -= 120
     return score
 
 
