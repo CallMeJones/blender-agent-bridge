@@ -21,6 +21,7 @@ _MODULE_NAMES = (
     "viewport_capture",
     "playblast_capture",
     "inspection_render",
+    "autosave",
     "lab_parity",
     "render_jobs",
     "project_files",

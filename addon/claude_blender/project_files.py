@@ -13,6 +13,10 @@ from . import lab_parity, script_runner
 
 DEFAULT_PROJECT_DIRS = ("assets", "refs", "renders", "exports")
 PROJECT_NAME_RE = re.compile(r"[^A-Za-z0-9._ -]+")
+USER_PATH_REQUIRED_MESSAGE = (
+    "This operation needs a human-confirmed path. Ask the user for the .blend path or project folder, "
+    "then retry with user_confirmed_path=true."
+)
 
 
 def _abspath(path):
@@ -70,6 +74,18 @@ def _ensure_parent_dir(path, *, create_dirs):
     return {"ok": True, "directory": directory}
 
 
+def _user_path_required_payload(*, path="", before=None):
+    return {
+        "ok": False,
+        "code": "user_path_required",
+        "message": USER_PATH_REQUIRED_MESSAGE,
+        "path": path,
+        "human_in_loop_required": True,
+        "requires_user_confirmed_path": True,
+        "before": before or _current_state(),
+    }
+
+
 def _checkpoint_before_replace(context, *, create_checkpoint=True, require_checkpoint=True, checkpoint_dir=None):
     if not bool(create_checkpoint):
         return {"ok": False, "requested": False, "message": "Checkpoint disabled", "path": ""}
@@ -125,7 +141,7 @@ def _run_read_homefile(*, template="default"):
         return bpy.ops.wm.read_homefile()
 
 
-def _save_result_payload(path, *, operation, operator_result, before, copy):
+def _save_result_payload(path, *, operation, operator_result, before, copy, path_source):
     exists = os.path.isfile(path)
     diagnostics = lab_parity.get_blend_file_diagnostics(bpy.context)
     return {
@@ -133,6 +149,7 @@ def _save_result_payload(path, *, operation, operator_result, before, copy):
         "message": f"Blend file {operation} complete" if exists else f"Blend file {operation} did not create a file",
         "operation": operation,
         "path": path,
+        "path_source": path_source,
         "copy": bool(copy),
         "operator_result": sorted(str(item) for item in operator_result),
         "size_bytes": os.path.getsize(path) if exists else 0,
@@ -142,23 +159,22 @@ def _save_result_payload(path, *, operation, operator_result, before, copy):
     }
 
 
-def save_blend_file(context, *, filepath="", copy=False, overwrite=False, create_dirs=True):
+def save_blend_file(context, *, filepath="", copy=False, overwrite=False, create_dirs=True, user_confirmed_path=False):
     before = _current_state()
     target = _abspath(filepath) if str(filepath or "").strip() else before["absolute_path"]
     requested_path = bool(str(filepath or "").strip())
     copy = bool(copy)
     if not target:
-        return {
-            "ok": False,
-            "message": "A filepath is required because the current blend file has not been saved yet",
-            "before": before,
-        }
+        return _user_path_required_payload(before=before)
     if not _is_blend_path(target):
         return {"ok": False, "message": "Blend file path must end with .blend", "path": target, "before": before}
     if copy and not requested_path:
         return {"ok": False, "message": "Saving a copy requires an explicit filepath", "path": target, "before": before}
     current = before["absolute_path"]
     same_current = bool(current and os.path.normcase(current) == os.path.normcase(target))
+    path_changes_binding = bool(requested_path and not same_current)
+    if path_changes_binding and not bool(user_confirmed_path):
+        return _user_path_required_payload(path=target, before=before)
     if copy and same_current:
         return {"ok": False, "message": "Save-copy target must differ from the active blend file", "path": target, "before": before}
     parent = _ensure_parent_dir(target, create_dirs=bool(create_dirs))
@@ -188,6 +204,7 @@ def save_blend_file(context, *, filepath="", copy=False, overwrite=False, create
         operator_result=operator_result,
         before=before,
         copy=copy,
+        path_source="user_confirmed" if path_changes_binding else "active_blend_binding",
     )
 
 
@@ -200,6 +217,7 @@ def open_blend_file(
     require_checkpoint=True,
     checkpoint_dir=None,
     load_ui=False,
+    user_confirmed_path=False,
 ):
     before = _current_state()
     path = _abspath(filepath)
@@ -212,6 +230,8 @@ def open_blend_file(
         }
     if not path:
         return {"ok": False, "message": "A filepath is required", "before": before}
+    if not bool(user_confirmed_path):
+        return _user_path_required_payload(path=path, before=before)
     if not _is_blend_path(path):
         return {"ok": False, "message": "Blend file path must end with .blend", "path": path, "before": before}
     if not os.path.isfile(path):
@@ -247,6 +267,7 @@ def open_blend_file(
         "ok": True,
         "message": "Blend file opened",
         "path": path,
+        "path_source": "user_confirmed",
         "operator_result": sorted(str(item) for item in operator_result),
         "elapsed_seconds": round(time.time() - started_at, 3),
         "checkpoint": checkpoint,
@@ -271,6 +292,7 @@ def create_new_blender_project(
     create_checkpoint=True,
     require_checkpoint=True,
     checkpoint_dir=None,
+    user_confirmed_path=False,
 ):
     before = _current_state()
     requested_project_name = str(project_name or "").strip()
@@ -296,6 +318,8 @@ def create_new_blender_project(
             "path": target,
             "before": before,
         }
+    if not bool(user_confirmed_path):
+        return _user_path_required_payload(path=target, before=before)
     if not _is_blend_path(target):
         return {"ok": False, "message": "Blend file path must end with .blend", "path": target, "before": before}
     parent = _ensure_parent_dir(target, create_dirs=bool(create_dirs))
@@ -357,6 +381,7 @@ def create_new_blender_project(
         "project_name": safe_name,
         "project_dir": os.path.dirname(target),
         "path": target,
+        "path_source": "user_confirmed",
         "template": str(template or "default"),
         "created_dirs": created_dirs,
         "operator_result": {

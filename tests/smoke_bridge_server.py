@@ -121,6 +121,7 @@ def main():
         assert "save_blend_file" in names, names
         assert "open_blend_file" in names, names
         assert "create_new_blender_project" in names, names
+        assert "autosave_current_blend_file" in names, names
         assert "get_workspace_layout" in names, names
         assert "render_scene_thumbnail" in names, names
         assert "start_render_job" in names, names
@@ -191,6 +192,22 @@ def main():
         status_resource = json.loads(resource["text"])
         assert status_resource["scene"] == bpy.context.scene.name
         assert status_resource["addon_source_hash"] == build_info.source_tree_hash(), status_resource
+        assert "blender://tools/catalog" in uris, resources
+        assert "blender://tools/contracts" not in uris, resources
+        assert "blender://audit/summary" in uris, resources
+        assert "blender://audit/latest" not in uris, resources
+        tool_catalog_url = base + "/resource?" + urllib.parse.urlencode({"uri": "blender://tools/catalog"})
+        tool_catalog_resource = _request_with_pump(lambda: _get(tool_catalog_url))
+        tool_catalog = json.loads(tool_catalog_resource["text"])
+        assert tool_catalog["ok"] is True, tool_catalog
+        assert tool_catalog["full_contracts_resource"] == "blender://tools/contracts", tool_catalog
+        assert tool_catalog["count"] == len(tool_catalog["tools"]), tool_catalog
+        assert not any("input_schema" in tool for tool in tool_catalog["tools"]), tool_catalog
+        audit_summary_url = base + "/resource?" + urllib.parse.urlencode({"uri": "blender://audit/summary"})
+        audit_summary_resource = _request_with_pump(lambda: _get(audit_summary_url))
+        audit_summary = json.loads(audit_summary_resource["text"])
+        assert audit_summary["ok"] is True, audit_summary
+        assert audit_summary["latest_full_resource"] == "blender://audit/latest", audit_summary
 
         capture_dir = tempfile.mkdtemp(prefix="claude-blender-captures-")
         capture_path = os.path.join(capture_dir, "viewport-test.png")

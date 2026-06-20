@@ -55,6 +55,7 @@ def main():
         assert "save_blend_file" in bundle["available_tools"]
         assert "open_blend_file" in bundle["available_tools"]
         assert "create_new_blender_project" in bundle["available_tools"]
+        assert "autosave_current_blend_file" in bundle["available_tools"]
         assert "get_workspace_layout" in bundle["available_tools"]
         assert "get_visual_evidence_resources" in bundle["available_tools"]
         assert "render_scene_thumbnail" in bundle["available_tools"]
@@ -84,6 +85,7 @@ def main():
         assert "save_blend_file" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "open_blend_file" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "create_new_blender_project" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
+        assert "autosave_current_blend_file" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "get_workspace_layout" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "get_visual_evidence_resources" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "render_scene_thumbnail" in {tool["name"] for tool in agent_tools.blender_tool_definitions()}
@@ -113,6 +115,7 @@ def main():
         assert "save_blend_file" in bridge_protocol.TOOL_CONTRACTS
         assert "open_blend_file" in bridge_protocol.TOOL_CONTRACTS
         assert "create_new_blender_project" in bridge_protocol.TOOL_CONTRACTS
+        assert "autosave_current_blend_file" in bridge_protocol.TOOL_CONTRACTS
         assert "get_workspace_layout" in bridge_protocol.TOOL_CONTRACTS
         assert "get_visual_evidence_resources" in bridge_protocol.TOOL_CONTRACTS
         assert "render_scene_thumbnail" in bridge_protocol.TOOL_CONTRACTS

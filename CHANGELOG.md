@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Nothing yet.
+
+## 0.1.1
+
+- Added human-in-the-loop `.blend` lifecycle path policy: save-as/save-copy, open, and new-project operations require a user-confirmed path.
+- Added in-place autosave for the active bound `.blend` file, with no snapshot files and no invented path for unsaved scenes.
+- Added MCP path-policy annotations and compact-catalog recovery smoke coverage so clients can discover when to ask the user for a path.
 - Hardened the stdio MCP server with protocol fallback, pagination, prompts, resource templates, structured tool errors, output schemas, and JSON Schema argument validation.
 - Added normalized bridge tool contracts with risk levels, permissions, output schemas, and MCP annotations.
 - Added local JSONL audit logging for MCP and bridge tool calls with redaction for code, tokens, keys, passwords, and credential-like fields.

@@ -220,7 +220,7 @@ RESOURCE_TEMPLATES = [
         "uriTemplate": "blender://tools/{resource}",
         "name": "tool-resource",
         "title": "Blender Tool Resource",
-        "description": "Tool metadata resources such as the normalized contract registry.",
+        "description": "Tool metadata resources such as compact catalog or the explicit full contract registry.",
         "mimeType": "application/json",
     },
     {
@@ -234,7 +234,7 @@ RESOURCE_TEMPLATES = [
         "uriTemplate": "blender://audit/{resource}",
         "name": "audit-resource",
         "title": "Blender Audit Resource",
-        "description": "Recent local audit events for MCP and bridge tool calls.",
+        "description": "Compact audit summaries or explicit recent local audit events for MCP and bridge tool calls.",
         "mimeType": "application/json",
     },
     {
@@ -597,7 +597,10 @@ def _compact_tool_definitions():
         {
             "name": "search_blender_tools",
             "title": "Search Blender Tools",
-            "description": "Search the full Blender MCP tool catalog by name, description, risk, and permissions.",
+            "description": (
+                "Search the full Blender MCP tool catalog by name, description, risk, and permissions. "
+                "Returns compact summaries by default; call get_blender_tool_schema for one selected tool."
+            ),
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -609,7 +612,10 @@ def _compact_tool_definitions():
                     "requires_approval": {"type": "boolean", "description": "Filter by approval requirement"},
                     "requires_live_preview": {"type": "boolean", "description": "Filter by live-preview requirement"},
                     "risk_level": {"type": "string", "description": "Filter by risk level such as read, preview, or approval"},
-                    "include_schemas": {"type": "boolean", "description": "Include input/output schemas in search results"},
+                    "include_schemas": {
+                        "type": "boolean",
+                        "description": "Include input/output schemas in search results. Defaults to false to protect context budget.",
+                    },
                 },
                 "additionalProperties": False,
             },
@@ -777,7 +783,7 @@ def _tool_category(tool):
         return "external_assets"
     if name in {"get_workspace_layout", "jump_to_workspace", "set_viewport_view", "focus_object_in_viewport"}:
         return "navigation"
-    if name in {"get_blend_file_diagnostics", "save_blend_file", "open_blend_file", "create_new_blender_project"}:
+    if name in {"get_blend_file_diagnostics", "save_blend_file", "open_blend_file", "create_new_blender_project", "autosave_current_blend_file"}:
         return "project_files"
     if name in {"start_render_job", "get_render_job_status", "cancel_render_job", "assemble_render_job_video", "validate_render_job_output"}:
         return "camera_render"
@@ -836,6 +842,9 @@ def _tool_summary(tool, *, include_schema=True):
         "returns_background_job": bool(annotations.get("returnsBackgroundJob", False)),
         "duration_hint": str(annotations.get("durationHint", "") or ""),
         "timeout_recovery": dict(annotations.get("timeoutRecovery") or {}),
+        "human_in_loop_required": bool(annotations.get("humanInLoopRequired", False)),
+        "requires_user_path": bool(annotations.get("requiresUserPath", False)),
+        "path_policy": str(annotations.get("pathPolicy", "") or ""),
     }
     if include_schema:
         summary["input_schema"] = tool.get("inputSchema") or {}
@@ -1336,6 +1345,9 @@ class BlenderMCPServer:
             "query": filters["query"],
             "count": len(tools),
             "total": len(matches),
+            "include_schemas": include_schemas,
+            "schema_lookup_tool": "get_blender_tool_schema",
+            "invoke_tool": "invoke_blender_tool",
             "tools": tools,
             "filters": {
                 key: value
@@ -1346,9 +1358,7 @@ class BlenderMCPServer:
         return _tool_result(json.dumps(structured, indent=2, sort_keys=True), structured)
 
     def _search_blender_tools(self, arguments):
-        compatible_arguments = dict(arguments)
-        compatible_arguments.setdefault("include_schemas", True)
-        return self._search_catalog(compatible_arguments)
+        return self._search_catalog(arguments)
 
     def _catalog_categories(self, arguments):
         filters = _catalog_filters(arguments)

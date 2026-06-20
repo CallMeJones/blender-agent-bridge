@@ -9,6 +9,7 @@ import queue
 import threading
 import time
 import urllib.parse
+from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import bpy
@@ -52,6 +53,8 @@ def _env_int(name, default):
 
 
 REQUEST_TIMEOUT_SECONDS = max(10, _env_int("BLENDER_AGENT_BRIDGE_REQUEST_TIMEOUT", "90"))
+AUDIT_SUMMARY_EVENT_LIMIT = 40
+AUDIT_LATEST_EVENT_LIMIT = 20
 
 
 class _RequestTooLarge(Exception):
@@ -73,6 +76,64 @@ def _json_bytes(payload):
 
 def _public_context():
     return context_bundle.public_bundle(context_bundle.build_context_bundle(bpy.context))
+
+
+def _compact_tool_catalog():
+    contracts = bridge_protocol.list_tool_contracts()
+    tools = []
+    for name, contract in sorted((contracts.get("tools") or {}).items()):
+        normalized = bridge_protocol.normalized_tool_contract(name, contract)
+        annotations = bridge_protocol.mcp_annotations_for_tool(name)
+        tools.append(
+            {
+                "name": name,
+                "risk_level": str(annotations.get("riskLevel", "") or ""),
+                "permissions": list(annotations.get("permissions", []) or []),
+                "mutates_scene": bool(annotations.get("mutatesScene", False)),
+                "requires_approval": bool(annotations.get("requiresApproval", False)),
+                "requires_live_preview": bool(annotations.get("requiresLivePreview", False)),
+                "human_in_loop_required": bool(annotations.get("humanInLoopRequired", False)),
+                "requires_user_path": bool(annotations.get("requiresUserPath", False)),
+                "title": normalized.get("title") or name.replace("_", " ").title(),
+            }
+        )
+    return {
+        "ok": True,
+        "schema_version": contracts.get("schema_version"),
+        "bridge_version": contracts.get("bridge_version"),
+        "count": len(tools),
+        "tools": tools,
+        "full_contracts_resource": "blender://tools/contracts",
+        "note": "Compact catalog for resource discovery. Use MCP tool search/schema helpers for normal tool routing.",
+    }
+
+
+def _audit_summary():
+    events = audit_log.read_recent(AUDIT_SUMMARY_EVENT_LIMIT)
+    event_counts = Counter(str(event.get("event") or "unknown") for event in events)
+    tool_counts = Counter(str(event.get("tool_name") or "") for event in events if event.get("tool_name"))
+    error_count = sum(1 for event in events if event.get("ok") is False or event.get("code"))
+    latest = []
+    for event in events[-8:]:
+        latest.append(
+            {
+                "timestamp": event.get("timestamp"),
+                "event": event.get("event"),
+                "tool_name": event.get("tool_name"),
+                "ok": event.get("ok"),
+                "code": event.get("code"),
+            }
+        )
+    return {
+        "ok": True,
+        "event_count": len(events),
+        "events_by_type": dict(sorted(event_counts.items())),
+        "tool_calls_by_name": dict(sorted(tool_counts.items())),
+        "error_count": error_count,
+        "latest_events": latest,
+        "latest_full_resource": "blender://audit/latest",
+        "latest_full_event_limit": AUDIT_LATEST_EVENT_LIMIT,
+    }
 
 
 def _operation_recovery_guidance(name):
@@ -316,10 +377,10 @@ def _resources():
             "mimeType": "application/json",
         },
         {
-            "uri": "blender://tools/contracts",
-            "name": "tool-contracts",
-            "title": "Blender Tool Contracts",
-            "description": "Tool safety metadata for the bridge/MCP surface",
+            "uri": "blender://tools/catalog",
+            "name": "tool-catalog",
+            "title": "Compact Blender Tool Catalog",
+            "description": "Compact tool names, risk, and permission metadata for resource discovery",
             "mimeType": "application/json",
         },
         {
@@ -330,10 +391,10 @@ def _resources():
             "mimeType": "text/plain",
         },
         {
-            "uri": "blender://audit/latest",
-            "name": "latest-audit-log",
-            "title": "Blender Agent Bridge Audit Log",
-            "description": "Recent local JSON audit events for bridge and MCP tool calls",
+            "uri": "blender://audit/summary",
+            "name": "audit-summary",
+            "title": "Blender Agent Bridge Audit Summary",
+            "description": "Compact summary of recent local audit events for bridge and MCP tool calls",
             "mimeType": "application/json",
         },
         {
@@ -401,6 +462,11 @@ def _read_resource(uri):
         return {"mimeType": "application/json", "text": json.dumps(_scene_status(), indent=2, sort_keys=True)}
     if uri == "blender://scene/context":
         return {"mimeType": "application/json", "text": json.dumps(_public_context(), indent=2, sort_keys=True, default=str)}
+    if uri == "blender://tools/catalog":
+        return {
+            "mimeType": "application/json",
+            "text": json.dumps(_compact_tool_catalog(), indent=2, sort_keys=True),
+        }
     if uri == "blender://tools/contracts":
         return {
             "mimeType": "application/json",
@@ -411,7 +477,21 @@ def _read_resource(uri):
     if uri == "blender://audit/latest":
         return {
             "mimeType": "application/json",
-            "text": json.dumps({"ok": True, "events": audit_log.read_recent(80)}, indent=2, sort_keys=True),
+            "text": json.dumps(
+                {
+                    "ok": True,
+                    "events": audit_log.read_recent(AUDIT_LATEST_EVENT_LIMIT),
+                    "event_limit": AUDIT_LATEST_EVENT_LIMIT,
+                    "summary_resource": "blender://audit/summary",
+                },
+                indent=2,
+                sort_keys=True,
+            ),
+        }
+    if uri == "blender://audit/summary":
+        return {
+            "mimeType": "application/json",
+            "text": json.dumps(_audit_summary(), indent=2, sort_keys=True),
         }
     if uri == viewport_capture.LATEST_CAPTURE_RESOURCE_URI:
         return viewport_capture.latest_capture_resource(context=bpy.context, preferred_dir=_capture_cache_dir())

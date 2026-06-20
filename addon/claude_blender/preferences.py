@@ -72,6 +72,18 @@ class CLAUDEBLENDER_AP_preferences(bpy.types.AddonPreferences):
         description="Save blend checkpoints before risky changes",
         default=True,
     )
+    autosave_enabled: bpy.props.BoolProperty(
+        name="Autosave",
+        description="Automatically save the active blend file in place after it has a user-confirmed path",
+        default=True,
+    )
+    autosave_interval_seconds: bpy.props.IntProperty(
+        name="Autosave Interval Seconds",
+        description="Minimum seconds between in-place autosaves of the active blend file",
+        default=300,
+        min=30,
+        soft_max=1800,
+    )
     bridge_port: bpy.props.IntProperty(
         name="Bridge Port",
         description="Localhost HTTP bridge port for external MCP access",
@@ -99,6 +111,8 @@ class CLAUDEBLENDER_AP_preferences(bpy.types.AddonPreferences):
         layout.prop(self, "checkpoint_dir")
         layout.prop(self, "max_screenshot_bytes")
         layout.prop(self, "checkpoints_enabled")
+        layout.prop(self, "autosave_enabled")
+        layout.prop(self, "autosave_interval_seconds")
         layout.separator()
         layout.label(text="External Bridge / MCP")
         layout.prop(self, "bridge_port")

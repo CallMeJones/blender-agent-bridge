@@ -109,7 +109,7 @@ flowchart LR
   scripts --> approve["Run / Reject / Trust Session"]
 ```
 
-The MCP surface is compact by default. Clients can call direct workflow tools for common animation tasks, or use `blender_tool_catalog` to search, inspect, and invoke the full local tool catalog.
+The MCP surface is compact by default, so clients do not need to load the whole helper catalog into prompt context. They get a small direct surface for status, scene listing, animation workflows, and async render jobs, plus `blender_tool_catalog` / `search_blender_tools` to search compact summaries. Fetch one schema only when needed with `get_blender_tool_schema`, then call it through `invoke_blender_tool`.
 
 Some MCP clients cache tool lists and server configs. After installing a new ZIP, reloading the add-on, or pressing `Copy MCP`, replace the old client config and refresh or restart that MCP client.
 
@@ -148,14 +148,14 @@ Build and validate the extension ZIP from the repository root:
 ```powershell
 blender --command extension validate addon\claude_blender
 python scripts\build_extension_zip.py --blender blender
-blender --command extension validate dist\claude_blender-0.1.0.zip
+blender --command extension validate dist\claude_blender-0.1.1.zip
 ```
 
 The build writes:
 
 ```text
-dist/claude_blender-0.1.0.zip
-dist/claude_blender-0.1.0.zip.sha256
+dist/claude_blender-0.1.1.zip
+dist/claude_blender-0.1.1.zip.sha256
 ```
 
 For day-to-day development on Windows, link the checkout into Blender's user extension repository:

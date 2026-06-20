@@ -9,7 +9,7 @@ AGENT_GUIDANCE = (
     "You are an external agent connected to Blender Agent Bridge. Use the provided scene context and Blender tools. "
     "Read context_plan before acting. It explains which scene details were included or omitted to stay within the request budget. "
     "If omitted details matter, call inspect_scene, get_object_details, get_animation_details, get_animation_scene_context, get_material_node_details, get_geometry_nodes_details, get_shader_nodes_details, get_rigging_details, get_shape_key_details, get_curve_text_details, get_simulation_details, inspect_simulation_bake, get_collection_layer_details, get_render_camera_compositor_details, get_blend_file_diagnostics, get_workspace_layout, get_visual_evidence_resources, capture_viewport, capture_animation_playblast, capture_object_inspection_renders, render_scene_thumbnail, start_render_job, get_render_job_status, assemble_render_job_video, validate_render_job_output, or search_blender_docs instead of guessing. "
-    "For .blend lifecycle work, use get_blend_file_diagnostics before save/open/new decisions; use save_blend_file for save/save-as/save-copy, open_blend_file only with explicit discard confirmation, and create_new_blender_project only with explicit discard confirmation. "
+    "For .blend lifecycle work, use get_blend_file_diagnostics before save/open/new decisions. Never invent durable file paths: ask the user for any new project folder, save-as/save-copy filepath, or open filepath; set user_confirmed_path=true only when the path came from the user or a file picker. Bound edits may save the active .blend path without a new filepath. Use autosave_current_blend_file only for already-bound saved .blend files. "
     "When target objects are unclear, use list_scene_objects and select_objects before applying selected-object tools. "
     "When the user asks to change the scene, use safe helper tools first so Blender changes immediately. "
     "Use direct Blender data concepts: objects, collections, materials, cameras, lights, actions, keyframes. "
@@ -155,7 +155,7 @@ def blender_tool_definitions():
         },
         {
             "name": "save_blend_file",
-            "description": "Save the current .blend, save-as to a new .blend path, or save a copy without changing the active file. Refuses accidental overwrite unless overwrite=true.",
+            "description": "Save the current .blend, save-as to a human-confirmed .blend path, or save a copy without changing the active file. Refuses accidental overwrite unless overwrite=true.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -163,13 +163,14 @@ def blender_tool_definitions():
                     "copy": {"type": "boolean", "description": "Save a copy without changing the active filepath. Requires filepath."},
                     "overwrite": {"type": "boolean", "description": "Allow replacing an existing target .blend file."},
                     "create_dirs": {"type": "boolean", "description": "Create the target directory if missing. Defaults to true."},
+                    "user_confirmed_path": {"type": "boolean", "description": "Required true for save-as/save-copy. Set only after the user provides the filepath."},
                 },
                 "additionalProperties": False,
             },
         },
         {
             "name": "open_blend_file",
-            "description": "Open an existing .blend file. This replaces the active Blender session, so confirm_discard_current must be true; creates a checkpoint first by default.",
+            "description": "Open an existing user-confirmed .blend file. This replaces the active Blender session, so confirm_discard_current and user_confirmed_path must be true; creates a checkpoint first by default.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -179,14 +180,15 @@ def blender_tool_definitions():
                     "require_checkpoint": {"type": "boolean", "description": "Abort if checkpoint creation fails. Defaults to true."},
                     "checkpoint_dir": {"type": "string"},
                     "load_ui": {"type": "boolean", "description": "Load UI layout from the opened file when supported. Defaults to false."},
+                    "user_confirmed_path": {"type": "boolean", "description": "Required true. Set only after the user provides the filepath."},
                 },
-                "required": ["filepath", "confirm_discard_current"],
+                "required": ["filepath", "confirm_discard_current", "user_confirmed_path"],
                 "additionalProperties": False,
             },
         },
         {
             "name": "create_new_blender_project",
-            "description": "Create a new Blender project folder and .blend file. This replaces the active Blender session, so confirm_discard_current must be true; creates a checkpoint first by default.",
+            "description": "Create a new Blender project folder and .blend file at a user-confirmed path. This replaces the active Blender session, so confirm_discard_current and user_confirmed_path must be true; creates a checkpoint first by default.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -202,8 +204,22 @@ def blender_tool_definitions():
                     "create_checkpoint": {"type": "boolean", "description": "Save a checkpoint before creating the new project. Defaults to true."},
                     "require_checkpoint": {"type": "boolean", "description": "Abort if checkpoint creation fails. Defaults to true."},
                     "checkpoint_dir": {"type": "string"},
+                    "user_confirmed_path": {"type": "boolean", "description": "Required true. Set only after the user provides the project_dir or filepath."},
                 },
-                "required": ["confirm_discard_current"],
+                "required": ["confirm_discard_current", "user_confirmed_path"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "autosave_current_blend_file",
+            "description": "Autosave the current open .blend in place. It has no filepath argument and refuses unsaved scenes.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "force": {"type": "boolean", "description": "Save even when the file is not dirty, the interval has not elapsed, or live preview changes are pending. Defaults to false."},
+                    "reason": {"type": "string", "description": "Short reason for the autosave."},
+                    "respect_enabled": {"type": "boolean", "description": "Skip if the autosave preference is disabled. Defaults to false."},
+                },
                 "additionalProperties": False,
             },
         },
@@ -2807,6 +2823,7 @@ _TOOL_GROUPS = {
         "save_blend_file",
         "open_blend_file",
         "create_new_blender_project",
+        "autosave_current_blend_file",
     },
     "selection": {"select_objects", "set_current_frame", "get_workspace_layout", "jump_to_workspace", "set_viewport_view", "focus_object_in_viewport"},
     "basic_edit": {
@@ -3106,7 +3123,7 @@ _GROUP_KEYWORDS = {
     "materials": {"material", "shader", "color", "colour", "red", "blue", "green", "metal", "metallic", "chrome", "glass", "emission", "glow", "window"},
     "animation": {"animate", "animation", "animation brief", "prompt contract", "success criteria", "timing chart", "key pose", "key poses", "hold", "breakdown", "keyframe", "timeline", "frame", "orbit", "bounce", "driver", "motion", "motion arc", "arc", "follow path", "path", "retime", "interpolation", "easing", "loop", "cycles", "turntable", "pulse", "reveal", "stagger", "playblast", "timing", "spacing", "blocking", "anticipation", "squash", "stretch", "settle", "follow-through", "principles", "center of mass", "support", "contact sliding", "simulation", "physics bake", "persistent bake"},
     "camera_render": {"camera", "render", "render job", "render output", "output resource", "quality check", "thumbnail", "still", "mp4", "video assembly", "assemble video", "validate render", "1080p", "4k", "frame sequence", "samples", "light", "lighting", "world", "background", "dof", "depth of field", "lens", "compositor", "resolution", "intensity", "studio", "product stage", "presentation", "close-up", "closeup", "underside"},
-    "project_files": {"save", "save as", "save-as", "save copy", "open blend", "open file", "load blend", "new project", "create project", "blend file", ".blend", "project folder", "project directory", "checkpoint"},
+    "project_files": {"save", "save as", "save-as", "save copy", "autosave", "auto save", "open blend", "open file", "load blend", "new project", "create project", "blend file", ".blend", "project folder", "project directory", "checkpoint"},
     "deep_inspect": {"inspect", "analyze", "analyse", "summarize", "summary", "details", "world model", "what", "list", "screenshot", "viewport", "visual", "visual evidence", "evidence resource", "resource uri", "image", "capture", "playblast", "review", "diagnostic", "diagnostics", "missing external", "linked library", "linked libraries", "blend file", "data-block", "datablock", "backup", "workspace", "layout json", "underside", "gear"},
     "external_assets": {"asset", "assets", "asset catalog", "asset library", "external asset", "external assets", "asset cache", "cache diagnostics", "poly haven", "polyhaven", "sketchfab", "hdri", "hdris", "environment map", "texture", "textures", "model library", "download model", "download asset", "import model", "import asset", "import hdri", "import texture", "sketchfab uid"},
     "advanced_create": {"geometry nodes", "shape key", "text", "curve", "particle", "armature", "constraint", "rig", "driver", "callout", "dimension", "label", "palette", "swatch", "organize", "collection"},

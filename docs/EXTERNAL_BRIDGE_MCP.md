@@ -19,7 +19,7 @@ The add-on owns all Blender reads/writes. The MCP server is a small stdlib Pytho
 
 ## Start The Bridge
 
-1. Install and enable the latest `claude_blender-0.1.0.zip`.
+1. Install and enable the latest `claude_blender-0.1.1.zip`.
 2. Open the add-on sidebar in the 3D View.
 3. In `External Bridge`, press `Start`.
 4. Optional: set `Bridge Token` in add-on preferences before starting.
@@ -105,6 +105,11 @@ By default it exposes a compact, client-friendly tool surface:
 - `plan_animation_workflow`
 - `run_animation_workflow`
 - `run_animation_task`
+- `start_render_job`
+- `get_render_job_status`
+- `cancel_render_job`
+- `assemble_render_job_video`
+- `validate_render_job_output`
 
 Use `blender_tool_catalog` as the primary entry point for the large helper catalog:
 
@@ -113,11 +118,13 @@ Use `blender_tool_catalog` as the primary entry point for the large helper catal
 - `{"action":"schema","name":"add_camera"}` returns one tool's input schema, output schema, and safety annotations.
 - `{"action":"invoke","name":"add_camera","arguments":{...}}` validates arguments against the target tool schema before forwarding the call to Blender.
 
-The older `search_blender_tools`, `get_blender_tool_schema`, and `invoke_blender_tool` tools remain as compatibility wrappers for clients that prefer separate operations.
+The older `search_blender_tools`, `get_blender_tool_schema`, and `invoke_blender_tool` tools remain as compatibility wrappers for clients that prefer separate operations. Search results are compact by default; set `include_schemas=true` only for compatibility or debugging. For normal agent routing, search first, fetch exactly one schema with `get_blender_tool_schema`, then call `invoke_blender_tool`.
 
-Set `BLENDER_MCP_FULL_TOOL_LIST=1` in the MCP server environment to expose every Blender helper as a top-level MCP tool for legacy clients or debugging.
+Set `BLENDER_MCP_FULL_TOOL_LIST=1` in the MCP server environment to expose every Blender helper as a top-level MCP tool for legacy clients or debugging. Do not enable it for normal client use unless that client handles large tool lists well.
 
 `tools/list`, `resources/list`, `resources/templates/list`, and `prompts/list` support cursor pagination. Tool definitions include `inputSchema`, `outputSchema`, and risk/permission annotations derived from the bridge contract.
+
+Project file tools are human-in-the-loop. For `save_blend_file` save-as/save-copy, `open_blend_file`, and `create_new_blender_project`, clients must ask the user for the target path or use a file picker and set `user_confirmed_path=true`; agents must not invent durable paths. Saving the already-bound active `.blend` may omit `filepath`. `autosave_current_blend_file` accepts no filepath and saves only the already-bound active `.blend` in place.
 
 `blender_bridge_status` also reports the current external script trust snapshot, including whether tokenless external script runs are allowed, seconds remaining, the runtime expiry timestamp, whether saved scene trust state is stale, and source-hash match/mismatch diagnostics. Some MCP clients cache callable tools aggressively; if a newly added Blender tool is missing, restart or refresh the MCP client after copying the latest config.
 
@@ -142,9 +149,9 @@ Current resources:
 - `blender://bridge/status`
 - `blender://scene/status`
 - `blender://scene/context`
-- `blender://tools/contracts`
+- `blender://tools/catalog`
 - `blender://transcript/latest`
-- `blender://audit/latest`
+- `blender://audit/summary`
 - `blender://captures/latest`
 - `blender://captures/latest/metadata`
 - `blender://captures/{capture_id}`
@@ -166,6 +173,8 @@ Current resources:
 - `blender://render-jobs/{job_id}/video`
 
 `blender://captures/latest` is scoped to the currently connected Blender bridge and its active project/session. Capture metadata includes the exact `capture_id` resource URIs for repeat reads. By default, saved `.blend` files store captures in a hidden project-local `.claude_blender/captures/<session_id>` folder so separate projects do not overwrite each other. Unsaved or unwritable projects fall back to Blender's extension user-data directory, with `~/.claude_blender/captures/<project_id>/<session_id>` kept only as a non-extension runtime fallback. A custom capture cache preference remains a custom base directory and still gets project/session subfolders.
+
+`blender://tools/catalog` is the resource-friendly compact catalog for eager MCP clients. It contains tool names plus risk and permission metadata, not full schemas. The full contract registry remains readable at `blender://tools/contracts` for debugging, but it is intentionally not listed as a default resource because it is large. `blender://audit/summary` is likewise the compact default audit resource; `blender://audit/latest` remains readable for explicit debugging and returns a bounded recent event window.
 
 `capture_animation_playblast` captures sampled viewport PNG frames across an animation range when Blender is running with an interactive window. It defaults to low-resolution preview evidence capped at 640x360; pass `quality`, `max_width`, or `max_height` only when higher fidelity is needed. It advances the scene frame, updates the view layer, and flushes the viewport draw path where possible before each screenshot; frame metadata includes `captured_scene_frame` as a sanity check against stale captures. The metadata resource lists exact frame URIs so external clients can inspect timing, spacing, staging, arcs, and contact poses without relying only on keyframe data. `review_playblast_against_brief` also derives compact pixel digests, visual-subject interpretation, and frame-to-frame motion deltas from available PNGs, then emits `repair_operations` with executable `tool_call` payloads for deliberate follow-up repairs. Those operations include `target_frames` and `target_frame_range` when a visual finding points to specific sampled frames, missing coverage, weak/cropped subject evidence, or a static-looking frame span. `run_animation_workflow` uses that review path after generation, and `run_animation_repair_loop` can apply a bounded allowlisted subset of repair operations, skip under-specified repairs, and re-run review while preserving the preview commit/revert model. Rig repair findings can route through `get_rigging_details`, `set_rig_custom_property_keyframes`, and then `set_rig_pose_hold` so a client inspects armature controls, holds scalar IK/FK or space-switch properties, and keys a pose-bone hold. For IK/FK-style rigs, repair operations include `metadata.rig_targeting` with the selected controls, roles, regions, score reasons, detected IK/FK or space-switch custom properties, pose-library/action candidates, and planning notes; support/contact rig findings avoid generic object `set_pose_hold` suggestions when rig controls are the better owner. In background/headless mode capture fails soft and reports that an interactive window is required.
 

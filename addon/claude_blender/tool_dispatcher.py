@@ -9,7 +9,7 @@ import textwrap
 
 import bpy
 
-from . import animation_analysis, animation_brief, animation_workflow, advanced_helpers, context_bundle, docs_index, external_assets, inspection_render, lab_parity, live_preview, playblast_capture, preferences, project_files, render_jobs, script_runner, viewport_capture, world_model
+from . import animation_analysis, animation_brief, animation_workflow, advanced_helpers, autosave, context_bundle, docs_index, external_assets, inspection_render, lab_parity, live_preview, playblast_capture, preferences, project_files, render_jobs, script_runner, viewport_capture, world_model
 
 
 def _float_list(values, length, default):
@@ -2686,6 +2686,7 @@ def save_blend_file(context, args):
         copy=bool(args.get("copy", False)),
         overwrite=bool(args.get("overwrite", False)),
         create_dirs=bool(args.get("create_dirs", True)),
+        user_confirmed_path=bool(args.get("user_confirmed_path", False)),
     )
 
 
@@ -2698,6 +2699,7 @@ def open_blend_file(context, args):
         require_checkpoint=bool(args.get("require_checkpoint", True)),
         checkpoint_dir=str(args.get("checkpoint_dir") or ""),
         load_ui=bool(args.get("load_ui", False)),
+        user_confirmed_path=bool(args.get("user_confirmed_path", False)),
     )
 
 
@@ -2717,6 +2719,16 @@ def create_new_blender_project(context, args):
         create_checkpoint=bool(args.get("create_checkpoint", True)),
         require_checkpoint=bool(args.get("require_checkpoint", True)),
         checkpoint_dir=str(args.get("checkpoint_dir") or ""),
+        user_confirmed_path=bool(args.get("user_confirmed_path", False)),
+    )
+
+
+def autosave_current_blend_file(context, args):
+    return autosave.autosave_current_blend_file(
+        context,
+        force=bool(args.get("force", False)),
+        reason=str(args.get("reason") or "manual"),
+        respect_enabled=bool(args.get("respect_enabled", False)),
     )
 
 
@@ -3296,6 +3308,7 @@ TOOL_FUNCTIONS = {
     "save_blend_file": save_blend_file,
     "open_blend_file": open_blend_file,
     "create_new_blender_project": create_new_blender_project,
+    "autosave_current_blend_file": autosave_current_blend_file,
     "get_workspace_layout": get_workspace_layout,
     "get_visual_evidence_resources": get_visual_evidence_resources,
     "jump_to_workspace": jump_to_workspace,

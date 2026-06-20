@@ -130,6 +130,18 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                             "mimeType": "application/json",
                         },
                         {
+                            "uri": "blender://tools/catalog",
+                            "name": "tool-catalog",
+                            "title": "Compact Blender Tool Catalog",
+                            "mimeType": "application/json",
+                        },
+                        {
+                            "uri": "blender://audit/summary",
+                            "name": "audit-summary",
+                            "title": "Blender Agent Bridge Audit Summary",
+                            "mimeType": "application/json",
+                        },
+                        {
                             "uri": "blender://captures/latest",
                             "name": "latest-capture",
                             "title": "Latest Viewport Capture",
@@ -176,7 +188,84 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
             )
         elif parsed.path == "/resource":
             uri = urllib.parse.parse_qs(parsed.query).get("uri", [""])[0]
-            if uri == "blender://captures/latest":
+            if uri == "blender://tools/catalog":
+                self._send(
+                    {
+                        "ok": True,
+                        "uri": "blender://tools/catalog",
+                        "mimeType": "application/json",
+                        "text": json.dumps(
+                            {
+                                "ok": True,
+                                "count": 2,
+                                "tools": [
+                                    {
+                                        "name": "list_scene_objects",
+                                        "risk_level": "read",
+                                        "permissions": ["scene:read"],
+                                    },
+                                    {
+                                        "name": "draft_script",
+                                        "risk_level": "approval",
+                                        "permissions": ["script:stage"],
+                                        "requires_approval": True,
+                                    },
+                                ],
+                                "full_contracts_resource": "blender://tools/contracts",
+                            }
+                        ),
+                    }
+                )
+            elif uri == "blender://audit/summary":
+                self._send(
+                    {
+                        "ok": True,
+                        "uri": "blender://audit/summary",
+                        "mimeType": "application/json",
+                        "text": json.dumps(
+                            {
+                                "ok": True,
+                                "event_count": 1,
+                                "events_by_type": {"mcp_tool_call": 1},
+                                "tool_calls_by_name": {"list_scene_objects": 1},
+                                "error_count": 0,
+                                "latest_events": [
+                                    {
+                                        "timestamp": "2026-06-20T00:00:00+00:00",
+                                        "event": "mcp_tool_call",
+                                        "tool_name": "list_scene_objects",
+                                        "ok": True,
+                                    }
+                                ],
+                                "latest_full_resource": "blender://audit/latest",
+                            }
+                        ),
+                    }
+                )
+            elif uri == "blender://audit/latest":
+                self._send(
+                    {
+                        "ok": True,
+                        "uri": "blender://audit/latest",
+                        "mimeType": "application/json",
+                        "text": json.dumps(
+                            {
+                                "ok": True,
+                                "event_limit": 20,
+                                "summary_resource": "blender://audit/summary",
+                                "events": [
+                                    {
+                                        "timestamp": "2026-06-20T00:00:00+00:00",
+                                        "event": "mcp_tool_call",
+                                        "tool_name": "list_scene_objects",
+                                        "ok": True,
+                                    }
+                                ],
+                            }
+                        ),
+                    }
+                )
+            elif uri == "blender://captures/latest":
                 self._send(
                     {
                         "ok": True,
@@ -478,6 +567,29 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                     },
                 )
                 return
+            if payload.get("name") == "save_blend_file" and not arguments:
+                self._send(
+                    {
+                        "ok": True,
+                        "result": {
+                            "ok": False,
+                            "code": "user_path_required",
+                            "message": (
+                                "This operation needs a human-confirmed path. Ask the user for the .blend path "
+                                "or project folder, then retry with user_confirmed_path=true."
+                            ),
+                            "human_in_loop_required": True,
+                            "requires_user_confirmed_path": True,
+                            "before": {
+                                "filepath": "",
+                                "absolute_path": "",
+                                "is_saved": False,
+                                "is_dirty": False,
+                            },
+                        },
+                    }
+                )
+                return
             self._send(
                 {
                     "ok": True,
@@ -503,22 +615,8 @@ def _send(proc, payload):
 def _assert_compact_tools_visible(proc):
     listed = _send(proc, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
     names = {tool["name"] for tool in listed["result"]["tools"]}
-    assert {
-        "blender_bridge_status",
-        "blender_tool_catalog",
-        "search_blender_tools",
-        "get_blender_tool_schema",
-        "invoke_blender_tool",
-        "list_scene_objects",
-        "plan_animation_workflow",
-        "run_animation_workflow",
-        "run_animation_task",
-        "start_render_job",
-        "get_render_job_status",
-        "cancel_render_job",
-        "assemble_render_job_video",
-        "validate_render_job_output",
-    }.issubset(names), listed
+    expected_names = set(mcp_server.WRAPPER_TOOL_NAMES) | set(mcp_server.COMPACT_DIRECT_TOOL_NAMES)
+    assert names == expected_names, listed
     assert "draft_script" not in names, listed
     assert "run_approved_script" not in names, listed
     status_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "blender_bridge_status")
@@ -578,6 +676,7 @@ def _assert_full_tools_visible(proc):
         "save_blend_file",
         "open_blend_file",
         "create_new_blender_project",
+        "autosave_current_blend_file",
         "draft_script",
         "run_approved_script",
     }.issubset(names), listed
@@ -591,6 +690,12 @@ def _assert_full_tools_visible(proc):
     assert run_tool["annotations"]["readOnlyHint"] is False, run_tool
     open_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "open_blend_file")
     assert open_tool["annotations"]["destructiveHint"] is True, open_tool
+    assert open_tool["annotations"]["humanInLoopRequired"] is True, open_tool
+    assert open_tool["annotations"]["requiresUserPath"] is True, open_tool
+    assert "user_confirmed_path" in open_tool["inputSchema"]["required"], open_tool
+    autosave_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "autosave_current_blend_file")
+    assert autosave_tool["annotations"]["requiresUserPath"] is False, autosave_tool
+    assert autosave_tool["annotations"]["pathPolicy"], autosave_tool
     assert open_tool["annotations"]["timeoutRecovery"]["status_tool"] == "blender_bridge_status", open_tool
     return listed
 
@@ -853,6 +958,61 @@ def main():
         assert timeout_content["data"]["resource_tool"] == "get_visual_evidence_resources", timeout_call
         assert timeout_content["data"]["poll_after_seconds"] == 5, timeout_call
 
+        lifecycle_search = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 30,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_blender_tools",
+                    "arguments": {"query": "save blend file", "category": "project_files", "limit": 5},
+                },
+            },
+        )
+        lifecycle_tools = lifecycle_search["result"]["structuredContent"]["tools"]
+        lifecycle_by_name = {tool["name"]: tool for tool in lifecycle_tools}
+        assert "save_blend_file" in lifecycle_by_name, lifecycle_search
+        save_summary = lifecycle_by_name["save_blend_file"]
+        assert save_summary["human_in_loop_required"] is True, save_summary
+        assert save_summary["requires_user_path"] is True, save_summary
+        assert "user_confirmed_path=true" in save_summary["path_policy"], save_summary
+        assert save_summary["timeout_recovery"]["status_tool"] == "blender_bridge_status", save_summary
+        assert save_summary["duration_hint"], save_summary
+
+        save_schema = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 31,
+                "method": "tools/call",
+                "params": {"name": "get_blender_tool_schema", "arguments": {"name": "save_blend_file"}},
+            },
+        )
+        save_tool_schema = save_schema["result"]["structuredContent"]["tool"]
+        assert save_tool_schema["annotations"]["humanInLoopRequired"] is True, save_schema
+        assert save_tool_schema["annotations"]["requiresUserPath"] is True, save_schema
+        assert "user_confirmed_path" in save_tool_schema["inputSchema"]["properties"], save_schema
+
+        save_without_path = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 32,
+                "method": "tools/call",
+                "params": {
+                    "name": "invoke_blender_tool",
+                    "arguments": {"name": "save_blend_file", "arguments": {}},
+                },
+            },
+        )
+        save_without_path_content = save_without_path["result"]["structuredContent"]
+        assert save_without_path["result"]["isError"] is True, save_without_path
+        assert save_without_path_content["code"] == "user_path_required", save_without_path
+        assert save_without_path_content["human_in_loop_required"] is True, save_without_path
+        assert save_without_path_content["requires_user_confirmed_path"] is True, save_without_path
+        assert "Ask the user" in save_without_path_content["message"], save_without_path
+
         full_audit_fd, full_audit_path = tempfile.mkstemp(
             prefix="claude-blender-mcp-full-audit-",
             suffix=".jsonl",
@@ -898,8 +1058,26 @@ def main():
         searched_names = {tool["name"] for tool in searched["result"]["structuredContent"]["tools"]}
         assert {"draft_script", "run_approved_script"}.issubset(searched_names), searched
         searched_tools = searched["result"]["structuredContent"]["tools"]
-        assert "input_schema" in searched_tools[0], searched
-        assert "output_schema" in searched_tools[0], searched
+        assert searched["result"]["structuredContent"]["include_schemas"] is False, searched
+        assert searched["result"]["structuredContent"]["schema_lookup_tool"] == "get_blender_tool_schema", searched
+        assert "input_schema" not in searched_tools[0], searched
+        assert "output_schema" not in searched_tools[0], searched
+        searched_with_schemas = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 211,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_blender_tools",
+                    "arguments": {"query": "approved script", "limit": 5, "include_schemas": True},
+                },
+            },
+        )
+        searched_schema_tools = searched_with_schemas["result"]["structuredContent"]["tools"]
+        assert searched_with_schemas["result"]["structuredContent"]["include_schemas"] is True, searched_with_schemas
+        assert "input_schema" in searched_schema_tools[0], searched_with_schemas
+        assert "output_schema" in searched_schema_tools[0], searched_with_schemas
 
         for query in (
             "Make the selected cube bounce twice and get smaller each bounce.",
@@ -1116,6 +1294,10 @@ def main():
         uris = {item["uri"] for item in resources["result"]["resources"]}
         assert "blender://bridge/status" in uris
         assert "blender://scene/status" in uris
+        assert "blender://tools/catalog" in uris
+        assert "blender://tools/contracts" not in uris
+        assert "blender://audit/summary" in uris
+        assert "blender://audit/latest" not in uris
         assert "blender://captures/latest" in uris
         assert "blender://captures/latest/metadata" in uris
         assert "blender://playblasts/latest/metadata" in uris
@@ -1123,6 +1305,48 @@ def main():
         assert "blender://render-thumbnails/latest" in uris
         assert "blender://render-thumbnails/latest/metadata" in uris
         assert "blender://render-jobs/latest/metadata" in uris
+
+        tool_catalog_resource = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 36,
+                "method": "resources/read",
+                "params": {"uri": "blender://tools/catalog"},
+            },
+        )
+        tool_catalog = json.loads(tool_catalog_resource["result"]["contents"][0]["text"])
+        assert tool_catalog["ok"] is True, tool_catalog
+        assert tool_catalog["full_contracts_resource"] == "blender://tools/contracts", tool_catalog
+        assert "tools" in tool_catalog and tool_catalog["count"] == len(tool_catalog["tools"]), tool_catalog
+        assert "input_schema" not in tool_catalog["tools"][0], tool_catalog
+
+        audit_summary_resource = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 37,
+                "method": "resources/read",
+                "params": {"uri": "blender://audit/summary"},
+            },
+        )
+        audit_summary = json.loads(audit_summary_resource["result"]["contents"][0]["text"])
+        assert audit_summary["ok"] is True, audit_summary
+        assert "latest_events" in audit_summary, audit_summary
+        assert audit_summary["latest_full_resource"] == "blender://audit/latest", audit_summary
+
+        audit_latest_resource = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 38,
+                "method": "resources/read",
+                "params": {"uri": "blender://audit/latest"},
+            },
+        )
+        audit_latest = json.loads(audit_latest_resource["result"]["contents"][0]["text"])
+        assert audit_latest["event_limit"] == 20, audit_latest
+        assert len(audit_latest["events"]) <= 20, audit_latest
 
         templates = _send(proc, {"jsonrpc": "2.0", "id": 40, "method": "resources/templates/list"})
         template_names = {item["name"] for item in templates["result"]["resourceTemplates"]}

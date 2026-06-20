@@ -248,6 +248,7 @@ def build_context_bundle(context, *, include_visual=False, capture_dir=None, max
             "save_blend_file",
             "open_blend_file",
             "create_new_blender_project",
+            "autosave_current_blend_file",
             "get_workspace_layout",
             "get_visual_evidence_resources",
             "capture_viewport",

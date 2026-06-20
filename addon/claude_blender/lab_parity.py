@@ -11,7 +11,7 @@ import uuid
 
 import bpy
 
-from . import inspection_render, playblast_capture, render_jobs, viewport_capture
+from . import autosave, inspection_render, playblast_capture, render_jobs, viewport_capture
 
 
 LATEST_RENDER_THUMBNAIL_URI = "blender://render-thumbnails/latest"
@@ -524,15 +524,18 @@ def get_blend_file_diagnostics(context, *, max_items=50):
     directory = os.path.dirname(absolute_filepath) if absolute_filepath else ""
     is_dirty = bool(getattr(bpy.data, "is_dirty", False))
     suggested_project_dir = directory or os.path.join(os.path.expanduser("~"), "Documents", "Blender")
+    path_bound = bool(filepath)
     external_files, missing = _external_files(max_items)
     libraries = _linked_libraries(max_items)
-    unsaved = not bool(filepath)
+    unsaved = not path_bound
     diagnostics = {
         "ok": True,
         "message": "Blend file diagnostics collected",
         "file": {
             "filepath": filepath,
             "absolute_path": absolute_filepath,
+            "binding_state": "bound" if path_bound else "unbound",
+            "bound_project_dir": directory,
             "is_saved": not unsaved,
             "is_dirty": is_dirty,
             "needs_save": bool(unsaved or is_dirty),
@@ -542,8 +545,14 @@ def get_blend_file_diagnostics(context, *, max_items=50):
             "directory_exists": bool(directory and os.path.isdir(directory)),
             "directory_writable": bool(directory and os.path.isdir(directory) and os.access(directory, os.W_OK)),
             "suggested_project_dir": suggested_project_dir,
+            "suggested_project_dir_is_hint_only": True,
+            "requires_user_confirmed_path": not path_bound,
+            "path_policy": (
+                "Use the active .blend path for bound-file edits. Ask the user for a path before save-as, save-copy, open, or new-project operations."
+            ),
             "backup_files": _backup_files(absolute_filepath, max_items),
         },
+        "autosave": autosave.autosave_status(context),
         "linked_libraries": libraries,
         "linked_library_count": len(libraries),
         "missing_linked_libraries": [item for item in libraries if not item.get("exists")],
