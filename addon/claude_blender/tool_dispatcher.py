@@ -2280,6 +2280,106 @@ def set_world_background(context, args):
     )
 
 
+def plan_advanced_scene_workflow(context, args):
+    return advanced_helpers.plan_advanced_scene_workflow(
+        context,
+        prompt=str(args.get("prompt") or ""),
+        domains=_name_list(args.get("domains")),
+        target_objects=_name_list(args.get("target_objects")),
+        label=args.get("label", "Plan advanced scene workflow"),
+    )
+
+
+def get_2d_animation_details(context, args):
+    return advanced_helpers.get_2d_animation_details(
+        context,
+        max_items=_bounded_int(args.get("max_items"), 32, minimum=1, maximum=128),
+    )
+
+
+def create_storyboard_panels(context, args):
+    return advanced_helpers.create_storyboard_panels(
+        context,
+        panel_count=_bounded_int(args.get("panel_count"), 4, minimum=1, maximum=24),
+        columns=_bounded_int(args.get("columns"), 2, minimum=1, maximum=24),
+        panel_width=float(args.get("panel_width", 3.2)),
+        panel_height=float(args.get("panel_height", 1.8)),
+        gap=float(args.get("gap", 0.35)),
+        name_prefix=str(args.get("name_prefix") or "Agent Bridge Storyboard"),
+        frame_start=int(args.get("frame_start", context.scene.frame_start)),
+        frame_step=_bounded_int(args.get("frame_step"), 24, minimum=1, maximum=10000),
+        background_color=_float_list(args.get("background_color"), 4, (0.08, 0.08, 0.09, 1.0)),
+        border_color=_float_list(args.get("border_color"), 4, (0.9, 0.9, 0.86, 1.0)),
+        text_color=_float_list(args.get("text_color"), 4, (0.95, 0.95, 0.9, 1.0)),
+        create_camera=bool(args.get("create_camera", True)),
+        label=args.get("label", "Create storyboard panels"),
+    )
+
+
+def create_2d_cutout_layer(context, args):
+    return advanced_helpers.create_2d_cutout_layer(
+        context,
+        name=str(args.get("name") or "Agent Bridge 2D Cutout"),
+        location=_float_list(args.get("location"), 3, (0.0, 0.0, 0.0)),
+        size=args.get("size") or [1.0, 1.0],
+        color=_float_list(args.get("color"), 4, (0.2, 0.55, 1.0, 1.0)),
+        frame_start=int(args.get("frame_start", context.scene.frame_start)),
+        frame_end=int(args.get("frame_end", context.scene.frame_end)),
+        location_end=_optional_float_list(args.get("location_end"), 3, (0.0, 0.0, 0.0)),
+        rotation_end=_optional_float_list(args.get("rotation_end"), 3, (0.0, 0.0, 0.0)),
+        scale_end=_optional_float_list(args.get("scale_end"), 3, (1.0, 1.0, 1.0)),
+        text=str(args.get("text") or ""),
+        label=args.get("label", "Create 2D cutout layer"),
+    )
+
+
+def apply_procedural_array_stack(context, args):
+    return advanced_helpers.apply_procedural_array_stack(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", True)),
+        count=_bounded_int(args.get("count"), 5, minimum=1, maximum=1000),
+        relative_offset=_float_list(args.get("relative_offset"), 3, (1.25, 0.0, 0.0)),
+        bevel_width=float(args.get("bevel_width", 0.025)),
+        bevel_segments=_bounded_int(args.get("bevel_segments"), 2, minimum=1, maximum=32),
+        add_weighted_normals=bool(args.get("add_weighted_normals", True)),
+        name_prefix=str(args.get("name_prefix") or "Agent Bridge Procedural"),
+        label=args.get("label", "Apply procedural array stack"),
+    )
+
+
+def create_camera_dolly_animation(context, args):
+    return advanced_helpers.create_camera_dolly_animation(
+        context,
+        camera_name=str(args.get("camera_name") or ""),
+        target_name=str(args.get("target_name") or ""),
+        frame_start=int(args.get("frame_start", context.scene.frame_start)),
+        frame_end=int(args.get("frame_end", context.scene.frame_end)),
+        start_location=_optional_float_list(args.get("start_location"), 3, (0.0, 0.0, 0.0)),
+        end_location=_optional_float_list(args.get("end_location"), 3, (0.0, 0.0, 0.0)),
+        lens_start=args.get("lens_start"),
+        lens_end=args.get("lens_end"),
+        interpolation=str(args.get("interpolation") or "BEZIER"),
+        label=args.get("label", "Create camera dolly animation"),
+    )
+
+
+def add_cloth_simulation_to_selected(context, args):
+    return advanced_helpers.add_cloth_simulation_to_selected(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", True)),
+        name=str(args.get("name") or "Agent Bridge Cloth"),
+        quality=_bounded_int(args.get("quality"), 5, minimum=1, maximum=30),
+        mass=float(args.get("mass", 0.3)),
+        tension_stiffness=float(args.get("tension_stiffness", 5.0)),
+        compression_stiffness=float(args.get("compression_stiffness", 5.0)),
+        shear_stiffness=float(args.get("shear_stiffness", 5.0)),
+        air_damping=float(args.get("air_damping", 1.0)),
+        label=args.get("label", "Add cloth simulation"),
+    )
+
+
 def create_empty(context, args):
     return advanced_helpers.create_empty(
         context,
@@ -3391,6 +3491,13 @@ TOOL_FUNCTIONS = {
     "set_render_settings": set_render_settings,
     "set_camera_settings": set_camera_settings,
     "set_world_background": set_world_background,
+    "plan_advanced_scene_workflow": plan_advanced_scene_workflow,
+    "get_2d_animation_details": get_2d_animation_details,
+    "create_storyboard_panels": create_storyboard_panels,
+    "create_2d_cutout_layer": create_2d_cutout_layer,
+    "apply_procedural_array_stack": apply_procedural_array_stack,
+    "create_camera_dolly_animation": create_camera_dolly_animation,
+    "add_cloth_simulation_to_selected": add_cloth_simulation_to_selected,
     "create_empty": create_empty,
     "set_object_visibility": set_object_visibility,
     "set_object_display": set_object_display,

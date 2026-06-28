@@ -653,6 +653,10 @@ def _assert_compact_tools_visible(proc):
     assert "invoke" in catalog_tool["inputSchema"]["properties"]["action"]["enum"], catalog_tool
     search_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "search_blender_tools")
     assert search_tool["annotations"]["readOnlyHint"] is True, search_tool
+    advanced_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "plan_advanced_scene_workflow")
+    assert advanced_tool["annotations"]["readOnlyHint"] is True, advanced_tool
+    two_d_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "get_2d_animation_details")
+    assert two_d_tool["annotations"]["readOnlyHint"] is True, two_d_tool
     task_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "run_animation_task")
     assert set(task_tool["inputSchema"]["properties"]) == {"prompt"}, task_tool
     assert task_tool["inputSchema"]["required"] == ["prompt"], task_tool
@@ -810,6 +814,16 @@ def _assert_external_asset_search_routes_first(response, *, query):
             assert names.index(direct_name) > names.index("start_external_asset_import_job"), (query, names)
 
 
+def _assert_advanced_search_routes_first(response, *, query, expected):
+    tools = response["result"]["structuredContent"]["tools"]
+    names = [tool["name"] for tool in tools]
+    assert names[0] == "plan_advanced_scene_workflow", (query, names)
+    for tool_name in expected:
+        assert tool_name in names[:6], (query, tool_name, names)
+    if "draft_script" in names:
+        assert names.index("draft_script") > 5, (query, names)
+
+
 def _assert_material_texture_search_avoids_asset_route(response, *, query):
     tools = response["result"]["structuredContent"]["tools"]
     names = [tool["name"] for tool in tools]
@@ -926,6 +940,34 @@ def main():
                 },
             )
             _assert_animation_search_routes_first(offline_animation_search, query=query)
+        advanced_queries = (
+            (
+                "Create a 2D storyboard animatic with panels, cutout layers, and a camera dolly.",
+                {"get_2d_animation_details", "create_storyboard_panels", "create_2d_cutout_layer"},
+            ),
+            (
+                "Make an advanced procedural 3D hard-surface array stack with bevels.",
+                {"apply_procedural_array_stack"},
+            ),
+            (
+                "Add cloth simulation setup and inspect it before any bake.",
+                {"add_cloth_simulation_to_selected", "get_simulation_details"},
+            ),
+        )
+        for query, expected in advanced_queries:
+            offline_advanced_search = _send(
+                offline_proc,
+                {
+                    "jsonrpc": "2.0",
+                    "id": 99,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "search_blender_tools",
+                        "arguments": {"query": query, "limit": 10},
+                    },
+                },
+            )
+            _assert_advanced_search_routes_first(offline_advanced_search, query=query, expected=expected)
         for query in (
             "Search Poly Haven for a sunset HDRI and import it into the world.",
             "Import a downloadable Sketchfab Falcon 9 model if auth is present.",
@@ -1728,6 +1770,7 @@ def main():
         prompts = _send(proc, {"jsonrpc": "2.0", "id": 41, "method": "prompts/list"})
         prompt_names = {item["name"] for item in prompts["result"]["prompts"]}
         assert "safe_scene_change" in prompt_names, prompts
+        assert "advanced_scene_workflow" in prompt_names, prompts
         assert "advanced_animation_workflow" in prompt_names, prompts
         assert "external_asset_workflow" in prompt_names, prompts
 
@@ -1755,6 +1798,23 @@ def main():
         assert "run_animation_workflow" in animation_prompt_text, animation_prompt
         assert "capture_object_inspection_renders" in animation_prompt_text, animation_prompt
         assert "draft_script only" in animation_prompt_text, animation_prompt
+        advanced_prompt = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 45,
+                "method": "prompts/get",
+                "params": {
+                    "name": "advanced_scene_workflow",
+                    "arguments": {"goal": "make a 2D storyboard and procedural 3D set"},
+                },
+            },
+        )
+        advanced_prompt_text = advanced_prompt["result"]["messages"][0]["content"]["text"]
+        assert "plan_advanced_scene_workflow" in advanced_prompt_text, advanced_prompt
+        assert "create_storyboard_panels" in advanced_prompt_text, advanced_prompt
+        assert "apply_procedural_array_stack" in advanced_prompt_text, advanced_prompt
+        assert "add_cloth_simulation_to_selected" in advanced_prompt_text, advanced_prompt
         asset_prompt = _send(
             proc,
             {

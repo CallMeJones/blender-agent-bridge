@@ -93,10 +93,126 @@ HELPER_FIRST_SCRIPT_GROUPS = {
     "curves_text",
     "particles",
     "geometry_nodes",
+    "advanced_workflow",
+    "two_d_storyboard",
+    "procedural_3d",
+    "simulation_setup",
     "preview_control",
 }
 
 HELPER_FIRST_SCRIPT_RULES = (
+    {
+        "code": "advanced_workflow_helper_required",
+        "terms": {
+            "advanced workflow",
+            "advanced 3d",
+            "advanced 2d",
+            "advanced animation",
+            "which tools",
+            "what tools",
+            "helper path",
+            "workflow plan",
+        },
+        "message": (
+            "Use the advanced workflow planner and domain helpers before drafting Python for broad advanced "
+            "3D, 2D, animation, simulation, or compositor/render work."
+        ),
+        "recommended_tools": [
+            "plan_advanced_scene_workflow",
+            "get_2d_animation_details",
+            "get_geometry_nodes_details",
+            "get_simulation_details",
+            "get_render_camera_compositor_details",
+        ],
+    },
+    {
+        "code": "two_d_storyboard_helper_required",
+        "terms": {
+            "storyboard",
+            "animatic",
+            "2d animation",
+            "2d scene",
+            "cutout",
+            "cut-out",
+            "motion graphic",
+            "motion graphics",
+            "grease pencil",
+            "grease-pencil",
+        },
+        "message": (
+            "Use the 2D/storyboard inspection and creation helpers before drafting Python for common "
+            "storyboard, animatic, cutout, or motion-graphics setup."
+        ),
+        "recommended_tools": [
+            "get_2d_animation_details",
+            "create_storyboard_panels",
+            "create_2d_cutout_layer",
+            "create_camera_dolly_animation",
+            "capture_animation_playblast",
+        ],
+    },
+    {
+        "code": "procedural_3d_helper_required",
+        "terms": {
+            "array stack",
+            "modifier stack",
+            "procedural array",
+            "hard surface",
+            "hard-surface",
+            "non destructive",
+            "non-destructive",
+        },
+        "message": (
+            "Use procedural modeling helpers and geometry-node inspection before drafting Python for common "
+            "non-destructive array/bevel/weighted-normal stacks."
+        ),
+        "recommended_tools": [
+            "plan_advanced_scene_workflow",
+            "get_geometry_nodes_details",
+            "apply_procedural_array_stack",
+            "add_geometry_nodes_modifier",
+            "add_bevel_and_subsurf",
+        ],
+    },
+    {
+        "code": "camera_animation_helper_required",
+        "terms": {
+            "camera dolly",
+            "dolly shot",
+            "camera move",
+            "camera animation",
+            "lens keyframe",
+            "animate camera",
+        },
+        "message": "Use the camera dolly animation helper before drafting Python for common camera moves.",
+        "recommended_tools": [
+            "create_camera_dolly_animation",
+            "set_camera_settings",
+            "capture_animation_playblast",
+        ],
+    },
+    {
+        "code": "simulation_setup_helper_required",
+        "terms": {
+            "cloth simulation",
+            "cloth sim",
+            "add cloth",
+            "physics setup",
+            "simulation setup",
+            "add particle system",
+            "particle system",
+        },
+        "message": (
+            "Use bounded simulation setup helpers before drafting Python for common cloth or particle "
+            "simulation setup; inspect cache state before any persistent bake."
+        ),
+        "recommended_tools": [
+            "get_simulation_details",
+            "add_cloth_simulation_to_selected",
+            "add_particle_system_to_selected",
+            "inspect_simulation_bake",
+        ],
+    },
     {
         "code": "external_asset_workflow_required",
         "terms": {
@@ -171,6 +287,7 @@ HELPER_FIRST_SCRIPT_RULES = (
         "recommended_tools": [
             "get_simulation_details",
             "inspect_simulation_bake",
+            "add_cloth_simulation_to_selected",
             "stage_persistent_simulation_bake",
         ],
     },

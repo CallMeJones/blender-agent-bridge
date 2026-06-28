@@ -48,6 +48,8 @@ MCP_TIMEOUT_GRACE_SECONDS = 15.0
 SKETCHFAB_AUTH_FORWARD_TOOLS = {"download_sketchfab_model", "import_sketchfab_model", "start_external_asset_download"}
 COMPACT_DIRECT_TOOL_NAMES = (
     "list_scene_objects",
+    "plan_advanced_scene_workflow",
+    "get_2d_animation_details",
     "plan_animation_workflow",
     "run_animation_workflow",
     "run_animation_task",
@@ -126,6 +128,37 @@ ANIMATION_ROUTE_TOOLS = {
     "apply_rig_action_clip",
     "offset_rig_limb_controls",
 }
+ADVANCED_ROUTE_TERMS = {
+    "advanced",
+    "advanced 3d",
+    "advanced 2d",
+    "storyboard",
+    "animatic",
+    "cutout",
+    "cut-out",
+    "motion graphics",
+    "grease pencil",
+    "procedural",
+    "array stack",
+    "modifier stack",
+    "hard surface",
+    "cloth simulation",
+    "camera dolly",
+    "dolly shot",
+}
+ADVANCED_ROUTE_TOOLS = {
+    "plan_advanced_scene_workflow",
+    "get_2d_animation_details",
+    "create_storyboard_panels",
+    "create_2d_cutout_layer",
+    "apply_procedural_array_stack",
+    "create_camera_dolly_animation",
+    "add_cloth_simulation_to_selected",
+}
+TWO_D_ROUTE_TERMS = {"advanced 2d", "storyboard", "animatic", "cutout", "cut-out", "motion graphics", "grease pencil"}
+PROCEDURAL_ROUTE_TERMS = {"advanced 3d", "procedural", "array stack", "modifier stack", "hard surface"}
+SIMULATION_SETUP_ROUTE_TERMS = {"cloth simulation", "cloth sim", "simulation setup", "physics setup"}
+CAMERA_MOVE_ROUTE_TERMS = {"camera dolly", "dolly shot", "camera move", "camera animation", "lens keyframe"}
 GENERIC_SELECTED_OBJECT_TOOLS = {
     "set_selected_location_delta",
     "set_selected_transform",
@@ -233,6 +266,7 @@ TOOL_CATEGORY_LABELS = {
     "transform": "Selection And Transform",
     "creation": "Object Creation",
     "materials": "Materials And Shading",
+    "two_d": "2D And Storyboard",
     "animation": "Animation",
     "camera_render": "Camera, Light, And Render",
     "geometry": "Geometry And Modifiers",
@@ -480,6 +514,28 @@ PROMPTS = {
             "helper generation, validation, playblast review, and repair. "
             "When rendered visual evidence is needed for object details, use capture_object_inspection_renders. "
             "Use draft_script only when the workflow's script_fallback_policy says helpers cannot express the edit."
+        ),
+    },
+    "advanced_scene_workflow": {
+        "name": "advanced_scene_workflow",
+        "title": "Plan Advanced 3D And 2D Workflow",
+        "description": "Guide an MCP client through helper-first advanced 3D, 2D/storyboard, animation, simulation, and render planning before scripts.",
+        "arguments": [
+            {
+                "name": "goal",
+                "description": "The advanced Blender scene, 2D, animation, simulation, or render goal.",
+                "required": True,
+            }
+        ],
+        "template": (
+            "Handle this advanced Blender task through helper-first planning: {goal}\n\n"
+            "Call plan_advanced_scene_workflow first when the helper path is not obvious. For 2D, storyboard, "
+            "animatic, cutout, or motion-graphics tasks, call get_2d_animation_details, then prefer "
+            "create_storyboard_panels, create_2d_cutout_layer, create_camera_dolly_animation, and visual review. "
+            "For procedural 3D modifier-stack tasks, inspect geometry nodes when relevant and prefer "
+            "apply_procedural_array_stack before custom geometry scripts. For cloth setup, use "
+            "add_cloth_simulation_to_selected, then get_simulation_details or inspect_simulation_bake before any "
+            "persistent bake. Use draft_script only after the planner or helper result identifies an explicit helper gap."
         ),
     },
     "external_asset_workflow": {
@@ -947,6 +1003,10 @@ def _tool_category(tool):
         return "project_files"
     if name in {"start_render_job", "get_render_job_status", "cancel_render_job", "assemble_render_job_video", "validate_render_job_output"}:
         return "camera_render"
+    if name in {"get_2d_animation_details", "create_storyboard_panels", "create_2d_cutout_layer"}:
+        return "two_d"
+    if name == "plan_advanced_scene_workflow":
+        return "inspect"
     if name.startswith("get_") or name.startswith("list_") or name in {
         "inspect_scene",
         "search_blender_docs",
@@ -1089,12 +1149,19 @@ def _score_tool_match(tool, query):
     title = str(tool.get("title") or "").lower()
     category = _tool_category(tool)
     animation_query = _contains_any_phrase(normalized_query, ANIMATION_ROUTE_TERMS)
+    advanced_query = _contains_any_phrase(normalized_query, ADVANCED_ROUTE_TERMS)
+    two_d_query = _contains_any_phrase(normalized_query, TWO_D_ROUTE_TERMS)
+    procedural_query = _contains_any_phrase(normalized_query, PROCEDURAL_ROUTE_TERMS)
+    simulation_setup_query = _contains_any_phrase(normalized_query, SIMULATION_SETUP_ROUTE_TERMS)
+    camera_move_query = _contains_any_phrase(normalized_query, CAMERA_MOVE_ROUTE_TERMS)
     explicit_script_query = _contains_any_phrase(normalized_query, SCRIPT_EXPLICIT_TERMS)
     external_asset_query = _is_external_asset_route_query(normalized_query)
     explicit_direct_asset_query = _contains_any_phrase(normalized_query, EXTERNAL_ASSET_DIRECT_TERMS)
     matched_terms = [term for term in terms if term in text]
     if not matched_terms:
         if animation_query and (name in ANIMATION_ROUTE_TOOLS or category == "animation"):
+            score = 25
+        elif advanced_query and (name in ADVANCED_ROUTE_TOOLS or category in {"two_d", "geometry", "simulation", "camera_render"}):
             score = 25
         elif external_asset_query and (name in EXTERNAL_ASSET_WORKFLOW_TOOLS or category == "external_assets"):
             score = 25
@@ -1126,6 +1193,33 @@ def _score_tool_match(tool, query):
             score += 250
         if name in GENERIC_SELECTED_OBJECT_TOOLS:
             score -= 250
+        if name == "draft_script" and not explicit_script_query:
+            score -= 1000
+    if advanced_query:
+        if name == "plan_advanced_scene_workflow":
+            score += 1100
+        if two_d_query:
+            if name == "get_2d_animation_details":
+                score += 900
+            elif name in {"create_storyboard_panels", "create_2d_cutout_layer"}:
+                score += 800
+        if procedural_query:
+            if name == "apply_procedural_array_stack":
+                score += 900
+            elif name in {"get_geometry_nodes_details", "add_geometry_nodes_modifier", "add_bevel_and_subsurf"}:
+                score += 500
+        if simulation_setup_query:
+            if name == "add_cloth_simulation_to_selected":
+                score += 900
+            elif name in {"get_simulation_details", "inspect_simulation_bake", "stage_persistent_simulation_bake"}:
+                score += 650
+        if camera_move_query:
+            if name == "create_camera_dolly_animation":
+                score += 900
+            elif name in {"set_camera_settings", "capture_animation_playblast"}:
+                score += 450
+        if not (two_d_query or procedural_query or simulation_setup_query or camera_move_query) and name in ADVANCED_ROUTE_TOOLS:
+            score += 350
         if name == "draft_script" and not explicit_script_query:
             score -= 1000
     elif name == "draft_script" and not explicit_script_query:
@@ -1532,6 +1626,8 @@ class BlenderMCPServer:
                 "Start the bridge inside Blender before using scene tools. By default, this server exposes a compact "
                 "tool surface; use search_blender_tools, get_blender_tool_schema, and invoke_blender_tool for the full "
                 "Blender helper catalog. Mutating tools affect the live scene and may leave preview changes pending. "
+                "For broad advanced 3D, 2D/storyboard, animation, simulation, or render tasks, call "
+                "plan_advanced_scene_workflow first when the helper path is unclear. "
                 "For external asset downloads/imports, use the async path by default: start_external_asset_download, "
                 "poll get_external_asset_job_status, then start_external_asset_import_job and poll "
                 "get_external_asset_import_job_status. Treat direct provider download/import tools as synchronous "

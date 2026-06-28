@@ -17,6 +17,13 @@ from claude_blender import agent_tools, context_bundle, live_preview, tool_dispa
 
 
 ADVANCED_TOOLS = {
+    "plan_advanced_scene_workflow",
+    "get_2d_animation_details",
+    "create_storyboard_panels",
+    "create_2d_cutout_layer",
+    "apply_procedural_array_stack",
+    "create_camera_dolly_animation",
+    "add_cloth_simulation_to_selected",
     "create_shader_material",
     "add_geometry_nodes_modifier",
     "create_shape_key",
@@ -111,6 +118,51 @@ def main():
         tool_names = {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert ADVANCED_TOOLS.issubset(tool_names)
 
+        assert live_preview.current_transaction() is None
+        invalid_dolly = json.loads(tool_dispatcher.execute_tool(context, "create_camera_dolly_animation", {"camera_name": "Cube"}))
+        assert invalid_dolly["ok"] is False, invalid_dolly
+        assert "not a camera" in invalid_dolly["message"], invalid_dolly
+        assert live_preview.current_transaction() is None, invalid_dolly
+
+        workflow = _execute(
+            context,
+            "plan_advanced_scene_workflow",
+            {"prompt": "Plan advanced 2D storyboard, procedural 3D, cloth simulation, and camera animation helpers."},
+        )
+        assert {"two_d_storyboard", "procedural_3d", "advanced_animation", "simulation_setup"}.intersection(set(workflow["domains"]))
+        details = _execute(context, "get_2d_animation_details", {"max_items": 12})
+        assert "recommended_tools" in details
+
+        board = _execute(
+            context,
+            "create_storyboard_panels",
+            {
+                "panel_count": 2,
+                "columns": 2,
+                "name_prefix": "Agent Bridge Advanced Board",
+                "frame_start": 1,
+                "frame_step": 12,
+            },
+        )
+        assert len(board["panels"]) == 2
+        assert board["camera"] in bpy.data.objects
+
+        cutout = _execute(
+            context,
+            "create_2d_cutout_layer",
+            {
+                "name": "Agent Bridge Advanced Cutout",
+                "location": [0.0, -0.2, 0.0],
+                "size": [0.8, 0.5],
+                "frame_start": 1,
+                "frame_end": 24,
+                "location_end": [0.5, -0.2, 0.25],
+                "text": "Layer",
+            },
+        )
+        assert cutout["object"] in bpy.data.objects
+        assert cutout["action"] in bpy.data.actions
+
         _select_object(context, cube)
         material = _execute(
             context,
@@ -149,6 +201,14 @@ def main():
         assert geometry_nodes["node_group"] in bpy.data.node_groups
         assert cube.modifiers.get("Agent Bridge Advanced GN")
 
+        procedural = _execute(
+            context,
+            "apply_procedural_array_stack",
+            {"object_names": ["Cube"], "selected_only": False, "count": 3, "name_prefix": "Agent Bridge Advanced Procedural"},
+        )
+        assert procedural["objects"][0]["object"] == "Cube"
+        assert cube.modifiers.get("Agent Bridge Advanced Procedural Array")
+
         shape_key = _execute(context, "create_shape_key", {"object_name": "Cube", "key_name": "Agent Bridge Bulge", "value": 0.25})
         assert shape_key["shape_key"] in cube.data.shape_keys.key_blocks
         _execute(
@@ -172,6 +232,14 @@ def main():
         )
         assert particles["objects"] == ["Cube"]
         assert cube.modifiers.get("Agent Bridge Advanced Particles")
+
+        cloth = _execute(
+            context,
+            "add_cloth_simulation_to_selected",
+            {"object_names": ["Cube"], "selected_only": False, "name": "Agent Bridge Advanced Cloth", "quality": 3},
+        )
+        assert cloth["objects"][0]["modifier"] == "Agent Bridge Advanced Cloth"
+        assert cube.modifiers.get("Agent Bridge Advanced Cloth")
 
         text = _execute(
             context,
@@ -214,6 +282,23 @@ def main():
             {"target_name": "Cube", "constraint_type": "COPY_LOCATION", "name": "Agent Bridge Advanced Copy Location"},
         )
         assert len(camera.constraints) == initial["camera_constraints"] + 1
+
+        dolly = _execute(
+            context,
+            "create_camera_dolly_animation",
+            {
+                "camera_name": "Camera",
+                "target_name": "Cube",
+                "frame_start": 1,
+                "frame_end": 36,
+                "start_location": [0.0, -5.0, 2.0],
+                "end_location": [0.0, -3.5, 1.4],
+                "lens_start": 35,
+                "lens_end": 55,
+            },
+        )
+        assert dolly["camera"] == "Camera"
+        assert dolly["action"] in bpy.data.actions
 
         _execute(context, "set_render_settings", {"resolution": [1280, 720], "fps": 30, "frame_start": 1, "frame_end": 48, "film_transparent": True})
         assert scene.render.resolution_x == 1280 and scene.render.resolution_y == 720

@@ -165,9 +165,11 @@ Set `BLENDER_MCP_FULL_TOOL_LIST=1` in the MCP server environment to expose every
 
 `tools/list`, `resources/list`, `resources/templates/list`, and `prompts/list` support cursor pagination. Tool definitions include `inputSchema`, `outputSchema`, and risk/permission annotations derived from the bridge contract.
 
-Catalog summaries, schema lookups, and tool-call results may include `guardrail_warnings`. These are advisory, machine-readable nudges for MCP clients; they do not replace Blender-side enforcement. Current warning categories cover synchronous external asset fallbacks, cache cleanup writes, destructive project-file operations, user-confirmed paths, approval-gated scripts, live-preview mutations, long-running synchronous calls, and background job polling.
+Catalog summaries, schema lookups, and tool-call results may include `guardrail_warnings`. These are advisory, machine-readable nudges for MCP clients; they do not replace Blender-side enforcement. Current warning categories cover synchronous external asset fallbacks, cache cleanup writes, destructive project-file operations, user-confirmed paths, approval-gated scripts, live-preview mutations, long-running synchronous calls, helper-first advanced 2D/3D/simulation/camera routing, and background job polling.
 
 `draft_script` is a fallback, not the preferred route for common edits. If a client drafts Python for helper-covered work such as transforms, materials, bounded object creation, external asset download/import, project file lifecycle operations, simulation bakes, or render/camera/world settings, the bridge refuses the draft and returns `recommended_tools`. Custom/procedural node, shader, rig, or explicitly stated helper-gap scripts still go through the normal approval path.
+
+For broad advanced work, compact MCP mode exposes `plan_advanced_scene_workflow` and `get_2d_animation_details` directly. Use the planner before custom scripts when a request mixes advanced 3D, 2D/storyboard, animation, simulation, compositor/render, or unclear helper coverage. For storyboard or animatic prompts, route through `get_2d_animation_details`, `create_storyboard_panels`, `create_2d_cutout_layer`, and optionally `create_camera_dolly_animation`. For procedural 3D stack prompts, use `apply_procedural_array_stack` and geometry-node inspection before custom mesh or node scripts. For cloth setup, use `add_cloth_simulation_to_selected`, then inspect simulation state before any persistent bake.
 
 Simulation tools are exposed in compact MCP mode so clients do not have to discover them through the generic invoke wrapper. `stage_persistent_simulation_bake` carries machine-readable annotations: `requiresExplicitOneTimeApproval=true`, `trustWindowAutoRunAllowed=false`, `approvalPolicy`, and `recoveryHint`. Its output schema also includes `requires_explicit_one_time_approval`, `trust_window_auto_run_allowed`, `user_action_required`, and `recommended_next_step`. Clients should treat that response as a staged approval state, not as a long-running bake or bridge hang.
 
@@ -188,6 +190,9 @@ Use these prompts after installing a fresh zip and refreshing the MCP client. Du
 | `make selected cube bounce twice and get smaller each bounce` | `run_animation_task` -> `run_animation_workflow` -> `create_progressive_bounce_animation` -> review tools | The client uses `run_animation_task` or `run_animation_workflow` before any `draft_script`. |
 | `block a jump with anticipation, contact, apex, settle` | `plan_animation_workflow` or `run_animation_task` -> `create_timing_chart` / blocking helpers -> evaluators | The client plans or runs the animation workflow and does not start with Python. |
 | `review this animation for spacing/contact` | `run_animation_task` or `plan_animation_workflow` -> evaluator tools -> `review_playblast_against_brief` / `repair_animation_from_findings` when evidence exists | The client uses workflow/evaluator/review helpers before considering script repair, even when the prompt is too ambiguous for generation. |
+| `create a 2D storyboard animatic with panels and a camera move` | `plan_advanced_scene_workflow` -> `get_2d_animation_details` -> `create_storyboard_panels` / `create_2d_cutout_layer` / `create_camera_dolly_animation` | The client does not start with `draft_script` for common storyboard setup. |
+| `make an advanced procedural hard-surface array stack` | `plan_advanced_scene_workflow` -> `get_geometry_nodes_details` -> `apply_procedural_array_stack` | The client uses helper-backed non-destructive modifier setup before custom geometry scripts. |
+| `add cloth simulation setup and inspect it before baking` | `plan_advanced_scene_workflow` or `get_simulation_details` -> `add_cloth_simulation_to_selected` -> `inspect_simulation_bake` | The client does not stage custom bake Python and does not bake persistently without explicit approval. |
 
 If a client still calls `draft_script` first for these prompts, refresh or restart the MCP client, press `Copy MCP Config` again, confirm `tools/list` includes `run_animation_task`, and check `blender_bridge_status` for matching add-on, bridge, MCP server, and config versions.
 
@@ -262,7 +267,7 @@ For real MCP clients, the normal route is discovery, `start_external_asset_downl
 
 ## Prompts
 
-The MCP server exposes prompt templates for common safe workflows: scene inspection, reversible scene changes, advanced animation workflow planning, async external asset import, and approval-gated Python drafts.
+The MCP server exposes prompt templates for common safe workflows: scene inspection, reversible scene changes, broad advanced scene workflow planning, advanced animation workflow planning, async external asset import, and approval-gated Python drafts.
 
 ## Safety
 

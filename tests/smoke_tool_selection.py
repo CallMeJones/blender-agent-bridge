@@ -197,6 +197,62 @@ def main():
         inspection_render_names = _names(inspection_render_tools)
         assert "capture_object_inspection_renders" in inspection_render_names, inspection_render_meta
 
+        advanced_tools, advanced_meta = agent_tools.select_blender_tool_definitions(
+            "Plan the helper path for advanced 3D, 2D storyboard, animation, simulation, and compositor work.",
+            bundle,
+        )
+        advanced_names = _names(advanced_tools)
+        assert "plan_advanced_scene_workflow" in advanced_names, advanced_meta
+        assert "get_2d_animation_details" in advanced_names, advanced_meta
+        assert "get_render_camera_compositor_details" in advanced_names, advanced_meta
+
+        storyboard_tools, storyboard_meta = agent_tools.select_blender_tool_definitions(
+            "Create a 2D storyboard animatic with panels, cutout layers, and a camera move.",
+            bundle,
+        )
+        storyboard_names = _names(storyboard_tools)
+        for expected in {
+            "plan_advanced_scene_workflow",
+            "get_2d_animation_details",
+            "create_storyboard_panels",
+            "create_2d_cutout_layer",
+            "create_camera_dolly_animation",
+        }:
+            assert expected in storyboard_names, (expected, storyboard_meta)
+        assert "draft_script" not in storyboard_names, storyboard_meta
+
+        storyboard_script_tools, storyboard_script_meta = agent_tools.select_blender_tool_definitions(
+            "Write a Python script to create a storyboard animatic with 2D panels.",
+            bundle,
+        )
+        storyboard_script_names = _names(storyboard_script_tools)
+        assert "create_storyboard_panels" in storyboard_script_names, storyboard_script_meta
+        assert "draft_script" not in storyboard_script_names, storyboard_script_meta
+
+        procedural_tools, procedural_meta = agent_tools.select_blender_tool_definitions(
+            "Make this an advanced 3D procedural hard-surface array stack with bevels and weighted normals.",
+            bundle,
+        )
+        procedural_names = _names(procedural_tools)
+        assert "apply_procedural_array_stack" in procedural_names, procedural_meta
+        assert "get_geometry_nodes_details" in procedural_names, procedural_meta
+
+        cloth_tools, cloth_meta = agent_tools.select_blender_tool_definitions(
+            "Add cloth simulation setup and inspect the physics cache before any bake.",
+            bundle,
+        )
+        cloth_names = _names(cloth_tools)
+        assert "add_cloth_simulation_to_selected" in cloth_names, cloth_meta
+        assert "inspect_simulation_bake" in cloth_names, cloth_meta
+
+        dolly_tools, dolly_meta = agent_tools.select_blender_tool_definitions(
+            "Create a dolly shot camera animation with lens keyframes and playblast review.",
+            bundle,
+        )
+        dolly_names = _names(dolly_tools)
+        assert "create_camera_dolly_animation" in dolly_names, dolly_meta
+        assert "capture_animation_playblast" in dolly_names, dolly_meta
+
         request_tools = agent_tools.blender_tool_definitions_for_request(
             "What objects are in my current scene?",
             bundle,

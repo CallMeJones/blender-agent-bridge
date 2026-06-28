@@ -3666,6 +3666,588 @@ def _resolve_edit_objects(context, *, object_names=None, selected_only=True, inc
     return [], missing
 
 
+ADVANCED_WORKFLOW_DOMAINS = {
+    "2d_storyboard": {
+        "keywords": {"2d", "two dimensional", "storyboard", "animatic", "storyboard panel", "storyboard panels", "2d panel", "2d panels", "grease pencil", "grease-pencil", "cutout", "cut-out", "motion graphic"},
+        "tools": [
+            "get_2d_animation_details",
+            "create_storyboard_panels",
+            "create_2d_cutout_layer",
+            "create_camera_dolly_animation",
+            "capture_animation_playblast",
+        ],
+        "script_boundary": "Use draft_script only for custom Grease Pencil stroke editing, SVG conversion, or destructive vector import helpers that are not exposed yet.",
+    },
+    "procedural_3d": {
+        "keywords": {"advanced 3d", "procedural", "array", "scatter", "kitbash", "hard surface", "hard-surface", "geometry nodes", "node group", "modifier stack"},
+        "tools": [
+            "get_geometry_nodes_details",
+            "apply_procedural_array_stack",
+            "add_geometry_nodes_modifier",
+            "shade_smooth_selected",
+            "add_bevel_and_subsurf",
+            "organize_scene_for_production",
+        ],
+        "script_boundary": "Use draft_script for custom node graphs or destructive mesh operators after inspection and Blender API lookup.",
+    },
+    "advanced_animation": {
+        "keywords": {"advanced animation", "shot", "blocking", "dolly", "camera move", "camera animation", "nla", "retime", "f-curve", "pose", "acting", "motion arc"},
+        "tools": [
+            "plan_animation_workflow",
+            "run_animation_workflow",
+            "create_camera_dolly_animation",
+            "block_key_poses",
+            "add_breakdown_pose",
+            "set_pose_hold",
+            "create_motion_arc",
+            "analyze_animation_principles",
+        ],
+        "script_boundary": "Use draft_script only when the workflow reports a helper gap or a custom rig/driver operation is required.",
+    },
+    "simulation_setup": {
+        "keywords": {"simulation", "cloth", "physics", "particle", "rigid body", "cache", "bake"},
+        "tools": [
+            "get_simulation_details",
+            "add_cloth_simulation_to_selected",
+            "add_particle_system_to_selected",
+            "inspect_simulation_bake",
+            "stage_persistent_simulation_bake",
+        ],
+        "script_boundary": "Persistent bake/free operators remain explicit one-time approval only; inspect first, then stage the fixed bake helper.",
+    },
+    "compositor_render": {
+        "keywords": {"compositor", "compositing", "post", "post process", "transparent", "alpha", "render preset", "render pass", "mp4", "preview"},
+        "tools": [
+            "get_render_camera_compositor_details",
+            "set_render_settings",
+            "set_camera_settings",
+            "render_scene_thumbnail",
+            "start_render_job",
+            "assemble_render_job_video",
+            "validate_render_job_output",
+        ],
+        "script_boundary": "Use draft_script for custom compositor node graphs until compositor node-tree rollback support is implemented.",
+    },
+}
+
+
+def _advanced_domain_matches(prompt, domains=None):
+    requested = [str(domain).strip().lower() for domain in domains or [] if str(domain).strip()]
+    if requested:
+        return [domain for domain in ADVANCED_WORKFLOW_DOMAINS if domain in requested]
+    text = str(prompt or "").lower()
+    matches = []
+    for domain, spec in ADVANCED_WORKFLOW_DOMAINS.items():
+        if any(keyword in text for keyword in spec["keywords"]):
+            matches.append(domain)
+    return matches or ["advanced_animation" if "animate" in text or "animation" in text else "procedural_3d"]
+
+
+def plan_advanced_scene_workflow(context, *, prompt="", domains=None, target_objects=None, label="Plan advanced scene workflow"):
+    matched_domains = _advanced_domain_matches(prompt, domains)
+    existing_targets = []
+    missing_targets = []
+    for name in [str(item) for item in target_objects or [] if str(item).strip()]:
+        if bpy.data.objects.get(name):
+            existing_targets.append(name)
+        else:
+            missing_targets.append(name)
+    steps = []
+    recommended_tools = []
+    script_boundaries = []
+    for domain in matched_domains:
+        spec = ADVANCED_WORKFLOW_DOMAINS[domain]
+        tools = list(spec["tools"])
+        recommended_tools.extend(tool for tool in tools if tool not in recommended_tools)
+        script_boundaries.append({"domain": domain, "policy": spec["script_boundary"]})
+        steps.append(
+            {
+                "domain": domain,
+                "inspect_first": tools[0],
+                "helper_path": tools[1:],
+                "script_fallback": spec["script_boundary"],
+            }
+        )
+    return {
+        "ok": True,
+        "message": f"Planned advanced workflow across {len(matched_domains)} domain(s)",
+        "domains": matched_domains,
+        "target_objects": existing_targets,
+        "missing_target_objects": missing_targets,
+        "recommended_tools": recommended_tools,
+        "steps": steps,
+        "script_fallback_policy": {
+            "helper_first": True,
+            "requires_explicit_helper_gap": True,
+            "search_docs_before_unfamiliar_python": True,
+            "domain_boundaries": script_boundaries,
+        },
+        "label": label,
+    }
+
+
+def _animation_owner_name(obj):
+    action = obj.animation_data.action if getattr(obj, "animation_data", None) else None
+    return action.name if action else ""
+
+
+def _object_2d_summary(obj):
+    data = getattr(obj, "data", None)
+    material_names = []
+    if hasattr(obj, "material_slots"):
+        material_names = [slot.material.name for slot in obj.material_slots if slot.material]
+    return {
+        "name": obj.name,
+        "type": obj.type,
+        "data": getattr(data, "name", ""),
+        "location": [round(float(component), 5) for component in obj.location],
+        "dimensions": [round(float(component), 5) for component in obj.dimensions],
+        "material_names": material_names[:8],
+        "action": _animation_owner_name(obj),
+        "layer_like": obj.type in {"FONT", "CURVE"} or "GREASE" in obj.type,
+    }
+
+
+def get_2d_animation_details(context, *, max_items=32):
+    scene = context.scene
+    limit = max(1, min(128, int(max_items or 32)))
+    grease_objects = [obj for obj in bpy.data.objects if "GREASE" in obj.type][:limit]
+    text_objects = [obj for obj in bpy.data.objects if obj.type == "FONT"][:limit]
+    curve_objects = [obj for obj in bpy.data.objects if obj.type == "CURVE"][:limit]
+    flat_meshes = [
+        obj
+        for obj in bpy.data.objects
+        if obj.type == "MESH" and min(float(component) for component in obj.dimensions) <= 0.05
+    ][:limit]
+    gp_collections = {}
+    for attr in ("grease_pencils", "grease_pencils_v3"):
+        collection = getattr(bpy.data, attr, None)
+        if collection is not None:
+            gp_collections[attr] = len(collection)
+    camera = scene.camera
+    compositor_tree = getattr(scene, "node_tree", None) if getattr(scene, "use_nodes", False) else None
+    return {
+        "ok": True,
+        "message": "Collected 2D/storyboard animation context",
+        "grease_pencil_data_counts": gp_collections,
+        "grease_pencil_objects": [_object_2d_summary(obj) for obj in grease_objects],
+        "text_objects": [_object_2d_summary(obj) for obj in text_objects],
+        "curve_objects": [_object_2d_summary(obj) for obj in curve_objects],
+        "flat_mesh_layers": [_object_2d_summary(obj) for obj in flat_meshes],
+        "camera": {
+            "name": camera.name if camera else "",
+            "type": camera.data.type if camera and camera.type == "CAMERA" else "",
+            "ortho_scale": float(camera.data.ortho_scale) if camera and camera.type == "CAMERA" else None,
+        },
+        "timeline": {
+            "frame_current": int(scene.frame_current),
+            "frame_start": int(scene.frame_start),
+            "frame_end": int(scene.frame_end),
+            "fps": int(scene.render.fps),
+        },
+        "render": {
+            "resolution": [int(scene.render.resolution_x), int(scene.render.resolution_y)],
+            "film_transparent": bool(scene.render.film_transparent),
+        },
+        "compositor": {
+            "use_nodes": bool(getattr(scene, "use_nodes", False)),
+            "node_count": len(compositor_tree.nodes) if compositor_tree else 0,
+        },
+        "recommended_tools": [
+            "create_storyboard_panels",
+            "create_2d_cutout_layer",
+            "create_camera_dolly_animation",
+            "capture_animation_playblast",
+            "get_render_camera_compositor_details",
+        ],
+    }
+
+
+def create_storyboard_panels(
+    context,
+    *,
+    panel_count=4,
+    columns=2,
+    panel_width=3.2,
+    panel_height=1.8,
+    gap=0.35,
+    name_prefix="Agent Bridge Storyboard",
+    frame_start=1,
+    frame_step=24,
+    background_color=(0.08, 0.08, 0.09, 1.0),
+    border_color=(0.9, 0.9, 0.86, 1.0),
+    text_color=(0.95, 0.95, 0.9, 1.0),
+    create_camera=True,
+    label="Create storyboard panels",
+):
+    count = max(1, min(24, int(panel_count or 1)))
+    column_count = max(1, min(count, int(columns or 1)))
+    width = max(0.25, min(50.0, float(panel_width or 3.2)))
+    height = max(0.25, min(50.0, float(panel_height or 1.8)))
+    spacing = max(0.0, min(20.0, float(gap or 0.0)))
+    start = int(frame_start or 1)
+    step = max(1, min(10000, int(frame_step or 24)))
+    rows = int(math.ceil(count / column_count))
+    board_width = column_count * width + (column_count - 1) * spacing
+    board_height = rows * height + (rows - 1) * spacing
+    prefix = str(name_prefix or "Agent Bridge Storyboard")
+    transaction = live_preview.begin(label, context)
+    live_preview._record_scene_timeline(context.scene)
+    _record_scene_render(context.scene)
+    context.scene.frame_start = min(context.scene.frame_start, start)
+    context.scene.frame_end = max(context.scene.frame_end, start + (count - 1) * step)
+    context.scene.render.resolution_x = max(context.scene.render.resolution_x, 1280)
+    context.scene.render.resolution_y = max(context.scene.render.resolution_y, 720)
+    background = _material_for_color(f"{prefix} Panel Material", background_color)
+    border = _material_for_color(f"{prefix} Border Material", border_color)
+    text_material = _material_for_color(f"{prefix} Text Material", text_color)
+    panels = []
+    created = []
+    for index in range(count):
+        row = index // column_count
+        col = index % column_count
+        x = col * (width + spacing) - board_width / 2.0 + width / 2.0
+        z = board_height / 2.0 - row * (height + spacing) - height / 2.0
+        frame = start + index * step
+        panel = _create_cube_object(context, f"{prefix} Panel {index + 1:02d}", (x, 0.0, z), (width, 0.025, height), background)
+        panel.show_name = True
+        border_points = [
+            (x - width / 2.0, -0.04, z - height / 2.0),
+            (x + width / 2.0, -0.04, z - height / 2.0),
+            (x + width / 2.0, -0.04, z + height / 2.0),
+            (x - width / 2.0, -0.04, z + height / 2.0),
+        ]
+        border_obj = _create_curve_line(
+            context,
+            f"{prefix} Border {index + 1:02d}",
+            border_points,
+            max(0.004, min(width, height) * 0.008),
+            border,
+        )
+        border_obj.data.splines[0].use_cyclic_u = True
+        label_obj = _create_text_label(
+            context,
+            f"{prefix} Label {index + 1:02d}",
+            f"Shot {index + 1}  F{frame}",
+            (x - width / 2.0 + 0.12, -0.08, z - height / 2.0 + 0.12),
+            size=max(0.08, min(width, height) * 0.08),
+            rotation=(math.radians(90.0), 0.0, 0.0),
+            material=text_material,
+        )
+        panels.append({"panel": panel.name, "border": border_obj.name, "label": label_obj.name, "frame": frame})
+        created.extend([panel.name, border_obj.name, label_obj.name])
+    camera_name = ""
+    if create_camera:
+        live_preview._record_scene_camera(context.scene)
+        target = _create_empty_target(context, f"{prefix} Camera Target", (0.0, 0.0, 0.0), display_size=0.35)
+        data = bpy.data.cameras.new(name=f"{prefix} Camera Data")
+        data.type = "ORTHO"
+        data.ortho_scale = max(board_height + spacing, (board_width + spacing) * 9.0 / 16.0)
+        camera = bpy.data.objects.new(name=f"{prefix} Camera", object_data=data)
+        camera.location = (0.0, -max(6.0, board_width * 1.25), 0.0)
+        context.scene.collection.objects.link(camera)
+        live_preview._record_created_id("object", camera.name)
+        live_preview._record_created_id("camera", data.name)
+        _track_to_target(camera, target)
+        context.scene.camera = camera
+        camera_name = camera.name
+        created.extend([target.name, camera.name])
+    transaction["applied_steps"].append(
+        {
+            "type": "create_storyboard_panels",
+            "label": label,
+            "panel_count": count,
+            "columns": column_count,
+            "frame_start": start,
+            "frame_step": step,
+            "camera": camera_name,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Created {count} storyboard panel(s)",
+        "panels": panels,
+        "camera": camera_name,
+        "created_objects": created,
+        "transaction_id": transaction["id"],
+    }
+
+
+def create_2d_cutout_layer(
+    context,
+    *,
+    name="Agent Bridge 2D Cutout",
+    location=(0.0, 0.0, 0.0),
+    size=(1.0, 1.0),
+    color=(0.2, 0.55, 1.0, 1.0),
+    frame_start=1,
+    frame_end=48,
+    location_end=None,
+    rotation_end=None,
+    scale_end=None,
+    text="",
+    label="Create 2D cutout layer",
+):
+    width = max(0.01, min(100.0, float((size or [1.0, 1.0])[0])))
+    height = max(0.01, min(100.0, float((size or [1.0, 1.0])[-1])))
+    start = int(frame_start or context.scene.frame_start)
+    end = int(frame_end or context.scene.frame_end)
+    if end < start:
+        start, end = end, start
+    transaction = live_preview.begin(label, context)
+    live_preview._record_scene_timeline(context.scene)
+    context.scene.frame_start = min(context.scene.frame_start, start)
+    context.scene.frame_end = max(context.scene.frame_end, end)
+    material = _material_for_color(f"{name} Material", color)
+    loc = _coerce_vector(location, (0.0, 0.0, 0.0))
+    layer = _create_cube_object(context, name or "Agent Bridge 2D Cutout", loc, (width, 0.02, height), material)
+    layer.show_name = True
+    created = [layer.name]
+    action = live_preview._assign_preview_action(layer)
+    layer.keyframe_insert(data_path="location", frame=start)
+    layer.keyframe_insert(data_path="rotation_euler", frame=start)
+    layer.keyframe_insert(data_path="scale", frame=start)
+    if location_end is not None:
+        layer.location = _coerce_vector(location_end, loc)
+    if rotation_end is not None:
+        layer.rotation_euler = _coerce_vector(rotation_end, (0.0, 0.0, 0.0))
+    if scale_end is not None:
+        layer.scale = _coerce_vector(scale_end, layer.scale)
+    layer.keyframe_insert(data_path="location", frame=end)
+    layer.keyframe_insert(data_path="rotation_euler", frame=end)
+    layer.keyframe_insert(data_path="scale", frame=end)
+    _set_action_interpolation(action, "BEZIER")
+    text_name = ""
+    if text:
+        text_obj = _create_text_label(
+            context,
+            f"{layer.name} Label",
+            str(text),
+            (loc[0], loc[1] - 0.05, loc[2]),
+            size=max(0.08, min(width, height) * 0.2),
+            rotation=(math.radians(90.0), 0.0, 0.0),
+            material=_material_for_color(f"{name} Text Material", (1.0, 1.0, 1.0, 1.0)),
+        )
+        text_name = text_obj.name
+        created.append(text_name)
+    transaction["applied_steps"].append(
+        {
+            "type": "create_2d_cutout_layer",
+            "label": label,
+            "object": layer.name,
+            "frame_start": start,
+            "frame_end": end,
+            "text_object": text_name,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Created 2D cutout layer {layer.name}",
+        "object": layer.name,
+        "text_object": text_name,
+        "action": action.name,
+        "created_objects": created,
+        "transaction_id": transaction["id"],
+    }
+
+
+def apply_procedural_array_stack(
+    context,
+    *,
+    object_names=None,
+    selected_only=True,
+    count=5,
+    relative_offset=(1.25, 0.0, 0.0),
+    bevel_width=0.025,
+    bevel_segments=2,
+    add_weighted_normals=True,
+    name_prefix="Agent Bridge Procedural",
+    label="Apply procedural array stack",
+):
+    objects, missing = _resolve_edit_objects(context, object_names=object_names, selected_only=selected_only)
+    meshes = [obj for obj in objects if obj.type == "MESH"]
+    if not meshes:
+        return {"ok": False, "message": "No mesh objects found for procedural array stack", "missing_object_names": missing}
+    transaction = live_preview.begin(label, context)
+    changed = []
+    for obj in meshes:
+        array = obj.modifiers.new(f"{name_prefix} Array", "ARRAY")
+        live_preview._record_created_modifier(obj, array)
+        array.count = max(1, min(1000, int(count or 1)))
+        array.relative_offset_displace = _coerce_vector(relative_offset, (1.25, 0.0, 0.0))
+        bevel = obj.modifiers.new(f"{name_prefix} Bevel", "BEVEL")
+        live_preview._record_created_modifier(obj, bevel)
+        bevel.width = max(0.0, min(10.0, float(bevel_width or 0.0)))
+        bevel.segments = max(1, min(32, int(bevel_segments or 1)))
+        modifiers = [array.name, bevel.name]
+        if add_weighted_normals:
+            weighted = obj.modifiers.new(f"{name_prefix} Weighted Normals", "WEIGHTED_NORMAL")
+            live_preview._record_created_modifier(obj, weighted)
+            modifiers.append(weighted.name)
+        changed.append({"object": obj.name, "modifiers": modifiers})
+    transaction["applied_steps"].append({"type": "apply_procedural_array_stack", "label": label, "objects": changed})
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Applied procedural array stack to {len(changed)} mesh object(s)",
+        "objects": changed,
+        "missing_object_names": missing,
+        "transaction_id": transaction["id"],
+    }
+
+
+def create_camera_dolly_animation(
+    context,
+    *,
+    camera_name="",
+    target_name="",
+    frame_start=1,
+    frame_end=96,
+    start_location=None,
+    end_location=None,
+    lens_start=None,
+    lens_end=None,
+    interpolation="BEZIER",
+    label="Create camera dolly animation",
+):
+    scene = context.scene
+    camera = bpy.data.objects.get(str(camera_name or "")) if camera_name else scene.camera
+    if camera is not None and camera.type != "CAMERA":
+        return {"ok": False, "message": f"Object is not a camera: {camera.name}"}
+    transaction = live_preview.begin(label, context)
+    if camera is None:
+        live_preview._record_scene_camera(scene)
+        data = bpy.data.cameras.new("Agent Bridge Dolly Camera Data")
+        camera = bpy.data.objects.new("Agent Bridge Dolly Camera", object_data=data)
+        scene.collection.objects.link(camera)
+        scene.camera = camera
+        live_preview._record_created_id("object", camera.name)
+        live_preview._record_created_id("camera", data.name)
+    target = bpy.data.objects.get(str(target_name or "")) if target_name else None
+    start = int(frame_start or scene.frame_start)
+    end = int(frame_end or scene.frame_end)
+    if end < start:
+        start, end = end, start
+    live_preview._record_scene_timeline(scene)
+    live_preview._record_object_transform(camera)
+    _record_camera_settings(camera)
+    scene.frame_start = min(scene.frame_start, start)
+    scene.frame_end = max(scene.frame_end, end)
+    if start_location is not None:
+        camera.location = _coerce_vector(start_location, camera.location)
+    action = live_preview._assign_preview_action(camera)
+    camera.keyframe_insert(data_path="location", frame=start)
+    if target and not any(constraint.type == "TRACK_TO" and constraint.target == target for constraint in camera.constraints):
+        constraint = camera.constraints.new(type="TRACK_TO")
+        constraint.name = "Agent Bridge Dolly Track Target"
+        constraint.track_axis = "TRACK_NEGATIVE_Z"
+        constraint.up_axis = "UP_Y"
+        constraint.target = target
+        live_preview._record_created_constraint(camera, constraint)
+    if end_location is None:
+        base = Vector(camera.location)
+        if target:
+            direction = (Vector(target.location) - base)
+            if direction.length > 0.0001:
+                direction.normalize()
+                end_location = tuple(base + direction * 2.0)
+        if end_location is None:
+            end_location = (camera.location.x, camera.location.y + 2.0, camera.location.z)
+    camera.location = _coerce_vector(end_location, camera.location)
+    camera.keyframe_insert(data_path="location", frame=end)
+    _set_action_interpolation(action, interpolation)
+    lens_action_name = ""
+    if lens_start is not None or lens_end is not None:
+        live_preview._record_id_animation(camera.data, "cameras")
+        lens_action = bpy.data.actions.new(name=f"{camera.name} Agent Bridge Lens Preview Action")
+        camera.data.animation_data_create().action = lens_action
+        live_preview._record_created_id("action", lens_action.name)
+        if lens_start is not None:
+            camera.data.lens = max(1.0, min(1000.0, float(lens_start)))
+        camera.data.keyframe_insert(data_path="lens", frame=start)
+        if lens_end is not None:
+            camera.data.lens = max(1.0, min(1000.0, float(lens_end)))
+        camera.data.keyframe_insert(data_path="lens", frame=end)
+        _set_action_interpolation(lens_action, interpolation)
+        lens_action_name = lens_action.name
+    transaction["applied_steps"].append(
+        {
+            "type": "create_camera_dolly_animation",
+            "label": label,
+            "camera": camera.name,
+            "target": target.name if target else "",
+            "frame_start": start,
+            "frame_end": end,
+            "action": action.name,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Created camera dolly animation for {camera.name}",
+        "camera": camera.name,
+        "target": target.name if target else "",
+        "action": action.name,
+        "lens_action": lens_action_name,
+        "transaction_id": transaction["id"],
+    }
+
+
+def add_cloth_simulation_to_selected(
+    context,
+    *,
+    object_names=None,
+    selected_only=True,
+    name="Agent Bridge Cloth",
+    quality=5,
+    mass=0.3,
+    tension_stiffness=5.0,
+    compression_stiffness=5.0,
+    shear_stiffness=5.0,
+    air_damping=1.0,
+    label="Add cloth simulation",
+):
+    objects, missing = _resolve_edit_objects(context, object_names=object_names, selected_only=selected_only)
+    meshes = [obj for obj in objects if obj.type == "MESH"]
+    if not meshes:
+        return {"ok": False, "message": "No mesh objects found for cloth simulation", "missing_object_names": missing}
+    transaction = live_preview.begin(label, context)
+
+    def set_if_present(settings, attr, value):
+        if hasattr(settings, attr):
+            setattr(settings, attr, value)
+
+    changed = []
+    for obj in meshes:
+        modifier = obj.modifiers.new(name or "Agent Bridge Cloth", "CLOTH")
+        live_preview._record_created_modifier(obj, modifier)
+        settings = modifier.settings
+        set_if_present(settings, "quality", max(1, min(30, int(quality or 1))))
+        set_if_present(settings, "mass", max(0.001, min(1000.0, float(mass or 0.001))))
+        set_if_present(settings, "tension_stiffness", max(0.0, min(1000.0, float(tension_stiffness or 0.0))))
+        set_if_present(settings, "compression_stiffness", max(0.0, min(1000.0, float(compression_stiffness or 0.0))))
+        set_if_present(settings, "shear_stiffness", max(0.0, min(1000.0, float(shear_stiffness or 0.0))))
+        set_if_present(settings, "air_damping", max(0.0, min(1000.0, float(air_damping or 0.0))))
+        changed.append({"object": obj.name, "modifier": modifier.name})
+    transaction["applied_steps"].append({"type": "add_cloth_simulation_to_selected", "label": label, "objects": changed})
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Added cloth simulation to {len(changed)} mesh object(s)",
+        "objects": changed,
+        "missing_object_names": missing,
+        "recommended_next_tools": ["get_simulation_details", "inspect_simulation_bake"],
+        "transaction_id": transaction["id"],
+    }
+
+
 def create_empty(
     context,
     *,

@@ -1325,6 +1325,41 @@ TOOL_CONTRACTS = {
         "mutates_scene": True,
         "requires_live_preview": True,
     },
+    "plan_advanced_scene_workflow": {
+        "description": "Plan helper-first workflows for advanced 3D, 2D/storyboard, animation, simulation, compositor/render, and script-fallback work",
+        "mutates_scene": False,
+        "supports_headless": True,
+    },
+    "get_2d_animation_details": {
+        "description": "Inspect 2D/storyboard, Grease Pencil-like, cutout, camera, render, and compositor context",
+        "mutates_scene": False,
+        "supports_headless": True,
+    },
+    "create_storyboard_panels": {
+        "description": "Create reversible storyboard/animatic panels with labels and optional orthographic camera",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
+    "create_2d_cutout_layer": {
+        "description": "Create a reversible flat 2D cutout layer with optional transform animation",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
+    "apply_procedural_array_stack": {
+        "description": "Apply a bounded procedural array, bevel, and weighted-normal modeling stack",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
+    "create_camera_dolly_animation": {
+        "description": "Create a reversible camera dolly move with optional target tracking and lens keyframes",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
+    "add_cloth_simulation_to_selected": {
+        "description": "Add a bounded Cloth simulation modifier without baking caches",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+    },
     "duplicate_selected_objects": {
         "description": "Duplicate selected objects with optional unique data, offset, animation copy, and selecting the duplicates",
         "mutates_scene": True,

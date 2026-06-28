@@ -78,7 +78,7 @@ The source `.blend` file and full 1080p videos are not committed here; the repos
 - Search Poly Haven and Sketchfab catalogs, cache/import HDRIs, textures, and models, and report source, license, cache, and imported data-block diagnostics.
 - Start external asset download/cache jobs for Poly Haven or Sketchfab, poll or cancel them, then import completed job results from cached manifests.
 - Use animation workflow tools such as `run_animation_task`, `plan_animation_workflow`, `run_animation_workflow`, `review_playblast_against_brief`, and `run_animation_repair_loop`.
-- Apply safe helper edits for transforms, materials, lights, cameras, primitives, keyframes, rigs, constraints, render settings, product stages, character/vehicle kits, geometry-node starters, and scene organization.
+- Apply safe helper edits for transforms, materials, lights, cameras, primitives, keyframes, rigs, constraints, render settings, 2D storyboard/animatic panels, cutout animation layers, camera dolly shots, cloth setup, procedural array stacks, product stages, character/vehicle kits, geometry-node starters, and scene organization.
 - Start long-running render jobs in a background Blender process, poll progress, assemble PNG sequences into MP4, and validate the output before reporting success.
 - Search cached Blender Python API and Manual docs before using version-sensitive APIs, and use status/audit resources to spot stale client configs or timed-out work.
 - Stage arbitrary Blender Python into the `Agent Bridge Pending Script` Text datablock when helpers cannot express the task.

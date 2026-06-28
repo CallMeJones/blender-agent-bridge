@@ -317,6 +317,8 @@ get_simulation_details
 inspect_simulation_bake
 get_collection_layer_details
 get_render_camera_compositor_details
+plan_advanced_scene_workflow
+get_2d_animation_details
 get_blend_file_diagnostics
 get_workspace_layout
 get_visual_evidence_resources
@@ -541,7 +543,12 @@ Tools:
 ```text
 create_text_object
 create_curve_path
+create_storyboard_panels
+create_2d_cutout_layer
+apply_procedural_array_stack
+create_camera_dolly_animation
 add_particle_system_to_selected
+add_cloth_simulation_to_selected
 create_basic_armature
 add_copy_transform_constraint
 shade_smooth_selected
@@ -571,6 +578,9 @@ Owner tests:
 Required scenarios:
 
 - Helpers create bounded, reversible data-blocks and reject unsupported complex operations.
+- 2D/storyboard helpers create reversible panels, labels, flat cutout layers, and camera moves.
+- Procedural stack helpers add bounded array/bevel/weighted-normal modifiers without destructive mesh edits.
+- Cloth setup adds a modifier only; cache inspection and persistent bake remain separate explicit steps.
 - Product, vehicle, and character templates generate expected named objects/materials/collections.
 - Visual QA renders product and character outputs and rejects blank images.
 - Rollback restores created objects, materials, modifiers, constraints, collections, cameras, and lights.

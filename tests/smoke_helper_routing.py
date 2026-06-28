@@ -52,6 +52,24 @@ def main():
     assert material_guard["code"] == "material_helper_required", material_guard
     assert "create_shader_material" in material_guard["recommended_tools"], material_guard
 
+    storyboard_guard = helper_routing.helper_first_script_guard(
+        "Write a Python script to create a storyboard animatic with 2D panels."
+    )
+    assert storyboard_guard["code"] == "two_d_storyboard_helper_required", storyboard_guard
+    assert "create_storyboard_panels" in storyboard_guard["recommended_tools"], storyboard_guard
+
+    procedural_guard = helper_routing.helper_first_script_guard(
+        "Write Python for a non-destructive procedural array stack with bevels."
+    )
+    assert procedural_guard["code"] == "procedural_3d_helper_required", procedural_guard
+    assert "apply_procedural_array_stack" in procedural_guard["recommended_tools"], procedural_guard
+
+    cloth_guard = helper_routing.helper_first_script_guard(
+        "Draft a script to add cloth simulation setup to the selected mesh."
+    )
+    assert cloth_guard["code"] == "simulation_setup_helper_required", cloth_guard
+    assert "add_cloth_simulation_to_selected" in cloth_guard["recommended_tools"], cloth_guard
+
     assert helper_routing.helper_first_script_guard(custom_prompt) is None
     print("smoke_helper_routing: ok")
 

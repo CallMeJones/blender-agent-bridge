@@ -149,7 +149,7 @@ The search tool returns only top matching snippets and URLs. It never exposes th
 
 This keeps the local docs cache, screenshots, and large Blender scenes from killing the LLM request with oversized context.
 
-`agent_tools.select_blender_tool_definitions()` also applies a tool-schema budget. The full tool catalog remains available locally, but compact surfaces can expose a core inspection/docs set plus task-matched groups such as materials, animation, camera/render, geometry nodes, rigging, particles, curves/text, advanced creation, refinement, or vehicle tools.
+`agent_tools.select_blender_tool_definitions()` also applies a tool-schema budget. The full tool catalog remains available locally, but compact surfaces can expose a core inspection/docs set plus task-matched groups such as materials, animation, 2D/storyboard, procedural 3D, simulation setup, camera/render, geometry nodes, rigging, particles, curves/text, advanced creation, refinement, or vehicle tools.
 
 ### Docs-First Rule
 
@@ -225,6 +225,13 @@ Initial helpers:
 - `set_render_settings(engine, resolution, fps, frame_start, frame_end, film_transparent)`
 - `set_camera_settings(camera_name, lens, dof_enabled, focus_object_name, aperture_fstop)`
 - `set_world_background(color)`
+- `plan_advanced_scene_workflow(prompt, domains, target_objects)`
+- `get_2d_animation_details(max_items)`
+- `create_storyboard_panels(panel_count, columns, panel_width, panel_height, frame_start, frame_step)`
+- `create_2d_cutout_layer(name, location, size, frame_start, frame_end, location_end, text)`
+- `apply_procedural_array_stack(object_names, count, relative_offset, bevel_width, bevel_segments)`
+- `create_camera_dolly_animation(camera_name, target_name, frame_start, frame_end, start_location, end_location, lens_start, lens_end)`
+- `add_cloth_simulation_to_selected(object_names, quality, mass)`
 - `shade_smooth_selected(add_weighted_normals)`
 - `add_bevel_and_subsurf(bevel_width, bevel_segments, subsurf_levels)`
 - `create_wheel_assembly(name, location, radius, tire_thickness, axis)`
@@ -246,7 +253,7 @@ Helpers should validate inputs and return structured results. External agents ca
 
 `inspect_simulation_bake` is the safe simulation inspection path before an agent reaches for custom Python. It samples evaluated rigid-body/particle/simulation state across a bounded frame range, restores the original scene frame, returns object center/bounds samples, includes `get_simulation_details` cache metadata, and reports that persistent point-cache baking was not performed. This gives the client concrete bake/cache evidence without mutating persistent simulation caches or writing disk caches behind the user's back. `stage_persistent_simulation_bake` is the explicit persistent-bake path: it stages a fixed-template scene-wide `bpy.ops.ptcache.bake_all(bake=True)` script for Blender-side approval/trust and does not ask clients to invent bake Python. Requested object names limit inspection and cache-range preparation, but Blender's bake-all operator remains scene-wide. `analyze_center_of_mass` uses convex-hull support footprints from support objects' world-space bounds when available, and character subjects can use weighted child-mesh bounds for a better articulated center-of-mass proxy, so rotated supports and rigged body-part layouts do not get reduced to a single misleading object origin or axis-aligned box.
 
-The advanced helpers are intentionally bounded. They create useful starter states and simple edits without exposing arbitrary node graph, rig, or simulation mutation. When an external agent needs a custom geometry-node network, production rig, compositor graph, destructive mesh operation, import/export, or complex simulation setup, it should draft approved Python after inspecting context and docs.
+The advanced helpers are intentionally bounded. They create useful starter states and simple edits without exposing arbitrary node graph, rig, compositor, or persistent simulation mutation. `plan_advanced_scene_workflow` is the broad routing entry point for advanced 3D, 2D/storyboard, advanced animation, simulation setup, compositor/render, and script-heavy requests. 2D helpers currently cover storyboard/animatic panels and cutout layers; compositor support is inspection/planning-first until node-tree rollback exists. When an external agent needs a custom geometry-node network, production rig, compositor graph, destructive mesh operation, import/export, custom Grease Pencil stroke editing, or complex simulation setup, it should draft approved Python after inspecting context and docs.
 Reusable refinement templates should stay bounded and composable. Vehicle, product, and character kits inspect bounds, add tasteful primitive/curve/material details, preserve preview rollback, and escalate to approved Python for topology-heavy work.
 
 ## Script Drafting Protocol
