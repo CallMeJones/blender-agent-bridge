@@ -228,6 +228,23 @@ def main():
         final = _snapshot(cube)
         assert final == initial, {"initial": initial, "final": final}
 
+        # Shaded playblast: invalid shading is ignored, valid shading yields a restore
+        # callback, and the dispatcher plumbs `shading` through without error. Background
+        # mode has no interactive viewport, so capture is unavailable but must not crash.
+        from claude_blender import playblast_capture  # noqa: E402
+
+        invalid_restore, invalid_name = playblast_capture._apply_viewport_shading(context, "NONSENSE")
+        assert invalid_restore is None and invalid_name == "", (invalid_restore, invalid_name)
+        valid_restore, valid_name = playblast_capture._apply_viewport_shading(context, "material")
+        assert callable(valid_restore) and valid_name == "MATERIAL", (valid_restore, valid_name)
+        shaded = json.loads(
+            tool_dispatcher.execute_tool(
+                context, "capture_animation_playblast", {"shading": "MATERIAL", "max_frames": 2}
+            )
+        )
+        assert "playblast" in shaded, shaded
+        assert shaded["playblast"]["available"] is False, shaded  # headless: no interactive viewport
+
         print("smoke_refinement_helpers: ok")
     finally:
         claude_blender.unregister()

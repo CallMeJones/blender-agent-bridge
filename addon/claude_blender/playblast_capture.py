@@ -10,7 +10,7 @@ import uuid
 
 import bpy
 
-from . import live_preview, viewport_capture
+from . import bridge_protocol, live_preview, viewport_capture
 
 
 LATEST_PLAYBLAST_METADATA_URI = "blender://playblasts/latest/metadata"
@@ -284,6 +284,41 @@ def _flush_frame_capture_view(context):
         pass
 
 
+VALID_PLAYBLAST_SHADING = set(bridge_protocol.PLAYBLAST_SHADING_MODES)
+
+
+def _apply_viewport_shading(context, shading):
+    """Set 3D viewport shading for capture.
+
+    Returns ``(restore_callback, applied_name)``. For empty or unrecognized input this
+    is a no-op returning ``(None, "")`` — the single place shading is normalized/validated.
+    """
+    shading = str(shading or "").upper()
+    if shading not in VALID_PLAYBLAST_SHADING:
+        return None, ""
+    previous = []
+    for window in getattr(context.window_manager, "windows", []):
+        for area in getattr(window.screen, "areas", []):
+            if area.type != "VIEW_3D":
+                continue
+            for space in area.spaces:
+                if space.type == "VIEW_3D":
+                    previous.append((space, space.shading.type))
+                    try:
+                        space.shading.type = shading
+                    except Exception:
+                        pass
+
+    def _restore():
+        for space, prior in previous:
+            try:
+                space.shading.type = prior
+            except Exception:
+                pass
+
+    return _restore, shading
+
+
 def capture_animation_playblast(
     context,
     *,
@@ -295,6 +330,7 @@ def capture_animation_playblast(
     max_width=None,
     max_height=None,
     brief="",
+    shading="",
     capture_dir=None,
 ):
     scene = context.scene
@@ -339,6 +375,7 @@ def capture_animation_playblast(
     current_frame = int(scene.frame_current)
     frames = []
     method = ""
+    shading_restore, applied_shading = _apply_viewport_shading(context, shading)
     try:
         for frame_number in sampled_frames:
             filepath = os.path.join(playblast_dir, f"frame-{int(frame_number):04d}.png")
@@ -382,6 +419,8 @@ def capture_animation_playblast(
             )
     finally:
         scene.frame_set(current_frame)
+        if shading_restore is not None:
+            shading_restore()
 
     available_frames = [frame for frame in frames if frame.get("available")]
     metadata = {
@@ -414,6 +453,7 @@ def capture_animation_playblast(
         "quality": quality,
         "max_width": resolved_max_width,
         "max_height": resolved_max_height,
+        "shading": applied_shading,
         "capture_method": method,
         "brief": str(brief or "")[:1000],
         "resource_type": "png_frame_sequence",

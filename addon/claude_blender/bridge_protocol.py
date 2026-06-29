@@ -28,6 +28,32 @@ DEFAULT_OUTPUT_SCHEMA = {
 }
 
 
+# Canonical 3D viewport shading modes for capture_animation_playblast. Single source of
+# truth for the tool schema (here and in agent_tools) and the runtime validation set in
+# playblast_capture, so they cannot drift.
+PLAYBLAST_SHADING_MODES = ["WIREFRAME", "SOLID", "MATERIAL", "RENDERED"]
+
+
+# Helpers that add lights surface a non-fatal warning when the scene was already lit,
+# so callers can detect over-exposure risk from the structured result.
+LIGHTING_AWARE_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "ok": {"type": "boolean", "description": "Whether the tool completed successfully"},
+        "message": {"type": "string", "description": "Human-readable status or error message"},
+        "created_objects": {"type": "array", "items": {"type": "string"}},
+        "lights": {"type": "array", "items": {"type": "string"}},
+        "lighting_warning": {
+            "type": "string",
+            "description": "Set when stacking lights onto an already-lit scene may over-expose the render; empty otherwise.",
+        },
+        "warnings": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["ok"],
+    "additionalProperties": True,
+}
+
+
 TOOL_CONTRACTS = {
     "inspect_scene": {
         "description": "Return a compact context bundle for the active Blender scene",
@@ -709,8 +735,42 @@ TOOL_CONTRACTS = {
                 "max_width": {"type": "integer"},
                 "max_height": {"type": "integer"},
                 "brief": {"type": "string"},
+                "shading": {
+                    "type": "string",
+                    "enum": PLAYBLAST_SHADING_MODES,
+                    "description": "Optional viewport shading for the capture. Defaults to the current viewport; use MATERIAL or RENDERED to review materials and lighting.",
+                },
             },
             "additionalProperties": False,
+        },
+        "output_schema": {
+            "type": "object",
+            "properties": {
+                "ok": {"type": "boolean"},
+                "message": {"type": "string"},
+                "playblast": {
+                    "type": "object",
+                    "properties": {
+                        "ok": {"type": "boolean"},
+                        "available": {"type": "boolean"},
+                        "playblast_id": {"type": "string"},
+                        "metadata_uri": {"type": "string"},
+                        "latest_metadata_uri": {"type": "string"},
+                        "frame_start": {"type": "integer"},
+                        "frame_end": {"type": "integer"},
+                        "frame_count": {"type": "integer"},
+                        "requested_frame_count": {"type": "integer"},
+                        "sampled_frames": {"type": "array", "items": {"type": "integer"}},
+                        "quality": {"type": "string"},
+                        "shading": {"type": "string"},
+                        "frames": {"type": "array", "items": {"type": "object"}},
+                    },
+                    "required": ["ok", "available"],
+                    "additionalProperties": True,
+                },
+            },
+            "required": ["ok"],
+            "additionalProperties": True,
         },
     },
     "capture_object_inspection_renders": {
@@ -1502,6 +1562,7 @@ TOOL_CONTRACTS = {
         "description": "Apply a bounded product presentation kit with material polish, smoothing, staging, callouts, and optional turntable",
         "mutates_scene": True,
         "requires_live_preview": True,
+        "output_schema": LIGHTING_AWARE_OUTPUT_SCHEMA,
     },
     "apply_character_refinement_template": {
         "description": "Apply a bounded character blockout/detail kit with body polish, head, eyes, shoulder marker, and optional guides",
@@ -1512,6 +1573,7 @@ TOOL_CONTRACTS = {
         "description": "Create a bounded studio/product presentation stage around a target object",
         "mutates_scene": True,
         "requires_live_preview": True,
+        "output_schema": LIGHTING_AWARE_OUTPUT_SCHEMA,
     },
     "add_dimension_callouts": {
         "description": "Add non-destructive dimension/ruler callouts around a target object's bounds",
@@ -1522,6 +1584,7 @@ TOOL_CONTRACTS = {
         "description": "Create a bounded production lighting rig around a target object",
         "mutates_scene": True,
         "requires_live_preview": True,
+        "output_schema": LIGHTING_AWARE_OUTPUT_SCHEMA,
     },
     "create_material_palette": {
         "description": "Create a bounded material palette and optional swatch objects",

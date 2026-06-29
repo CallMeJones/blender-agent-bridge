@@ -2787,6 +2787,7 @@ def capture_animation_playblast(context, args):
         max_width=args.get("max_width"),
         max_height=args.get("max_height"),
         brief=str(args.get("brief") or ""),
+        shading=str(args.get("shading") or ""),
         capture_dir=getattr(prefs, "capture_cache_dir", None),
     )
     return {

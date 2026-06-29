@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 
 try:
-    from . import helper_routing, script_analysis
+    from . import bridge_protocol, helper_routing, script_analysis
 except ImportError:  # Allows direct imports from addon/claude_blender.
+    import bridge_protocol
     import helper_routing
     import script_analysis
 
@@ -112,6 +113,11 @@ def blender_tool_definitions():
                     "brief": {
                         "type": "string",
                         "description": "Short animation intent or prompt contract to store with the playblast metadata.",
+                    },
+                    "shading": {
+                        "type": "string",
+                        "enum": bridge_protocol.PLAYBLAST_SHADING_MODES,
+                        "description": "Optional viewport shading for the capture. Defaults to the current viewport; use MATERIAL or RENDERED to review materials and lighting instead of flat solid shading.",
                     },
                 },
                 "additionalProperties": False,

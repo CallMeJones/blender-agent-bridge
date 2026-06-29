@@ -33,6 +33,24 @@ def main():
     for tool_name in ("draft_script", "draft_privileged_script"):
         code_schema = catalog_by_name[tool_name]["input_schema"]["properties"]["code"]
         assert code_schema["maxLength"] == script_analysis.MAX_SCRIPT_CHARS, code_schema
+
+    # Input-schema parity: when a tool declares an input schema in both the external catalog
+    # (agent_tools) and the bridge contract (bridge_protocol), their property names must match.
+    # This catches a field added to one schema but not the other (e.g. a new playblast option).
+    for tool_name, tool in catalog_by_name.items():
+        catalog_schema = tool.get("input_schema")
+        if not isinstance(catalog_schema, dict) or "properties" not in catalog_schema:
+            continue
+        contract_schema = bridge_protocol.TOOL_CONTRACTS.get(tool_name, {}).get("input_schema")
+        if not isinstance(contract_schema, dict) or "properties" not in contract_schema:
+            continue
+        catalog_props = set(catalog_schema["properties"])
+        contract_props = set(contract_schema["properties"])
+        assert catalog_props == contract_props, (
+            tool_name,
+            {"only_in_catalog": sorted(catalog_props - contract_props),
+             "only_in_contract": sorted(contract_props - catalog_props)},
+        )
     print("smoke_tool_contract_inventory: ok")
 
 
