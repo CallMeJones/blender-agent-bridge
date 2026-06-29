@@ -554,6 +554,31 @@ def _create_area_light(context, name, location, *, energy, size, color, target=N
     return obj
 
 
+def _scene_light_names(context):
+    """Names of render-visible lights already in the scene (composition awareness)."""
+    scene = getattr(context, "scene", None)
+    if scene is None:
+        return []
+    names = []
+    for obj in getattr(scene, "objects", []):
+        if getattr(obj, "type", "") == "LIGHT" and not getattr(obj, "hide_render", False):
+            names.append(obj.name)
+    return names
+
+
+def _existing_light_warning(existing_names, added_count, *, source):
+    """Warn when a helper stacks lights on top of an already-lit scene."""
+    if not existing_names or added_count <= 0:
+        return None
+    sample = ", ".join(existing_names[:4])
+    more = "" if len(existing_names) <= 4 else f", +{len(existing_names) - 4} more"
+    return (
+        f"Scene already had {len(existing_names)} render-visible light(s) before {source} added "
+        f"{added_count} more; stacking lighting rigs can over-expose the render. "
+        f"Hide or remove competing lights ({sample}{more}) if highlights blow out."
+    )
+
+
 def _create_wheel_parts(context, *, name, location, radius, thickness, axis, tire_material, rim_material):
     rotation = _axis_rotation(axis)
     bpy.ops.mesh.primitive_torus_add(
@@ -3534,6 +3559,15 @@ def add_copy_transform_constraint(
     return {"ok": True, "message": f"Added {constraint_type} constraint to {len(changed)} object(s)", "transaction_id": transaction["id"]}
 
 
+def _valid_render_engines(scene):
+    """Available render engine identifiers, or empty set when introspection fails."""
+    try:
+        prop = scene.render.bl_rna.properties["engine"]
+        return {item.identifier for item in prop.enum_items}
+    except Exception:
+        return set()
+
+
 def set_render_settings(
     context,
     *,
@@ -3546,6 +3580,16 @@ def set_render_settings(
     label="Set render settings",
 ):
     scene = context.scene
+    if engine:
+        valid_engines = _valid_render_engines(scene)
+        if valid_engines and str(engine) not in valid_engines:
+            return {
+                "ok": False,
+                "message": (
+                    f"Unsupported render engine: {engine}. "
+                    f"Available engines: {', '.join(sorted(valid_engines))}"
+                ),
+            }
     transaction = live_preview.begin(label)
     _record_scene_render(scene)
     if engine:
@@ -5186,6 +5230,7 @@ def create_studio_product_stage(
     target = bpy.data.objects.get(target_name) if target_name else context.active_object
     if target is None or not hasattr(target, "bound_box"):
         return {"ok": False, "message": "A target object with bounds is required for a studio stage"}
+    existing_lights = _scene_light_names(context) if lighting else []
     transaction = live_preview.begin(label, context)
     bounds = _bounds_world(target)
     min_x, min_y, min_z = bounds["min"]
@@ -5290,6 +5335,7 @@ def create_studio_product_stage(
     )
     live_preview.redraw(context)
     live_preview._mark_pending(context, label)
+    lighting_warning = _existing_light_warning(existing_lights, len(lights), source="the studio product stage")
     return {
         "ok": True,
         "message": f"Created product stage around {target.name}",
@@ -5297,6 +5343,8 @@ def create_studio_product_stage(
         "created_objects": created,
         "lights": lights,
         "camera": camera_name,
+        "lighting_warning": lighting_warning or "",
+        "warnings": [lighting_warning] if lighting_warning else [],
         "transaction_id": transaction["id"],
     }
 
@@ -5415,6 +5463,7 @@ def apply_lighting_preset(
         return {"ok": False, "message": "A target object with bounds is required for a lighting preset"}
     preset_key = str(preset or "product_softbox").lower()
     lights_spec = LIGHTING_PRESETS.get(preset_key) or LIGHTING_PRESETS["product_softbox"]
+    existing_lights = _scene_light_names(context)
     transaction = live_preview.begin(label, context)
     bounds = _bounds_world(target)
     center_x, center_y, center_z = bounds["center"]
@@ -5458,6 +5507,7 @@ def apply_lighting_preset(
     )
     live_preview.redraw(context)
     live_preview._mark_pending(context, label)
+    lighting_warning = _existing_light_warning(existing_lights, len(lights), source="the lighting preset")
     return {
         "ok": True,
         "message": f"Applied {preset_key if preset_key in LIGHTING_PRESETS else 'product_softbox'} lighting around {target.name}",
@@ -5465,6 +5515,8 @@ def apply_lighting_preset(
         "preset": preset_key if preset_key in LIGHTING_PRESETS else "product_softbox",
         "created_objects": created,
         "lights": lights,
+        "lighting_warning": lighting_warning or "",
+        "warnings": [lighting_warning] if lighting_warning else [],
         "transaction_id": transaction["id"],
     }
 
@@ -5891,6 +5943,7 @@ def apply_product_refinement_template(
     )
     live_preview.redraw(context)
     live_preview._mark_pending(context, label)
+    warnings = list(stage_result.get("warnings") or [])
     return {
         "ok": True,
         "message": f"Applied product refinement template around {target.name}",
@@ -5902,6 +5955,7 @@ def apply_product_refinement_template(
         "turntable": turntable_result,
         "created_objects": created,
         "features": features,
+        "warnings": warnings,
         "transaction_id": transaction["id"],
     }
 

@@ -120,6 +120,9 @@ def main():
         assert len(stage["lights"]) == 3
         assert stage["camera"]
         assert "studio stage" in stage["expected_changes"], stage
+        # Default scene already has the "Light" object, so stacking a stage rig must warn.
+        assert stage["warnings"], stage
+        assert "over-expose" in stage["lighting_warning"], stage
 
         callouts = _execute(context, "add_dimension_callouts", {"target_name": "Cube", "unit_label": "m"})
         assert {"width", "depth", "height"} == set(callouts["measurements"])
@@ -127,6 +130,9 @@ def main():
 
         lighting = _execute(context, "apply_lighting_preset", {"target_name": "Cube", "preset": "dramatic_rim"})
         assert len(lighting["lights"]) == 3
+        # The stage rig above is already live in this transaction, so the preset must warn too.
+        assert lighting["warnings"], lighting
+        assert "over-expose" in lighting["lighting_warning"], lighting
 
         _select_object(context, cube)
         palette = _execute(
@@ -148,6 +154,12 @@ def main():
 
         organized = _execute(context, "organize_scene_for_production", {"collection_prefix": "Agent Bridge Test Production"})
         assert organized["collections"], organized
+
+        # Engine guard: an unknown engine is refused cleanly (no dangling transaction),
+        # while the scene's current engine still applies.
+        bad_engine = _execute_failure(context, "set_render_settings", {"engine": "NOT_A_REAL_ENGINE"})
+        assert "Unsupported render engine" in bad_engine["message"], bad_engine
+        _execute(context, "set_render_settings", {"engine": context.scene.render.engine})
 
         _execute(context, "revert_preview", {})
         final = _snapshot(cube)

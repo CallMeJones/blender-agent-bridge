@@ -1161,6 +1161,28 @@ def main():
         assert timeout_content["data"]["resource_tool"] == "get_visual_evidence_resources", timeout_call
         assert timeout_content["data"]["poll_after_seconds"] == 5, timeout_call
 
+        # Unknown arguments must be rejected before reaching the bridge. This guards the
+        # additionalProperties:false contract on direct tools like start_render_job, so a
+        # malformed call surfaces an error instead of silently running with defaults.
+        unknown_arg_call = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 291,
+                "method": "tools/call",
+                "params": {
+                    "name": "start_render_job",
+                    "arguments": {"frame_start": 1, "not_a_real_arg": True},
+                },
+            },
+        )
+        assert unknown_arg_call["result"]["isError"] is True, unknown_arg_call
+        unknown_arg_content = unknown_arg_call["result"]["structuredContent"]
+        assert unknown_arg_content["code"] == "invalid_arguments", unknown_arg_call
+        assert any(
+            "not_a_real_arg" in str(error) for error in unknown_arg_content["data"]["errors"]
+        ), unknown_arg_call
+
         lifecycle_search = _send(
             proc,
             {
