@@ -1207,14 +1207,44 @@ TOOL_CONTRACTS = {
         "requires_live_preview": True,
     },
     "create_shader_material": {
-        "description": "Create or update a Principled BSDF material and optionally assign it",
+        "description": "Create or update a Principled BSDF material from explicit values or bounded presets and optionally assign it",
         "mutates_scene": True,
         "requires_live_preview": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "preset": {
+                    "type": "string",
+                    "enum": ["custom", "brushed_metal", "matte_plastic", "clear_glass", "emissive_accent", "matte_ceramic"],
+                },
+                "base_color": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 4},
+                "metallic": {"type": "number"},
+                "roughness": {"type": "number"},
+                "alpha": {"type": "number"},
+                "emission_color": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 4},
+                "emission_strength": {"type": "number"},
+                "assign_to_selected": {"type": "boolean"},
+                "label": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
     },
     "add_geometry_nodes_modifier": {
-        "description": "Add a valid passthrough Geometry Nodes modifier and node group",
+        "description": "Add a valid Geometry Nodes modifier and starter node group",
         "mutates_scene": True,
         "requires_live_preview": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "node_group_name": {"type": "string"},
+                "template": {"type": "string", "enum": ["passthrough", "transform", "join_geometry"]},
+                "selected_only": {"type": "boolean"},
+                "label": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
     },
     "create_shape_key": {
         "description": "Create or update a mesh shape key value",

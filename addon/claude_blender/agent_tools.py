@@ -21,7 +21,7 @@ AGENT_GUIDANCE = (
     "When the user asks to change the scene, use safe helper tools first so Blender changes immediately. "
     "Use direct Blender data concepts: objects, collections, materials, cameras, lights, actions, keyframes. "
     "For advanced 3D, 2D/storyboard, animation, simulation, compositor/render, or script-heavy tasks, call plan_advanced_scene_workflow first when the helper path is not obvious. It returns domain-specific helpers and script fallback boundaries. "
-    "For scene building and layout, prefer create_primitive, create_empty, duplicate_selected_objects, parent_selected_to_empty, align_selected_objects, distribute_selected_objects, set_object_visibility, set_object_display, assign_material_to_selected, assign_emission_material_to_selected, create_shader_material, create_text_object, create_curve_path, create_collection, link_selected_to_collection, add_light, add_camera, add_modifier_to_selected, add_geometry_nodes_modifier, apply_procedural_array_stack, create_procedural_object_kit, add_track_to_constraint, add_copy_transform_constraint, create_basic_armature, add_particle_system_to_selected, add_cloth_simulation_to_selected, set_render_settings, set_camera_settings, and set_world_background. "
+    "For scene building and layout, prefer create_primitive, create_empty, duplicate_selected_objects, parent_selected_to_empty, align_selected_objects, distribute_selected_objects, set_object_visibility, set_object_display, assign_material_to_selected, assign_emission_material_to_selected, create_shader_material, create_text_object, create_curve_path, create_collection, link_selected_to_collection, add_light, add_camera, add_modifier_to_selected, add_geometry_nodes_modifier, apply_procedural_array_stack, create_procedural_object_kit, add_track_to_constraint, add_copy_transform_constraint, create_basic_armature, add_particle_system_to_selected, add_cloth_simulation_to_selected, set_render_settings, set_camera_settings, and set_world_background. create_shader_material includes bounded material presets; add_geometry_nodes_modifier includes passthrough, transform, and join-geometry starter templates. "
     "For 2D, storyboard, animatic, cutout, or motion-graphics work, inspect first with get_2d_animation_details, then prefer create_storyboard_panels, create_2d_cutout_layer, create_camera_dolly_animation, capture_animation_playblast, and render jobs before drafting custom Grease Pencil or SVG Python. "
     "For model refinement and production presentation, prefer shade_smooth_selected, add_bevel_and_subsurf, apply_procedural_array_stack, create_procedural_object_kit, create_wheel_assembly, add_panel_seams, add_window_materials, apply_vehicle_refinement_template, apply_product_refinement_template, apply_character_refinement_template, create_studio_product_stage, add_dimension_callouts, apply_lighting_preset, create_material_palette, create_product_turntable_setup, and organize_scene_for_production when they fit the task. create_procedural_object_kit includes kitbash, radial/scatter/product, mechanical-joint, and control-panel templates for bounded prop generation before custom mesh scripts. "
     "For shape-key animation, prefer create_shape_key and animate_shape_key before drafting Python. "
@@ -1239,11 +1239,15 @@ def blender_tool_definitions():
         },
         {
             "name": "create_shader_material",
-            "description": "Create or update a Principled BSDF material and optionally assign it to selected mesh objects. Applies immediately with preview revert support.",
+            "description": "Create or update a Principled BSDF material from explicit values or bounded presets such as brushed metal, matte plastic, clear glass, emissive accent, or matte ceramic. Optionally assigns it to selected mesh objects and applies immediately with preview revert support.",
             "input_schema": {
                 "type": "object",
                 "properties": {
                     "name": {"type": "string"},
+                    "preset": {
+                        "type": "string",
+                        "enum": ["custom", "brushed_metal", "matte_plastic", "clear_glass", "emissive_accent", "matte_ceramic"],
+                    },
                     "base_color": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 4},
                     "metallic": {"type": "number"},
                     "roughness": {"type": "number"},
@@ -1253,22 +1257,21 @@ def blender_tool_definitions():
                     "assign_to_selected": {"type": "boolean"},
                     "label": {"type": "string"},
                 },
-                "required": ["name", "base_color"],
                 "additionalProperties": False,
             },
         },
         {
             "name": "add_geometry_nodes_modifier",
-            "description": "Add a valid passthrough Geometry Nodes modifier and node group to selected mesh objects. Applies immediately with preview revert support.",
+            "description": "Add a valid Geometry Nodes modifier and starter node group to selected mesh objects. Templates include passthrough, transform, and join geometry. Applies immediately with preview revert support.",
             "input_schema": {
                 "type": "object",
                 "properties": {
                     "name": {"type": "string"},
                     "node_group_name": {"type": "string"},
+                    "template": {"type": "string", "enum": ["passthrough", "transform", "join_geometry"]},
                     "selected_only": {"type": "boolean"},
                     "label": {"type": "string"},
                 },
-                "required": ["name", "node_group_name"],
                 "additionalProperties": False,
             },
         },

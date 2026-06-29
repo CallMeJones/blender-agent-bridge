@@ -1782,12 +1782,13 @@ def create_shader_material(context, args):
     return advanced_helpers.create_shader_material(
         context,
         name=str(args.get("name") or "Agent Bridge Shader Material"),
-        base_color=_float_list(args.get("base_color"), 4, (0.8, 0.8, 0.8, 1.0)),
-        metallic=float(args.get("metallic", 0.0)),
-        roughness=float(args.get("roughness", 0.5)),
-        alpha=float(args.get("alpha", 1.0)),
+        base_color=_float_list(args.get("base_color"), 4, (0.8, 0.8, 0.8, 1.0)) if "base_color" in args else None,
+        metallic=float(args["metallic"]) if "metallic" in args else None,
+        roughness=float(args["roughness"]) if "roughness" in args else None,
+        alpha=float(args["alpha"]) if "alpha" in args else None,
         emission_color=_optional_float_list(args.get("emission_color"), 4, (0.0, 0.0, 0.0, 1.0)),
-        emission_strength=float(args.get("emission_strength", 0.0)),
+        emission_strength=float(args["emission_strength"]) if "emission_strength" in args else None,
+        preset=str(args.get("preset") or "custom"),
         assign_to_selected=bool(args.get("assign_to_selected", True)),
         label=args.get("label", "Create shader material"),
     )
@@ -1798,6 +1799,7 @@ def add_geometry_nodes_modifier(context, args):
         context,
         name=str(args.get("name") or "Agent Bridge Geometry Nodes"),
         node_group_name=str(args.get("node_group_name") or "Agent Bridge Geometry Nodes"),
+        template=str(args.get("template") or "passthrough"),
         selected_only=bool(args.get("selected_only", True)),
         label=args.get("label", "Add Geometry Nodes modifier"),
     )
@@ -3445,6 +3447,7 @@ def _compact_targets(step):
     for key in (
         "objects",
         "selected_objects",
+        "assigned_objects",
         "actions",
         "materials",
         "created",
@@ -3455,7 +3458,7 @@ def _compact_targets(step):
         "cameras",
     ):
         value = step.get(key)
-        if not value:
+        if not value or isinstance(value, bool):
             continue
         if isinstance(value, list):
             names = []

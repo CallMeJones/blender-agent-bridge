@@ -180,6 +180,29 @@ def main():
         )
         assert material["material"] in bpy.data.materials
         assert cube.material_slots[0].material.name == material["material"]
+        glass = _execute(
+            context,
+            "create_shader_material",
+            {
+                "name": "Agent Bridge Advanced Glass Preset",
+                "preset": "clear_glass",
+            },
+        )
+        assert glass["preset"] == "clear_glass", glass
+        glass_material = bpy.data.materials[glass["material"]]
+        assert round(float(glass_material.diffuse_color[3]), 2) == 0.32, tuple(glass_material.diffuse_color)
+        assert cube.material_slots[0].material.name == glass["material"]
+        bpy.ops.object.select_all(action="DESELECT")
+        unassigned_material = _execute(
+            context,
+            "create_shader_material",
+            {
+                "name": "Agent Bridge Advanced Unassigned Preset",
+                "preset": "matte_ceramic",
+            },
+        )
+        assert unassigned_material["preview_change_report"]["targets"] == [unassigned_material["material"]], unassigned_material
+        _select_object(context, cube)
         existing_update = _execute(
             context,
             "create_shader_material",
@@ -198,9 +221,12 @@ def main():
         geometry_nodes = _execute(
             context,
             "add_geometry_nodes_modifier",
-            {"name": "Agent Bridge Advanced GN", "node_group_name": "Agent Bridge Advanced GN Group"},
+            {"name": "Agent Bridge Advanced GN", "node_group_name": "Agent Bridge Advanced GN Group", "template": "transform"},
         )
         assert geometry_nodes["node_group"] in bpy.data.node_groups
+        assert geometry_nodes["template"] == "transform", geometry_nodes
+        assert not geometry_nodes["warnings"], geometry_nodes
+        assert bpy.data.node_groups[geometry_nodes["node_group"]].nodes.get("Agent Bridge Transform Geometry")
         assert cube.modifiers.get("Agent Bridge Advanced GN")
 
         procedural = _execute(

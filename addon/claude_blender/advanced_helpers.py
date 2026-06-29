@@ -93,6 +93,48 @@ MATERIAL_PALETTES = {
     ],
 }
 
+SHADER_MATERIAL_PRESETS = {
+    "custom": {},
+    "brushed_metal": {
+        "base_color": (0.55, 0.56, 0.54, 1.0),
+        "metallic": 1.0,
+        "roughness": 0.28,
+        "alpha": 1.0,
+        "emission_strength": 0.0,
+    },
+    "matte_plastic": {
+        "base_color": (0.08, 0.18, 0.42, 1.0),
+        "metallic": 0.0,
+        "roughness": 0.72,
+        "alpha": 1.0,
+        "emission_strength": 0.0,
+    },
+    "clear_glass": {
+        "base_color": (0.72, 0.9, 1.0, 0.32),
+        "metallic": 0.0,
+        "roughness": 0.04,
+        "alpha": 0.32,
+        "emission_strength": 0.0,
+    },
+    "emissive_accent": {
+        "base_color": (0.05, 0.26, 1.0, 1.0),
+        "metallic": 0.0,
+        "roughness": 0.18,
+        "alpha": 1.0,
+        "emission_color": (0.05, 0.38, 1.0, 1.0),
+        "emission_strength": 1.8,
+    },
+    "matte_ceramic": {
+        "base_color": (0.86, 0.84, 0.78, 1.0),
+        "metallic": 0.0,
+        "roughness": 0.58,
+        "alpha": 1.0,
+        "emission_strength": 0.0,
+    },
+}
+
+GEOMETRY_NODE_TEMPLATES = {"passthrough", "transform", "join_geometry"}
+
 PRODUCT_REFINEMENT_STYLES = {
     "studio": {
         "material": ("Agent Bridge Product Satin White", (0.82, 0.84, 0.8, 1.0)),
@@ -637,16 +679,33 @@ def create_shader_material(
     context,
     *,
     name,
-    base_color,
-    metallic=0.0,
-    roughness=0.5,
-    alpha=1.0,
+    base_color=None,
+    metallic=None,
+    roughness=None,
+    alpha=None,
     emission_color=None,
-    emission_strength=0.0,
+    emission_strength=None,
+    preset="custom",
     assign_to_selected=True,
     label="Create shader material",
 ):
     transaction = live_preview.begin(label, context)
+    preset_key = str(preset or "custom").strip().lower().replace("-", "_").replace(" ", "_")
+    preset_spec = SHADER_MATERIAL_PRESETS.get(preset_key) or {}
+    if preset_key not in SHADER_MATERIAL_PRESETS:
+        preset_key = "custom"
+    if base_color is None:
+        base_color = preset_spec.get("base_color", (0.8, 0.8, 0.8, 1.0))
+    if metallic is None:
+        metallic = preset_spec.get("metallic", 0.0)
+    if roughness is None:
+        roughness = preset_spec.get("roughness", 0.5)
+    if alpha is None:
+        alpha = preset_spec.get("alpha", 1.0)
+    if emission_color is None:
+        emission_color = preset_spec.get("emission_color")
+    if emission_strength is None:
+        emission_strength = preset_spec.get("emission_strength", 0.0)
     material = bpy.data.materials.get(name)
     created = material is None
     if material is None:
@@ -700,6 +759,7 @@ def create_shader_material(
             "label": label,
             "material": material.name,
             "created": created,
+            "preset": preset_key,
             "assigned_objects": assigned,
         }
     )
@@ -709,9 +769,67 @@ def create_shader_material(
         "ok": True,
         "message": f"{'Created' if created else 'Updated'} shader material {material.name}",
         "material": material.name,
+        "preset": preset_key,
         "assigned_objects": assigned,
         "transaction_id": transaction["id"],
     }
+
+
+def _new_geometry_node(group, node_type, name, location, warnings):
+    try:
+        node = group.nodes.new(node_type)
+    except Exception as exc:
+        warnings.append(f"Could not create {node_type}: {type(exc).__name__}: {exc}")
+        return None
+    node.name = name
+    node.label = name
+    node.location = location
+    return node
+
+
+def _link_node_sockets(group, from_socket, to_socket, warnings):
+    if from_socket is None or to_socket is None:
+        warnings.append("Skipped a Geometry Nodes template link because a required socket was missing")
+        return False
+    try:
+        group.links.new(from_socket, to_socket)
+        return True
+    except Exception as exc:
+        warnings.append(f"Could not link Geometry Nodes sockets: {type(exc).__name__}: {exc}")
+        return False
+
+
+def _build_geometry_node_template(group, template):
+    template_key = str(template or "passthrough").strip().lower().replace("-", "_").replace(" ", "_")
+    if template_key not in GEOMETRY_NODE_TEMPLATES:
+        template_key = "passthrough"
+    warnings = []
+    group.interface.new_socket(name="Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
+    group.interface.new_socket(name="Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
+    group_input = group.nodes.new("NodeGroupInput")
+    group_output = group.nodes.new("NodeGroupOutput")
+    group_input.location = (-420, 0)
+    group_output.location = (260, 0)
+    source = group_input.outputs.get("Geometry")
+    target = group_output.inputs.get("Geometry")
+    if template_key == "transform":
+        transform = _new_geometry_node(group, "GeometryNodeTransform", "Agent Bridge Transform Geometry", (-80, 0), warnings)
+        if transform is not None:
+            _link_node_sockets(group, source, transform.inputs.get("Geometry"), warnings)
+            _link_node_sockets(group, transform.outputs.get("Geometry"), target, warnings)
+        else:
+            _link_node_sockets(group, source, target, warnings)
+    elif template_key == "join_geometry":
+        join = _new_geometry_node(group, "GeometryNodeJoinGeometry", "Agent Bridge Join Geometry", (-80, 0), warnings)
+        if join is not None:
+            geometry_input = join.inputs.get("Geometry")
+            _link_node_sockets(group, source, geometry_input, warnings)
+            _link_node_sockets(group, join.outputs.get("Geometry"), target, warnings)
+        else:
+            _link_node_sockets(group, source, target, warnings)
+    else:
+        _link_node_sockets(group, source, target, warnings)
+    return template_key, warnings
 
 
 def add_geometry_nodes_modifier(
@@ -719,6 +837,7 @@ def add_geometry_nodes_modifier(
     *,
     name,
     node_group_name,
+    template="passthrough",
     selected_only=True,
     label="Add Geometry Nodes modifier",
 ):
@@ -731,13 +850,12 @@ def add_geometry_nodes_modifier(
     if group is None:
         group = bpy.data.node_groups.new(node_group_name or "Agent Bridge Geometry Nodes", "GeometryNodeTree")
         live_preview._record_created_id("node_group", group.name)
-        group.interface.new_socket(name="Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
-        group.interface.new_socket(name="Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
-        group_input = group.nodes.new("NodeGroupInput")
-        group_output = group.nodes.new("NodeGroupOutput")
-        group_input.location = (-220, 0)
-        group_output.location = (220, 0)
-        group.links.new(group_input.outputs["Geometry"], group_output.inputs["Geometry"])
+        template_key, warnings = _build_geometry_node_template(group, template)
+    else:
+        template_key = str(template or "passthrough").strip().lower().replace("-", "_").replace(" ", "_")
+        if template_key not in GEOMETRY_NODE_TEMPLATES:
+            template_key = "passthrough"
+        warnings = ["Existing node group reused without editing its node tree, so preview rollback stays reversible."]
     changed = []
     for obj in targets:
         modifier = obj.modifiers.new(name or "Agent Bridge Geometry Nodes", "NODES")
@@ -751,6 +869,8 @@ def add_geometry_nodes_modifier(
             "objects": changed,
             "node_group": group.name,
             "created_group": created_group,
+            "template": template_key,
+            "warnings": warnings,
         }
     )
     live_preview.redraw(context)
@@ -760,6 +880,8 @@ def add_geometry_nodes_modifier(
         "message": f"Added Geometry Nodes modifier to {len(changed)} mesh object(s)",
         "objects": changed,
         "node_group": group.name,
+        "template": template_key,
+        "warnings": warnings,
         "transaction_id": transaction["id"],
     }
 

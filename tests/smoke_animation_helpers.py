@@ -309,6 +309,21 @@ def main():
         assert "create_directed_animation_shot" in move_call_names, move_plan
         assert not move_plan["generation_blockers"], move_plan
 
+        assert animation_brief._infer_action("Animate the truck moving forward over 48 frames.") == "move"
+        subject_truck_workflow = _execute(
+            context,
+            "plan_animation_workflow",
+            {
+                "prompt": "Animate the truck moving forward over 48 frames.",
+                "subject_names": ["Cube"],
+                "frame_start": 1,
+                "frame_end": 48,
+                "mode": "full",
+            },
+        )
+        subject_truck_plan = subject_truck_workflow["workflow"]
+        assert subject_truck_plan["brief"]["action"] == "move", subject_truck_plan
+
         crane_workflow = _execute(
             context,
             "plan_animation_workflow",
