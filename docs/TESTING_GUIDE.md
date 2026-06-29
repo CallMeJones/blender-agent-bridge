@@ -239,6 +239,14 @@ Invoke-RestMethod -Uri http://127.0.0.1:8765/tool -Method Post -ContentType appl
 Invoke-RestMethod -Uri http://127.0.0.1:8765/resources
 ```
 
+Fast evidence smoke from the repository root:
+
+```powershell
+python scripts\live_bridge_smoke.py
+```
+
+This checks bridge health, captures a viewport PNG, captures a tiny sampled playblast, and verifies `get_visual_evidence_resources` can see the latest artifacts.
+
 MCP stdio smoke against the live bridge:
 
 ```powershell
@@ -829,7 +837,7 @@ Required negative cases:
 - `open_blend_file`, `create_new_blender_project`, and save-as/copy refuse unconfirmed paths.
 - Sketchfab token arguments are redacted from logs and not written to preferences.
 - Render child processes do not inherit `BLENDER_BRIDGE_TOKEN` or `BLENDER_BRIDGE_URL`.
-- Trust grant expires or revokes and tokenless `run_approved_script` fails afterward.
+- Trust Off/reload/file-load/bridge-start revokes trust and tokenless `run_approved_script` fails afterward.
 
 ## Phase 9: Coverage Gap Audit
 

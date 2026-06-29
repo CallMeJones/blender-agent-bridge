@@ -35,7 +35,7 @@ Current implementation:
 - Execution pushes a Blender undo step when possible, saves a timestamped `.blend` checkpoint when enabled, and records stdout/errors in `Agent Bridge Script Log`.
 - Failed scripts keep their pending code, traceback, and logs available locally so the external client can inspect and stage a corrected draft.
 - External clients can normally call `run_approved_script` with a short-lived one-time token issued by the Blender UI for the current pending script.
-- Users can also enable a Blender-side external script trust window from sidebar presets. During that runtime-only window, external clients may call `draft_script` and have non-privileged scripts auto-run after static checks pass, or run an already staged non-privileged script without a per-script token. Blocked scripts remain refused. Timed grants expire; session grants last until Revoke, add-on reload, file load, or bridge start.
+- Users can also turn Blender-side external script trust on or off from the sidebar. During that runtime-only session trust, external clients may call `draft_script` and have non-privileged scripts auto-run after static checks pass, or run an already staged non-privileged script without a per-script token. Blocked scripts remain refused. Session trust lasts until Trust Off, add-on reload, file load, or bridge start.
 
 ### Limited Autonomous
 
@@ -63,7 +63,7 @@ Defaults and boundaries:
 - Add-on preferences can require a bearer token for HTTP bridge requests.
 - MCP clients call `mcp_server.py`; they do not import Blender Python or touch `bpy`.
 - Mutating helper tools still run inside Blender and use the live-preview/revert path.
-- Generated arbitrary Python is normally staged with `draft_script` or `draft_privileged_script` and must be approved in Blender. When the user grants a runtime external script trust window, `draft_script` auto-runs normal scripts that pass static checks until trust is revoked or expires.
+- Generated arbitrary Python is normally staged with `draft_script` or `draft_privileged_script` and must be approved in Blender. When the user turns on runtime external script trust, `draft_script` auto-runs normal scripts that pass static checks until trust is revoked or cleared by reload/file load/bridge start.
 - External script trust can run animation-like and helper-overlap scripts after static checks pass. Responses may still include helper advice so clients can choose a structured helper path when it clearly fits.
 - External script trust does not auto-run privileged external asset/project-file scripts or persistent simulation/cache bake/free operators; those require manual Run or a fresh one-time approval token.
 - Viewport screenshots, sampled animation playblast frames, inspection renders, render thumbnails, and async render-job outputs exposed through MCP resources are local artifacts. Saved `.blend` files use a project-local `.claude_blender/captures/` folder by default, while unsaved or unwritable projects use Blender's extension user-data directory. Async render jobs launch a background Blender process from a temporary `.blend` copy and can be cancelled with `cancel_render_job` while the bridge session is tracking the process.
@@ -119,7 +119,7 @@ Before approved execution:
 - Save a timestamped bridge-created `.blend` checkpoint when checkpoints are enabled.
 - Record the generated script and result log locally.
 - For external clients, require the approval token to match the current pending script and consume it before execution.
-- If an external script trust window is active, auto-run normal `draft_script` calls after static checks pass and accept tokenless external execution only within the runtime grant for a currently staged non-privileged script that still passes static checks.
+- If external script trust is active, auto-run normal `draft_script` calls after static checks pass and accept tokenless external execution only within the runtime grant for a currently staged non-privileged script that still passes static checks.
 - For animation-like scripts, enforce workflow-first routing before considering trust auto-run.
 
 During live preview:

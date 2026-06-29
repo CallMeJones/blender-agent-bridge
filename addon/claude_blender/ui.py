@@ -29,19 +29,6 @@ from . import (
 _docs_results = queue.Queue()
 _docs_timer_registered = False
 
-TRUST_DURATION_SECONDS = {
-    "MIN_15": 15 * 60,
-    "HOUR_1": 60 * 60,
-    "HOUR_4": 4 * 60 * 60,
-}
-
-TRUST_DURATION_BUTTON_TEXT = {
-    "MIN_15": "Trust 15 Min",
-    "HOUR_1": "Trust 1 Hour",
-    "HOUR_4": "Trust 4 Hours",
-    "SESSION": "Trust Session",
-}
-
 
 def _prefs(context):
     return preferences.get_preferences(context)
@@ -146,12 +133,12 @@ def _refresh_bridge_diagnostics_state(context, state, prefs):
     hash_match = diagnostics.get("addon_source_hash_match")
     match_text = "not provided" if hash_match is None else ("match" if hash_match else "mismatch")
     state.bridge_source_status = (
-        f"Runtime {runtime}; config hash {hash_status}/{match_text}; "
-        f"source {_short_hash(diagnostics.get('addon_source_hash'))}; "
-        f"expected {_short_hash(diagnostics.get('expected_addon_source_hash'))}"
+        f"Source: {runtime or 'unknown'} | Config hash: {hash_status or 'unknown'}/{match_text} | "
+        f"Add-on {_short_hash(diagnostics.get('addon_source_hash'))} | "
+        f"Expected {_short_hash(diagnostics.get('expected_addon_source_hash'))}"
     )
     state.bridge_diagnostics_status = (
-        f"{'On' if bridge_running else 'Off'} | {url} | "
+        f"Bridge: {'On' if bridge_running else 'Off'} | "
         f"Add-on {build_info.ADDON_VERSION} | Bridge {build_info.BRIDGE_VERSION} | "
         f"MCP {build_info.MCP_SERVER_VERSION} | Config {build_info.MCP_CONFIG_VERSION}"
     )
@@ -179,8 +166,9 @@ def _refresh_preview_manifest_state(state):
         created = sum(len(values) for values in (manifest.get("created") or {}).values())
         modified = sum(len(values) for values in (manifest.get("modified") or {}).values())
         state.preview_manifest_status = (
-            f"{status}: {manifest.get('applied_step_count', 0)} step(s), "
-            f"{manifest.get('snapshot_count', 0)} snapshot(s), {created} created, {modified} modified"
+            f"Preview: {str(status).title()}, {manifest.get('applied_step_count', 0)} step(s), "
+            f"{manifest.get('snapshot_count', 0)} rollback snapshot(s), "
+            f"{created} created, {modified} modified"
         )
     return body
 
@@ -194,8 +182,7 @@ def _refresh_audit_log_state(state, *, limit=40):
 
 def _resource_line(entry):
     entry = entry or {}
-    kind = str(entry.get("kind") or "resource")
-    available = "yes" if entry.get("available") else "no"
+    kind = str(entry.get("kind") or "resource").replace("_", " ")
     item_id = str(entry.get("id") or "")
     summary = entry.get("summary") or {}
     counts = []
@@ -205,14 +192,11 @@ def _resource_line(entry):
         counts.append(f"{summary['image_count']} image(s)")
     if summary.get("width") and summary.get("height"):
         counts.append(f"{summary['width']}x{summary['height']}")
-    status = str(entry.get("status") or entry.get("note") or "")
-    bits = [kind, f"available {available}"]
+    bits = [kind]
     if item_id:
         bits.append(item_id)
     if counts:
         bits.append(", ".join(counts))
-    if status:
-        bits.append(status[:120])
     return " | ".join(bits)
 
 
@@ -222,11 +206,11 @@ def _refresh_visual_evidence_state(context, state, prefs):
     latest = resources.get("latest_available") or {}
     if latest:
         state.visual_evidence_status = (
-            f"{resources.get('available_count', 0)} available | latest {_resource_line(latest)}"
+            f"Evidence: {resources.get('available_count', 0)} available | latest {_resource_line(latest)}"
         )
         state.visual_evidence_latest_path = str((latest.get("path_info") or {}).get("path") or latest.get("path") or "")
     else:
-        state.visual_evidence_status = f"0 available | {resources.get('resource_count', 0)} tracked resource type(s)"
+        state.visual_evidence_status = f"Evidence: 0 available | {resources.get('resource_count', 0)} tracked type(s)"
         state.visual_evidence_latest_path = ""
     body = json.dumps(resources, indent=2, sort_keys=True, default=str)
     state.visual_evidence_text_name = _write_text_datablock(
@@ -453,19 +437,17 @@ def _draw_ask_section(layout, state, prefs):
     trust_snapshot = script_runner.external_script_trust_snapshot(bpy.context, state=state)
     trust_active = trust_snapshot["active"]
     trust_status = trust_snapshot["status"]
+    trust_expired = trust_snapshot["expired"]
+    ask_box.label(text=f"Script Trust: {'On' if trust_active else 'Off'}")
     trust_row = ask_box.row(align=True)
-    trust_row.prop(state, "external_script_trust_duration", text="")
-    trust_preset = str(getattr(state, "external_script_trust_duration", "HOUR_1") or "HOUR_1")
-    trust = trust_row.operator(
-        "claude_blender.approve_external_script_trust",
-        text=TRUST_DURATION_BUTTON_TEXT.get(trust_preset, "Trust"),
-        icon="KEYTYPE_KEYFRAME_VEC",
-    )
-    trust.ttl_seconds = TRUST_DURATION_SECONDS.get(trust_preset, script_runner.EXTERNAL_TRUST_TTL_SECONDS)
-    trust.session_trust = trust_preset == "SESSION"
-    revoke_row = trust_row.row(align=True)
-    revoke_row.enabled = trust_active or trust_snapshot["expired"]
-    revoke_row.operator("claude_blender.revoke_external_script_trust", text="Revoke Trust", icon="CANCEL")
+    if trust_active:
+        trust_row.operator("claude_blender.revoke_external_script_trust", text="Trust Off", icon="CANCEL")
+    else:
+        trust = trust_row.operator("claude_blender.approve_external_script_trust", text="Trust On", icon="CHECKMARK")
+        trust.session_trust = True
+        trust.ttl_seconds = script_runner.EXTERNAL_TRUST_TTL_SECONDS
+        if trust_expired:
+            trust_row.operator("claude_blender.revoke_external_script_trust", text="Clear Expired", icon="TRASH")
     if trust_status != script_runner.NO_EXTERNAL_TRUST_STATUS:
         _draw_field(ask_box, "Script Trust", trust_status, width=44, max_lines=2)
 
@@ -571,7 +553,7 @@ def _draw_action_center(layout, state):
             _draw_field(actions, "External Approval", state.pending_script_external_approval_status, width=44, max_lines=2)
         trust_snapshot = script_runner.external_script_trust_snapshot(bpy.context, state=state)
         if trust_snapshot["active"] or trust_snapshot["expired"]:
-            _draw_field(actions, "Trust Window", trust_snapshot["status"], width=44, max_lines=2)
+            _draw_field(actions, "Script Trust", trust_snapshot["status"], width=44, max_lines=2)
         if state.pending_script_status == "Script failed" or state.last_script_error_summary:
             if state.last_script_error_summary:
                 _draw_field(actions, "Last Error", state.last_script_error_summary, width=44, max_lines=3)
@@ -653,7 +635,7 @@ class CLAUDEBLENDER_OT_approve_external_script_run(bpy.types.Operator):
 class CLAUDEBLENDER_OT_approve_external_script_trust(bpy.types.Operator):
     bl_idname = "claude_blender.approve_external_script_trust"
     bl_label = "Trust External Scripts"
-    bl_description = "Allow external clients to run staged, static-check-passing scripts for the selected time"
+    bl_description = "Turn on runtime session trust for staged, static-check-passing external scripts"
     bl_options = {"REGISTER"}
 
     ttl_seconds: bpy.props.IntProperty(
@@ -673,7 +655,7 @@ class CLAUDEBLENDER_OT_approve_external_script_trust(bpy.types.Operator):
             ttl_seconds=self.ttl_seconds,
             session=self.session_trust,
         )
-        message = result.get("message", "External script trust window finished")
+        message = result.get("message", "External script trust finished")
         if result.get("ok"):
             pending_auto_run = None
             if getattr(state, "pending_script", False):
@@ -691,8 +673,8 @@ class CLAUDEBLENDER_OT_approve_external_script_trust(bpy.types.Operator):
                 )
             else:
                 state.last_response = (
-                    "External script trust window approved.\n"
-                    "External clients can run staged scripts without a per-script token while this window is active.\n"
+                    "External script trust approved.\n"
+                    "External clients can run staged scripts without a per-script token while trust is active.\n"
                     f"Expires in {result.get('ttl_seconds', script_runner.EXTERNAL_TRUST_TTL_SECONDS)} second(s)."
                 )
             if pending_auto_run is not None:
@@ -711,9 +693,9 @@ class CLAUDEBLENDER_OT_approve_external_script_trust(bpy.types.Operator):
                     )
                     self.report({"WARNING"}, "Trust approved; pending script did not run")
                     return {"FINISHED"}
-            self.report({"INFO"}, "External script trust window approved")
+            self.report({"INFO"}, "External script trust approved")
             return {"FINISHED"}
-        state.last_response = f"External script trust window was not approved.\n{message}"
+        state.last_response = f"External script trust was not approved.\n{message}"
         self.report({"ERROR"}, message)
         return {"CANCELLED"}
 
@@ -727,7 +709,7 @@ class CLAUDEBLENDER_OT_revoke_external_script_trust(bpy.types.Operator):
     def execute(self, context):
         state = context.scene.claude_blender
         result = script_runner.revoke_external_script_trust_window(context)
-        message = result.get("message", "External script trust window revoked")
+        message = result.get("message", "External script trust revoked")
         state.last_response = message
         if result.get("ok"):
             self.report({"INFO"}, message)

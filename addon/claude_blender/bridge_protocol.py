@@ -1582,7 +1582,7 @@ TOOL_CONTRACTS = {
         "mutates_scene": True,
     },
     "draft_script": {
-        "description": "Stage generated Blender Python, or auto-run it after static checks when a Blender-side external script trust window is active",
+        "description": "Stage generated Blender Python, or auto-run it after static checks when Blender-side external script trust is active",
         "mutates_scene": True,
         "has_side_effects": True,
         "requires_approval": True,
@@ -1620,7 +1620,7 @@ TOOL_CONTRACTS = {
         },
     },
     "run_approved_script": {
-        "description": "Run a pending script with a one-time approval token or an active Blender-side trust window",
+        "description": "Run a pending script with a one-time approval token or active Blender-side script trust",
         "mutates_scene": True,
         "has_side_effects": True,
         "requires_approval": True,

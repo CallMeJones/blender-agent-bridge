@@ -10,6 +10,7 @@ build/
 *.zip
 *.blend1
 *.blend2
+test-artifacts/
 local/
 secrets.*
 .env

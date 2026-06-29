@@ -40,7 +40,24 @@ Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets
    Move the selected cube up 1 Blender unit and make it red. Leave the change as a preview.
    ```
 
-Live helper edits stay pending in Blender until you use `Commit`, `Revert`, or Blender undo. For Sketchfab downloads/imports, add `SKETCHFAB_API_TOKEN` to the copied MCP config `env` block before restarting the MCP client. For generated Python, use Blender's `Run`/`Reject` controls or grant temporary external script trust from the sidebar. Custom asset/project-file scripts use `draft_privileged_script`, require a path/URL/action manifest for user review and audit, and never auto-run under normal script trust. The privileged manifest is not a filesystem or network sandbox.
+Live helper edits stay pending in Blender until you use `Commit`, `Revert`, or Blender undo. For Sketchfab downloads/imports, add `SKETCHFAB_API_TOKEN` to the copied MCP config `env` block before restarting the MCP client. For generated Python, use Blender's `Run`/`Reject` controls or turn on session script trust from the sidebar. Custom asset/project-file scripts use `draft_privileged_script`, require a path/URL/action manifest for user review and audit, and never auto-run under normal script trust. The privileged manifest is not a filesystem or network sandbox.
+
+## After Updates
+
+Some MCP clients cache server paths, source hashes, and tool lists. After updating the extension:
+
+1. Restart Blender or disable/enable `Blender Agent Bridge`.
+2. Open the `Agent Bridge` sidebar panel and press `Start Bridge`.
+3. Press `Copy MCP Config`.
+4. Replace the client config with the copied config.
+5. Refresh or restart the MCP client.
+6. Ask the client to call `blender_bridge_status` and confirm the add-on, MCP server, and source hash are current.
+
+For a quick local smoke with Blender open and the bridge running:
+
+```powershell
+python scripts\live_bridge_smoke.py
+```
 
 After connecting, MCP results may include `guardrail_warnings`. These are advisory client-routing hints, not failures: follow them toward async external asset jobs, queued imports, background render/MP4 polling, user-confirmed file paths, approval-gated scripts, and preview commit/revert controls.
 
@@ -97,7 +114,7 @@ Connected agents do not get blanket access to Blender.
 | External assets | Poly Haven uses public catalog/file APIs. Sketchfab downloads/imports require a per-call API token or a token inherited by the MCP server environment. Tokens are redacted and not written to job metadata. |
 | Generated Python | Staged into a Text datablock and blocked until approved in Blender, unless runtime-only script trust is active. |
 | Privileged Python | Custom asset/project-file scripts require a manifest and one-time approval; normal script trust cannot auto-run them. |
-| External script trust | Optional sidebar preset for iterative sessions. Trust is runtime-only and can be revoked. Blocked scripts remain refused. |
+| External script trust | Optional sidebar on/off control for iterative sessions. Trust is runtime-only, session-scoped, and can be revoked. Blocked scripts remain refused. |
 | Audit and status | Local redacted JSONL audit events and bridge/MCP diagnostics are available through MCP resources and status calls. |
 | MCP guardrail warnings | Advisory hints in catalog, schema, and tool results steer clients toward async jobs, queued imports, user-confirmed paths, approval gates, dry-run cleanup, preview commit/revert, and background-job polling. |
 | Model provider keys | Not stored in Blender Agent Bridge. External clients bring their own model/provider connection. |
@@ -161,7 +178,7 @@ flowchart LR
   bridge --> scripts["Approval-gated Python"]
   helpers --> preview["Live preview transaction"]
   preview --> commit["Commit / Revert / Undo"]
-  scripts --> approve["Run / Reject / Trust Session"]
+  scripts --> approve["Run / Reject / Trust On/Off"]
 ```
 
 The MCP surface is compact by default, so clients do not need to load the whole helper catalog into prompt context. They get a small direct surface for status, scene listing, `.blend` diagnostics, external asset discovery/jobs, animation workflows, and async render jobs, plus `blender_tool_catalog` / `search_blender_tools` to search compact summaries. Fetch one schema only when needed with `get_blender_tool_schema`, then call it through `invoke_blender_tool`. When a result includes `guardrail_warnings`, treat them as routing and recovery hints before retrying direct fallback tools.
@@ -206,7 +223,7 @@ Check whether Sketchfab auth is available in this MCP config, then search for a 
 Check the current blend-file diagnostics and autosave only if the scene is already saved to a real .blend path.
 ```
 
-Live helper changes, including external asset imports, remain pending until you use `Commit`, `Revert`, or Blender undo. Generated Python remains pending until you use `Run`, `Approve External`, `Reject`, or an active trusted session allows it. Privileged generated Python for custom asset/project-file work remains pending until manual Run or a fresh one-time external approval token.
+Live helper changes, including external asset imports, remain pending until you use `Commit`, `Revert`, or Blender undo. Generated Python remains pending until you use `Run`, `Approve External`, `Reject`, or active session trust allows it. Privileged generated Python for custom asset/project-file work remains pending until manual Run or a fresh one-time external approval token.
 
 ## Install From Source
 

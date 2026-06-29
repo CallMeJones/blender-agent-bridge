@@ -3332,7 +3332,7 @@ def draft_privileged_script(context, args):
                 "They are not a filesystem or network sandbox; inspect the script before approval."
             ),
             "approval_policy": (
-                "Privileged asset/project-file scripts never auto-run under the normal external script trust window. "
+                "Privileged asset/project-file scripts never auto-run under normal external script trust. "
                 "Review the manifest in Blender, then run manually or issue a one-time external approval token."
             ),
         }

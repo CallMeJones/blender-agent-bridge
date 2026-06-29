@@ -3147,7 +3147,7 @@ def blender_tool_definitions():
             "description": (
                 "Stage Blender Python in a Text datablock for explicit user approval, or auto-run after static checks when external script trust is active. "
                 "Use only when safe helper tools cannot express the requested scene, animation, material, or rig change. "
-                "Blocked scripts are refused even during a trust window."
+                "Blocked scripts are refused even while external script trust is active."
             ),
             "input_schema": {
                 "type": "object",

@@ -340,7 +340,7 @@ print("created", obj.name)
 
         staged = script_runner.stage_script(
             context,
-            intent="Create a harmless object during the timed trust window",
+            intent="Create a harmless object while script trust is active",
             expected_changes=f"Creates mesh object {OBJECT_NAME}",
             risk_level="low",
             target_objects=[OBJECT_NAME],
@@ -401,7 +401,7 @@ print("created", obj.name)
 
         bake_guarded_under_trust = script_runner.stage_script(
             context,
-            intent="Bake persistent simulation cache during the trust window",
+            intent="Bake persistent simulation cache while script trust is active",
             expected_changes="Runs a point-cache bake",
             risk_level="high",
             target_objects=[],
@@ -622,7 +622,7 @@ print("created", obj.name)
 
         trusted_blocked = script_runner.stage_script(
             context,
-            intent="Try blocked code during an active trust window",
+            intent="Try blocked code while script trust is active",
             expected_changes="No scene changes should occur",
             risk_level="high",
             target_objects=[],
@@ -658,7 +658,7 @@ print("created", obj.name)
 
         trusted_second = script_runner.stage_script(
             context,
-            intent="Run a second script through the trust window",
+            intent="Run a second script through active script trust",
             expected_changes="A scene custom property is set",
             risk_level="low",
             target_objects=[],
@@ -692,7 +692,7 @@ print("created", obj.name)
         assert needs_approval["ok"], needs_approval
         missing_after_revoke = script_runner.run_externally_approved_script(context, "", checkpoint_enabled=False)
         assert not missing_after_revoke["ok"], missing_after_revoke
-        assert "trust window" in missing_after_revoke["message"], missing_after_revoke
+        assert "script trust" in missing_after_revoke["message"], missing_after_revoke
 
         approval = script_runner.approve_pending_script_for_external_run(context, ttl_seconds=60)
         assert approval["ok"], approval

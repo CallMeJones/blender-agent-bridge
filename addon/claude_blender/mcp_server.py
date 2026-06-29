@@ -1375,7 +1375,7 @@ def _guardrail_warnings_for_tool(tool, arguments=None):
                 "code": "explicit_one_time_approval_required",
                 "severity": "warning",
                 "message": (
-                    "This requires a fresh one-time approval in Blender; a session trust window cannot auto-run it."
+                    "This requires a fresh one-time approval in Blender; session script trust cannot auto-run it."
                 ),
                 "approval_policy": str(annotations.get("approvalPolicy") or ""),
             }

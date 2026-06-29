@@ -164,7 +164,7 @@ Expose external agents to narrow client tools rather than raw Python first:
 - `create_camera_orbit`: creates a keyframed camera orbit rig around a target object.
 - `commit_preview`: accepts the current live preview changes.
 - `revert_preview`: rolls back the current live preview changes.
-- `draft_script`: stores proposed code without running it by default; auto-runs after static checks while an external script trust window is active.
+- `draft_script`: stores proposed code without running it by default; auto-runs after static checks while external script trust is active.
 - `run_approved_script`: only runs code after explicit user approval.
 - `undo_last_action`: calls Blender undo for the last approved execution.
 - `save_checkpoint`: saves a copy of the current `.blend` before risky work.
@@ -224,7 +224,7 @@ Acceptance:
 - Add-on can create and modify Blender objects.
 - Failures show readable errors and do not silently corrupt state.
 
-Status: Initial approval-gated script flow is implemented. External agents can stage generated Python with `draft_script`; custom external asset and project-file lifecycle scripts use `draft_privileged_script` with a declared capability/path/URL/action manifest and mandatory one-time approval. The lean sidebar exposes bridge/trust controls plus pending script Run/Reject controls when needed; static checks block obvious risky imports/calls; execution pushes a Blender undo point when possible, saves a timestamped `.blend` checkpoint when enabled, and records stdout/errors in a local Text datablock. Failed scripts expose traceback/log context locally so external clients can draft a corrected script. When the user grants a runtime external script trust window, `draft_script` auto-runs non-privileged staged scripts that pass static checks, and `run_approved_script` remains available for already staged scripts. Privileged asset/project-file scripts never auto-run under broad trust.
+Status: Initial approval-gated script flow is implemented. External agents can stage generated Python with `draft_script`; custom external asset and project-file lifecycle scripts use `draft_privileged_script` with a declared capability/path/URL/action manifest and mandatory one-time approval. The lean sidebar exposes bridge/trust controls plus pending script Run/Reject controls when needed; static checks block obvious risky imports/calls; execution pushes a Blender undo point when possible, saves a timestamped `.blend` checkpoint when enabled, and records stdout/errors in a local Text datablock. Failed scripts expose traceback/log context locally so external clients can draft a corrected script. When the user turns on runtime external script trust, `draft_script` auto-runs non-privileged staged scripts that pass static checks, and `run_approved_script` remains available for already staged scripts. Privileged asset/project-file scripts never auto-run under broad trust.
 Tool-loop calls now have a larger output budget for complete `draft_script.code` payloads, and the dispatcher tolerates common alternate script field names before reporting missing code.
 
 ### Milestone 3.5: Live Preview Transactions

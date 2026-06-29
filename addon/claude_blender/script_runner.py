@@ -26,8 +26,8 @@ MAX_SCRIPT_CHARS = 500_000
 MAX_STATE_TEXT_CHARS = 1800
 EXTERNAL_APPROVAL_TTL_SECONDS = 300
 EXTERNAL_TRUST_TTL_SECONDS = 15 * 60
-NO_EXTERNAL_TRUST_STATUS = "No external script trust window"
-EXTERNAL_TRUST_EXPIRED_STATUS = "External script trust window expired"
+NO_EXTERNAL_TRUST_STATUS = "No external script trust"
+EXTERNAL_TRUST_EXPIRED_STATUS = "External script trust expired"
 EXTERNAL_TRUST_SESSION_STATUS = "External script trust active for this Blender session"
 CHECKPOINT_FILENAME_RE = re.compile(r"-(?:agent|claude)-\d{8}-\d{6}\.blend$", re.IGNORECASE)
 
@@ -325,13 +325,13 @@ def approve_external_script_trust_window(context, *, ttl_seconds=EXTERNAL_TRUST_
         status=state.external_script_trust_status,
     )
     transcript.record_system_message(
-        "User approved a timed external script trust window. "
+        "User approved external script trust. "
         "External clients may run staged scripts without a per-script token until it expires; "
         "blocked scripts and failing static checks remain refused."
     )
     return {
         "ok": True,
-        "message": "External script trust window approved",
+        "message": "External script trust approved",
         "expires_at": expires_at,
         "ttl_seconds": ttl,
         "session": False,
@@ -342,11 +342,11 @@ def revoke_external_script_trust_window(context):
     state = _scene_state(context)
     if not state:
         return {"ok": False, "message": "No Blender scene state is available"}
-    clear_external_script_trust(state=state, status="External script trust window revoked")
-    state.status = "External script trust window revoked"
-    _audit_external_script_trust("revoke", state=state, status="External script trust window revoked")
-    transcript.record_system_message("User revoked the external script trust window.")
-    return {"ok": True, "message": "External script trust window revoked"}
+    clear_external_script_trust(state=state, status="External script trust revoked")
+    state.status = "External script trust revoked"
+    _audit_external_script_trust("revoke", state=state, status="External script trust revoked")
+    transcript.record_system_message("User turned external script trust off.")
+    return {"ok": True, "message": "External script trust revoked"}
 
 
 def approve_pending_script_for_external_run(context, *, ttl_seconds=EXTERNAL_APPROVAL_TTL_SECONDS):
@@ -457,7 +457,7 @@ def validate_external_script_approval(context, approval_token):
                 "message": "External trusted window accepted",
                 "approval_mode": "trusted_window",
             }
-        return _external_approval_error(state, "Missing external approval token and no active external trust window")
+        return _external_approval_error(state, "Missing external approval token and no active external script trust")
     accepted = _validate_current_pending_script_for_external_run(context, state)
     if not accepted.get("ok"):
         return accepted
