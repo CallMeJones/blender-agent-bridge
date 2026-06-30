@@ -26,7 +26,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
-ADDON_MODULE = "bl_ext.user_default.claude_blender"
 DEFAULT_REQUIRED_TOOLS = (
     "blender_bridge_status",
     "plan_director_workflow",
@@ -152,7 +151,14 @@ def _wait_for_bridge(status_path: Path, process: subprocess.Popen[str], *, timeo
     raise TimeoutError(f"Timed out waiting for installed bridge startup. Last error: {last_error}")
 
 
-def _start_blender(blender: str, *, env: dict[str, str], profile_dir: Path, port: int) -> tuple[subprocess.Popen[str], str, dict]:
+def _start_blender(
+    blender: str,
+    *,
+    env: dict[str, str],
+    profile_dir: Path,
+    port: int,
+    timeout: float,
+) -> tuple[subprocess.Popen[str], str, dict]:
     status_path = profile_dir / "installed-bridge-status.json"
     startup_path = profile_dir / "start_installed_bridge.py"
     startup_path.write_text(
@@ -210,13 +216,16 @@ print("INSTALLED_BRIDGE_START", result, flush=True)
     )
     process._bab_log_handles = (stdout_handle, stderr_handle)  # type: ignore[attr-defined]
     try:
-        bridge_url, health = _wait_for_bridge(status_path, process, timeout=60)
+        bridge_url, health = _wait_for_bridge(status_path, process, timeout=timeout)
     except Exception:
-        for handle in (stdout_handle, stderr_handle):
-            handle.flush()
-        for log_path in (stdout_path, stderr_path):
-            if log_path.exists():
-                print(f"{log_path}:\n{_tail(log_path.read_text(encoding='utf-8', errors='replace'))}", file=sys.stderr)
+        try:
+            for handle in (stdout_handle, stderr_handle):
+                handle.flush()
+            for log_path in (stdout_path, stderr_path):
+                if log_path.exists():
+                    print(f"{log_path}:\n{_tail(log_path.read_text(encoding='utf-8', errors='replace'))}", file=sys.stderr)
+        finally:
+            _stop_blender(process)
         raise
     return process, bridge_url, health
 
@@ -341,7 +350,13 @@ def main(argv: list[str] | None = None) -> int:
             raise RuntimeError("Installed extension was not listed by Blender")
 
         _disable_startup_splash(blender, env=env, timeout=args.timeout)
-        process, bridge_url, health = _start_blender(blender, env=env, profile_dir=profile_dir, port=args.port)
+        process, bridge_url, health = _start_blender(
+            blender,
+            env=env,
+            profile_dir=profile_dir,
+            port=args.port,
+            timeout=args.timeout,
+        )
         _verify_installed_health(health, profile_dir)
         print(
             "installed bridge ok:",
