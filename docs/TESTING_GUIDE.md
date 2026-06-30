@@ -223,6 +223,14 @@ Pass criteria:
 
 Run when changing `bridge_server.py`, `mcp_server.py`, `bridge_protocol.py`, `agent_tools.py`, `tool_dispatcher.py`, resource handling, prompts, copied MCP config, source hashes, bridge auth, or tool routing.
 
+Installed-extension end-to-end smoke from the repository root:
+
+```powershell
+python scripts\installed_extension_live_smoke.py --blender "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --keep-profile
+```
+
+This builds the extension ZIP, installs it into a temporary Blender profile, starts the bridge from the installed extension, runs the live workflow sweep, captures viewport/playblast evidence, verifies the installed MCP server over stdio, and stops Blender. Use `--keep-profile` only when you want to inspect the captured artifacts after the run.
+
 Manual setup:
 
 1. Open Blender with the tested extension installed or linked.

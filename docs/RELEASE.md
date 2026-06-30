@@ -140,7 +140,7 @@ blender --online-mode --command extension list -s
 - Confirm the generated zip includes `LICENSE` at the package root.
 - Install the zip into a clean Blender profile.
 - Verify the GitHub Pages extension repository install path from a clean temporary Blender profile.
-- Start the External Bridge and run an MCP smoke against the installed extension.
-- Capture one viewport screenshot and one sampled animation playblast, then confirm project-local or fallback capture storage behaves as documented.
+- Run `python scripts\installed_extension_live_smoke.py --blender "<path-to-blender>"` to verify the installed extension can start the External Bridge, serve the live helper workflow, expose MCP stdio tools, and capture viewport/playblast evidence.
+- Confirm project-local or fallback capture storage behaves as documented.
 - Review `SECURITY.md`, `PRIVACY.md`, and declared manifest permissions.
 - Scan the zip for secrets, generated logs, checkpoints, screenshots, playblast frame sequences, caches, and private `.blend` files.
