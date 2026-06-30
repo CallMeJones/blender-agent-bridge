@@ -1717,6 +1717,28 @@ TOOL_CONTRACTS = {
         "mutates_scene": True,
         "requires_live_preview": True,
     },
+    "prepare_imported_asset_presentation": {
+        "description": "Organize imported asset objects, fill missing mesh materials, and create a bounded studio/turntable presentation setup after an import job completes",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+        "output_schema": LIGHTING_AWARE_OUTPUT_SCHEMA,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "imported_object_names": {"type": "array", "items": {"type": "string"}},
+                "target_object_name": {"type": "string"},
+                "selected_only": {"type": "boolean"},
+                "use_active_fallback": {"type": "boolean"},
+                "collection_prefix": {"type": "string"},
+                "presentation_preset": {"type": "string", "enum": ["studio", "catalog", "turntable", "lookdev"]},
+                "assign_material_if_missing": {"type": "boolean"},
+                "create_stage": {"type": "boolean"},
+                "create_turntable": {"type": "boolean"},
+                "label": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
+    },
     "organize_scene_for_production": {
         "description": "Link scene objects into production-oriented collections without deleting source links",
         "mutates_scene": True,

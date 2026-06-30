@@ -336,6 +336,23 @@ def main():
         assert async_poly_import_status["asset_import_job"]["phase"] == "import", async_poly_import_status
         assert async_poly_import_status["asset_import_job"]["import_result"]["ok"] is True, async_poly_import_status
         assert "SmokeImportedModel" in async_poly_import_status["asset_import_job"]["import_result"]["imported_objects"], async_poly_import_status
+        async_poly_presentation = _execute(
+            bpy.context,
+            "prepare_imported_asset_presentation",
+            {
+                "imported_object_names": async_poly_import_status["asset_import_job"]["import_result"]["imported_objects"],
+                "target_object_name": "SmokeImportedModel",
+                "collection_prefix": "Smoke Imported Asset",
+                "presentation_preset": "studio",
+                "assign_material_if_missing": True,
+                "create_stage": True,
+            },
+        )
+        assert async_poly_presentation["target"] == "SmokeImportedModel", async_poly_presentation
+        assert async_poly_presentation["selection_source"] == "explicit_names", async_poly_presentation
+        assert async_poly_presentation["organization"]["ok"] is True, async_poly_presentation
+        assert async_poly_presentation["stage"]["ok"] is True, async_poly_presentation
+        assert "missing material fill" in async_poly_presentation["features"], async_poly_presentation
         assert live_preview.revert(bpy.context)["ok"] is True
 
         cancel_import_job = _execute(

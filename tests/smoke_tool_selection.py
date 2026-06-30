@@ -85,6 +85,7 @@ def main():
         assert "plan_asset_import_workflow" in asset_script_names, asset_script_meta
         assert "start_external_asset_download" in asset_script_names, asset_script_meta
         assert "start_external_asset_import_job" in asset_script_names, asset_script_meta
+        assert "prepare_imported_asset_presentation" in asset_script_names, asset_script_meta
         assert "draft_script" not in asset_script_names, asset_script_meta
         assert "draft_privileged_script" in asset_script_names, asset_script_meta
 
@@ -95,6 +96,7 @@ def main():
         custom_asset_script_names = _names(custom_asset_script_tools)
         assert "plan_asset_import_workflow" in custom_asset_script_names, custom_asset_script_meta
         assert "start_external_asset_download" in custom_asset_script_names, custom_asset_script_meta
+        assert "prepare_imported_asset_presentation" in custom_asset_script_names, custom_asset_script_meta
         assert "draft_script" not in custom_asset_script_names, custom_asset_script_meta
         assert "draft_privileged_script" in custom_asset_script_names, custom_asset_script_meta
 

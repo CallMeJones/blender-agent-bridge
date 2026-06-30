@@ -112,6 +112,7 @@ def main():
     assert asset_guard["blocked"], asset_guard
     assert asset_guard["code"] == "external_asset_workflow_required", asset_guard
     assert "plan_asset_import_workflow" in asset_guard["recommended_tools"], asset_guard
+    assert "prepare_imported_asset_presentation" in asset_guard["recommended_tools"], asset_guard
 
     custom_asset_guard = helper_routing.helper_first_script_guard(
         "Write a custom Python script to download and import a Poly Haven sunset HDRI."

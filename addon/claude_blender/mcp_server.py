@@ -68,6 +68,7 @@ COMPACT_DIRECT_TOOL_NAMES = (
     "cancel_external_asset_job",
     "start_external_asset_import_job",
     "get_external_asset_import_job_status",
+    "prepare_imported_asset_presentation",
     "cancel_external_asset_import_job",
 )
 CATALOG_TOOL_NAME = "blender_tool_catalog"
@@ -232,6 +233,8 @@ EXTERNAL_ASSET_STRONG_ROUTE_TERMS = {
     "external assets",
     "hdri",
     "hdris",
+    "imported asset",
+    "imported assets",
     "model library",
     "poly haven",
     "polyhaven",
@@ -284,6 +287,7 @@ EXTERNAL_ASSET_WORKFLOW_TOOLS = {
     "cancel_external_asset_job",
     "start_external_asset_import_job",
     "get_external_asset_import_job_status",
+    "prepare_imported_asset_presentation",
     "cancel_external_asset_import_job",
     "get_external_asset_cache_diagnostics",
 }
@@ -625,7 +629,9 @@ PROMPTS = {
             "or search_sketchfab_models for discovery. For any download/cache or import request, first choose "
             "a concrete Poly Haven asset_id or Sketchfab uid, then call start_external_asset_download and "
             "poll get_external_asset_job_status until completed or failed. Then call start_external_asset_import_job for scene import and poll "
-            "get_external_asset_import_job_status until completed or failed. Use cancel_external_asset_job or "
+            "get_external_asset_import_job_status until completed or failed. After import completes, call "
+            "prepare_imported_asset_presentation with imported_object_names from the import result before "
+            "visual evidence capture. Use cancel_external_asset_job or "
             "cancel_external_asset_import_job if the user asks to stop. Treat download_poly_haven_asset, "
             "import_poly_haven_asset, download_sketchfab_model, import_sketchfab_model, and "
             "import_external_asset_job_result as synchronous fallback/debug paths, not the normal client workflow."
@@ -1061,6 +1067,7 @@ def _tool_category(tool):
         "import_external_asset_job_result",
         "start_external_asset_import_job",
         "get_external_asset_import_job_status",
+        "prepare_imported_asset_presentation",
         "cancel_external_asset_import_job",
         "delete_external_asset_job",
         "get_external_asset_cache_diagnostics",
@@ -1319,6 +1326,8 @@ def _score_tool_match(tool, query):
             score += 900
         elif name == "get_external_asset_import_job_status":
             score += 850
+        elif name == "prepare_imported_asset_presentation":
+            score += 780
         elif name in {"search_poly_haven_assets", "search_sketchfab_models", "inspect_poly_haven_asset_files"}:
             score += 600
         elif name in EXTERNAL_ASSET_WORKFLOW_TOOLS:
@@ -1716,7 +1725,7 @@ class BlenderMCPServer:
                 "plan_advanced_scene_workflow first when the helper path is unclear. "
                 "For external asset downloads/imports, use the async path by default after discovery selects a concrete "
                 "asset_id or uid: start_external_asset_download, poll get_external_asset_job_status, then start_external_asset_import_job and poll "
-                "get_external_asset_import_job_status. Treat direct provider download/import tools as synchronous "
+                "get_external_asset_import_job_status, then call prepare_imported_asset_presentation for cleanup/staging. Treat direct provider download/import tools as synchronous "
                 "fallbacks for explicit direct/debug use. "
                 "If a bridge_timeout occurs, treat it as recoverable: wait the returned poll_after_seconds, call "
                 "blender_bridge_status, then inspect visual evidence resources or audit logs before rerunning work. "

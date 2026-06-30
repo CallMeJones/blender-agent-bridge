@@ -4059,6 +4059,20 @@ def _infer_asset_provider(prompt, provider=""):
     return "poly_haven" if any(term in text for term in ("poly haven", "polyhaven", "hdri", "texture", "environment map")) else ""
 
 
+def _infer_presentation_preset(prompt, preset=""):
+    requested = str(preset or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if requested in {"studio", "catalog", "turntable", "lookdev"}:
+        return requested
+    text = str(prompt or "").lower()
+    if "turntable" in text or "spin" in text or "360" in text:
+        return "turntable"
+    if "catalog" in text or "dimension" in text or "callout" in text:
+        return "catalog"
+    if "lookdev" in text or "look dev" in text or "material preview" in text:
+        return "lookdev"
+    return "studio"
+
+
 def _infer_object_kit_template(prompt):
     text = str(prompt or "").lower()
     if any(term in text for term in ("mechanical assembly", "actuator", "exploded assembly", "bracket assembly")):
@@ -4162,26 +4176,22 @@ def plan_asset_import_workflow(
         "uid": uid_text,
     }
     import_args = {"source_job_id": "<asset_job_id>", "target_object_name": target_name}
+    preset_key = _infer_presentation_preset(prompt, presentation_preset)
     post_import_target = target_name or "<imported_object_name>"
     presentation = [
         _planned_tool_call(
-            "organize_scene_for_production",
-            {"collection_prefix": "Agent Bridge Imported Asset", "selected_only": False},
-            reason="Link imported data into production-oriented collections without deleting source links.",
-            mutates_scene=True,
-            requires_live_preview=True,
-        ),
-        _planned_tool_call(
-            "create_material_palette",
-            {"palette": "product_neutral", "create_swatches": False},
-            reason="Prepare a bounded material palette for asset cleanup or presentation.",
-            mutates_scene=True,
-            requires_live_preview=True,
-        ),
-        _planned_tool_call(
-            "create_studio_product_stage",
-            {"target_name": post_import_target, "stage_name": f"Agent Bridge {presentation_preset or 'Studio'} Asset Stage"},
-            reason="Create a safe product/studio presentation stage around the imported asset.",
+            "prepare_imported_asset_presentation",
+            {
+                "imported_object_names": ["<imported_object_name>"],
+                "target_object_name": post_import_target,
+                "collection_prefix": "Agent Bridge Imported Asset",
+                "presentation_preset": preset_key,
+                "assign_material_if_missing": True,
+                "create_stage": True,
+                "create_turntable": preset_key == "turntable",
+                "use_active_fallback": False,
+            },
+            reason="Organize imported objects, fill missing materials, and create a bounded presentation setup in preview.",
             mutates_scene=True,
             requires_live_preview=True,
         ),
@@ -4278,6 +4288,7 @@ def plan_asset_import_workflow(
                 "get_external_asset_job_status",
                 "start_external_asset_import_job",
                 "get_external_asset_import_job_status",
+                "prepare_imported_asset_presentation",
             ],
             "synchronous_fallbacks_debug_only": ["download_poly_haven_asset", "import_poly_haven_asset", "download_sketchfab_model", "import_sketchfab_model", "import_external_asset_job_result"],
             "custom_asset_scripts": "Use draft_privileged_script with declared paths/URLs/actions when provider helpers cannot express the workflow.",
@@ -6540,6 +6551,225 @@ def create_product_turntable_setup(
         "stage": stage_result,
         "animation": animation_result,
         "camera_orbit": orbit_result,
+        "transaction_id": transaction["id"],
+    }
+
+
+def _asset_presentation_objects(
+    context,
+    *,
+    imported_object_names=None,
+    target_object_name="",
+    selected_only=False,
+    use_active_fallback=True,
+):
+    names = []
+    target_object_name = str(target_object_name or "").strip()
+    if target_object_name and not target_object_name.startswith("<"):
+        names.append(target_object_name)
+    for name in imported_object_names or []:
+        text = str(name or "").strip()
+        if text and not text.startswith("<") and text not in names:
+            names.append(text)
+    objects = []
+    missing = []
+    seen = set()
+    for name in names:
+        obj = bpy.data.objects.get(name)
+        if obj is None:
+            missing.append(name)
+            continue
+        if not hasattr(obj, "bound_box"):
+            continue
+        if obj.name not in seen:
+            objects.append(obj)
+            seen.add(obj.name)
+    if objects:
+        return objects, missing, "explicit_names"
+
+    if selected_only:
+        for obj in context.selected_objects:
+            if obj and hasattr(obj, "bound_box") and obj.name not in seen:
+                objects.append(obj)
+                seen.add(obj.name)
+        if objects:
+            return objects, missing, "selected_objects"
+
+    active = context.active_object if use_active_fallback else None
+    if active and hasattr(active, "bound_box"):
+        return [active], missing, "active_object"
+    return [], missing, "none"
+
+
+def _largest_bounds_object(objects):
+    best = None
+    best_volume = -1.0
+    for obj in objects or []:
+        try:
+            sx, sy, sz = _bounds_world(obj)["size"]
+            volume = max(0.0, float(sx)) * max(0.0, float(sy)) * max(0.0, float(sz))
+        except Exception:
+            volume = 0.0
+        if best is None or volume > best_volume:
+            best = obj
+            best_volume = volume
+    return best
+
+
+def prepare_imported_asset_presentation(
+    context,
+    *,
+    imported_object_names=None,
+    target_object_name="",
+    selected_only=False,
+    use_active_fallback=True,
+    collection_prefix="Agent Bridge Imported Asset",
+    presentation_preset="studio",
+    assign_material_if_missing=True,
+    create_stage=True,
+    create_turntable=False,
+    label="Prepare imported asset presentation",
+):
+    """Organize imported scene objects and build a bounded presentation setup."""
+
+    objects, missing, source = _asset_presentation_objects(
+        context,
+        imported_object_names=imported_object_names,
+        target_object_name=target_object_name,
+        selected_only=selected_only,
+        use_active_fallback=use_active_fallback,
+    )
+    if not objects:
+        return {
+            "ok": False,
+            "message": "Imported object names, selected objects, or an active object with bounds are required",
+            "missing_object_names": missing,
+            "selection_source": source,
+        }
+
+    target = bpy.data.objects.get(target_object_name) if target_object_name and not str(target_object_name).startswith("<") else None
+    if target not in objects or not hasattr(target, "bound_box"):
+        target = _largest_bounds_object(objects)
+    if target is None:
+        return {"ok": False, "message": "A bounded target object is required for imported asset presentation"}
+
+    preset_key = _infer_presentation_preset("", presentation_preset)
+    collection_prefix = str(collection_prefix or "Agent Bridge Imported Asset")
+    transaction = live_preview.begin(label, context)
+    assigned = []
+    material_name = ""
+    with _preserve_selection(context):
+        bpy.ops.object.select_all(action="DESELECT")
+        for obj in objects:
+            obj.select_set(True)
+        context.view_layer.objects.active = target
+
+        organization_result = organize_scene_for_production(
+            context,
+            collection_prefix=collection_prefix,
+            selected_only=True,
+            label=label,
+        )
+
+        if assign_material_if_missing:
+            material = _material_for_color(f"{collection_prefix} Neutral Material", (0.64, 0.63, 0.59, 1.0))
+            material_name = material.name
+            for obj in objects:
+                if obj.type != "MESH" or not obj.data:
+                    continue
+                if obj.material_slots:
+                    continue
+                live_preview._record_object_materials(obj)
+                obj.data.materials.append(material)
+                assigned.append({"object": obj.name, "material": material.name})
+
+        palette_result = create_material_palette(
+            context,
+            palette_name=f"{collection_prefix} Palette",
+            palette="product_neutral" if preset_key != "lookdev" else "cinematic",
+            create_swatches=False,
+            assign_to_selected=False,
+            label=label,
+        )
+
+        stage_result = {}
+        if create_stage:
+            stage_result = create_studio_product_stage(
+                context,
+                target_name=target.name,
+                stage_name=f"{collection_prefix} Stage",
+                floor=True,
+                backdrop=preset_key != "lookdev",
+                lighting=True,
+                camera=True,
+                label=label,
+            )
+
+        turntable_result = {}
+        if create_turntable or preset_key == "turntable":
+            turntable_result = create_product_turntable_setup(
+                context,
+                target_name=target.name,
+                frame_start=context.scene.frame_start,
+                frame_end=max(context.scene.frame_end, context.scene.frame_start + 96),
+                revolutions=1.0,
+                setup_name=f"{collection_prefix} Turntable",
+                create_stage=False,
+                label=label,
+            )
+
+    created = []
+    created.extend(stage_result.get("created_objects") or [])
+    if turntable_result.get("camera_orbit", {}).get("camera"):
+        created.append(turntable_result["camera_orbit"]["camera"])
+    features = ["production collections"]
+    if assigned:
+        features.append("missing material fill")
+    if palette_result.get("ok"):
+        features.append("material palette")
+    if stage_result.get("ok"):
+        features.append("studio stage")
+    if turntable_result.get("ok"):
+        features.append("turntable review")
+    transaction["applied_steps"].append(
+        {
+            "type": "prepare_imported_asset_presentation",
+            "label": label,
+            "target": target.name,
+            "objects": [obj.name for obj in objects],
+            "selection_source": source,
+            "collection_prefix": collection_prefix,
+            "presentation_preset": preset_key,
+            "assigned_materials": assigned,
+            "created_objects": created,
+            "features": features,
+            "expected_changes": (
+                f"Prepares imported asset objects around {target.name}: "
+                f"{', '.join(features)}."
+            ),
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    warnings = list(stage_result.get("warnings") or [])
+    return {
+        "ok": True,
+        "message": f"Prepared imported asset presentation for {target.name}",
+        "target": target.name,
+        "objects": [obj.name for obj in objects],
+        "missing_object_names": missing,
+        "selection_source": source,
+        "collection_prefix": collection_prefix,
+        "presentation_preset": preset_key,
+        "organization": organization_result,
+        "material": material_name,
+        "assigned_materials": assigned,
+        "palette": palette_result,
+        "stage": stage_result,
+        "turntable": turntable_result,
+        "created_objects": created,
+        "features": features,
+        "warnings": warnings,
         "transaction_id": transaction["id"],
     }
 

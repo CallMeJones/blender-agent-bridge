@@ -27,6 +27,7 @@ ADVANCED_TOOLS = {
     "create_procedural_object_kit",
     "create_camera_dolly_animation",
     "create_directed_animation_shot",
+    "prepare_imported_asset_presentation",
     "add_cloth_simulation_to_selected",
     "create_shader_material",
     "add_geometry_nodes_modifier",
@@ -169,6 +170,11 @@ def main():
         concrete_download = next(call for phase in concrete_asset_plan["phases"] for call in phase["tool_calls"] if call["name"] == "start_external_asset_download")
         assert concrete_download["input"]["asset_id"] == "agent_bridge_test_asset", concrete_asset_plan
         assert not concrete_download["input"]["uid"], concrete_asset_plan
+        concrete_present = next(call for phase in concrete_asset_plan["phases"] for call in phase["tool_calls"] if call["name"] == "prepare_imported_asset_presentation")
+        assert concrete_present["input"]["presentation_preset"] == "studio", concrete_asset_plan
+        assert concrete_present["input"]["imported_object_names"] == ["<imported_object_name>"], concrete_asset_plan
+        assert concrete_present["input"]["use_active_fallback"] is False, concrete_asset_plan
+        assert concrete_present["requires_live_preview"] is True, concrete_asset_plan
         ambiguous_asset_plan = _execute(
             context,
             "plan_asset_import_workflow",

@@ -30,6 +30,7 @@ REFINEMENT_TOOLS = {
     "apply_lighting_preset",
     "create_material_palette",
     "create_product_turntable_setup",
+    "prepare_imported_asset_presentation",
     "organize_scene_for_production",
 }
 
@@ -151,6 +152,27 @@ def main():
         )
         assert turntable["animation"]["action"], turntable
         assert turntable["camera_orbit"]["camera"], turntable
+
+        imported_presentation = _execute(
+            context,
+            "prepare_imported_asset_presentation",
+            {
+                "imported_object_names": ["Cube"],
+                "target_object_name": "Cube",
+                "collection_prefix": "Agent Bridge Test Imported Asset",
+                "presentation_preset": "turntable",
+                "assign_material_if_missing": False,
+                "create_stage": True,
+                "create_turntable": True,
+            },
+        )
+        assert imported_presentation["target"] == "Cube", imported_presentation
+        assert imported_presentation["organization"]["ok"] is True, imported_presentation
+        assert imported_presentation["stage"]["ok"] is True, imported_presentation
+        assert imported_presentation["turntable"]["ok"] is True, imported_presentation
+        assert "production collections" in imported_presentation["features"], imported_presentation
+        assert "turntable review" in imported_presentation["features"], imported_presentation
+        assert "imported asset" in imported_presentation["expected_changes"].lower(), imported_presentation
 
         organized = _execute(context, "organize_scene_for_production", {"collection_prefix": "Agent Bridge Test Production"})
         assert organized["collections"], organized

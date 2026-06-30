@@ -48,7 +48,7 @@ ROUTING_FIXTURES = [
     {
         "id": "asset_import_async_path",
         "prompt": "Find a Poly Haven model, download it, import it, organize it, make a studio presentation, and capture viewport evidence.",
-        "must_select": ["plan_asset_import_workflow", "start_external_asset_download", "get_external_asset_job_status", "start_external_asset_import_job", "get_external_asset_import_job_status"],
+        "must_select": ["plan_asset_import_workflow", "start_external_asset_download", "get_external_asset_job_status", "start_external_asset_import_job", "get_external_asset_import_job_status", "prepare_imported_asset_presentation"],
         "must_not_select": ["draft_script"],
         "search": "poly haven asset import organize studio presentation workflow",
         "search_before": [("plan_asset_import_workflow", "download_poly_haven_asset"), ("start_external_asset_download", "download_poly_haven_asset")],
@@ -56,7 +56,7 @@ ROUTING_FIXTURES = [
     {
         "id": "director_orchestration",
         "prompt": "Director workflow: import an asset, build a product scene, animate a reveal, review evidence, repair, and ask me to commit or revert.",
-        "must_select": ["plan_director_workflow", "plan_asset_import_workflow", "plan_advanced_scene_workflow", "run_animation_workflow", "capture_viewport"],
+        "must_select": ["plan_director_workflow", "plan_asset_import_workflow", "plan_advanced_scene_workflow", "prepare_imported_asset_presentation", "run_animation_workflow", "capture_viewport"],
         "must_not_select": ["draft_script"],
         "search": "director workflow import asset product scene animate reveal evidence commit revert",
         "search_before": [("plan_director_workflow", "draft_script"), ("plan_asset_import_workflow", "draft_script")],

@@ -23,11 +23,11 @@ AGENT_GUIDANCE = (
     "For broad multi-step scene, asset, animation, and evidence work, call plan_director_workflow first to get an ordered helper/evidence/preview plan without mutating the scene. For advanced 3D, 2D/storyboard, animation, simulation, compositor/render, asset-import, or script-heavy tasks, call plan_advanced_scene_workflow first when the helper path is not obvious. It returns domain-specific helpers and script fallback boundaries. "
     "For scene building and layout, prefer create_primitive, create_empty, duplicate_selected_objects, parent_selected_to_empty, align_selected_objects, distribute_selected_objects, set_object_visibility, set_object_display, assign_material_to_selected, assign_emission_material_to_selected, create_shader_material, create_text_object, create_curve_path, create_collection, link_selected_to_collection, add_light, add_camera, add_modifier_to_selected, add_geometry_nodes_modifier, apply_procedural_array_stack, create_procedural_object_kit, add_track_to_constraint, add_copy_transform_constraint, create_basic_armature, add_particle_system_to_selected, add_cloth_simulation_to_selected, set_render_settings, set_camera_settings, and set_world_background. create_shader_material includes bounded material presets; add_geometry_nodes_modifier includes passthrough, transform, join-geometry, set-position, and subdivide-mesh starter templates. "
     "For 2D, storyboard, animatic, cutout, or motion-graphics work, inspect first with get_2d_animation_details, then prefer create_storyboard_panels, create_2d_cutout_layer, create_camera_dolly_animation, capture_animation_playblast, and render jobs before drafting custom Grease Pencil or SVG Python. "
-    "For model refinement and production presentation, prefer shade_smooth_selected, add_bevel_and_subsurf, apply_procedural_array_stack, create_procedural_object_kit, create_wheel_assembly, add_panel_seams, add_window_materials, apply_vehicle_refinement_template, apply_product_refinement_template, apply_character_refinement_template, create_studio_product_stage, add_dimension_callouts, apply_lighting_preset, create_material_palette, create_product_turntable_setup, and organize_scene_for_production when they fit the task. create_procedural_object_kit includes kitbash, radial/scatter/product, mechanical-joint, control-panel, studio-prop, mechanical-part, modular-wall-panel, and pipe-run templates for bounded prop generation before custom mesh scripts. "
+    "For model refinement and production presentation, prefer shade_smooth_selected, add_bevel_and_subsurf, apply_procedural_array_stack, create_procedural_object_kit, create_wheel_assembly, add_panel_seams, add_window_materials, apply_vehicle_refinement_template, apply_product_refinement_template, apply_character_refinement_template, create_studio_product_stage, add_dimension_callouts, apply_lighting_preset, create_material_palette, create_product_turntable_setup, prepare_imported_asset_presentation, and organize_scene_for_production when they fit the task. create_procedural_object_kit includes kitbash, radial/scatter/product, mechanical-joint, control-panel, studio-prop, mechanical-part, modular-wall-panel, and pipe-run templates for bounded prop generation before custom mesh scripts. "
     "For shape-key animation, prefer create_shape_key and animate_shape_key before drafting Python. "
     "For quick animation playblasts and visual review, use low-resolution preview defaults unless the user explicitly asks for HD/final/1080p/4K quality. For long-running or high-resolution renders, frame sequences, 1080p/4K previews, or MP4 quality checks, use start_render_job and poll get_render_job_status instead of blocking render_scene_thumbnail, capture tools, or draft_script; report the returned rough estimate/poll interval to the user; use assemble_render_job_video for PNG sequences and validate_render_job_output before reporting success; use cancel_render_job if the user wants to stop it. If a render, playblast, or visual-review tool times out, treat it as recoverable: wait the returned poll_after_seconds, call blender_bridge_status, inspect get_visual_evidence_resources and the audit log, and only rerun if no artifact/result appears. "
     "For simulation setup, prefer add_cloth_simulation_to_selected or add_particle_system_to_selected for bounded setup, then inspect with get_simulation_details or inspect_simulation_bake. For persistent simulation/cache bakes or cache-freeing operations, use stage_persistent_simulation_bake for a fixed approval-gated script. Session-wide external script trust is not enough for bpy.ops.fluid.* or bpy.ops.ptcache.* bake/free operators; they require explicit one-time user approval. Do not hand the user a checkpoint or recovery .blend path unless you just verified that it exists and is restorable through checkpoint metadata, diagnostics, or a filesystem check. "
-    "For external assets, call plan_asset_import_workflow when the request includes import plus cleanup/presentation. Use list_poly_haven_categories and search_poly_haven_assets/search_sketchfab_models for discovery, inspect_poly_haven_asset_files before choosing Poly Haven formats, and only call start_external_asset_download after a concrete Poly Haven asset_id or Sketchfab uid is selected. Poll get_external_asset_job_status until completed or failed. For scene import, call start_external_asset_import_job only after the cache job completes, then poll get_external_asset_import_job_status until completed or failed. Use download_poly_haven_asset, import_poly_haven_asset, download_sketchfab_model, import_sketchfab_model, and import_external_asset_job_result only for explicit synchronous fallback/debug cases. Use get_external_asset_cache_diagnostics to report cached/imported assets. Sketchfab API tokens must be provided per call or through the MCP server environment, not Blender preferences. "
+    "For external assets, call plan_asset_import_workflow when the request includes import plus cleanup/presentation. Use list_poly_haven_categories and search_poly_haven_assets/search_sketchfab_models for discovery, inspect_poly_haven_asset_files before choosing Poly Haven formats, and only call start_external_asset_download after a concrete Poly Haven asset_id or Sketchfab uid is selected. Poll get_external_asset_job_status until completed or failed. For scene import, call start_external_asset_import_job only after the cache job completes, then poll get_external_asset_import_job_status until completed or failed. After import completes, call prepare_imported_asset_presentation with imported_object_names from the import result to organize, fill missing materials, and build a bounded studio/turntable setup before visual evidence capture. Use download_poly_haven_asset, import_poly_haven_asset, download_sketchfab_model, import_sketchfab_model, and import_external_asset_job_result only for explicit synchronous fallback/debug cases. Use get_external_asset_cache_diagnostics to report cached/imported assets. Sketchfab API tokens must be provided per call or through the MCP server environment, not Blender preferences. "
     "For animation generation, review, or repair, call run_animation_task for simple prompt-in/task-out use, or call plan_animation_workflow first when you need manual control of the generated workflow. plan_animation_workflow returns the brief, scene routing, timing chart, ordered helper calls, evaluator calls, repair calls, and script fallback rules. For common helper-backed generation, call run_animation_workflow to execute the plan, review the result, optionally capture playblast evidence, and leave changes in preview. Use any animation_brief in context as the prompt contract; otherwise call create_animation_brief first when the prompt needs an explicit contract, success criteria, or later validation. Call get_animation_scene_context before advanced animation in scenes with rigs, constraints, drivers, shape keys, physics, or unclear edit targets so you know whether to animate object transforms, rig controls, shape keys, materials, physics, or camera settings. Use create_timing_chart, block_key_poses, add_breakdown_pose, set_pose_hold, set_rig_pose_hold, get_rig_pose_library_details, apply_rig_pose_from_action, apply_rig_pose_marker, apply_rig_action_clip, offset_rig_limb_controls, set_rig_custom_property_keyframes, create_directed_animation_shot, create_camera_dolly_animation, and create_motion_arc for animator-style blocking before spline/f-curve polish; use rig pose/action helpers only after identifying armature controls, pose-library candidates, or existing scalar IK/FK/space properties through rig inspection or repair metadata. Then use analyze_animation_principles plus focused analyzers to check timing, spacing, arcs, pose clarity, anticipation, squash/stretch, contact, center-of-mass support, speed/acceleration plausibility, simulation cache readiness, and settle before repair; use inspect_simulation_bake before persistent bake decisions, and use stage_persistent_simulation_bake when the user intentionally wants a persistent point-cache bake. Use capture_animation_playblast and review_playblast_against_brief when visual frame evidence matters; use capture_object_inspection_renders and review_inspection_renders_against_brief when close-up object detail evidence matters; if review or repair tools return repair_operations, prefer run_animation_repair_loop for bounded helper repair and review-again behavior, or execute relevant tool_call name/input entries deliberately when manual control is needed. Then prefer set_scene_frame_range, set_animation_preview_range, animate_selected_transform, animate_object_bounce, create_progressive_bounce_animation, animate_material_property, animate_light_property, create_follow_path_animation, create_turntable_animation, create_pulse_animation, create_reveal_animation, create_staggered_motion, create_directed_animation_shot, set_action_interpolation, retime_actions, add_action_cycles, clear_animation, create_camera_dolly_animation, and create_camera_orbit. "
     "For complex scene builds that need many objects or more than about eight helper calls, stage one cohesive Blender Python script with draft_script instead of making a long chain of helper calls. "
     "Use draft_script for custom or larger advanced scene scripts when static checks pass; helper overlap should be treated as advice. Use draft_privileged_script for custom external asset or project-file lifecycle scripts that need declared filesystem, network, asset-import, or project-file capabilities. Privileged scripts require a manifest and never auto-run under normal external script trust. Persistent simulation/cache bakes stay on their dedicated one-time approval path. If the user has granted external script trust, draft_script may auto-run after static checks. "
@@ -2756,6 +2756,26 @@ def blender_tool_definitions():
             },
         },
         {
+            "name": "prepare_imported_asset_presentation",
+            "description": "Organize imported asset objects, fill missing mesh materials without overwriting imported materials, create a bounded studio/turntable presentation setup, and leave the result in preview. Use after an external asset import job completes.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "imported_object_names": {"type": "array", "items": {"type": "string"}},
+                    "target_object_name": {"type": "string"},
+                    "selected_only": {"type": "boolean"},
+                    "use_active_fallback": {"type": "boolean"},
+                    "collection_prefix": {"type": "string"},
+                    "presentation_preset": {"type": "string", "enum": ["studio", "catalog", "turntable", "lookdev"]},
+                    "assign_material_if_missing": {"type": "boolean"},
+                    "create_stage": {"type": "boolean"},
+                    "create_turntable": {"type": "boolean"},
+                    "label": {"type": "string"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "organize_scene_for_production",
             "description": "Link scene or selected objects into production-oriented type collections without deleting original links. Applies immediately with preview revert support.",
             "input_schema": {
@@ -3461,6 +3481,7 @@ _TOOL_GROUPS = {
         "create_studio_product_stage",
         "apply_lighting_preset",
         "create_product_turntable_setup",
+        "prepare_imported_asset_presentation",
         "create_turntable_animation",
         "set_render_settings",
         "set_camera_settings",
@@ -3528,6 +3549,7 @@ _TOOL_GROUPS = {
         "import_external_asset_job_result",
         "start_external_asset_import_job",
         "get_external_asset_import_job_status",
+        "prepare_imported_asset_presentation",
         "cancel_external_asset_import_job",
         "delete_external_asset_job",
         "get_external_asset_cache_diagnostics",
@@ -3589,6 +3611,7 @@ _TOOL_GROUPS = {
         "apply_lighting_preset",
         "create_material_palette",
         "create_product_turntable_setup",
+        "prepare_imported_asset_presentation",
         "apply_product_refinement_template",
         "apply_character_refinement_template",
         "organize_scene_for_production",
@@ -3608,6 +3631,7 @@ _TOOL_GROUPS = {
         "apply_lighting_preset",
         "create_material_palette",
         "create_product_turntable_setup",
+        "prepare_imported_asset_presentation",
         "apply_product_refinement_template",
         "apply_character_refinement_template",
         "organize_scene_for_production",
@@ -3638,6 +3662,7 @@ _TOOL_GROUPS = {
         "apply_lighting_preset",
         "create_material_palette",
         "create_product_turntable_setup",
+        "prepare_imported_asset_presentation",
         "apply_product_refinement_template",
         "organize_scene_for_production",
         "set_render_settings",
@@ -3992,6 +4017,7 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "apply_lighting_preset",
     "create_material_palette",
     "create_product_turntable_setup",
+    "prepare_imported_asset_presentation",
     "organize_scene_for_production",
     "apply_vehicle_refinement_template",
     "apply_product_refinement_template",

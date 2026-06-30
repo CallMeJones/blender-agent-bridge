@@ -86,6 +86,7 @@ def main():
         assert "import_external_asset_job_result" in bundle["available_tools"]
         assert "start_external_asset_import_job" in bundle["available_tools"]
         assert "get_external_asset_import_job_status" in bundle["available_tools"]
+        assert "prepare_imported_asset_presentation" in bundle["available_tools"]
         assert "cancel_external_asset_import_job" in bundle["available_tools"]
         assert "delete_external_asset_job" in bundle["available_tools"]
         assert "get_external_asset_cache_diagnostics" in bundle["available_tools"]
@@ -164,6 +165,7 @@ def main():
         assert "import_external_asset_job_result" in bridge_protocol.TOOL_CONTRACTS
         assert "start_external_asset_import_job" in bridge_protocol.TOOL_CONTRACTS
         assert "get_external_asset_import_job_status" in bridge_protocol.TOOL_CONTRACTS
+        assert "prepare_imported_asset_presentation" in bridge_protocol.TOOL_CONTRACTS
         assert "cancel_external_asset_import_job" in bridge_protocol.TOOL_CONTRACTS
         assert "delete_external_asset_job" in bridge_protocol.TOOL_CONTRACTS
         assert "get_external_asset_cache_diagnostics" in bridge_protocol.TOOL_CONTRACTS

@@ -718,6 +718,7 @@ def _assert_compact_tools_visible(proc):
     assert "Default client path" in asset_import_tool["description"], asset_import_tool
     assert asset_import_tool["annotations"]["returnsBackgroundJob"] is True, asset_import_tool
     assert asset_import_tool["annotations"]["timeoutRecovery"]["resource_tool"] == "get_external_asset_import_job_status", asset_import_tool
+    assert "prepare_imported_asset_presentation" in names, listed
     assert "import_poly_haven_asset" not in names, listed
     assert "import_sketchfab_model" not in names, listed
     bake_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "stage_persistent_simulation_bake")
@@ -825,6 +826,7 @@ def _initialize(proc):
     assert initialized["result"]["capabilities"]["prompts"] == {"listChanged": False}, initialized
     assert "start_external_asset_download" in initialized["result"]["instructions"], initialized
     assert "start_external_asset_import_job" in initialized["result"]["instructions"], initialized
+    assert "prepare_imported_asset_presentation" in initialized["result"]["instructions"], initialized
     proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
     proc.stdin.flush()
     return initialized
@@ -850,6 +852,7 @@ def _assert_external_asset_search_routes_first(response, *, query):
     assert "start_external_asset_import_job" in names[:5], (query, names)
     assert "get_external_asset_job_status" in names[:6], (query, names)
     assert "get_external_asset_import_job_status" in names[:7], (query, names)
+    assert "prepare_imported_asset_presentation" in names[:8], (query, names)
     for direct_name in (
         "download_poly_haven_asset",
         "import_poly_haven_asset",
@@ -1948,6 +1951,7 @@ def main():
         assert "get_external_asset_job_status" in asset_prompt_text, asset_prompt
         assert "start_external_asset_import_job" in asset_prompt_text, asset_prompt
         assert "get_external_asset_import_job_status" in asset_prompt_text, asset_prompt
+        assert "prepare_imported_asset_presentation" in asset_prompt_text, asset_prompt
         assert "synchronous fallback" in asset_prompt_text, asset_prompt
 
         resource = _send(

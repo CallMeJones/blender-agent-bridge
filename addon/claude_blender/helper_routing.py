@@ -266,6 +266,7 @@ HELPER_FIRST_SCRIPT_RULES = (
             "get_external_asset_job_status",
             "start_external_asset_import_job",
             "get_external_asset_import_job_status",
+            "prepare_imported_asset_presentation",
         ],
     },
     {

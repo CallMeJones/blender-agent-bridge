@@ -2695,6 +2695,22 @@ def create_product_turntable_setup(context, args):
     )
 
 
+def prepare_imported_asset_presentation(context, args):
+    return advanced_helpers.prepare_imported_asset_presentation(
+        context,
+        imported_object_names=_name_list(args.get("imported_object_names") or args.get("object_names")),
+        target_object_name=str(args.get("target_object_name") or args.get("target_name") or ""),
+        selected_only=bool(args.get("selected_only", False)),
+        use_active_fallback=bool(args.get("use_active_fallback", True)),
+        collection_prefix=str(args.get("collection_prefix") or "Agent Bridge Imported Asset"),
+        presentation_preset=str(args.get("presentation_preset") or "studio"),
+        assign_material_if_missing=bool(args.get("assign_material_if_missing", True)),
+        create_stage=bool(args.get("create_stage", True)),
+        create_turntable=bool(args.get("create_turntable", False)),
+        label=args.get("label", "Prepare imported asset presentation"),
+    )
+
+
 def organize_scene_for_production(context, args):
     return advanced_helpers.organize_scene_for_production(
         context,
@@ -3555,6 +3571,12 @@ def _preview_expected_changes(step, label, kind, target_text):
             f"{'stage, ' if step.get('stage_created') else ''}"
             f"camera {step.get('camera') or 'none'} and action {step.get('action') or 'none'}."
         )
+    if kind == "prepare_imported_asset_presentation":
+        features = ", ".join(step.get("features") or []) or "presentation setup"
+        return (
+            f"{label}: prepares imported asset objects around {step.get('target') or target_text} "
+            f"with {features}."
+        )
     if kind == "organize_scene_for_production":
         return (
             f"{label}: links {_format_count('object', len(step.get('linked') or []))} into "
@@ -3727,6 +3749,7 @@ TOOL_FUNCTIONS = {
     "apply_lighting_preset": apply_lighting_preset,
     "create_material_palette": create_material_palette,
     "create_product_turntable_setup": create_product_turntable_setup,
+    "prepare_imported_asset_presentation": prepare_imported_asset_presentation,
     "organize_scene_for_production": organize_scene_for_production,
     "add_track_to_constraint": add_track_to_constraint,
     "add_light": add_light,

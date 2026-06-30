@@ -500,6 +500,7 @@ def main():
             "import_external_asset_job_result",
             "start_external_asset_import_job",
             "get_external_asset_import_job_status",
+            "prepare_imported_asset_presentation",
             "cancel_external_asset_import_job",
             "delete_external_asset_job",
             "get_external_asset_cache_diagnostics",
@@ -521,7 +522,7 @@ def main():
             }:
                 assert "network" in annotations["permissions"], annotations
                 assert annotations["openWorldHint"] is True, annotations
-            if name in {"import_poly_haven_asset", "import_sketchfab_model", "import_external_asset_job_result", "start_external_asset_import_job"}:
+            if name in {"import_poly_haven_asset", "import_sketchfab_model", "import_external_asset_job_result", "start_external_asset_import_job", "prepare_imported_asset_presentation"}:
                 assert annotations["mutatesScene"] is True, annotations
                 assert annotations["requiresLivePreview"] is True, annotations
             elif name in {"download_poly_haven_asset", "download_sketchfab_model", "start_external_asset_download", "cancel_external_asset_job", "cancel_external_asset_import_job", "delete_external_asset_job", "prune_external_asset_cache"}:
