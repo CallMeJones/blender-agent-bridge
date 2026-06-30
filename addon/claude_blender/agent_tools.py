@@ -2287,7 +2287,7 @@ def blender_tool_definitions():
         },
         {
             "name": "create_procedural_object_kit",
-            "description": "Create a reversible procedural object kit from bounded templates such as kitbash towers, radial arrays, scatter grids, product stacks, mechanical joints, control panels, studio prop sets, mechanical parts, modular wall panels, or pipe runs. Use before custom mesh or geometry-node scripts.",
+            "description": "Create a reversible procedural object kit from bounded templates such as kitbash towers, radial arrays, scatter grids, product stacks, product display rigs, mechanical joints, mechanical assemblies, control panels, studio prop sets, mechanical parts, modular wall panels, or pipe runs. Use before custom mesh or geometry-node scripts.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -2298,7 +2298,9 @@ def blender_tool_definitions():
                             "radial_array",
                             "scatter_grid",
                             "product_stack",
+                            "product_display_rig",
                             "mechanical_joint",
+                            "mechanical_assembly",
                             "control_panel",
                             "studio_prop_set",
                             "mechanical_part",

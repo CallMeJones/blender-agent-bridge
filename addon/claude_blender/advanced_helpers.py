@@ -54,7 +54,9 @@ PROCEDURAL_OBJECT_KIT_TEMPLATES = {
     "radial_array",
     "scatter_grid",
     "product_stack",
+    "product_display_rig",
     "mechanical_joint",
+    "mechanical_assembly",
     "control_panel",
     "studio_prop_set",
     "mechanical_part",
@@ -4059,6 +4061,10 @@ def _infer_asset_provider(prompt, provider=""):
 
 def _infer_object_kit_template(prompt):
     text = str(prompt or "").lower()
+    if any(term in text for term in ("mechanical assembly", "actuator", "exploded assembly", "bracket assembly")):
+        return "mechanical_assembly"
+    if any(term in text for term in ("product display", "product rig", "display rig", "presentation rig", "turntable plinth")):
+        return "product_display_rig"
     if any(term in text for term in ("pipe", "pipes", "conduit")):
         return "pipe_run"
     if any(term in text for term in ("wall panel", "modular panel", "sci fi panel", "sci-fi panel")):
@@ -4859,6 +4865,23 @@ def create_procedural_object_kit(
         hero = remember(_create_cylinder_object(context, f"{prefix} Hero Stand", (origin[0], origin[1], origin[2] + height * 0.58), radius * 0.22, height * 0.22, accent, vertices=48))
         hero.show_name = True
 
+    elif template == "product_display_rig":
+        remember(_create_cylinder_object(context, f"{prefix} Turntable Plinth", origin, radius * 0.62, height * 0.12, primary, vertices=72))
+        hero = remember(_create_cylinder_object(context, f"{prefix} Hero Product Placeholder", (origin[0], origin[1], origin[2] + height * 0.38), radius * 0.22, height * 0.45, accent, vertices=48))
+        hero.show_name = True
+        remember(_create_cube_object(context, f"{prefix} Sweep Backdrop", (origin[0], origin[1] + radius * 0.68, origin[2] + height * 0.42), (radius * 1.45, max(0.04, radius * 0.04), height * 0.78), primary))
+        mark_count = max(4, min(16, count))
+        for index in range(mark_count):
+            angle = math.tau * index / mark_count
+            x = origin[0] + math.cos(angle) * radius * 0.68
+            y = origin[1] + math.sin(angle) * radius * 0.68
+            marker = remember(_create_cube_object(context, f"{prefix} Turntable Tick {index + 1:02d}", (x, y, origin[2] + height * 0.09), (radius * 0.025, radius * 0.11, height * 0.025), accent))
+            marker.rotation_euler[2] = angle
+        for side, sx in (("Left", -1.0), ("Right", 1.0)):
+            softbox = remember(_create_cube_object(context, f"{prefix} {side} Softbox Card", (origin[0] + sx * radius * 0.92, origin[1] - radius * 0.18, origin[2] + height * 0.55), (radius * 0.05, radius * 0.28, height * 0.42), accent))
+            softbox.rotation_euler[2] = math.radians(-10.0 * sx)
+        remember(_create_cube_object(context, f"{prefix} Camera Framing Rail", (origin[0], origin[1] - radius * 0.95, origin[2] + height * 0.08), (radius * 0.9, radius * 0.035, height * 0.035), primary))
+
     elif template == "mechanical_joint":
         arm_count = max(3, min(16, count))
         bearing = remember(
@@ -4986,6 +5009,25 @@ def create_procedural_object_kit(
                     vertices=16,
                 )
             )
+
+    elif template == "mechanical_assembly":
+        base = remember(_create_cube_object(context, f"{prefix} Base Bracket", (origin[0], origin[1], origin[2] - height * 0.08), (radius * 0.95, radius * 0.36, height * 0.12), primary))
+        base.show_name = True
+        rail_count = max(2, min(6, count))
+        for index in range(rail_count):
+            y = origin[1] + (index - (rail_count - 1) / 2.0) * radius * 0.16
+            remember(_create_cube_object(context, f"{prefix} Linear Rail {index + 1:02d}", (origin[0], y, origin[2] + height * 0.08), (radius * 0.92, radius * 0.035, height * 0.04), accent if index % 2 else primary))
+        carriage = remember(_create_cube_object(context, f"{prefix} Sliding Carriage", (origin[0] - radius * 0.12, origin[1], origin[2] + height * 0.22), (radius * 0.28, radius * 0.34, height * 0.16), accent))
+        carriage.show_name = True
+        remember(_create_cylinder_object(context, f"{prefix} Drive Screw", (origin[0], origin[1], origin[2] + height * 0.28), radius * 0.045, radius * 1.05, accent, vertices=32, rotation=_axis_rotation("X")))
+        for side, sx in (("Left", -1.0), ("Right", 1.0)):
+            remember(_create_cube_object(context, f"{prefix} {side} End Block", (origin[0] + sx * radius * 0.52, origin[1], origin[2] + height * 0.2), (radius * 0.08, radius * 0.42, height * 0.28), primary))
+        for index in range(max(4, min(12, count * 2))):
+            sx = -1.0 if index % 2 == 0 else 1.0
+            row = index // 2
+            x = origin[0] + sx * radius * 0.36
+            y = origin[1] + (row - 2.0) * radius * 0.08
+            remember(_create_cylinder_object(context, f"{prefix} Assembly Fastener {index + 1:02d}", (x, y, origin[2] + height * 0.31), radius * 0.025, height * 0.035, accent, vertices=16))
 
     elif template == "modular_wall_panel":
         panel_width = radius * 1.7

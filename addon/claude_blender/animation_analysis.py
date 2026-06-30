@@ -36,6 +36,7 @@ INSPECTION_DETAIL_KEYWORDS = {
 }
 EVIDENCE_COLLECTION_TOOLS = {"capture_animation_playblast", "capture_object_inspection_renders"}
 READ_ONLY_REVIEW_TOOLS = {
+    "analyze_camera_framing",
     "create_timing_chart",
     "get_shape_key_details",
     "get_simulation_details",
@@ -2357,6 +2358,23 @@ def _repair_frame_range(target_frame_range, frame_start, frame_end):
     return start, end
 
 
+def _repair_playblast_frame_count(evidence, requested_count):
+    counts = [12]
+    if requested_count:
+        counts.append(int(requested_count) * 2 + 1)
+    for key in ("required_sample_count", "requested_frame_count", "usable_frame_count"):
+        value = evidence.get(key) if isinstance(evidence, dict) else None
+        try:
+            if value is not None:
+                counts.append(int(value))
+        except (TypeError, ValueError):
+            pass
+    sampled_frames = evidence.get("sampled_frames") if isinstance(evidence, dict) else None
+    if sampled_frames:
+        counts.append(len(sampled_frames) + 4)
+    return max(3, min(48, max(counts)))
+
+
 def _finding_evidence(finding):
     return finding.get("evidence") if isinstance(finding, dict) and isinstance(finding.get("evidence"), dict) else {}
 
@@ -3059,15 +3077,17 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
         if repair_tool == "capture_animation_playblast" or (
             not repair_tool and ("playblast" in text or ("frame" in text and "unavailable" in text))
         ):
+            max_frames = _repair_playblast_frame_count(evidence, requested_count)
             operations.append(
                 _operation(
                     "capture_animation_playblast",
                     "Capture a fresh sampled playblast so visual review has usable frame evidence.",
-                    arguments={"frame_start": frame_start, "frame_end": frame_end, "max_frames": 12, "brief": (brief or {}).get("user_visible_interpretation", "")},
+                    arguments={"frame_start": frame_start, "frame_end": frame_end, "max_frames": max_frames, "brief": (brief or {}).get("user_visible_interpretation", "")},
                     source_index=index,
                     finding=finding,
                     target_frames=target_frames,
                     target_frame_range=target_frame_range,
+                    metadata={"requested_count": requested_count, "recapture_max_frames": max_frames},
                 )
             )
         if repair_tool == "capture_object_inspection_renders" or (
@@ -3208,15 +3228,42 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
                 )
             )
         if "camera" in text or "framing" in text:
+            framing_targets = target_object_names or subject_names
+            operations.append(
+                _operation(
+                    "analyze_camera_framing",
+                    "Re-run camera framing analysis before applying a camera repair so the repair loop has objective framing evidence.",
+                    arguments={"object_names": framing_targets, "frame_start": frame_start, "frame_end": frame_end, "sample_step": 6},
+                    source_index=index,
+                    finding=finding,
+                    confidence="high" if framing_targets else "medium",
+                    target_frames=target_frames,
+                    target_frame_range=target_frame_range,
+                )
+            )
+        if ("camera" in text or "framing" in text) and primary_subject:
+            visual_subject = evidence.get("visual_subject") if isinstance(evidence.get("visual_subject"), dict) else {}
+            framing_read = str(visual_subject.get("framing_read") or "").lower()
+            lens = 70.0 if framing_read == "tiny_subject" else 35.0 if framing_read == "cropped_subject" else 45.0
             operations.append(
                 _operation(
                     "create_camera_orbit",
                     "Repair camera framing around the animated subject.",
-                    arguments={"target_name": primary_subject, "frame_start": frame_start, "frame_end": frame_end},
+                    arguments={
+                        "target_name": primary_subject,
+                        "frame_start": frame_start,
+                        "frame_end": frame_end,
+                        "radius": 5.0,
+                        "height": 2.5,
+                        "name": "Agent Bridge Repair Orbit Camera",
+                        "lens": lens,
+                    },
                     source_index=index,
                     finding=finding,
+                    confidence="medium",
                     target_frames=target_frames,
                     target_frame_range=target_frame_range,
+                    metadata={"repairs_camera_framing": True, "framing_read": framing_read or "unknown"},
                 )
             )
         if "action_count" in text or "requested count" in text or "wrong count" in text or "bounce count" in text:

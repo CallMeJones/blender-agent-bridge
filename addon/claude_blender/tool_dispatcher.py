@@ -1034,6 +1034,7 @@ def repair_animation_from_findings(context, args):
 
 
 _REPAIR_LOOP_READ_ONLY_TOOLS = {
+    "analyze_camera_framing",
     "capture_animation_playblast",
     "capture_object_inspection_renders",
     "create_timing_chart",
@@ -1048,6 +1049,7 @@ _REPAIR_LOOP_READ_ONLY_TOOLS = {
 }
 
 _REPAIR_LOOP_DEFAULT_TOOLS = {
+    "analyze_camera_framing",
     "capture_animation_playblast",
     "capture_object_inspection_renders",
     "create_timing_chart",

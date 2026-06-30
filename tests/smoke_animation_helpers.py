@@ -1051,6 +1051,20 @@ def main():
                         "message": "Material glow and emission animation is missing from the screen accent.",
                         "frame": 48,
                     },
+                    {
+                        "severity": "warning",
+                        "message": "Camera framing crops the animated subject near the edge of the playblast.",
+                        "evidence": {
+                            "visual_subject": {"framing_read": "cropped_subject"},
+                            "sampled_frames": [1, 36, 72],
+                        },
+                    },
+                    {
+                        "severity": "warning",
+                        "message": "Playblast may be undersampled for the requested repeated action count.",
+                        "repair_tool": "capture_animation_playblast",
+                        "evidence": {"required_sample_count": 17, "sampled_frames": [1, 36, 72]},
+                    },
                 ],
                 "brief": contract,
             },
@@ -1080,6 +1094,19 @@ def main():
         material_repair = next(item for item in repair_plan["repair_operations"] if item["tool"] == "animate_material_property")
         assert material_repair["arguments"]["object_name"] == "Cube", repair_plan
         assert material_repair["arguments"]["property_name"] == "emission_strength", repair_plan
+        camera_analysis = next(item for item in repair_plan["repair_operations"] if item["tool"] == "analyze_camera_framing")
+        assert camera_analysis["mutates_scene"] is False, repair_plan
+        assert camera_analysis["arguments"]["object_names"] == ["Cube"], repair_plan
+        camera_repair = next(item for item in repair_plan["repair_operations"] if item["tool"] == "create_camera_orbit")
+        assert camera_repair["arguments"]["target_name"] == "Cube", repair_plan
+        assert camera_repair["arguments"]["lens"] == 35.0, repair_plan
+        assert camera_repair["metadata"]["repairs_camera_framing"] is True, repair_plan
+        dense_capture = next(
+            item
+            for item in repair_plan["repair_operations"]
+            if item["tool"] == "capture_animation_playblast" and item["arguments"]["max_frames"] == 17
+        )
+        assert dense_capture["metadata"]["recapture_max_frames"] == 17, repair_plan
 
         scale_repair_plan = _execute(
             context,

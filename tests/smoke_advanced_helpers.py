@@ -464,6 +464,38 @@ def main():
         assert any("Bearing" in name for name in mechanical_kit["objects"]), mechanical_kit
         assert any("Bolt" in name for name in mechanical_kit["objects"]), mechanical_kit
 
+        product_display = _execute(
+            context,
+            "create_procedural_object_kit",
+            {
+                "template": "product_display_rig",
+                "name_prefix": "Agent Bridge Product Display Kit",
+                "location": [0.0, -3.0, 0.0],
+                "count": 8,
+                "radius": 1.3,
+                "height": 1.2,
+            },
+        )
+        assert product_display["template"] == "product_display_rig", product_display
+        assert any("Turntable Plinth" in name for name in product_display["objects"]), product_display
+        assert any("Softbox Card" in name for name in product_display["objects"]), product_display
+
+        mechanical_assembly = _execute(
+            context,
+            "create_procedural_object_kit",
+            {
+                "template": "mechanical_assembly",
+                "name_prefix": "Agent Bridge Mechanical Assembly Kit",
+                "location": [-4.5, -2.5, 0.0],
+                "count": 5,
+                "radius": 1.1,
+                "height": 0.9,
+            },
+        )
+        assert mechanical_assembly["template"] == "mechanical_assembly", mechanical_assembly
+        assert any("Base Bracket" in name for name in mechanical_assembly["objects"]), mechanical_assembly
+        assert any("Drive Screw" in name for name in mechanical_assembly["objects"]), mechanical_assembly
+
         control_panel = _execute(
             context,
             "create_procedural_object_kit",
