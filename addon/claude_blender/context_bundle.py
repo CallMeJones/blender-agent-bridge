@@ -347,6 +347,7 @@ def build_context_bundle(context, *, include_visual=False, capture_dir=None, max
             "mirror_model",
             "symmetrize_model",
             "solidify_model",
+            "screw_model",
             "create_procedural_object_kit",
             "create_camera_dolly_animation",
             "create_directed_animation_shot",

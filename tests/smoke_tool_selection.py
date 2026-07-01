@@ -279,20 +279,21 @@ def main():
         assert "mirror_model" in procedural_names, procedural_meta
         assert "symmetrize_model" in procedural_names, procedural_meta
         assert "solidify_model" in procedural_names, procedural_meta
+        assert "screw_model" in procedural_names, procedural_meta
         assert "add_geometry_nodes_modifier" in procedural_names, procedural_meta
         assert "get_geometry_nodes_details" in procedural_names, procedural_meta
 
         modeling_tools, modeling_meta = agent_tools.select_blender_tool_definitions(
-            "Use a boolean cutter, mirror the model, symmetrize it on X, and solidify the wall thickness.",
+            "Use a boolean cutter, mirror the model, symmetrize it on X, solidify the wall thickness, and add a screw thread.",
             bundle,
         )
         modeling_names = _names(modeling_tools)
-        for expected in {"boolean_op", "mirror_model", "symmetrize_model", "solidify_model"}:
+        for expected in {"boolean_op", "mirror_model", "symmetrize_model", "solidify_model", "screw_model"}:
             assert expected in modeling_names, (expected, modeling_meta)
         assert "draft_script" not in modeling_names, modeling_meta
 
         mesh_edit_tools, mesh_edit_meta = agent_tools.select_blender_tool_definitions(
-            "Extrude the top face, inset the panel, bridge boundary loops, merge by distance, and convert this curve to mesh.",
+            "Extrude the top face, inset the panel, loop cut, knife cut, proportional edit, bridge boundary loops, merge by distance, and convert this curve to mesh.",
             bundle,
         )
         mesh_edit_names = _names(mesh_edit_tools)

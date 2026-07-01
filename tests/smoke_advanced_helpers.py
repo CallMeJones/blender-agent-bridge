@@ -30,6 +30,7 @@ ADVANCED_TOOLS = {
     "mirror_model",
     "symmetrize_model",
     "solidify_model",
+    "screw_model",
     "create_procedural_object_kit",
     "create_camera_dolly_animation",
     "create_directed_animation_shot",
@@ -76,6 +77,14 @@ def _snapshot(scene, cube, camera):
             mesh.name: (len(mesh.vertices), len(mesh.edges), len(mesh.polygons))
             for mesh in bpy.data.meshes
         },
+        "mesh_vertex_coordinates": {
+            mesh.name: tuple(
+                tuple(round(float(component), 5) for component in vertex.co)
+                for vertex in mesh.vertices
+            )
+            for mesh in bpy.data.meshes
+            if len(mesh.vertices) <= 128
+        },
         "cube_modifiers": [modifier.name for modifier in cube.modifiers],
         "cube_shape_keys": [block.name for block in cube.data.shape_keys.key_blocks] if cube.data.shape_keys else [],
         "camera_constraints": len(camera.constraints),
@@ -106,6 +115,102 @@ def _material_topology(material):
             )
             for link in node_tree.links
         ),
+    }
+
+
+def _run_phase1_desk_lamp_exit_test(context):
+    parts = {}
+
+    def primitive(name, primitive_type, location, rotation, scale):
+        result = _execute(
+            context,
+            "create_primitive",
+            {
+                "primitive_type": primitive_type,
+                "name": name,
+                "location": location,
+                "rotation": rotation,
+                "scale": scale,
+            },
+        )
+        parts[name] = bpy.data.objects[result["object"]]
+        return parts[name]
+
+    base = primitive("Agent Bridge Phase1 Lamp Base", "CYLINDER", [0.0, -4.0, 0.08], [0.0, 0.0, 0.0], [0.7, 0.7, 0.08])
+    pole = primitive("Agent Bridge Phase1 Lamp Pole", "CYLINDER", [0.0, -4.0, 0.85], [0.0, 0.0, 0.0], [0.045, 0.045, 0.75])
+    arm = primitive("Agent Bridge Phase1 Lamp Arm", "CYLINDER", [0.55, -4.0, 1.55], [0.0, 1.5708, 0.0], [0.04, 0.04, 0.55])
+    shade = primitive("Agent Bridge Phase1 Lamp Shade", "CONE", [1.1, -4.0, 1.42], [0.0, 1.5708, 0.0], [0.34, 0.34, 0.36])
+    bulb = primitive("Agent Bridge Phase1 Lamp Bulb", "UV_SPHERE", [0.92, -4.0, 1.36], [0.0, 0.0, 0.0], [0.13, 0.13, 0.13])
+    thread_seed = primitive("Agent Bridge Phase1 Lamp Thread Seed", "PLANE", [0.32, -4.0, 1.55], [0.0, 1.5708, 0.0], [0.04, 0.04, 0.04])
+
+    loop_result = _execute(
+        context,
+        "edit_mesh",
+        {"operation": "loop_cut", "object_names": [base.name], "selected_only": False, "loop_cuts": 1},
+    )
+    assert loop_result["objects"][0]["after"]["vertices"] > loop_result["objects"][0]["before"]["vertices"], loop_result
+    assert loop_result["objects"][0]["details"]["mode"] == "bounded_planar_loop", loop_result
+    knife_result = _execute(
+        context,
+        "edit_mesh",
+        {"operation": "knife_cut", "object_names": [shade.name], "selected_only": False, "cut_axis": "Z", "cut_position": 0.0},
+    )
+    assert knife_result["objects"][0]["after"]["edges"] > knife_result["objects"][0]["before"]["edges"], knife_result
+    proportional_result = _execute(
+        context,
+        "edit_mesh",
+        {
+            "operation": "proportional_edit",
+            "object_names": [shade.name],
+            "selected_only": False,
+            "axis": "Z",
+            "distance": -0.05,
+            "proportional_center": [0.0, 0.0, 0.35],
+            "proportional_radius": 0.9,
+            "proportional_falloff": "SMOOTH",
+        },
+    )
+    assert proportional_result["objects"][0]["details"]["moved_vertices"] > 0, proportional_result
+    solidify_result = _execute(
+        context,
+        "solidify_model",
+        {"object_names": [shade.name], "selected_only": False, "thickness": 0.035, "offset": 0.0, "name": "Agent Bridge Phase1 Shade Thickness"},
+    )
+    assert shade.modifiers.get(solidify_result["objects"][0]["modifier"]).type == "SOLIDIFY", solidify_result
+    screw_result = _execute(
+        context,
+        "screw_model",
+        {
+            "object_names": [thread_seed.name],
+            "selected_only": False,
+            "axis": "Z",
+            "angle": 12.566370614359172,
+            "screw_offset": 0.22,
+            "iterations": 2,
+            "steps": 16,
+            "name": "Agent Bridge Phase1 Thread Screw",
+        },
+    )
+    assert thread_seed.modifiers.get(screw_result["objects"][0]["modifier"]).type == "SCREW", screw_result
+
+    _execute(
+        context,
+        "select_objects",
+        {"object_names": [base.name, pole.name, arm.name, shade.name, thread_seed.name], "active_object_name": base.name},
+    )
+    _execute(context, "create_shader_material", {"name": "Agent Bridge Phase1 Brushed Metal", "preset": "brushed_metal", "assign_to_selected": True})
+    _execute(context, "select_objects", {"object_names": [bulb.name], "active_object_name": bulb.name})
+    _execute(context, "assign_emission_material_to_selected", {"name": "Agent Bridge Phase1 Warm Bulb", "color": [1.0, 0.74, 0.38, 1.0], "strength": 2.4})
+
+    for obj in (base, pole, arm, shade, bulb, thread_seed):
+        assert obj.name in bpy.data.objects
+        assert obj.type == "MESH"
+        assert obj.material_slots and obj.material_slots[0].material, obj.name
+    assert shade.modifiers.get("Agent Bridge Phase1 Shade Thickness")
+    assert thread_seed.modifiers.get("Agent Bridge Phase1 Thread Screw")
+    return {
+        "objects": [obj.name for obj in (base, pole, arm, shade, bulb, thread_seed)],
+        "materials": ["Agent Bridge Phase1 Brushed Metal", "Agent Bridge Phase1 Warm Bulb"],
     }
 
 
@@ -159,6 +264,42 @@ def main():
     dissolve_mesh.update()
     dissolve_fixture = bpy.data.objects.new("Agent Bridge Dissolve Fixture", dissolve_mesh)
     context.collection.objects.link(dissolve_fixture)
+    loop_mesh = bpy.data.meshes.new("Agent Bridge Loop Fixture Mesh")
+    loop_mesh.from_pydata(
+        [(-0.5, -0.5, 0.0), (0.5, -0.5, 0.0), (0.5, 0.5, 0.0), (-0.5, 0.5, 0.0)],
+        [(0, 1), (1, 2), (2, 3), (3, 0)],
+        [(0, 1, 2, 3)],
+    )
+    loop_mesh.update()
+    loop_fixture = bpy.data.objects.new("Agent Bridge Loop Fixture", loop_mesh)
+    context.collection.objects.link(loop_fixture)
+    knife_mesh = bpy.data.meshes.new("Agent Bridge Knife Fixture Mesh")
+    knife_mesh.from_pydata(
+        [
+            (-0.5, -0.5, -0.5),
+            (0.5, -0.5, -0.5),
+            (0.5, 0.5, -0.5),
+            (-0.5, 0.5, -0.5),
+            (-0.5, -0.5, 0.5),
+            (0.5, -0.5, 0.5),
+            (0.5, 0.5, 0.5),
+            (-0.5, 0.5, 0.5),
+        ],
+        [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4), (0, 4), (1, 5), (2, 6), (3, 7)],
+        [(0, 1, 2, 3), (4, 7, 6, 5), (0, 4, 5, 1), (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0)],
+    )
+    knife_mesh.update()
+    knife_fixture = bpy.data.objects.new("Agent Bridge Knife Fixture", knife_mesh)
+    context.collection.objects.link(knife_fixture)
+    proportional_mesh = bpy.data.meshes.new("Agent Bridge Proportional Fixture Mesh")
+    proportional_mesh.from_pydata(
+        [(-0.5, 0.0, 0.0), (0.0, 0.0, 0.0), (0.5, 0.0, 0.0)],
+        [(0, 1), (1, 2)],
+        [],
+    )
+    proportional_mesh.update()
+    proportional_fixture = bpy.data.objects.new("Agent Bridge Proportional Fixture", proportional_mesh)
+    context.collection.objects.link(proportional_fixture)
     shape_key_mesh = bpy.data.meshes.new("Agent Bridge Shape Key Fixture Mesh")
     shape_key_mesh.from_pydata(
         [(-0.5, -0.5, 0.0), (0.5, -0.5, 0.0), (0.5, 0.5, 0.0), (-0.5, 0.5, 0.0)],
@@ -573,6 +714,38 @@ def main():
             {"operation": "dissolve_degenerate", "object_names": [dissolve_fixture.name], "selected_only": False, "merge_distance": 0.01},
         )
         assert dissolved["objects"][0]["after"]["vertices"] < dissolved["objects"][0]["before"]["vertices"], dissolved
+        loop_cut = _execute(
+            context,
+            "edit_mesh",
+            {"operation": "loop_cut", "object_names": [loop_fixture.name], "selected_only": False, "loop_cuts": 2, "cut_axis": "X"},
+        )
+        assert loop_cut["objects"][0]["after"]["vertices"] > loop_cut["objects"][0]["before"]["vertices"], loop_cut
+        assert loop_cut["objects"][0]["details"]["mode"] == "bounded_planar_loop", loop_cut
+        assert loop_cut["objects"][0]["details"]["axis"] == "X", loop_cut
+        assert len(loop_cut["objects"][0]["details"]["positions"]) == 2, loop_cut
+        knife_cut = _execute(
+            context,
+            "edit_mesh",
+            {"operation": "knife_cut", "object_names": [knife_fixture.name], "selected_only": False, "cut_axis": "Z", "cut_position": 0.0},
+        )
+        assert knife_cut["objects"][0]["after"]["edges"] > knife_cut["objects"][0]["before"]["edges"], knife_cut
+        proportional_before = [vertex.co.z for vertex in proportional_fixture.data.vertices]
+        proportional = _execute(
+            context,
+            "edit_mesh",
+            {
+                "operation": "proportional_edit",
+                "object_names": [proportional_fixture.name],
+                "selected_only": False,
+                "axis": "Z",
+                "distance": 0.25,
+                "proportional_center": [0.0, 0.0, 0.0],
+                "proportional_radius": 0.6,
+                "proportional_falloff": "LINEAR",
+            },
+        )
+        assert proportional["objects"][0]["after"] == proportional["objects"][0]["before"], proportional
+        assert any(vertex.co.z > before for vertex, before in zip(proportional_fixture.data.vertices, proportional_before)), proportional
 
         cutter = _execute(
             context,
@@ -646,6 +819,24 @@ def main():
         solidify_modifier = cube.modifiers.get("Agent Bridge Advanced Solidify")
         assert solidify_modifier and solidify_modifier.type == "SOLIDIFY", solidify
         assert round(float(solidify_modifier.thickness), 3) == 0.08, solidify
+        screw = _execute(
+            context,
+            "screw_model",
+            {
+                "object_names": [loop_fixture.name],
+                "selected_only": False,
+                "axis": "Z",
+                "angle": 6.283185307179586,
+                "screw_offset": 0.35,
+                "iterations": 2,
+                "steps": 12,
+                "name": "Agent Bridge Advanced Screw",
+            },
+        )
+        screw_modifier = loop_fixture.modifiers.get("Agent Bridge Advanced Screw")
+        assert screw_modifier and screw_modifier.type == "SCREW", screw
+        assert screw["axis"] == "Z", screw
+        assert round(float(screw_modifier.screw_offset), 3) == 0.35, screw
 
         _select_object(context, cube)
         shape_key = _execute(context, "create_shape_key", {"object_name": "Cube", "key_name": "Agent Bridge Bulge", "value": 0.25})
@@ -857,6 +1048,11 @@ def main():
         assert pipe_run["template"] == "pipe_run", pipe_run
         assert any("Pipe 01" in name for name in pipe_run["objects"]), pipe_run
         assert any("Pipe Support" in name for name in pipe_run["objects"]), pipe_run
+
+        phase1_lamp = _run_phase1_desk_lamp_exit_test(context)
+        assert len(phase1_lamp["objects"]) == 6, phase1_lamp
+        assert all(name in bpy.data.objects for name in phase1_lamp["objects"]), phase1_lamp
+        assert all(name in bpy.data.materials for name in phase1_lamp["materials"]), phase1_lamp
 
         directed = _execute(
             context,

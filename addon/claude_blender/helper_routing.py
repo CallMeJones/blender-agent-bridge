@@ -185,6 +185,10 @@ HELPER_FIRST_SCRIPT_RULES = (
             "edit mesh",
             "extrude",
             "inset",
+            "loop cut",
+            "loop-cut",
+            "knife",
+            "proportional edit",
             "bridge loops",
             "bridge edge loops",
             "dissolve",
@@ -200,11 +204,14 @@ HELPER_FIRST_SCRIPT_RULES = (
             "symmetry",
             "symmetrize",
             "solidify",
+            "screw",
+            "thread",
+            "spiral",
             "wall thickness",
         },
         "message": (
             "Use procedural modeling helpers and geometry-node inspection before drafting Python for common "
-            "bounded mesh edits, curve conversion, non-destructive array/bevel/weighted-normal, boolean, mirror, symmetry, or solidify stacks."
+            "bounded mesh edits, curve conversion, non-destructive array/bevel/weighted-normal, boolean, mirror, symmetry, solidify, or screw stacks."
         ),
         "recommended_tools": [
             "plan_advanced_scene_workflow",
@@ -217,6 +224,7 @@ HELPER_FIRST_SCRIPT_RULES = (
             "mirror_model",
             "symmetrize_model",
             "solidify_model",
+            "screw_model",
             "add_geometry_nodes_modifier",
             "add_bevel_and_subsurf",
         ],

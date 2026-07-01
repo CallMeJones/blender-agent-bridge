@@ -1000,11 +1000,11 @@ def main():
                 {"apply_procedural_array_stack"},
             ),
             (
-                "Use a boolean cutter, mirror the model, symmetrize it, and solidify wall thickness.",
-                {"boolean_op", "mirror_model", "symmetrize_model", "solidify_model"},
+                "Use a boolean cutter, mirror the model, symmetrize it, solidify wall thickness, and add a screw thread.",
+                {"boolean_op", "mirror_model", "symmetrize_model", "solidify_model", "screw_model"},
             ),
             (
-                "Extrude mesh faces, inset panels, bridge boundary loops, merge by distance, and convert curve to mesh.",
+                "Extrude mesh faces, inset panels, loop cut, knife cut, proportional edit, bridge boundary loops, merge by distance, and convert curve to mesh.",
                 {"edit_mesh", "curve_to_mesh"},
             ),
             (

@@ -31,7 +31,16 @@ KEYFRAME_INTERPOLATIONS = {
 
 EMPTY_DISPLAY_TYPES = {"PLAIN_AXES", "ARROWS", "SINGLE_ARROW", "CIRCLE", "CUBE", "SPHERE", "CONE", "IMAGE"}
 OBJECT_DISPLAY_TYPES = {"TEXTURED", "SOLID", "WIRE", "BOUNDS"}
-EDIT_MESH_OPERATIONS = {"extrude_faces", "inset_faces", "merge_by_distance", "dissolve_degenerate", "bridge_boundary_loops"}
+EDIT_MESH_OPERATIONS = {
+    "extrude_faces",
+    "inset_faces",
+    "merge_by_distance",
+    "dissolve_degenerate",
+    "bridge_boundary_loops",
+    "loop_cut",
+    "knife_cut",
+    "proportional_edit",
+}
 
 LIGHTING_PRESETS = {
     "product_softbox": [
@@ -3911,7 +3920,7 @@ ADVANCED_WORKFLOW_DOMAINS = {
         "script_boundary": "Prefer storyboard/cutout helpers when they fit; draft_script can handle custom Grease Pencil stroke editing, SVG conversion, or bespoke vector workflows after static checks.",
     },
     "procedural_3d": {
-        "keywords": {"advanced 3d", "procedural", "array", "scatter", "kit", "object kit", "kitbash", "mechanical", "mechanical joint", "mechanical part", "control panel", "modular", "wall panel", "pipe run", "hard surface", "hard-surface", "geometry nodes", "node group", "modifier stack", "edit mesh", "extrude", "inset", "bridge", "dissolve", "merge", "curve to mesh", "convert curve", "boolean", "cutter", "mirror", "symmetry", "symmetrize", "solidify", "wall thickness"},
+        "keywords": {"advanced 3d", "procedural", "array", "scatter", "kit", "object kit", "kitbash", "mechanical", "mechanical joint", "mechanical part", "control panel", "modular", "wall panel", "pipe run", "hard surface", "hard-surface", "geometry nodes", "node group", "modifier stack", "edit mesh", "extrude", "inset", "loop cut", "loop-cut", "knife", "proportional edit", "bridge", "dissolve", "merge", "curve to mesh", "convert curve", "boolean", "cutter", "mirror", "symmetry", "symmetrize", "solidify", "screw", "thread", "spiral", "wall thickness"},
         "tools": [
             "get_geometry_nodes_details",
             "apply_procedural_array_stack",
@@ -3921,6 +3930,7 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "mirror_model",
             "symmetrize_model",
             "solidify_model",
+            "screw_model",
             "create_procedural_object_kit",
             "add_geometry_nodes_modifier",
             "shade_smooth_selected",
@@ -4772,6 +4782,14 @@ def _clamped_float(value, default, minimum, maximum):
     return max(float(minimum), min(float(maximum), result))
 
 
+def _clamped_int(value, default, minimum, maximum):
+    try:
+        result = int(value)
+    except (TypeError, ValueError):
+        result = int(default)
+    return max(int(minimum), min(int(maximum), result))
+
+
 def _coerce_bool_triplet(value, fallback):
     if value is None:
         values = list(fallback)
@@ -4818,6 +4836,15 @@ def _normalize_edit_mesh_operation(operation):
         "bridge": "bridge_boundary_loops",
         "bridge_loops": "bridge_boundary_loops",
         "bridge_edge_loops": "bridge_boundary_loops",
+        "loop": "loop_cut",
+        "loopcut": "loop_cut",
+        "loop_cuts": "loop_cut",
+        "subdivide": "loop_cut",
+        "knife": "knife_cut",
+        "bisect": "knife_cut",
+        "plane_cut": "knife_cut",
+        "proportional": "proportional_edit",
+        "proportional_move": "proportional_edit",
     }
     normalized = aliases.get(normalized, normalized)
     return normalized if normalized in EDIT_MESH_OPERATIONS else ""
@@ -4854,6 +4881,13 @@ def _scoped_bmesh_faces(bm, scope):
     return [face for face, value in centers if abs(value - target) <= tolerance]
 
 
+def _mesh_edit_axis_vector(axis):
+    axis_index, axis_name = _axis_index(axis)
+    components = [0.0, 0.0, 0.0]
+    components[axis_index] = 1.0
+    return Vector(components), axis_index, axis_name
+
+
 def _edit_mesh_vector(bm, faces, direction, axis, distance):
     distance = _clamped_float(distance, 0.25, -100.0, 100.0)
     normalized = str(direction or "NORMAL").strip().upper()
@@ -4877,7 +4911,45 @@ def _edit_mesh_vector(bm, faces, direction, axis, distance):
     return normal * distance, "NORMAL"
 
 
-def _apply_bmesh_edit_operation(bm, operation, *, face_scope, direction, axis, distance, inset_thickness, inset_depth, merge_distance):
+def _proportional_falloff_weight(distance, radius, falloff):
+    if radius <= 0.0:
+        return 1.0 if distance <= 1e-8 else 0.0
+    t = max(0.0, min(1.0, float(distance) / float(radius)))
+    if t >= 1.0:
+        return 0.0
+    falloff = str(falloff or "SMOOTH").strip().upper()
+    if falloff == "CONSTANT":
+        return 1.0
+    if falloff == "LINEAR":
+        return 1.0 - t
+    if falloff == "SHARP":
+        return (1.0 - t) * (1.0 - t)
+    if falloff == "ROOT":
+        return math.sqrt(1.0 - t)
+    if falloff == "SPHERE":
+        return math.sqrt(max(0.0, 1.0 - (t * t)))
+    smooth = t * t * (3.0 - (2.0 * t))
+    return 1.0 - smooth
+
+
+def _apply_bmesh_edit_operation(
+    bm,
+    operation,
+    *,
+    face_scope,
+    direction,
+    axis,
+    distance,
+    inset_thickness,
+    inset_depth,
+    merge_distance,
+    loop_cuts,
+    cut_axis,
+    cut_position,
+    proportional_center,
+    proportional_radius,
+    proportional_falloff,
+):
     bm.verts.ensure_lookup_table()
     bm.edges.ensure_lookup_table()
     bm.faces.ensure_lookup_table()
@@ -4931,6 +5003,96 @@ def _apply_bmesh_edit_operation(bm, operation, *, face_scope, direction, axis, d
         bmesh.ops.bridge_loops(bm, edges=boundary_edges)
         details = {"boundary_edges": len(boundary_edges)}
 
+    elif operation == "loop_cut":
+        cuts = _clamped_int(loop_cuts, 1, 1, 32)
+        normal, axis_index, axis_name = _mesh_edit_axis_vector(cut_axis or axis)
+        geom = list(bm.verts) + list(bm.edges) + list(bm.faces)
+        if not geom:
+            return before_counts, before_counts, {"skipped": "empty mesh"}
+        if len(geom) > 12288:
+            return before_counts, before_counts, {"skipped": "too many elements for bounded loop cut"}
+        values = [vert.co[axis_index] for vert in bm.verts]
+        lower = min(values)
+        upper = max(values)
+        span = upper - lower
+        if span <= 1e-8:
+            return before_counts, before_counts, {"skipped": f"mesh has no span on {axis_name} axis"}
+        positions = [lower + (span * (index + 1) / float(cuts + 1)) for index in range(cuts)]
+        cut_elements = 0
+        for position in positions:
+            plane_co = Vector((0.0, 0.0, 0.0))
+            plane_co[axis_index] = position
+            geom = list(bm.verts) + list(bm.edges) + list(bm.faces)
+            result = bmesh.ops.bisect_plane(
+                bm,
+                geom=geom,
+                plane_co=plane_co,
+                plane_no=normal,
+                clear_inner=False,
+                clear_outer=False,
+            )
+            cut_elements += len(result.get("geom_cut", []) if result else [])
+            bm.verts.ensure_lookup_table()
+            bm.edges.ensure_lookup_table()
+            bm.faces.ensure_lookup_table()
+        if cut_elements <= 0:
+            return before_counts, before_counts, {"skipped": "loop planes did not intersect mesh"}
+        details = {
+            "mode": "bounded_planar_loop",
+            "axis": axis_name,
+            "cuts": cuts,
+            "positions": [round(float(position), 6) for position in positions],
+            "cut_elements": cut_elements,
+        }
+
+    elif operation == "knife_cut":
+        plane_axis = cut_axis or axis
+        normal, axis_index, axis_name = _mesh_edit_axis_vector(plane_axis)
+        position = _clamped_float(cut_position, 0.0, -1000.0, 1000.0)
+        plane_co = Vector((0.0, 0.0, 0.0))
+        plane_co[axis_index] = position
+        geom = list(bm.verts) + list(bm.edges) + list(bm.faces)
+        if not geom:
+            return before_counts, before_counts, {"skipped": "empty mesh"}
+        result = bmesh.ops.bisect_plane(
+            bm,
+            geom=geom,
+            plane_co=plane_co,
+            plane_no=normal,
+            clear_inner=False,
+            clear_outer=False,
+        )
+        cut_geom = result.get("geom_cut", []) if result else []
+        if not cut_geom:
+            return before_counts, before_counts, {"skipped": "plane did not intersect mesh"}
+        details = {"axis": axis_name, "position": position, "cut_elements": len(cut_geom)}
+
+    elif operation == "proportional_edit":
+        move_axis, _axis_index_value, axis_name = _mesh_edit_axis_vector(axis)
+        amount = _clamped_float(distance, 0.25, -100.0, 100.0)
+        radius = _clamped_float(proportional_radius, 1.0, 0.0001, 1000.0)
+        center = Vector(_coerce_vector(proportional_center, (0.0, 0.0, 0.0)))
+        moved = 0
+        max_weight = 0.0
+        for vert in bm.verts:
+            weight = _proportional_falloff_weight((vert.co - center).length, radius, proportional_falloff)
+            if weight <= 1e-6:
+                continue
+            vert.co += move_axis * (amount * weight)
+            moved += 1
+            max_weight = max(max_weight, weight)
+        if moved == 0 or abs(amount) <= 1e-8:
+            return before_counts, before_counts, {"skipped": "no vertices inside proportional radius"}
+        details = {
+            "axis": axis_name,
+            "distance": amount,
+            "center": [float(component) for component in center],
+            "radius": radius,
+            "falloff": str(proportional_falloff or "SMOOTH").strip().upper(),
+            "moved_vertices": moved,
+            "max_weight": round(float(max_weight), 6),
+        }
+
     bm.normal_update()
     bm.verts.ensure_lookup_table()
     bm.edges.ensure_lookup_table()
@@ -4983,6 +5145,12 @@ def edit_mesh(
     inset_thickness=0.05,
     inset_depth=0.0,
     merge_distance=0.0001,
+    loop_cuts=1,
+    cut_axis="Z",
+    cut_position=0.0,
+    proportional_center=None,
+    proportional_radius=1.0,
+    proportional_falloff="SMOOTH",
     allow_shape_keys=False,
     label="Edit mesh",
 ):
@@ -5018,6 +5186,12 @@ def edit_mesh(
                 inset_thickness=inset_thickness,
                 inset_depth=inset_depth,
                 merge_distance=merge_distance,
+                loop_cuts=loop_cuts,
+                cut_axis=cut_axis,
+                cut_position=cut_position,
+                proportional_center=proportional_center,
+                proportional_radius=proportional_radius,
+                proportional_falloff=proportional_falloff,
             )
             if before_counts == after_counts and details.get("skipped"):
                 skipped.append({"object": obj.name, "reason": details["skipped"]})
@@ -5459,6 +5633,83 @@ def solidify_model(
         "objects": changed,
         "thickness": thickness,
         "offset": offset,
+        "missing_object_names": missing,
+        "transaction_id": transaction["id"],
+    }
+
+
+def screw_model(
+    context,
+    *,
+    object_names=None,
+    selected_only=True,
+    axis="Z",
+    angle=math.tau,
+    screw_offset=0.0,
+    iterations=1,
+    steps=16,
+    render_steps=32,
+    use_merge_vertices=False,
+    merge_threshold=0.001,
+    use_smooth_shade=True,
+    name="Agent Bridge Screw",
+    label="Screw model",
+):
+    objects, missing = _resolve_edit_objects(context, object_names=object_names, selected_only=selected_only)
+    meshes = [obj for obj in objects if obj.type == "MESH"]
+    if not meshes:
+        return {"ok": False, "message": "No mesh objects found for screw model", "missing_object_names": missing}
+
+    _axis_index_value, axis_name = _axis_index(axis)
+    angle = _clamped_float(angle, math.tau, -math.tau * 32.0, math.tau * 32.0)
+    screw_offset = _clamped_float(screw_offset, 0.0, -1000.0, 1000.0)
+    iterations = _clamped_int(iterations, 1, 1, 256)
+    steps = _clamped_int(steps, 16, 1, 512)
+    render_steps = _clamped_int(render_steps, max(steps, 16), 1, 1024)
+    merge_threshold = _clamped_float(merge_threshold, 0.001, 0.0, 10.0)
+    transaction = live_preview.begin(label, context)
+    changed = []
+    for obj in meshes:
+        modifier = obj.modifiers.new(str(name or "Agent Bridge Screw"), "SCREW")
+        live_preview._record_created_modifier(obj, modifier)
+        modifier.axis = axis_name
+        modifier.angle = angle
+        modifier.screw_offset = screw_offset
+        modifier.iterations = iterations
+        modifier.steps = steps
+        modifier.render_steps = render_steps
+        if hasattr(modifier, "use_merge_vertices"):
+            modifier.use_merge_vertices = bool(use_merge_vertices)
+        if hasattr(modifier, "merge_threshold"):
+            modifier.merge_threshold = merge_threshold
+        if hasattr(modifier, "use_smooth_shade"):
+            modifier.use_smooth_shade = bool(use_smooth_shade)
+        changed.append({"object": obj.name, "modifier": modifier.name})
+
+    transaction["applied_steps"].append(
+        {
+            "type": "screw_model",
+            "label": label,
+            "objects": changed,
+            "axis": axis_name,
+            "angle": angle,
+            "screw_offset": screw_offset,
+            "iterations": iterations,
+            "steps": steps,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Added Screw modifier to {len(changed)} mesh object(s)",
+        "objects": changed,
+        "axis": axis_name,
+        "angle": angle,
+        "screw_offset": screw_offset,
+        "iterations": iterations,
+        "steps": steps,
+        "render_steps": render_steps,
         "missing_object_names": missing,
         "transaction_id": transaction["id"],
     }

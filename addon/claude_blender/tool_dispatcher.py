@@ -2417,6 +2417,12 @@ def edit_mesh(context, args):
         inset_thickness=_bounded_float(args.get("inset_thickness"), 0.05, minimum=0.0, maximum=100.0),
         inset_depth=_bounded_float(args.get("inset_depth"), 0.0, minimum=-100.0, maximum=100.0),
         merge_distance=_bounded_float(args.get("merge_distance"), 0.0001, minimum=0.0, maximum=10.0),
+        loop_cuts=_bounded_int(args.get("loop_cuts"), 1, minimum=1, maximum=32),
+        cut_axis=str(args.get("cut_axis") or "Z"),
+        cut_position=_bounded_float(args.get("cut_position"), 0.0, minimum=-1000.0, maximum=1000.0),
+        proportional_center=_float_list(args.get("proportional_center"), 3, (0.0, 0.0, 0.0)),
+        proportional_radius=_bounded_float(args.get("proportional_radius"), 1.0, minimum=0.0001, maximum=1000.0),
+        proportional_falloff=str(args.get("proportional_falloff") or "SMOOTH"),
         allow_shape_keys=bool(args.get("allow_shape_keys", False)),
         label=args.get("label", "Edit mesh"),
     )
@@ -2485,6 +2491,25 @@ def solidify_model(context, args):
         use_even_offset=bool(args.get("use_even_offset", True)),
         name=str(args.get("name") or "Agent Bridge Solidify"),
         label=args.get("label", "Solidify model"),
+    )
+
+
+def screw_model(context, args):
+    return advanced_helpers.screw_model(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", True)),
+        axis=str(args.get("axis") or "Z"),
+        angle=_bounded_float(args.get("angle"), 6.283185307179586, minimum=-201.06192982974676, maximum=201.06192982974676),
+        screw_offset=_bounded_float(args.get("screw_offset"), 0.0, minimum=-1000.0, maximum=1000.0),
+        iterations=_bounded_int(args.get("iterations"), 1, minimum=1, maximum=256),
+        steps=_bounded_int(args.get("steps"), 16, minimum=1, maximum=512),
+        render_steps=_bounded_int(args.get("render_steps"), 32, minimum=1, maximum=1024),
+        use_merge_vertices=bool(args.get("use_merge_vertices", False)),
+        merge_threshold=_bounded_float(args.get("merge_threshold"), 0.001, minimum=0.0, maximum=10.0),
+        use_smooth_shade=bool(args.get("use_smooth_shade", True)),
+        name=str(args.get("name") or "Agent Bridge Screw"),
+        label=args.get("label", "Screw model"),
     )
 
 
@@ -3694,6 +3719,11 @@ def _preview_expected_changes(step, label, kind, target_text):
         )
     if kind == "solidify_model":
         return f"{label}: adds Solidify modifiers to {target_text} with thickness {step.get('thickness')}."
+    if kind == "screw_model":
+        return (
+            f"{label}: adds Screw modifiers to {target_text} on {step.get('axis', 'Z')} "
+            f"with offset {step.get('screw_offset')}."
+        )
     if kind == "organize_scene_for_production":
         return (
             f"{label}: links {_format_count('object', len(step.get('linked') or []))} into "
@@ -3848,6 +3878,7 @@ TOOL_FUNCTIONS = {
     "mirror_model": mirror_model,
     "symmetrize_model": symmetrize_model,
     "solidify_model": solidify_model,
+    "screw_model": screw_model,
     "create_procedural_object_kit": create_procedural_object_kit,
     "create_camera_dolly_animation": create_camera_dolly_animation,
     "create_directed_animation_shot": create_directed_animation_shot,

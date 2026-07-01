@@ -168,6 +168,10 @@ ADVANCED_ROUTE_TERMS = {
     "edit mesh",
     "extrude",
     "inset",
+    "loop cut",
+    "loop-cut",
+    "knife",
+    "proportional edit",
     "bridge",
     "dissolve",
     "merge",
@@ -179,6 +183,8 @@ ADVANCED_ROUTE_TERMS = {
     "symmetry",
     "symmetrize",
     "solidify",
+    "screw",
+    "thread",
     "director",
     "director workflow",
     "asset import",
@@ -197,6 +203,7 @@ ADVANCED_ROUTE_TOOLS = {
     "mirror_model",
     "symmetrize_model",
     "solidify_model",
+    "screw_model",
     "create_procedural_object_kit",
     "create_camera_dolly_animation",
     "create_directed_animation_shot",
@@ -227,6 +234,10 @@ PROCEDURAL_ROUTE_TERMS = {
     "edit mesh",
     "extrude",
     "inset",
+    "loop cut",
+    "loop-cut",
+    "knife",
+    "proportional edit",
     "bridge",
     "dissolve",
     "merge",
@@ -241,6 +252,8 @@ PROCEDURAL_ROUTE_TERMS = {
     "symmetry",
     "symmetrize",
     "solidify",
+    "screw",
+    "thread",
     "wall thickness",
 }
 SIMULATION_SETUP_ROUTE_TERMS = {"cloth simulation", "cloth sim", "simulation setup", "physics setup"}
@@ -1140,7 +1153,7 @@ def _tool_category(tool):
         return "camera_render"
     if "animate" in name or "animation" in name or "frame" in name:
         return "animation"
-    if name in {"edit_mesh", "curve_to_mesh", "boolean_op", "mirror_model", "symmetrize_model", "solidify_model"}:
+    if name in {"edit_mesh", "curve_to_mesh", "boolean_op", "mirror_model", "symmetrize_model", "solidify_model", "screw_model"}:
         return "geometry"
     if "geometry" in name or "modifier" in name or "bevel" in name or "subsurf" in name or "shape_key" in name:
         return "geometry"
@@ -1331,7 +1344,7 @@ def _score_tool_match(tool, query):
                 score += 950
             elif name == "apply_procedural_array_stack":
                 score += 900
-            elif name == "edit_mesh" and any(term in normalized_query for term in ("edit mesh", "extrude", "inset", "bridge", "dissolve", "merge")):
+            elif name == "edit_mesh" and any(term in normalized_query for term in ("edit mesh", "extrude", "inset", "loop cut", "loop-cut", "knife", "proportional edit", "bridge", "dissolve", "merge")):
                 score += 1250
             elif name == "curve_to_mesh" and any(term in normalized_query for term in ("curve to mesh", "convert curve", "mesh copy")):
                 score += 1250
@@ -1342,6 +1355,8 @@ def _score_tool_match(tool, query):
             elif name == "symmetrize_model" and any(term in normalized_query for term in ("symmetry", "symmetrize", "symmetrical")):
                 score += 1200
             elif name == "solidify_model" and any(term in normalized_query for term in ("solidify", "thickness", "shell")):
+                score += 1200
+            elif name == "screw_model" and any(term in normalized_query for term in ("screw", "thread", "spring", "spiral", "helix")):
                 score += 1200
             elif name in {"get_geometry_nodes_details", "add_geometry_nodes_modifier", "add_bevel_and_subsurf"}:
                 score += 500
