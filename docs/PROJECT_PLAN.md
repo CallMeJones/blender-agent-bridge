@@ -130,6 +130,7 @@ Expose external agents to narrow client tools rather than raw Python first:
 - `link_selected_to_collection`: links selected objects to a named collection.
 - `add_modifier_to_selected`: adds bounded BEVEL, SUBSURF, SOLIDIFY, or ARRAY modifiers to selected mesh objects.
 - `edit_mesh`: applies bounded topology/shape edits such as face extrusion, face inset, bounded planar loop cut, planar knife cut, boundary-loop bridge, dissolve-degenerate, merge-by-distance, and proportional vertex edit to single-user mesh data with mesh snapshot rollback.
+- `inspect_modeling_quality`: read-only Phase 1 diagnostic for loose/non-manifold geometry, missing materials, modifier seed warnings, and unapplied scale warnings.
 - `curve_to_mesh`: creates preview-safe mesh-copy objects from Curve/Text sources without destroying the original.
 - `boolean_op`: adds non-destructive Boolean modifiers to a target mesh using named or selected cutter meshes.
 - `mirror_model`: adds non-destructive Mirror modifiers to selected or named mesh objects.
@@ -248,7 +249,7 @@ Acceptance:
 - Riskier generated scripts still require explicit approval before mutating the scene.
 
 Status: Initial tool loop implemented for scene object listing, object selection, playhead changes, selected-object movement, absolute transform edits, primitive creation, material assignment, emission material assignment, collection creation/linking, bounded modifier creation, Track To constraints, timeline setup, active camera selection, selected-object transform keyframes, light creation, camera creation, camera orbit creation, scene inspection, docs lookup scaffold, commit, and revert.
-Advanced helper coverage is now implemented for Principled shader material setup, Geometry Nodes starter modifiers, procedural object-kit templates, bounded Phase 1 modeling helpers (`edit_mesh`, `curve_to_mesh`, Booleans, mirror/symmetry, solidify, and screw depth), shape key creation/animation, text objects, curve paths, bounded particles, basic armatures, copy-transform constraints, render settings, camera settings, and world background colors. These tools still use the reversible live-preview transaction; complex custom node graphs, production rigs, and simulation setups remain approval-gated Python.
+Advanced helper coverage is now implemented for Principled shader material setup, Geometry Nodes starter modifiers, procedural object-kit templates including a bounded desk-lamp/product-prop kit, bounded Phase 1 modeling helpers (`edit_mesh`, `inspect_modeling_quality`, `curve_to_mesh`, Booleans, mirror/symmetry, solidify, and screw depth), shape key creation/animation, text objects, curve paths, bounded particles, basic armatures, copy-transform constraints, render settings, camera settings, and world background colors. These tools still use the reversible live-preview transaction; complex custom node graphs, production rigs, and simulation setups remain approval-gated Python.
 Model refinement helpers are now implemented for shade smoothing, bevel/subdivision stacks, wheel assemblies, panel seams, window/glass panels, and bounded vehicle, product, and character refinement templates.
 The bridge now uses request-specific tool schema selection so external agents receive a compact task-relevant subset instead of the whole growing toolbox.
 

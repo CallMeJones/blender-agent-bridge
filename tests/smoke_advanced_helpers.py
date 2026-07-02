@@ -25,6 +25,7 @@ ADVANCED_TOOLS = {
     "create_2d_cutout_layer",
     "apply_procedural_array_stack",
     "edit_mesh",
+    "inspect_modeling_quality",
     "curve_to_mesh",
     "boolean_op",
     "mirror_model",
@@ -118,7 +119,7 @@ def _material_topology(material):
     }
 
 
-def _run_phase1_desk_lamp_exit_test(context):
+def _run_phase1_modeling_helper_prop_test(context):
     parts = {}
 
     def primitive(name, primitive_type, location, rotation, scale):
@@ -202,6 +203,28 @@ def _run_phase1_desk_lamp_exit_test(context):
     _execute(context, "select_objects", {"object_names": [bulb.name], "active_object_name": bulb.name})
     _execute(context, "assign_emission_material_to_selected", {"name": "Agent Bridge Phase1 Warm Bulb", "color": [1.0, 0.74, 0.38, 1.0], "strength": 2.4})
 
+    lamp_object_names = [obj.name for obj in (base, pole, arm, shade, bulb, thread_seed)]
+    bpy.ops.object.select_all(action="DESELECT")
+    root_result = _execute(
+        context,
+        "parent_selected_to_empty",
+        {"object_names": lamp_object_names, "selected_only": False, "name": "Agent Bridge Phase1 Lamp Root"},
+    )
+    root_name = root_result["empty"]
+    assert root_result["missing_object_names"] == [], root_result
+    quality = _execute(
+        context,
+        "inspect_modeling_quality",
+        {"object_names": [root_name], "selected_only": False, "include_children": True, "require_materials": True},
+    )
+    assert quality["passed"] is True, quality
+    assert quality["object_count"] == 6, quality
+    assert quality["issue_count"] == 0, quality
+    for item in quality["objects"]:
+        assert item["materials"]["materials"], item
+        assert item["topology"]["loose_vertices"] == 0, item
+        assert item["topology"]["loose_edges"] == 0, item
+
     for obj in (base, pole, arm, shade, bulb, thread_seed):
         assert obj.name in bpy.data.objects
         assert obj.type == "MESH"
@@ -209,9 +232,77 @@ def _run_phase1_desk_lamp_exit_test(context):
     assert shade.modifiers.get("Agent Bridge Phase1 Shade Thickness")
     assert thread_seed.modifiers.get("Agent Bridge Phase1 Thread Screw")
     return {
-        "objects": [obj.name for obj in (base, pole, arm, shade, bulb, thread_seed)],
+        "root": root_name,
+        "objects": lamp_object_names,
         "materials": ["Agent Bridge Phase1 Brushed Metal", "Agent Bridge Phase1 Warm Bulb"],
+        "quality": quality,
     }
+
+
+def _run_desk_lamp_kit_exit_test(context):
+    kit = _execute(
+        context,
+        "create_procedural_object_kit",
+        {
+            "template": "desk_lamp",
+            "name_prefix": "Agent Bridge Desk Lamp Kit",
+            "location": [7.0, -6.0, 0.0],
+            "count": 1,
+            "radius": 1.25,
+            "height": 1.85,
+            "primary_color": [0.16, 0.17, 0.18, 1.0],
+            "accent_color": [0.85, 0.62, 0.28, 1.0],
+        },
+    )
+    assert kit["template"] == "desk_lamp", kit
+    expected_terms = (
+        "Root",
+        "Weighted Base",
+        "Vertical Stem",
+        "Lower Arm Front",
+        "Upper Arm Rear",
+        "Stem Hinge",
+        "Elbow Hinge",
+        "Shade Hinge",
+        "Open Shade",
+        "Visible Bulb",
+        "Power Cable",
+        "Shade Glow",
+    )
+    for term in expected_terms:
+        assert any(term in name for name in kit["objects"]), (term, kit)
+    root_name = next(name for name in kit["objects"] if name.endswith(" Root"))
+    mesh_names = [name for name in kit["objects"] if bpy.data.objects[name].type == "MESH"]
+    assert len(mesh_names) >= 10, kit
+    quality = _execute(
+        context,
+        "inspect_modeling_quality",
+        {"object_names": [root_name], "selected_only": False, "include_children": True, "require_materials": True},
+    )
+    assert quality["passed"] is True, quality
+    assert quality["object_count"] >= 10, quality
+    assert quality["issue_count"] == 0, quality
+    render_result = _execute(
+        context,
+        "capture_object_inspection_renders",
+        {
+            "object_names": [root_name],
+            "views": ["front_below", "side"],
+            "resolution_x": 320,
+            "resolution_y": 240,
+            "distance_factor": 3.0,
+            "note": "Desk-lamp kit visual exit evidence",
+        },
+    )
+    render = render_result["inspection_render"]
+    assert render["available"] is True, render
+    assert len(render["images"]) == 2, render
+    for image in render["images"]:
+        assert image["available"] is True, image
+        assert image["width"] == 320 and image["height"] == 240, image
+        assert image["size_bytes"] > 128, image
+        assert os.path.isfile(image["path"]), image
+    return {"kit": kit, "root": root_name, "quality": quality, "inspection_render": render}
 
 
 def main():
@@ -937,6 +1028,9 @@ def main():
         assert dolly["camera"] == "Camera"
         assert dolly["action"] in bpy.data.actions
 
+        desk_lamp = _run_desk_lamp_kit_exit_test(context)
+        assert desk_lamp["quality"]["passed"] is True, desk_lamp
+
         object_kit = _execute(
             context,
             "create_procedural_object_kit",
@@ -1049,10 +1143,10 @@ def main():
         assert any("Pipe 01" in name for name in pipe_run["objects"]), pipe_run
         assert any("Pipe Support" in name for name in pipe_run["objects"]), pipe_run
 
-        phase1_lamp = _run_phase1_desk_lamp_exit_test(context)
-        assert len(phase1_lamp["objects"]) == 6, phase1_lamp
-        assert all(name in bpy.data.objects for name in phase1_lamp["objects"]), phase1_lamp
-        assert all(name in bpy.data.materials for name in phase1_lamp["materials"]), phase1_lamp
+        phase1_prop = _run_phase1_modeling_helper_prop_test(context)
+        assert len(phase1_prop["objects"]) == 6, phase1_prop
+        assert all(name in bpy.data.objects for name in phase1_prop["objects"]), phase1_prop
+        assert all(name in bpy.data.materials for name in phase1_prop["materials"]), phase1_prop
 
         directed = _execute(
             context,

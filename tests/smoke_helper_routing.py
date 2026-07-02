@@ -107,6 +107,12 @@ def main():
     assert "edit_mesh" in edit_mesh_guard["recommended_tools"], edit_mesh_guard
     assert "curve_to_mesh" in edit_mesh_guard["recommended_tools"], edit_mesh_guard
 
+    quality_guard = helper_routing.helper_first_script_advisory(
+        "Write Python to validate model mesh quality, non-manifold edges, loose geometry, and missing materials."
+    )
+    assert quality_guard["code"] == "procedural_3d_helper_required", quality_guard
+    assert "inspect_modeling_quality" in quality_guard["recommended_tools"], quality_guard
+
     modular_guard = helper_routing.helper_first_script_advisory(
         "Write Python for a modular wall panel object kit with pipe run details."
     )

@@ -29,6 +29,11 @@ def main():
         assert contract["mutates_scene"] is True, contract
         assert contract["requires_live_preview"] is True, contract
         assert contract["input_schema"].get("additionalProperties") is False, contract
+    kit_templates = bridge_protocol.normalized_tool_contract("create_procedural_object_kit")["input_schema"]["properties"]["template"]["enum"]
+    assert "desk_lamp" in kit_templates, kit_templates
+    parent_contract = bridge_protocol.normalized_tool_contract("parent_selected_to_empty")
+    assert parent_contract["requires_selection"] is False, parent_contract
+    assert {"object_names", "selected_only"}.issubset(parent_contract["input_schema"]["properties"]), parent_contract
     catalog_by_name = {tool["name"]: tool for tool in agent_tools.blender_tool_definitions()}
     for tool_name in ("draft_script", "draft_privileged_script"):
         code_schema = catalog_by_name[tool_name]["input_schema"]["properties"]["code"]

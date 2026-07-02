@@ -1008,7 +1008,15 @@ def main():
                 {"edit_mesh", "curve_to_mesh"},
             ),
             (
+                "Inspect mesh quality for non-manifold edges, loose geometry, missing materials, and model readiness.",
+                {"inspect_modeling_quality"},
+            ),
+            (
                 "Create an advanced procedural object kit with a kitbash scatter grid.",
+                {"create_procedural_object_kit"},
+            ),
+            (
+                "Create a believable desk lamp product prop with a base, hinged arms, shade, and bulb.",
                 {"create_procedural_object_kit"},
             ),
             (

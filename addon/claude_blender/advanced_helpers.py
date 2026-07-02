@@ -73,6 +73,7 @@ PROCEDURAL_OBJECT_KIT_TEMPLATES = {
     "mechanical_part",
     "modular_wall_panel",
     "pipe_run",
+    "desk_lamp",
 }
 
 DIRECTED_SHOT_TYPES = {
@@ -584,6 +585,68 @@ def _create_cylinder_object(context, name, location, radius, depth, material=Non
     live_preview._record_created_id("object", obj.name)
     live_preview._record_created_id("mesh", obj.data.name)
     return obj
+
+
+def _create_cone_object(
+    context,
+    name,
+    location,
+    radius1,
+    radius2,
+    depth,
+    material=None,
+    *,
+    vertices=48,
+    rotation=(0.0, 0.0, 0.0),
+    end_fill_type="NOTHING",
+):
+    bpy.ops.mesh.primitive_cone_add(
+        vertices=max(8, int(vertices)),
+        radius1=max(0.01, float(radius1)),
+        radius2=max(0.0, float(radius2)),
+        depth=max(0.01, float(depth)),
+        end_fill_type=str(end_fill_type or "NOTHING"),
+        location=location,
+        rotation=rotation,
+    )
+    obj = context.object
+    obj.name = name
+    obj.data.name = f"{name} Mesh"
+    if material:
+        obj.data.materials.append(material)
+    live_preview._record_created_id("object", obj.name)
+    live_preview._record_created_id("mesh", obj.data.name)
+    return obj
+
+
+def _create_cylinder_between(context, name, start, end, radius, material=None, *, vertices=24):
+    start_vec = Vector(_coerce_vector(start, (0.0, 0.0, 0.0)))
+    end_vec = Vector(_coerce_vector(end, (0.0, 0.0, 1.0)))
+    direction = end_vec - start_vec
+    depth = max(0.01, direction.length)
+    rotation = direction.to_track_quat("Z", "Y").to_euler() if direction.length > 1e-6 else (0.0, 0.0, 0.0)
+    return _create_cylinder_object(
+        context,
+        name,
+        start_vec + direction * 0.5,
+        radius,
+        depth,
+        material,
+        vertices=vertices,
+        rotation=rotation,
+    )
+
+
+def _parent_objects_to_root(context, root, objects):
+    for obj in objects:
+        if obj == root:
+            continue
+        live_preview._record_object_parent(obj)
+        live_preview._record_object_transform(obj)
+        world_matrix = obj.matrix_world.copy()
+        obj.parent = root
+        obj.matrix_parent_inverse = root.matrix_world.inverted()
+        obj.matrix_world = world_matrix
 
 
 def _create_curve_line(context, name, points, bevel_depth, material=None):
@@ -3907,6 +3970,180 @@ def _resolve_edit_objects(context, *, object_names=None, selected_only=True, inc
     return [], missing
 
 
+MODELING_SEED_MODIFIER_TYPES = {"ARRAY", "BOOLEAN", "MIRROR", "NODES", "SCREW", "SOLIDIFY"}
+
+
+def _material_assignment_quality(obj):
+    slots = list(getattr(obj, "material_slots", []) or [])
+    materials = [slot.material.name for slot in slots if getattr(slot, "material", None)]
+    empty_slots = [index for index, slot in enumerate(slots) if getattr(slot, "material", None) is None]
+    unassigned_polygons = 0
+    mesh = obj.data if obj and obj.type == "MESH" else None
+    if mesh is not None:
+        for poly in mesh.polygons:
+            index = int(getattr(poly, "material_index", 0) or 0)
+            if index >= len(slots) or slots[index].material is None:
+                unassigned_polygons += 1
+    return {
+        "slot_count": len(slots),
+        "materials": materials,
+        "empty_slots": empty_slots,
+        "unassigned_polygons": unassigned_polygons,
+    }
+
+
+def _mesh_modeling_quality(obj, *, require_materials, allow_modifier_seed_boundaries, scale_tolerance):
+    mesh = obj.data if obj and obj.type == "MESH" else None
+    modifiers = [{"name": modifier.name, "type": modifier.type} for modifier in getattr(obj, "modifiers", [])]
+    seed_modifier = any(item["type"] in MODELING_SEED_MODIFIER_TYPES for item in modifiers)
+    materials = _material_assignment_quality(obj)
+    issues = []
+    warnings = []
+    topology = {
+        "vertices": len(mesh.vertices) if mesh else 0,
+        "edges": len(mesh.edges) if mesh else 0,
+        "faces": len(mesh.polygons) if mesh else 0,
+        "loose_vertices": 0,
+        "loose_edges": 0,
+        "boundary_edges": 0,
+        "non_manifold_edges": 0,
+        "ngons": 0,
+        "triangles": 0,
+    }
+    if mesh is None:
+        issues.append("not a mesh")
+    else:
+        bm = bmesh.new()
+        try:
+            bm.from_mesh(mesh)
+            bm.verts.ensure_lookup_table()
+            bm.edges.ensure_lookup_table()
+            bm.faces.ensure_lookup_table()
+            topology.update(
+                {
+                    "loose_vertices": sum(1 for vert in bm.verts if not vert.link_edges),
+                    "loose_edges": sum(1 for edge in bm.edges if edge.is_wire),
+                    "boundary_edges": sum(1 for edge in bm.edges if edge.is_boundary),
+                    "non_manifold_edges": sum(1 for edge in bm.edges if not edge.is_manifold),
+                }
+            )
+        finally:
+            bm.free()
+        topology["ngons"] = sum(1 for poly in mesh.polygons if len(poly.vertices) > 4)
+        topology["triangles"] = sum(1 for poly in mesh.polygons if len(poly.vertices) == 3)
+        if topology["vertices"] <= 0:
+            issues.append("mesh has no vertices")
+        if topology["faces"] <= 0 and not seed_modifier:
+            issues.append("mesh has no faces")
+        if topology["loose_vertices"]:
+            issues.append(f"{topology['loose_vertices']} loose vertex/vertices")
+        if topology["loose_edges"]:
+            issues.append(f"{topology['loose_edges']} loose edge(s)")
+        if topology["non_manifold_edges"]:
+            message = f"{topology['non_manifold_edges']} non-manifold/boundary edge(s)"
+            if allow_modifier_seed_boundaries and seed_modifier:
+                warnings.append(f"{message}; accepted as modifier seed geometry")
+            else:
+                issues.append(message)
+        if topology["ngons"]:
+            warnings.append(f"{topology['ngons']} n-gon face(s)")
+
+    if require_materials:
+        if not materials["materials"]:
+            issues.append("no assigned material")
+        if materials["empty_slots"]:
+            issues.append("empty material slot(s)")
+        if materials["unassigned_polygons"]:
+            issues.append(f"{materials['unassigned_polygons']} polygon(s) without material assignment")
+
+    scale = tuple(float(component) for component in getattr(obj, "scale", (1.0, 1.0, 1.0)))
+    if any(abs(abs(component) - 1.0) > scale_tolerance for component in scale):
+        warnings.append("object has unapplied scale")
+
+    dimensions = tuple(float(component) for component in getattr(obj, "dimensions", (0.0, 0.0, 0.0)))
+    if any(component <= 1e-6 for component in dimensions):
+        warnings.append("object has near-zero dimension")
+
+    return {
+        "object": obj.name,
+        "type": obj.type,
+        "mesh": mesh.name if mesh else "",
+        "topology": topology,
+        "materials": materials,
+        "modifiers": modifiers,
+        "scale": [round(value, 6) for value in scale],
+        "dimensions": [round(value, 6) for value in dimensions],
+        "issues": issues,
+        "warnings": warnings,
+        "passed": not issues,
+    }
+
+
+def inspect_modeling_quality(
+    context,
+    *,
+    object_names=None,
+    selected_only=True,
+    include_children=True,
+    require_materials=True,
+    allow_modifier_seed_boundaries=True,
+    scale_tolerance=0.001,
+    max_objects=64,
+):
+    roots, missing = _resolve_edit_objects(context, object_names=object_names, selected_only=selected_only, max_objects=max_objects)
+    seen = set()
+    objects = []
+    for root in roots:
+        candidates = [root]
+        if include_children:
+            candidates.extend(list(getattr(root, "children_recursive", []) or []))
+        for obj in candidates:
+            if obj.name in seen:
+                continue
+            seen.add(obj.name)
+            objects.append(obj)
+            if len(objects) >= max(1, int(max_objects or 1)):
+                break
+    mesh_objects = [obj for obj in objects if obj.type == "MESH"]
+    if not mesh_objects:
+        return {
+            "ok": False,
+            "passed": False,
+            "message": "No mesh objects found for modeling quality inspection",
+            "objects": [],
+            "missing_object_names": missing,
+        }
+
+    tolerance = _clamped_float(scale_tolerance, 0.001, 0.0, 1.0)
+    results = [
+        _mesh_modeling_quality(
+            obj,
+            require_materials=bool(require_materials),
+            allow_modifier_seed_boundaries=bool(allow_modifier_seed_boundaries),
+            scale_tolerance=tolerance,
+        )
+        for obj in mesh_objects
+    ]
+    issue_count = sum(len(item["issues"]) for item in results)
+    warning_count = sum(len(item["warnings"]) for item in results)
+    return {
+        "ok": True,
+        "passed": issue_count == 0,
+        "message": "Modeling quality inspection passed" if issue_count == 0 else "Modeling quality inspection found issues",
+        "objects": results,
+        "object_count": len(results),
+        "issue_count": issue_count,
+        "warning_count": warning_count,
+        "missing_object_names": missing,
+        "policy": {
+            "require_materials": bool(require_materials),
+            "include_children": bool(include_children),
+            "allow_modifier_seed_boundaries": bool(allow_modifier_seed_boundaries),
+            "scale_tolerance": tolerance,
+        },
+    }
+
+
 ADVANCED_WORKFLOW_DOMAINS = {
     "2d_storyboard": {
         "keywords": {"2d", "two dimensional", "storyboard", "animatic", "storyboard panel", "storyboard panels", "2d panel", "2d panels", "grease pencil", "grease-pencil", "cutout", "cut-out", "motion graphic"},
@@ -5852,6 +6089,142 @@ def create_procedural_object_kit(
             softbox.rotation_euler[2] = math.radians(-10.0 * sx)
         remember(_create_cube_object(context, f"{prefix} Camera Framing Rail", (origin[0], origin[1] - radius * 0.95, origin[2] + height * 0.08), (radius * 0.9, radius * 0.035, height * 0.035), primary))
 
+    elif template == "desk_lamp":
+        bulb = _material_for_color(f"{prefix} Warm Bulb", (1.0, 0.78, 0.36, 1.0))
+        cord = _material_for_color(f"{prefix} Cord", (0.025, 0.025, 0.028, 1.0))
+        root = remember(_create_empty_target(context, f"{prefix} Root", (origin[0] + radius * 0.28, origin[1], origin[2] + height * 0.42), display_size=radius * 0.2))
+        root.show_name = True
+        lamp_children = []
+
+        def lamp_part(obj, *, show_name=False):
+            obj.show_name = bool(show_name)
+            lamp_children.append(obj)
+            return obj
+
+        base = lamp_part(
+            remember(_create_cylinder_object(context, f"{prefix} Weighted Base", (origin[0], origin[1], origin[2] + height * 0.04), radius * 0.34, height * 0.08, primary, vertices=72)),
+            show_name=True,
+        )
+        switch = lamp_part(
+            remember(_create_cube_object(context, f"{prefix} Base Switch", (origin[0] + radius * 0.16, origin[1] - radius * 0.22, origin[2] + height * 0.105), (radius * 0.08, radius * 0.035, height * 0.018), accent))
+        )
+        stem_start = Vector((origin[0] - radius * 0.16, origin[1], origin[2] + height * 0.08))
+        stem_top = Vector((origin[0] - radius * 0.16, origin[1], origin[2] + height * 0.54))
+        elbow = Vector((origin[0] + radius * 0.18, origin[1], origin[2] + height * 0.78))
+        shade_joint = Vector((origin[0] + radius * 0.52, origin[1], origin[2] + height * 0.66))
+        lamp_part(remember(_create_cylinder_between(context, f"{prefix} Vertical Stem", stem_start, stem_top, radius * 0.025, primary, vertices=32)))
+        for suffix, y_offset in (("Front", -radius * 0.035), ("Rear", radius * 0.035)):
+            lamp_part(
+                remember(
+                    _create_cylinder_between(
+                        context,
+                        f"{prefix} Lower Arm {suffix}",
+                        (stem_top.x, origin[1] + y_offset, stem_top.z),
+                        (elbow.x, origin[1] + y_offset, elbow.z),
+                        radius * 0.018,
+                        primary,
+                        vertices=24,
+                    )
+                )
+            )
+            lamp_part(
+                remember(
+                    _create_cylinder_between(
+                        context,
+                        f"{prefix} Upper Arm {suffix}",
+                        (elbow.x, origin[1] + y_offset, elbow.z),
+                        (shade_joint.x, origin[1] + y_offset, shade_joint.z),
+                        radius * 0.018,
+                        primary,
+                        vertices=24,
+                    )
+                )
+            )
+        for joint_name, joint_location, joint_radius in (
+            ("Stem Hinge", stem_top, radius * 0.07),
+            ("Elbow Hinge", elbow, radius * 0.075),
+            ("Shade Hinge", shade_joint, radius * 0.06),
+        ):
+            lamp_part(remember(_create_uv_sphere_object(context, f"{prefix} {joint_name}", joint_location, joint_radius, accent, segments=32, ring_count=16)))
+
+        opening = Vector((origin[0] + radius * 0.78, origin[1], origin[2] + height * 0.52))
+        shade_axis = shade_joint - opening
+        shade_depth = max(0.2, shade_axis.length)
+        shade_center = opening + shade_axis * 0.5
+        shade_rotation = shade_axis.to_track_quat("Z", "Y").to_euler()
+        shade = lamp_part(
+            remember(
+                _create_cone_object(
+                    context,
+                    f"{prefix} Open Shade",
+                    shade_center,
+                    radius * 0.22,
+                    radius * 0.105,
+                    shade_depth,
+                    primary,
+                    vertices=72,
+                    rotation=shade_rotation,
+                    end_fill_type="NOTHING",
+                )
+            ),
+            show_name=True,
+        )
+        solidify = shade.modifiers.new("Agent Bridge Desk Lamp Shade Thickness", "SOLIDIFY")
+        solidify.thickness = radius * 0.018
+        solidify.offset = 0.0
+        live_preview._record_created_modifier(shade, solidify)
+        lamp_part(remember(_create_uv_sphere_object(context, f"{prefix} Visible Bulb", opening + shade_axis.normalized() * radius * 0.08, radius * 0.075, bulb, segments=32, ring_count=16)), show_name=True)
+        lamp_part(
+            remember(
+                _create_curve_line(
+                    context,
+                    f"{prefix} Power Cable",
+                    [
+                        (origin[0] - radius * 0.28, origin[1] + radius * 0.08, origin[2] + height * 0.08),
+                        (origin[0] - radius * 0.36, origin[1] + radius * 0.18, origin[2] + height * 0.035),
+                        (origin[0] - radius * 0.48, origin[1] + radius * 0.2, origin[2] + height * 0.02),
+                    ],
+                    radius * 0.012,
+                    cord,
+                )
+            )
+        )
+        remember(
+            _create_area_light(
+                context,
+                f"{prefix} Shade Glow",
+                (opening.x + radius * 0.05, opening.y - radius * 0.22, opening.z + height * 0.08),
+                energy=700.0,
+                size=radius * 0.35,
+                color=(1.0, 0.82, 0.48),
+                target=root,
+            )
+        )
+        remember(
+            _create_area_light(
+                context,
+                f"{prefix} Inspection Key",
+                (origin[0] - radius * 0.75, origin[1] - radius * 1.05, origin[2] + height * 0.9),
+                energy=520.0,
+                size=radius * 0.8,
+                color=(1.0, 0.93, 0.84),
+                target=root,
+            )
+        )
+        remember(
+            _create_area_light(
+                context,
+                f"{prefix} Inspection Fill",
+                (origin[0] + radius * 0.95, origin[1] - radius * 0.75, origin[2] + height * 0.55),
+                energy=180.0,
+                size=radius,
+                color=(0.78, 0.86, 1.0),
+                target=root,
+            )
+        )
+        _parent_objects_to_root(context, root, lamp_children)
+        base.show_name = True
+
     elif template == "mechanical_joint":
         arm_count = max(3, min(16, count))
         bearing = remember(
@@ -6658,15 +7031,32 @@ def duplicate_selected_objects(
 def parent_selected_to_empty(
     context,
     *,
+    object_names=None,
+    selected_only=True,
     name="Agent Bridge Parent",
     location=None,
     empty_display_type="PLAIN_AXES",
     keep_transform=True,
     label="Parent selected to empty",
 ):
-    selected = [obj for obj in context.selected_objects if obj]
+    objects, missing = _resolve_named_or_selected_objects(
+        context,
+        object_names,
+        selected_only=selected_only,
+        fallback_active=False,
+    )
+    selected = []
+    seen = set()
+    for obj in objects:
+        if obj.name in seen:
+            continue
+        seen.add(obj.name)
+        selected.append(obj)
     if not selected:
-        return {"ok": False, "message": "No selected objects to parent"}
+        result = {"ok": False, "message": "No target objects to parent" if object_names else "No selected objects to parent"}
+        if missing:
+            result["missing_object_names"] = missing
+        return result
     transaction = live_preview.begin(label, context)
     if location is None:
         center = Vector((0.0, 0.0, 0.0))
@@ -6707,6 +7097,7 @@ def parent_selected_to_empty(
         "message": f"Parented {len(selected)} object(s) to {empty.name}",
         "empty": empty.name,
         "children": [obj.name for obj in selected],
+        "missing_object_names": missing,
         "transaction_id": transaction["id"],
     }
 

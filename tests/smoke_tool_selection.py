@@ -274,6 +274,7 @@ def main():
         assert "create_procedural_object_kit" in procedural_names, procedural_meta
         assert "apply_procedural_array_stack" in procedural_names, procedural_meta
         assert "edit_mesh" in procedural_names, procedural_meta
+        assert "inspect_modeling_quality" in procedural_names, procedural_meta
         assert "curve_to_mesh" in procedural_names, procedural_meta
         assert "boolean_op" in procedural_names, procedural_meta
         assert "mirror_model" in procedural_names, procedural_meta
@@ -282,6 +283,15 @@ def main():
         assert "screw_model" in procedural_names, procedural_meta
         assert "add_geometry_nodes_modifier" in procedural_names, procedural_meta
         assert "get_geometry_nodes_details" in procedural_names, procedural_meta
+
+        lamp_tools, lamp_meta = agent_tools.select_blender_tool_definitions(
+            "Create a believable desk lamp product prop with a base, hinged arms, open shade, bulb, and cable.",
+            bundle,
+        )
+        lamp_names = _names(lamp_tools)
+        assert "plan_advanced_scene_workflow" in lamp_names, lamp_meta
+        assert "create_procedural_object_kit" in lamp_names, lamp_meta
+        assert "inspect_modeling_quality" in lamp_names, lamp_meta
 
         modeling_tools, modeling_meta = agent_tools.select_blender_tool_definitions(
             "Use a boolean cutter, mirror the model, symmetrize it on X, solidify the wall thickness, and add a screw thread.",
@@ -300,6 +310,15 @@ def main():
         assert "edit_mesh" in mesh_edit_names, mesh_edit_meta
         assert "curve_to_mesh" in mesh_edit_names, mesh_edit_meta
         assert "draft_script" not in mesh_edit_names, mesh_edit_meta
+
+        quality_tools, quality_meta = agent_tools.select_blender_tool_definitions(
+            "Inspect mesh quality for loose geometry, non-manifold edges, missing materials, and unapplied scale.",
+            bundle,
+        )
+        quality_names = _names(quality_tools)
+        assert "inspect_modeling_quality" in quality_names, quality_meta
+        assert "capture_object_inspection_renders" in quality_names, quality_meta
+        assert "draft_script" not in quality_names, quality_meta
 
         cloth_tools, cloth_meta = agent_tools.select_blender_tool_definitions(
             "Add cloth simulation setup and inspect the physics cache before any bake.",

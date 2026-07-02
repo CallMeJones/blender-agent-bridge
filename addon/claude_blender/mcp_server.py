@@ -165,6 +165,8 @@ ADVANCED_ROUTE_TERMS = {
     "radial array",
     "pipe run",
     "modular wall panel",
+    "desk lamp",
+    "product prop",
     "edit mesh",
     "extrude",
     "inset",
@@ -185,6 +187,11 @@ ADVANCED_ROUTE_TERMS = {
     "solidify",
     "screw",
     "thread",
+    "mesh quality",
+    "modeling quality",
+    "validate model",
+    "non-manifold",
+    "loose geometry",
     "director",
     "director workflow",
     "asset import",
@@ -198,6 +205,7 @@ ADVANCED_ROUTE_TOOLS = {
     "create_2d_cutout_layer",
     "apply_procedural_array_stack",
     "edit_mesh",
+    "inspect_modeling_quality",
     "curve_to_mesh",
     "boolean_op",
     "mirror_model",
@@ -231,6 +239,8 @@ PROCEDURAL_ROUTE_TERMS = {
     "modular wall panel",
     "wall panel",
     "pipe run",
+    "desk lamp",
+    "product prop",
     "edit mesh",
     "extrude",
     "inset",
@@ -1141,6 +1151,7 @@ def _tool_category(tool):
         "capture_viewport",
         "capture_animation_playblast",
         "capture_object_inspection_renders",
+        "inspect_modeling_quality",
         "get_visual_evidence_resources",
         "review_inspection_renders_against_brief",
     }:
@@ -1342,6 +1353,8 @@ def _score_tool_match(tool, query):
         if procedural_query:
             if name == "create_procedural_object_kit":
                 score += 950
+            elif name == "inspect_modeling_quality" and any(term in normalized_query for term in ("mesh quality", "modeling quality", "validate model", "non-manifold", "loose geometry", "missing material")):
+                score += 1300
             elif name == "apply_procedural_array_stack":
                 score += 900
             elif name == "edit_mesh" and any(term in normalized_query for term in ("edit mesh", "extrude", "inset", "loop cut", "loop-cut", "knife", "proportional edit", "bridge", "dissolve", "merge")):

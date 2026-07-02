@@ -172,10 +172,20 @@ def main():
         assert all(obj.data.name in bpy.data.meshes for obj in duplicate_objects)
         assert duplicate_objects[0].data is not cube.data
 
-        parented = _execute(context, "parent_selected_to_empty", {"name": "Agent Bridge Layout Parent"})
+        bpy.ops.object.select_all(action="DESELECT")
+        parented = _execute(
+            context,
+            "parent_selected_to_empty",
+            {
+                "object_names": duplicated["objects"],
+                "selected_only": False,
+                "name": "Agent Bridge Layout Parent",
+            },
+        )
         empty = bpy.data.objects[parented["empty"]]
         assert empty.type == "EMPTY"
         assert all(obj.parent == empty for obj in duplicate_objects)
+        assert parented["missing_object_names"] == []
 
         _execute(
             context,

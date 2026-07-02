@@ -2428,6 +2428,19 @@ def edit_mesh(context, args):
     )
 
 
+def inspect_modeling_quality(context, args):
+    return advanced_helpers.inspect_modeling_quality(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", True)),
+        include_children=bool(args.get("include_children", True)),
+        require_materials=bool(args.get("require_materials", True)),
+        allow_modifier_seed_boundaries=bool(args.get("allow_modifier_seed_boundaries", True)),
+        scale_tolerance=_bounded_float(args.get("scale_tolerance"), 0.001, minimum=0.0, maximum=1.0),
+        max_objects=_bounded_int(args.get("max_objects"), 64, minimum=1, maximum=256),
+    )
+
+
 def curve_to_mesh(context, args):
     return advanced_helpers.curve_to_mesh(
         context,
@@ -2642,6 +2655,8 @@ def duplicate_selected_objects(context, args):
 def parent_selected_to_empty(context, args):
     return advanced_helpers.parent_selected_to_empty(
         context,
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", True)),
         name=str(args.get("name") or "Agent Bridge Parent"),
         location=_optional_float_list(args.get("location"), 3, (0.0, 0.0, 0.0)),
         empty_display_type=str(args.get("empty_display_type") or "PLAIN_AXES"),
@@ -3873,6 +3888,7 @@ TOOL_FUNCTIONS = {
     "create_2d_cutout_layer": create_2d_cutout_layer,
     "apply_procedural_array_stack": apply_procedural_array_stack,
     "edit_mesh": edit_mesh,
+    "inspect_modeling_quality": inspect_modeling_quality,
     "curve_to_mesh": curve_to_mesh,
     "boolean_op": boolean_op,
     "mirror_model": mirror_model,

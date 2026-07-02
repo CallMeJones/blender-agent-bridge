@@ -46,6 +46,14 @@ ROUTING_FIXTURES = [
         "search_before": [("plan_advanced_scene_workflow", "draft_script"), ("create_procedural_object_kit", "draft_script")],
     },
     {
+        "id": "desk_lamp_prop_helper_first",
+        "prompt": "Create a believable desk lamp product prop with a base, hinged arms, open shade, bulb, cable, and capture inspection renders.",
+        "must_select": ["plan_advanced_scene_workflow", "create_procedural_object_kit", "inspect_modeling_quality", "capture_object_inspection_renders"],
+        "must_not_select": ["draft_script"],
+        "search": "desk lamp product prop hinged arms shade bulb cable object kit inspection renders",
+        "search_before": [("plan_advanced_scene_workflow", "draft_script"), ("create_procedural_object_kit", "draft_script")],
+    },
+    {
         "id": "asset_import_async_path",
         "prompt": "Find a Poly Haven model, download it, import it, organize it, make a studio presentation, and capture viewport evidence.",
         "must_select": ["plan_asset_import_workflow", "start_external_asset_download", "get_external_asset_job_status", "start_external_asset_import_job", "get_external_asset_import_job_status", "prepare_imported_asset_presentation"],

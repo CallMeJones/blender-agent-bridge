@@ -207,15 +207,22 @@ HELPER_FIRST_SCRIPT_RULES = (
             "screw",
             "thread",
             "spiral",
+            "mesh quality",
+            "modeling quality",
+            "validate model",
+            "non-manifold",
+            "loose geometry",
+            "missing materials",
             "wall thickness",
         },
         "message": (
             "Use procedural modeling helpers and geometry-node inspection before drafting Python for common "
-            "bounded mesh edits, curve conversion, non-destructive array/bevel/weighted-normal, boolean, mirror, symmetry, solidify, or screw stacks."
+            "bounded mesh edits, mesh-quality diagnostics, curve conversion, non-destructive array/bevel/weighted-normal, boolean, mirror, symmetry, solidify, or screw stacks."
         ),
         "recommended_tools": [
             "plan_advanced_scene_workflow",
             "get_geometry_nodes_details",
+            "inspect_modeling_quality",
             "create_procedural_object_kit",
             "apply_procedural_array_stack",
             "edit_mesh",

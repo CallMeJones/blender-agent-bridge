@@ -342,6 +342,7 @@ def build_context_bundle(context, *, include_visual=False, capture_dir=None, max
             "create_2d_cutout_layer",
             "apply_procedural_array_stack",
             "edit_mesh",
+            "inspect_modeling_quality",
             "curve_to_mesh",
             "boolean_op",
             "mirror_model",

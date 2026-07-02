@@ -1247,6 +1247,23 @@ TOOL_CONTRACTS = {
             "additionalProperties": False,
         },
     },
+    "inspect_modeling_quality": {
+        "description": "Read-only modeling quality diagnostic for mesh topology, material readiness, modifier seed warnings, and scale warnings",
+        "mutates_scene": False,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "object_names": {"type": "array", "items": {"type": "string"}},
+                "selected_only": {"type": "boolean"},
+                "include_children": {"type": "boolean"},
+                "require_materials": {"type": "boolean"},
+                "allow_modifier_seed_boundaries": {"type": "boolean"},
+                "scale_tolerance": {"type": "number"},
+                "max_objects": {"type": "integer", "minimum": 1, "maximum": 256},
+            },
+            "additionalProperties": False,
+        },
+    },
     "curve_to_mesh": {
         "description": "Create preview-safe mesh-copy objects from Curve/Text sources",
         "mutates_scene": True,
@@ -1699,6 +1716,7 @@ TOOL_CONTRACTS = {
                         "mechanical_part",
                         "modular_wall_panel",
                         "pipe_run",
+                        "desk_lamp",
                     ],
                 },
                 "name_prefix": {"type": "string"},
@@ -1788,10 +1806,22 @@ TOOL_CONTRACTS = {
         "requires_selection": True,
     },
     "parent_selected_to_empty": {
-        "description": "Create an empty and parent selected objects to it while preserving world transforms",
+        "description": "Create an empty and parent named or selected objects to it while preserving world transforms",
         "mutates_scene": True,
         "requires_live_preview": True,
-        "requires_selection": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "object_names": {"type": "array", "items": {"type": "string"}},
+                "selected_only": {"type": "boolean"},
+                "name": {"type": "string"},
+                "location": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                "empty_display_type": {"type": "string", "enum": ["PLAIN_AXES", "ARROWS", "CUBE", "SPHERE"]},
+                "keep_transform": {"type": "boolean"},
+                "label": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
     },
     "align_selected_objects": {
         "description": "Align selected object locations on one axis using active, min, max, center, or explicit value",
