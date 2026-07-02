@@ -47,10 +47,10 @@ ROUTING_FIXTURES = [
     },
     {
         "id": "desk_lamp_prop_helper_first",
-        "prompt": "Create a believable desk lamp product prop with a base, hinged arms, open shade, bulb, cable, and capture inspection renders.",
+        "prompt": "Create a believable architect desk lamp product prop with spring arms, counterweight, open wide shade, bulb, cable, and capture inspection renders.",
         "must_select": ["plan_advanced_scene_workflow", "create_procedural_object_kit", "inspect_modeling_quality", "capture_object_inspection_renders"],
         "must_not_select": ["draft_script"],
-        "search": "desk lamp product prop hinged arms shade bulb cable object kit inspection renders",
+        "search": "architect desk lamp product prop spring arms counterweight wide shade bulb cable object kit inspection renders",
         "search_before": [("plan_advanced_scene_workflow", "draft_script"), ("create_procedural_object_kit", "draft_script")],
     },
     {

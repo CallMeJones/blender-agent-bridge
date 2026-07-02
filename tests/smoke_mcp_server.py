@@ -1016,7 +1016,7 @@ def main():
                 {"create_procedural_object_kit"},
             ),
             (
-                "Create a believable desk lamp product prop with a base, hinged arms, shade, and bulb.",
+                "Create a believable architect desk lamp product prop with spring arms, counterweight, wide shade, bulb, and cable.",
                 {"create_procedural_object_kit"},
             ),
             (

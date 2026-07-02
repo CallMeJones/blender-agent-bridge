@@ -2538,6 +2538,10 @@ def create_procedural_object_kit(context, args):
         height=float(args.get("height", 2.0)),
         primary_color=_float_list(args.get("primary_color"), 4, (0.18, 0.22, 0.27, 1.0)),
         accent_color=_float_list(args.get("accent_color"), 4, (0.95, 0.62, 0.18, 1.0)),
+        style=str(args.get("style") or "default"),
+        variant=str(args.get("variant") or "default"),
+        detail_level=str(args.get("detail_level") or "medium"),
+        features=args.get("features"),
         add_detail_modifiers=bool(args.get("add_detail_modifiers", True)),
         label=args.get("label", "Create procedural object kit"),
     )

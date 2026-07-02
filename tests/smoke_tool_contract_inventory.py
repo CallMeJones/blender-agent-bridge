@@ -31,6 +31,10 @@ def main():
         assert contract["input_schema"].get("additionalProperties") is False, contract
     kit_templates = bridge_protocol.normalized_tool_contract("create_procedural_object_kit")["input_schema"]["properties"]["template"]["enum"]
     assert "desk_lamp" in kit_templates, kit_templates
+    kit_props = bridge_protocol.normalized_tool_contract("create_procedural_object_kit")["input_schema"]["properties"]
+    assert {"style", "variant", "detail_level", "features"}.issubset(kit_props), kit_props
+    assert "architect" in kit_props["style"]["enum"], kit_props["style"]
+    assert "spring_arms" in kit_props["features"]["items"]["enum"], kit_props["features"]
     parent_contract = bridge_protocol.normalized_tool_contract("parent_selected_to_empty")
     assert parent_contract["requires_selection"] is False, parent_contract
     assert {"object_names", "selected_only"}.issubset(parent_contract["input_schema"]["properties"]), parent_contract

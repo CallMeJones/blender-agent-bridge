@@ -76,6 +76,82 @@ PROCEDURAL_OBJECT_KIT_TEMPLATES = {
     "desk_lamp",
 }
 
+DEFAULT_PROCEDURAL_KIT_PRIMARY_COLOR = (0.18, 0.22, 0.27, 1.0)
+DEFAULT_PROCEDURAL_KIT_ACCENT_COLOR = (0.95, 0.62, 0.18, 1.0)
+
+PROCEDURAL_KIT_STYLES = {
+    "default": {},
+    "studio": {
+        "primary_color": (0.82, 0.84, 0.82, 1.0),
+        "accent_color": (0.08, 0.09, 0.1, 1.0),
+    },
+    "industrial": {
+        "primary_color": (0.11, 0.12, 0.13, 1.0),
+        "accent_color": (0.72, 0.48, 0.18, 1.0),
+    },
+    "minimal": {
+        "primary_color": (0.88, 0.87, 0.82, 1.0),
+        "accent_color": (0.25, 0.27, 0.28, 1.0),
+    },
+    "architect": {
+        "primary_color": (0.015, 0.016, 0.018, 1.0),
+        "accent_color": (0.86, 0.63, 0.26, 1.0),
+    },
+    "retro": {
+        "primary_color": (0.05, 0.27, 0.18, 1.0),
+        "accent_color": (0.78, 0.58, 0.24, 1.0),
+    },
+}
+
+PROCEDURAL_KIT_DETAIL_LEVELS = {"low", "medium", "high"}
+
+DESK_LAMP_VARIANTS = {"default", "architect", "task", "studio", "compact", "clamp"}
+DESK_LAMP_VARIANT_ALIASES = {
+    "anglepoise": "architect",
+    "architect_lamp": "architect",
+    "drafting": "architect",
+    "drafting_lamp": "architect",
+    "task_lamp": "task",
+    "desk": "task",
+    "studio_lamp": "studio",
+    "product": "studio",
+    "small": "compact",
+    "portable": "compact",
+    "clamp_lamp": "clamp",
+    "desk_clamp": "clamp",
+}
+DESK_LAMP_FEATURES = {
+    "round_base",
+    "desk_clamp",
+    "inline_switch",
+    "double_arm",
+    "single_arm",
+    "spring_arms",
+    "counterweight",
+    "open_shade",
+    "wide_shade",
+    "visible_bulb",
+    "power_cable",
+    "inspection_lights",
+    "label_parts",
+}
+DESK_LAMP_FEATURE_ALIASES = {
+    "base": "round_base",
+    "clamp": "desk_clamp",
+    "switch": "inline_switch",
+    "label": "label_parts",
+    "labels": "label_parts",
+    "bulb": "visible_bulb",
+    "cable": "power_cable",
+    "cord": "power_cable",
+    "spring": "spring_arms",
+    "springs": "spring_arms",
+    "arms": "double_arm",
+    "wide": "wide_shade",
+    "shade": "open_shade",
+    "lights": "inspection_lights",
+}
+
 DIRECTED_SHOT_TYPES = {
     "camera_push_reveal",
     "orbit_reveal",
@@ -221,6 +297,52 @@ def _coerce_color(value, fallback=(1.0, 1.0, 1.0, 1.0)):
     while len(result) < 4:
         result.append(fallback[len(result)])
     return tuple(float(component) for component in result)
+
+
+def _normalize_design_token(value, allowed, default="default", aliases=None):
+    token = str(value or default).strip().lower().replace("-", "_").replace(" ", "_")
+    if aliases:
+        token = aliases.get(token, token)
+    return token if token in allowed else default
+
+
+def _normalize_design_features(features, allowed, aliases=None):
+    if features is None:
+        return set()
+    if isinstance(features, str):
+        raw_items = [item for item in re.split(r"[,;|]", features) if item.strip()]
+    else:
+        raw_items = list(features)
+    normalized = set()
+    for item in raw_items:
+        token = str(item or "").strip().lower().replace("-", "_").replace(" ", "_")
+        if not token:
+            continue
+        if aliases:
+            token = aliases.get(token, token)
+        if token in allowed:
+            normalized.add(token)
+    return normalized
+
+
+def _color_close(left, right, *, tolerance=1e-6):
+    left_color = _coerce_color(left, right)
+    right_color = _coerce_color(right, left)
+    return all(abs(float(a) - float(b)) <= tolerance for a, b in zip(left_color, right_color))
+
+
+def _resolve_procedural_kit_palette(style, primary_color, accent_color):
+    primary = _coerce_color(primary_color, DEFAULT_PROCEDURAL_KIT_PRIMARY_COLOR)
+    accent = _coerce_color(accent_color, DEFAULT_PROCEDURAL_KIT_ACCENT_COLOR)
+    palette = PROCEDURAL_KIT_STYLES.get(style, {})
+    applied = []
+    if palette and _color_close(primary, DEFAULT_PROCEDURAL_KIT_PRIMARY_COLOR):
+        primary = palette["primary_color"]
+        applied.append("primary_color")
+    if palette and _color_close(accent, DEFAULT_PROCEDURAL_KIT_ACCENT_COLOR):
+        accent = palette["accent_color"]
+        applied.append("accent_color")
+    return primary, accent, applied
 
 
 def _record_shape_keys(obj):
@@ -484,6 +606,10 @@ def _material_for_color(name, color):
         float(color[3]) if len(color) > 3 else 1.0,
     )
     material.diffuse_color = rgba
+    _record_shader_material(material)
+    principled = _ensure_principled_material(material)
+    _set_socket_value(principled.inputs.get("Base Color"), rgba)
+    _set_socket_value(principled.inputs.get("Alpha"), rgba[3])
     return material
 
 
@@ -5975,8 +6101,12 @@ def create_procedural_object_kit(
     radius=2.0,
     spacing=1.1,
     height=2.0,
-    primary_color=(0.18, 0.22, 0.27, 1.0),
-    accent_color=(0.95, 0.62, 0.18, 1.0),
+    primary_color=DEFAULT_PROCEDURAL_KIT_PRIMARY_COLOR,
+    accent_color=DEFAULT_PROCEDURAL_KIT_ACCENT_COLOR,
+    style="default",
+    variant="default",
+    detail_level="medium",
+    features=None,
     add_detail_modifiers=True,
     label="Create procedural object kit",
 ):
@@ -5995,6 +6125,13 @@ def create_procedural_object_kit(
     height = max(0.1, min(50.0, float(height or 2.0)))
     origin = _coerce_vector(location, (0.0, 0.0, 0.0))
     prefix = str(name_prefix or "Agent Bridge Kit")
+    style = _normalize_design_token(style, PROCEDURAL_KIT_STYLES)
+    detail_level = _normalize_design_token(detail_level, PROCEDURAL_KIT_DETAIL_LEVELS, "medium")
+    variant = _normalize_design_token(variant, DESK_LAMP_VARIANTS, aliases=DESK_LAMP_VARIANT_ALIASES) if template == "desk_lamp" else str(variant or "default").strip().lower().replace("-", "_").replace(" ", "_")
+    feature_set = _normalize_design_features(features, DESK_LAMP_FEATURES, aliases=DESK_LAMP_FEATURE_ALIASES) if template == "desk_lamp" else set()
+    primary_color, accent_color, applied_palette = _resolve_procedural_kit_palette(style, primary_color, accent_color)
+    if template == "desk_lamp" and variant == "default" and style == "architect":
+        variant = "architect"
     transaction = live_preview.begin(label, context)
     primary = _material_for_color(f"{prefix} Primary", primary_color)
     accent = _material_for_color(f"{prefix} Accent", accent_color)
@@ -6092,36 +6229,90 @@ def create_procedural_object_kit(
     elif template == "desk_lamp":
         bulb = _material_for_color(f"{prefix} Warm Bulb", (1.0, 0.78, 0.36, 1.0))
         cord = _material_for_color(f"{prefix} Cord", (0.025, 0.025, 0.028, 1.0))
+        spring = _material_for_color(f"{prefix} Spring Steel", (0.62, 0.62, 0.58, 1.0))
+        lamp_features = {
+            "round_base",
+            "inline_switch",
+            "double_arm",
+            "open_shade",
+            "visible_bulb",
+            "power_cable",
+            "inspection_lights",
+        }
+        lamp_features.update(feature_set)
+        if variant == "architect":
+            lamp_features.update({"spring_arms", "counterweight", "wide_shade"})
+        elif variant == "studio":
+            lamp_features.update({"wide_shade", "label_parts"})
+        elif variant == "compact":
+            lamp_features.add("single_arm")
+            lamp_features.discard("double_arm")
+        elif variant == "clamp":
+            lamp_features.update({"desk_clamp", "spring_arms"})
+            if "round_base" not in feature_set:
+                lamp_features.discard("round_base")
+        if detail_level == "high":
+            lamp_features.update({"spring_arms", "counterweight", "label_parts"})
+        elif detail_level == "low" and "inspection_lights" not in feature_set:
+            lamp_features.discard("inspection_lights")
+        if "single_arm" in lamp_features:
+            lamp_features.discard("double_arm")
+        else:
+            lamp_features.add("double_arm")
+        feature_set = lamp_features
+        show_labels = "label_parts" in lamp_features
+        compact_scale = 0.82 if variant == "compact" else 1.0
+        reach_scale = 1.18 if variant == "architect" else (0.85 if variant == "compact" else 1.0)
+        shade_scale = 1.22 if "wide_shade" in lamp_features else 1.0
         root = remember(_create_empty_target(context, f"{prefix} Root", (origin[0] + radius * 0.28, origin[1], origin[2] + height * 0.42), display_size=radius * 0.2))
         root.show_name = True
         lamp_children = []
 
         def lamp_part(obj, *, show_name=False):
-            obj.show_name = bool(show_name)
+            obj.show_name = bool(show_name or show_labels)
             lamp_children.append(obj)
             return obj
 
-        base = lamp_part(
-            remember(_create_cylinder_object(context, f"{prefix} Weighted Base", (origin[0], origin[1], origin[2] + height * 0.04), radius * 0.34, height * 0.08, primary, vertices=72)),
-            show_name=True,
-        )
-        switch = lamp_part(
-            remember(_create_cube_object(context, f"{prefix} Base Switch", (origin[0] + radius * 0.16, origin[1] - radius * 0.22, origin[2] + height * 0.105), (radius * 0.08, radius * 0.035, height * 0.018), accent))
-        )
+        if "round_base" in lamp_features:
+            base = lamp_part(
+                remember(_create_cylinder_object(context, f"{prefix} Weighted Base", (origin[0], origin[1], origin[2] + height * 0.04), radius * 0.34, height * 0.08, primary, vertices=72)),
+                show_name=True,
+            )
+        else:
+            base = lamp_part(
+                remember(_create_cube_object(context, f"{prefix} Desk Clamp Mount", (origin[0] - radius * 0.02, origin[1], origin[2] + height * 0.06), (radius * 0.22, radius * 0.22, height * 0.055), primary)),
+                show_name=True,
+            )
+        if "desk_clamp" in lamp_features:
+            lamp_part(remember(_create_cube_object(context, f"{prefix} Clamp Jaw Top", (origin[0] - radius * 0.35, origin[1], origin[2] + height * 0.16), (radius * 0.18, radius * 0.23, height * 0.025), accent)))
+            lamp_part(remember(_create_cube_object(context, f"{prefix} Clamp Jaw Bottom", (origin[0] - radius * 0.35, origin[1], origin[2] + height * 0.02), (radius * 0.18, radius * 0.23, height * 0.025), accent)))
+            lamp_part(remember(_create_cylinder_object(context, f"{prefix} Clamp Screw", (origin[0] - radius * 0.35, origin[1], origin[2] + height * 0.09), radius * 0.022, height * 0.14, spring, vertices=20)))
+        if "inline_switch" in lamp_features:
+            lamp_part(
+                remember(_create_cube_object(context, f"{prefix} Base Switch", (origin[0] + radius * 0.16, origin[1] - radius * 0.22, origin[2] + height * 0.105), (radius * 0.08, radius * 0.035, height * 0.018), accent))
+            )
         stem_start = Vector((origin[0] - radius * 0.16, origin[1], origin[2] + height * 0.08))
-        stem_top = Vector((origin[0] - radius * 0.16, origin[1], origin[2] + height * 0.54))
-        elbow = Vector((origin[0] + radius * 0.18, origin[1], origin[2] + height * 0.78))
-        shade_joint = Vector((origin[0] + radius * 0.52, origin[1], origin[2] + height * 0.66))
+        stem_top = Vector((origin[0] - radius * 0.16, origin[1], origin[2] + height * 0.54 * compact_scale))
+        elbow = Vector((origin[0] + radius * (0.18 * reach_scale), origin[1], origin[2] + height * (0.78 if variant != "compact" else 0.64)))
+        shade_joint = Vector((origin[0] + radius * (0.52 * reach_scale), origin[1], origin[2] + height * (0.66 if variant != "compact" else 0.55)))
         lamp_part(remember(_create_cylinder_between(context, f"{prefix} Vertical Stem", stem_start, stem_top, radius * 0.025, primary, vertices=32)))
-        for suffix, y_offset in (("Front", -radius * 0.035), ("Rear", radius * 0.035)):
+
+        arm_tracks = (("Center", 0.0),) if "single_arm" in lamp_features else (("Front", -radius * 0.035), ("Rear", radius * 0.035))
+        arm_pairs = []
+        for suffix, y_offset in arm_tracks:
+            lower_start = Vector((stem_top.x, origin[1] + y_offset, stem_top.z))
+            lower_end = Vector((elbow.x, origin[1] + y_offset, elbow.z))
+            upper_start = Vector((elbow.x, origin[1] + y_offset, elbow.z))
+            upper_end = Vector((shade_joint.x, origin[1] + y_offset, shade_joint.z))
+            arm_pairs.append((lower_start, lower_end, upper_start, upper_end))
             lamp_part(
                 remember(
                     _create_cylinder_between(
                         context,
                         f"{prefix} Lower Arm {suffix}",
-                        (stem_top.x, origin[1] + y_offset, stem_top.z),
-                        (elbow.x, origin[1] + y_offset, elbow.z),
-                        radius * 0.018,
+                        lower_start,
+                        lower_end,
+                        radius * (0.022 if "single_arm" in lamp_features else 0.018),
                         primary,
                         vertices=24,
                     )
@@ -6132,14 +6323,26 @@ def create_procedural_object_kit(
                     _create_cylinder_between(
                         context,
                         f"{prefix} Upper Arm {suffix}",
-                        (elbow.x, origin[1] + y_offset, elbow.z),
-                        (shade_joint.x, origin[1] + y_offset, shade_joint.z),
-                        radius * 0.018,
+                        upper_start,
+                        upper_end,
+                        radius * (0.022 if "single_arm" in lamp_features else 0.018),
                         primary,
                         vertices=24,
                     )
                 )
             )
+        if "spring_arms" in lamp_features:
+            for index, (lower_start, lower_end, upper_start, upper_end) in enumerate(arm_pairs[:1], start=1):
+                for spring_name, start, end in (("Lower Spring", lower_start, lower_end), ("Upper Spring", upper_start, upper_end)):
+                    points = []
+                    for step in range(9):
+                        t = step / 8.0
+                        wiggle = radius * 0.032 * (-1.0 if step % 2 else 1.0)
+                        point = start.lerp(end, t) + Vector((0.0, wiggle, 0.0))
+                        points.append((point.x, point.y, point.z))
+                    lamp_part(remember(_create_curve_line(context, f"{prefix} {spring_name} {index}", points, radius * 0.006, spring)))
+        if "counterweight" in lamp_features:
+            lamp_part(remember(_create_uv_sphere_object(context, f"{prefix} Counterweight", (stem_top.x - radius * 0.13, stem_top.y, stem_top.z + radius * 0.045), radius * 0.075, accent, segments=32, ring_count=16)))
         for joint_name, joint_location, joint_radius in (
             ("Stem Hinge", stem_top, radius * 0.07),
             ("Elbow Hinge", elbow, radius * 0.075),
@@ -6158,8 +6361,8 @@ def create_procedural_object_kit(
                     context,
                     f"{prefix} Open Shade",
                     shade_center,
-                    radius * 0.22,
-                    radius * 0.105,
+                    radius * 0.22 * shade_scale,
+                    radius * 0.105 * shade_scale,
                     shade_depth,
                     primary,
                     vertices=72,
@@ -6173,55 +6376,58 @@ def create_procedural_object_kit(
         solidify.thickness = radius * 0.018
         solidify.offset = 0.0
         live_preview._record_created_modifier(shade, solidify)
-        lamp_part(remember(_create_uv_sphere_object(context, f"{prefix} Visible Bulb", opening + shade_axis.normalized() * radius * 0.08, radius * 0.075, bulb, segments=32, ring_count=16)), show_name=True)
-        lamp_part(
-            remember(
-                _create_curve_line(
-                    context,
-                    f"{prefix} Power Cable",
-                    [
-                        (origin[0] - radius * 0.28, origin[1] + radius * 0.08, origin[2] + height * 0.08),
-                        (origin[0] - radius * 0.36, origin[1] + radius * 0.18, origin[2] + height * 0.035),
-                        (origin[0] - radius * 0.48, origin[1] + radius * 0.2, origin[2] + height * 0.02),
-                    ],
-                    radius * 0.012,
-                    cord,
+        if "visible_bulb" in lamp_features:
+            lamp_part(remember(_create_uv_sphere_object(context, f"{prefix} Visible Bulb", opening + shade_axis.normalized() * radius * 0.08, radius * 0.075, bulb, segments=32, ring_count=16)), show_name=True)
+        if "power_cable" in lamp_features:
+            lamp_part(
+                remember(
+                    _create_curve_line(
+                        context,
+                        f"{prefix} Power Cable",
+                        [
+                            (origin[0] - radius * 0.28, origin[1] + radius * 0.08, origin[2] + height * 0.08),
+                            (origin[0] - radius * 0.36, origin[1] + radius * 0.18, origin[2] + height * 0.035),
+                            (origin[0] - radius * 0.48, origin[1] + radius * 0.2, origin[2] + height * 0.02),
+                        ],
+                        radius * 0.012,
+                        cord,
+                    )
                 )
             )
-        )
-        remember(
-            _create_area_light(
-                context,
-                f"{prefix} Shade Glow",
-                (opening.x + radius * 0.05, opening.y - radius * 0.22, opening.z + height * 0.08),
-                energy=700.0,
-                size=radius * 0.35,
-                color=(1.0, 0.82, 0.48),
-                target=root,
+        if "inspection_lights" in lamp_features:
+            remember(
+                _create_area_light(
+                    context,
+                    f"{prefix} Shade Glow",
+                    (opening.x + radius * 0.05, opening.y - radius * 0.22, opening.z + height * 0.08),
+                    energy=700.0,
+                    size=radius * 0.35,
+                    color=(1.0, 0.82, 0.48),
+                    target=root,
+                )
             )
-        )
-        remember(
-            _create_area_light(
-                context,
-                f"{prefix} Inspection Key",
-                (origin[0] - radius * 0.75, origin[1] - radius * 1.05, origin[2] + height * 0.9),
-                energy=520.0,
-                size=radius * 0.8,
-                color=(1.0, 0.93, 0.84),
-                target=root,
+            remember(
+                _create_area_light(
+                    context,
+                    f"{prefix} Inspection Key",
+                    (origin[0] - radius * 0.75, origin[1] - radius * 1.05, origin[2] + height * 0.9),
+                    energy=520.0,
+                    size=radius * 0.8,
+                    color=(1.0, 0.93, 0.84),
+                    target=root,
+                )
             )
-        )
-        remember(
-            _create_area_light(
-                context,
-                f"{prefix} Inspection Fill",
-                (origin[0] + radius * 0.95, origin[1] - radius * 0.75, origin[2] + height * 0.55),
-                energy=180.0,
-                size=radius,
-                color=(0.78, 0.86, 1.0),
-                target=root,
+            remember(
+                _create_area_light(
+                    context,
+                    f"{prefix} Inspection Fill",
+                    (origin[0] + radius * 0.95, origin[1] - radius * 0.75, origin[2] + height * 0.55),
+                    energy=180.0,
+                    size=radius,
+                    color=(0.78, 0.86, 1.0),
+                    target=root,
+                )
             )
-        )
         _parent_objects_to_root(context, root, lamp_children)
         base.show_name = True
 
@@ -6477,6 +6683,13 @@ def create_procedural_object_kit(
                 "spacing": spacing,
                 "height": height,
             },
+            "design": {
+                "style": style,
+                "variant": variant,
+                "detail_level": detail_level,
+                "features": sorted(feature_set),
+                "applied_palette": applied_palette,
+            },
         }
     )
     live_preview.redraw(context)
@@ -6488,6 +6701,13 @@ def create_procedural_object_kit(
         "objects": created,
         "modifiers": modifiers,
         "controls": {"count": count, "radius": radius, "spacing": spacing, "height": height},
+        "design": {
+            "style": style,
+            "variant": variant,
+            "detail_level": detail_level,
+            "features": sorted(feature_set),
+            "applied_palette": applied_palette,
+        },
         "transaction_id": transaction["id"],
     }
 

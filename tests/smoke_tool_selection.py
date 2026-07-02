@@ -285,13 +285,14 @@ def main():
         assert "get_geometry_nodes_details" in procedural_names, procedural_meta
 
         lamp_tools, lamp_meta = agent_tools.select_blender_tool_definitions(
-            "Create a believable desk lamp product prop with a base, hinged arms, open shade, bulb, and cable.",
+            "Create a believable architect desk lamp product prop with spring arms, counterweight, open wide shade, bulb, and cable.",
             bundle,
         )
         lamp_names = _names(lamp_tools)
         assert "plan_advanced_scene_workflow" in lamp_names, lamp_meta
         assert "create_procedural_object_kit" in lamp_names, lamp_meta
         assert "inspect_modeling_quality" in lamp_names, lamp_meta
+        assert "draft_script" not in lamp_names, lamp_meta
 
         modeling_tools, modeling_meta = agent_tools.select_blender_tool_definitions(
             "Use a boolean cutter, mirror the model, symmetrize it on X, solidify the wall thickness, and add a screw thread.",

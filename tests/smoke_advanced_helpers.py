@@ -255,6 +255,10 @@ def _run_desk_lamp_kit_exit_test(context):
         },
     )
     assert kit["template"] == "desk_lamp", kit
+    assert kit["design"]["style"] == "default", kit
+    assert kit["design"]["variant"] == "default", kit
+    assert kit["design"]["detail_level"] == "medium", kit
+    assert {"round_base", "double_arm", "open_shade", "visible_bulb", "power_cable"}.issubset(set(kit["design"]["features"])), kit
     expected_terms = (
         "Root",
         "Weighted Base",
@@ -292,6 +296,63 @@ def _run_desk_lamp_kit_exit_test(context):
             "resolution_y": 240,
             "distance_factor": 3.0,
             "note": "Desk-lamp kit visual exit evidence",
+        },
+    )
+    render = render_result["inspection_render"]
+    assert render["available"] is True, render
+    assert len(render["images"]) == 2, render
+    for image in render["images"]:
+        assert image["available"] is True, image
+        assert image["width"] == 320 and image["height"] == 240, image
+        assert image["size_bytes"] > 128, image
+        assert os.path.isfile(image["path"]), image
+    return {"kit": kit, "root": root_name, "quality": quality, "inspection_render": render}
+
+
+def _run_desk_lamp_design_grammar_test(context):
+    kit = _execute(
+        context,
+        "create_procedural_object_kit",
+        {
+            "template": "desk_lamp",
+            "name_prefix": "Agent Bridge Architect Lamp Kit",
+            "location": [14.5, -6.0, 0.0],
+            "count": 1,
+            "radius": 1.2,
+            "height": 1.75,
+            "style": "architect",
+            "variant": "architect",
+            "detail_level": "high",
+            "features": ["spring_arms", "counterweight", "wide_shade", "label_parts"],
+        },
+    )
+    assert kit["template"] == "desk_lamp", kit
+    design = kit["design"]
+    assert design["style"] == "architect", kit
+    assert design["variant"] == "architect", kit
+    assert design["detail_level"] == "high", kit
+    for feature in ("spring_arms", "counterweight", "wide_shade", "label_parts"):
+        assert feature in design["features"], kit
+    for term in ("Lower Spring", "Upper Spring", "Counterweight", "Open Shade", "Visible Bulb"):
+        assert any(term in name for name in kit["objects"]), (term, kit)
+    root_name = next(name for name in kit["objects"] if name.endswith(" Root"))
+    quality = _execute(
+        context,
+        "inspect_modeling_quality",
+        {"object_names": [root_name], "selected_only": False, "include_children": True, "require_materials": True},
+    )
+    assert quality["passed"] is True, quality
+    assert quality["issue_count"] == 0, quality
+    render_result = _execute(
+        context,
+        "capture_object_inspection_renders",
+        {
+            "object_names": [root_name],
+            "views": ["front_below", "side"],
+            "resolution_x": 320,
+            "resolution_y": 240,
+            "distance_factor": 3.0,
+            "note": "Architect desk-lamp design grammar visual evidence",
         },
     )
     render = render_result["inspection_render"]
@@ -1030,6 +1091,8 @@ def main():
 
         desk_lamp = _run_desk_lamp_kit_exit_test(context)
         assert desk_lamp["quality"]["passed"] is True, desk_lamp
+        architect_lamp = _run_desk_lamp_design_grammar_test(context)
+        assert architect_lamp["quality"]["passed"] is True, architect_lamp
 
         object_kit = _execute(
             context,
