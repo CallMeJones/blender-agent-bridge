@@ -4415,14 +4415,31 @@ def plan_advanced_scene_workflow(context, *, prompt="", domains=None, target_obj
     }
 
 
-def _planned_tool_call(name, arguments=None, *, reason="", mutates_scene=False, requires_live_preview=False):
-    return {
+def _planned_tool_call(
+    name,
+    arguments=None,
+    *,
+    reason="",
+    mutates_scene=False,
+    requires_live_preview=False,
+    deferred=False,
+    depends_on=None,
+    input_handoff=None,
+):
+    call = {
         "name": str(name or ""),
         "input": dict(arguments or {}),
         "reason": str(reason or ""),
         "mutates_scene": bool(mutates_scene),
         "requires_live_preview": bool(requires_live_preview),
     }
+    if deferred:
+        call["deferred_until_inputs_resolved"] = True
+    if depends_on:
+        call["depends_on"] = str(depends_on)
+    if input_handoff:
+        call["input_handoff"] = dict(input_handoff)
+    return call
 
 
 def _prompt_has_any(prompt, terms):
@@ -4456,6 +4473,8 @@ def _infer_presentation_preset(prompt, preset=""):
 
 def _infer_object_kit_template(prompt):
     text = str(prompt or "").lower()
+    if any(term in text for term in ("lamp", "desk light", "task light", "architect light", "clamp light")):
+        return "desk_lamp"
     if any(term in text for term in ("mechanical assembly", "actuator", "exploded assembly", "bracket assembly")):
         return "mechanical_assembly"
     if any(term in text for term in ("product display", "product rig", "display rig", "presentation rig", "turntable plinth")):
@@ -4479,6 +4498,435 @@ def _infer_object_kit_template(prompt):
     if "product" in text or "stack" in text:
         return "product_stack"
     return "kitbash_tower"
+
+
+OBJECT_DESIGN_FAMILIES = {
+    "lighting": {"lamp", "light", "lighting", "lantern", "spotlight", "sconce", "chandelier", "shade", "bulb"},
+    "furniture": {"chair", "stool", "table", "desk", "shelf", "shelving", "cabinet", "sofa", "bench", "cushion"},
+    "appliance": {"appliance", "coffee machine", "espresso", "toaster", "microwave", "vending", "kettle", "machine"},
+    "vehicle": {"vehicle", "car", "truck", "rover", "bike", "motorbike", "aircraft", "drone", "landing gear"},
+    "architecture": {"building", "facade", "wall", "room", "door", "window", "stair", "stairs", "corridor", "panel"},
+    "mechanical": {"mechanical", "gear", "gearbox", "bracket", "hinge", "joint", "actuator", "piston", "valve", "pipe", "conduit"},
+    "electronics": {"electronics", "device", "console", "terminal", "control panel", "screen", "display", "keyboard", "button"},
+    "product_display": {"product display", "display rig", "turntable", "plinth", "packshot", "catalog", "catalogue", "hero product"},
+    "character": {"character", "humanoid", "person", "avatar", "head", "face", "body"},
+    "abstract_prop": {"prop", "kitbash", "sculpture", "abstract", "set dressing", "object"},
+    "unknown": set(),
+}
+
+OBJECT_DESIGN_EXACT_REFERENCE_TERMS = {
+    "exact",
+    "specific",
+    "real-world",
+    "real world",
+    "from photo",
+    "reference image",
+    "brand",
+    "branded",
+    "manufacturer",
+    "ikea",
+    "boeing",
+    "tesla",
+    "sony",
+    "apple",
+    "samsung",
+}
+
+OBJECT_DESIGN_FEATURE_TERMS = {
+    "display_screen": {"display", "screen", "touchscreen", "monitor"},
+    "pipe_run": {"pipe", "pipes", "conduit", "hose", "tube", "tubing"},
+    "beveled_body": {"bevel", "beveled", "rounded edge", "soft edges"},
+    "metal_trim": {"chrome", "brass", "metal", "metallic", "steel", "aluminum", "aluminium"},
+    "glass_panels": {"glass", "window", "transparent"},
+    "hinged_parts": {"hinge", "joint", "articulated"},
+    "buttons": {"button", "buttons", "knob", "knobs", "switch", "switches"},
+    "power_cable": {"cable", "cord", "wire", "wires"},
+    "spring_arms": {"spring", "spring arm", "spring arms"},
+    "counterweight": {"counterweight", "balance weight"},
+    "wide_shade": {"wide shade", "large shade", "open shade"},
+    "desk_clamp": {"clamp", "desk clamp"},
+    "visible_bulb": {"bulb", "visible bulb"},
+    "wheels": {"wheel", "wheels", "tire", "tyre"},
+    "labels": {"label", "labels", "callout", "callouts"},
+}
+
+OBJECT_DESIGN_MATERIAL_TERMS = {
+    "brass": ("brushed_metal", "Warm brass/gold accent material"),
+    "chrome": ("brushed_metal", "Chrome or polished metal material"),
+    "steel": ("brushed_metal", "Steel material"),
+    "metal": ("brushed_metal", "Generic metal material"),
+    "glass": ("clear_glass", "Transparent glass material"),
+    "rubber": ("rubber_black", "Black rubber material"),
+    "wood": ("warm_wood", "Warm wood material"),
+    "screen": ("screen_glow", "Screen glow material"),
+    "glow": ("emissive_accent", "Emissive accent material"),
+}
+
+
+def _infer_object_design_family(prompt, object_family=""):
+    requested = str(object_family or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if requested in OBJECT_DESIGN_FAMILIES:
+        return requested
+    text = str(prompt or "").lower()
+    scores = []
+    for family, keywords in OBJECT_DESIGN_FAMILIES.items():
+        if family == "unknown":
+            continue
+        score = sum(max(1, len(keyword.split()) * 2) for keyword in keywords if keyword in text)
+        if score:
+            scores.append((score, family))
+    if not scores:
+        return "abstract_prop" if any(term in text for term in ("make", "create", "object", "prop", "model")) else "unknown"
+    scores.sort(key=lambda item: (-item[0], item[1]))
+    return scores[0][1]
+
+
+def _infer_object_design_style(prompt):
+    text = str(prompt or "").lower()
+    for style in ("architect", "industrial", "minimal", "studio", "retro"):
+        if style in text:
+            return style
+    if any(term in text for term in ("chrome", "steel", "mechanical", "factory", "pipes", "pipe")):
+        return "industrial"
+    if any(term in text for term in ("clean", "simple", "white", "minimalist")):
+        return "minimal"
+    if any(term in text for term in ("product", "catalog", "packshot", "hero")):
+        return "studio"
+    return "default"
+
+
+def _infer_object_design_detail_level(prompt):
+    text = str(prompt or "").lower()
+    if any(term in text for term in ("rough", "blockout", "simple", "low detail", "quick")):
+        return "low"
+    if any(term in text for term in ("detailed", "believable", "hero", "production", "polished", "intricate")):
+        return "high"
+    return "medium"
+
+
+def _infer_object_design_variant(prompt, family):
+    text = str(prompt or "").lower()
+    if family == "lighting":
+        if "clamp" in text:
+            return "clamp"
+        if any(term in text for term in ("architect", "drafting", "anglepoise")):
+            return "architect"
+        if any(term in text for term in ("compact", "small", "portable")):
+            return "compact"
+        if "studio" in text:
+            return "studio"
+        if any(term in text for term in ("task", "desk")):
+            return "task"
+    if family == "product_display" and any(term in text for term in ("turntable", "360", "spin")):
+        return "turntable"
+    if family == "architecture" and any(term in text for term in ("wall", "facade", "panel")):
+        return "wall_panel"
+    if family == "appliance" and any(term in text for term in ("coffee", "espresso")):
+        return "countertop_machine"
+    return "default"
+
+
+def _infer_object_design_features(prompt):
+    text = str(prompt or "").lower()
+    features = []
+    for feature, keywords in OBJECT_DESIGN_FEATURE_TERMS.items():
+        if any(keyword in text for keyword in keywords):
+            features.append(feature)
+    return sorted(set(features))
+
+
+def _infer_object_design_materials(prompt):
+    text = str(prompt or "").lower()
+    hints = []
+    for term, (preset, description) in OBJECT_DESIGN_MATERIAL_TERMS.items():
+        if term in text:
+            hints.append(
+                {
+                    "term": term,
+                    "recommended_tool": "create_shader_material",
+                    "preset": preset,
+                    "description": description,
+                }
+            )
+    return hints
+
+
+def _infer_object_design_template(prompt, family):
+    text = str(prompt or "").lower()
+    if family == "lighting":
+        return "desk_lamp" if any(term in text for term in ("lamp", "desk", "task", "architect", "clamp")) else "studio_prop_set"
+    if family == "electronics":
+        return "control_panel"
+    if family == "appliance":
+        return "control_panel" if any(term in text for term in ("display", "screen", "button", "coffee", "espresso", "vending")) else "product_stack"
+    if family == "architecture":
+        return "pipe_run" if any(term in text for term in ("pipe", "conduit")) else "modular_wall_panel"
+    if family == "mechanical":
+        return _infer_object_kit_template(prompt)
+    if family == "product_display":
+        return "product_display_rig"
+    if family == "abstract_prop":
+        return _infer_object_kit_template(prompt)
+    return ""
+
+
+def _object_design_strategy(prompt, family, template):
+    text = str(prompt or "").lower()
+    exact_reference = any(term in text for term in OBJECT_DESIGN_EXACT_REFERENCE_TERMS)
+    asset_requested = any(term in text for term in ("asset", "download", "import model", "import asset", "sketchfab", "poly haven", "polyhaven"))
+    if exact_reference or asset_requested:
+        return "asset_reference_then_refine"
+    if template:
+        return "procedural_kit_plus_generic_modeling"
+    if family in {"furniture", "vehicle", "character"}:
+        return "generic_modeling_or_asset_reference"
+    if family == "unknown":
+        return "inspect_or_request_clarification"
+    return "generic_modeling_helpers"
+
+
+def _desk_lamp_supported_features(features):
+    supported = {
+        "desk_clamp": "desk_clamp",
+        "spring_arms": "spring_arms",
+        "counterweight": "counterweight",
+        "wide_shade": "wide_shade",
+        "visible_bulb": "visible_bulb",
+        "power_cable": "power_cable",
+        "labels": "label_parts",
+    }
+    return sorted({supported[item] for item in features if item in supported})
+
+
+def _object_design_companion_templates(prompt, template):
+    text = str(prompt or "").lower()
+    companions = []
+    if any(term in text for term in ("pipe", "pipes", "conduit", "hose")) and template != "pipe_run":
+        companions.append("pipe_run")
+    if any(term in text for term in ("turntable", "product display", "packshot")) and template != "product_display_rig":
+        companions.append("product_display_rig")
+    if any(term in text for term in ("wall panel", "facade", "modular wall")) and template != "modular_wall_panel":
+        companions.append("modular_wall_panel")
+    return companions
+
+
+def _object_design_target_handoff(strategy, template):
+    if template:
+        return {
+            "target_argument": "object_names",
+            "source_tool": "create_procedural_object_kit",
+            "source_result_field": "objects",
+            "instruction": "Populate object_names from the create_procedural_object_kit result before running this follow-up tool.",
+        }
+    if strategy == "asset_reference_then_refine":
+        return {
+            "target_argument": "object_names",
+            "source_tool": "start_external_asset_import_job",
+            "source_result_field": "imported_object_names",
+            "instruction": "Populate object_names from the completed asset-import result before running this follow-up tool.",
+        }
+    return {
+        "target_argument": "object_names",
+        "source_tool": "chosen_creation_or_modeling_helper",
+        "source_result_field": "objects",
+        "instruction": "Populate object_names from the helper result that creates or identifies the modeled object before running this follow-up tool.",
+    }
+
+
+def plan_object_design(context, *, prompt="", object_family="", target_objects=None, label="Plan object design"):
+    """Read-only object-family design mapper for helper-first procedural creation."""
+
+    prompt = str(prompt or "").strip()
+    family = _infer_object_design_family(prompt, object_family)
+    style = _infer_object_design_style(prompt)
+    detail_level = _infer_object_design_detail_level(prompt)
+    variant = _infer_object_design_variant(prompt, family)
+    features = _infer_object_design_features(prompt)
+    material_hints = _infer_object_design_materials(prompt)
+    inferred_template = _infer_object_design_template(prompt, family)
+    strategy = _object_design_strategy(prompt, family, inferred_template)
+    refinement_template = inferred_template if strategy == "asset_reference_then_refine" else ""
+    template = "" if strategy == "asset_reference_then_refine" else inferred_template
+    companion_templates = _object_design_companion_templates(prompt, template)
+    target_names = [str(item) for item in (target_objects or []) if str(item).strip()]
+    existing_targets = [name for name in target_names if bpy.data.objects.get(name)]
+    missing_targets = [name for name in target_names if not bpy.data.objects.get(name)]
+
+    kit_arguments = {}
+    if template:
+        kit_arguments = {
+            "template": template,
+            "name_prefix": "Agent Bridge Designed Object",
+            "style": style,
+            "detail_level": detail_level,
+        }
+        if template == "desk_lamp":
+            kit_arguments["variant"] = variant if variant in DESK_LAMP_VARIANTS else "default"
+            supported_features = _desk_lamp_supported_features(features)
+            if supported_features:
+                kit_arguments["features"] = supported_features
+
+    recommended_tools = []
+    planned_calls = []
+    deferred_calls = []
+    if strategy == "asset_reference_then_refine":
+        recommended_tools.extend(
+            [
+                "plan_asset_import_workflow",
+                "start_external_asset_download",
+                "get_external_asset_job_status",
+                "start_external_asset_import_job",
+                "get_external_asset_import_job_status",
+                "prepare_imported_asset_presentation",
+                "capture_viewport",
+            ]
+        )
+        planned_calls.append(
+            _planned_tool_call(
+                "plan_asset_import_workflow",
+                {"prompt": prompt, "target_object_name": existing_targets[0] if existing_targets else ""},
+                reason="Exact or external-reference object requests should discover/import an asset before procedural approximation.",
+            )
+        )
+    else:
+        recommended_tools.append("plan_advanced_scene_workflow")
+        if template:
+            recommended_tools.append("create_procedural_object_kit")
+            planned_calls.append(
+                _planned_tool_call(
+                    "create_procedural_object_kit",
+                    kit_arguments,
+                    reason="Create a bounded semantic starting kit before lower-level modeling.",
+                    mutates_scene=True,
+                    requires_live_preview=True,
+                )
+            )
+        recommended_tools.extend(
+            [
+                "edit_mesh",
+                "curve_to_mesh",
+                "boolean_op",
+                "solidify_model",
+                "screw_model",
+                "create_shader_material",
+                "inspect_modeling_quality",
+                "capture_object_inspection_renders",
+                "organize_scene_for_production",
+            ]
+        )
+        if "pipe_run" in companion_templates:
+            recommended_tools.insert(recommended_tools.index("edit_mesh"), "create_procedural_object_kit")
+        for hint in material_hints[:4]:
+            planned_calls.append(
+                _planned_tool_call(
+                    "create_shader_material",
+                    {"preset": hint["preset"], "name": f"Agent Bridge {hint['term'].title()} Material"},
+                    reason=f"Prompt mentions {hint['term']}; create a bounded material preset.",
+                    mutates_scene=True,
+                    requires_live_preview=True,
+                )
+            )
+        if existing_targets:
+            planned_calls.extend(
+                [
+                    _planned_tool_call(
+                        "inspect_modeling_quality",
+                        {"object_names": existing_targets, "selected_only": False, "include_children": True},
+                        reason="Validate topology/material readiness before signoff or repair.",
+                    ),
+                    _planned_tool_call(
+                        "capture_object_inspection_renders",
+                        {"object_names": existing_targets, "views": ["front_below", "side"]},
+                        reason="Capture visual evidence before committing preview changes.",
+                    ),
+                ]
+            )
+        else:
+            target_handoff = _object_design_target_handoff(strategy, template)
+            deferred_calls.extend(
+                [
+                    _planned_tool_call(
+                        "inspect_modeling_quality",
+                        {"selected_only": False, "include_children": True},
+                        reason="Validate topology/material readiness after the creation helper returns object names.",
+                        deferred=True,
+                        depends_on=target_handoff["source_tool"],
+                        input_handoff=target_handoff,
+                    ),
+                    _planned_tool_call(
+                        "capture_object_inspection_renders",
+                        {"views": ["front_below", "side"]},
+                        reason="Capture visual evidence after the creation helper returns object names.",
+                        deferred=True,
+                        depends_on=target_handoff["source_tool"],
+                        input_handoff=target_handoff,
+                    ),
+                ]
+            )
+
+    recommended_tools = list(dict.fromkeys(recommended_tools))
+    fallback_reason = ""
+    if strategy == "asset_reference_then_refine":
+        fallback_reason = "Prompt appears to request an exact, branded, referenced, or imported object; asset discovery/import is safer than procedural guessing."
+    elif not template:
+        fallback_reason = "No bounded object-kit grammar currently matches this family; use generic modeling helpers first, then draft_script only after a concrete helper gap."
+
+    steps = [
+        {
+            "name": "interpret_brief",
+            "description": "Map the natural-language prompt to object family, strategy, style, variant, features, and material hints.",
+            "mutates_scene": False,
+        },
+        {
+            "name": "create_starting_structure",
+            "description": "Use a bounded object kit when available; otherwise create primitive/curve/blockout structure with generic helpers.",
+            "tool": "create_procedural_object_kit" if template and strategy != "asset_reference_then_refine" else "plan_asset_import_workflow" if strategy == "asset_reference_then_refine" else "create_primitive",
+            "mutates_scene": strategy != "inspect_or_request_clarification",
+        },
+        {
+            "name": "refine_shape_and_materials",
+            "description": "Apply bounded modeling, curve, material, and organization helpers before considering custom scripts.",
+            "tools": [tool for tool in recommended_tools if tool not in {"plan_advanced_scene_workflow", "plan_asset_import_workflow", "create_procedural_object_kit"}],
+            "mutates_scene": True,
+        },
+        {
+            "name": "verify_evidence",
+            "description": "Run modeling quality checks and capture inspection renders before commit/revert.",
+            "tools": ["inspect_modeling_quality", "capture_object_inspection_renders"],
+            "mutates_scene": False,
+        },
+    ]
+
+    return {
+        "ok": True,
+        "message": f"Planned object design for {family} using {strategy}",
+        "label": label,
+        "prompt": prompt,
+        "object_family": family,
+        "strategy": strategy,
+        "template": template,
+        "refinement_template": refinement_template,
+        "companion_templates": companion_templates,
+        "style": style,
+        "variant": variant,
+        "detail_level": detail_level,
+        "features": features,
+        "material_hints": material_hints,
+        "kit_arguments": kit_arguments,
+        "target_objects": existing_targets,
+        "missing_target_objects": missing_targets,
+        "recommended_tools": recommended_tools,
+        "planned_tool_calls": planned_calls,
+        "deferred_tool_calls": deferred_calls,
+        "steps": steps,
+        "fallback_reason": fallback_reason,
+        "script_fallback_policy": {
+            "helper_first": True,
+            "requires_explicit_helper_gap": True,
+            "asset_reference_before_procedural_guessing": True,
+            "custom_scripts": "Use draft_script only when the plan identifies a concrete helper gap after inspection and bounded helpers.",
+        },
+    }
 
 
 def plan_asset_import_workflow(

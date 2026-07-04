@@ -1527,6 +1527,37 @@ TOOL_CONTRACTS = {
             "additionalProperties": False,
         },
     },
+    "plan_object_design": {
+        "description": "Map a natural-language object design brief to object family, creation strategy, bounded kit arguments, helper tools, asset-reference boundaries, and script fallback policy",
+        "mutates_scene": False,
+        "supports_headless": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string"},
+                "object_family": {
+                    "type": "string",
+                    "enum": [
+                        "",
+                        "lighting",
+                        "furniture",
+                        "appliance",
+                        "vehicle",
+                        "architecture",
+                        "mechanical",
+                        "electronics",
+                        "product_display",
+                        "character",
+                        "abstract_prop",
+                        "unknown",
+                    ],
+                },
+                "target_objects": {"type": "array", "items": {"type": "string"}},
+                "label": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
+    },
     "plan_asset_import_workflow": {
         "description": "Plan async external-asset discovery, download/cache, queued import, post-import staging, and visual-evidence workflow",
         "mutates_scene": False,

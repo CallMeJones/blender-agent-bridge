@@ -227,6 +227,7 @@ def main():
         advanced_names = _names(advanced_tools)
         assert "plan_director_workflow" in advanced_names, advanced_meta
         assert "plan_advanced_scene_workflow" in advanced_names, advanced_meta
+        assert "plan_object_design" in advanced_names, advanced_meta
         assert "get_2d_animation_details" in advanced_names, advanced_meta
         assert "get_render_camera_compositor_details" in advanced_names, advanced_meta
 
@@ -271,6 +272,7 @@ def main():
         )
         procedural_names = _names(procedural_tools)
         assert "plan_advanced_scene_workflow" in procedural_names, procedural_meta
+        assert "plan_object_design" in procedural_names, procedural_meta
         assert "create_procedural_object_kit" in procedural_names, procedural_meta
         assert "apply_procedural_array_stack" in procedural_names, procedural_meta
         assert "edit_mesh" in procedural_names, procedural_meta
@@ -290,9 +292,21 @@ def main():
         )
         lamp_names = _names(lamp_tools)
         assert "plan_advanced_scene_workflow" in lamp_names, lamp_meta
+        assert "plan_object_design" in lamp_names, lamp_meta
         assert "create_procedural_object_kit" in lamp_names, lamp_meta
         assert "inspect_modeling_quality" in lamp_names, lamp_meta
         assert "draft_script" not in lamp_names, lamp_meta
+
+        appliance_tools, appliance_meta = agent_tools.select_blender_tool_definitions(
+            "Design a futuristic wall-mounted coffee machine with chrome pipes, a small display, buttons, and beveled body.",
+            bundle,
+        )
+        appliance_names = _names(appliance_tools)
+        assert "plan_object_design" in appliance_names, appliance_meta
+        assert "create_procedural_object_kit" in appliance_names, appliance_meta
+        assert "edit_mesh" in appliance_names, appliance_meta
+        assert "create_shader_material" in appliance_names, appliance_meta
+        assert "draft_script" not in appliance_names, appliance_meta
 
         modeling_tools, modeling_meta = agent_tools.select_blender_tool_definitions(
             "Use a boolean cutter, mirror the model, symmetrize it on X, solidify the wall thickness, and add a screw thread.",

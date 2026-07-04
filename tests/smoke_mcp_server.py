@@ -694,6 +694,9 @@ def _assert_compact_tools_visible(proc):
     assert search_tool["annotations"]["readOnlyHint"] is True, search_tool
     advanced_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "plan_advanced_scene_workflow")
     assert advanced_tool["annotations"]["readOnlyHint"] is True, advanced_tool
+    object_design_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "plan_object_design")
+    assert object_design_tool["annotations"]["readOnlyHint"] is True, object_design_tool
+    assert "object_family" in object_design_tool["inputSchema"]["properties"], object_design_tool
     two_d_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "get_2d_animation_details")
     assert two_d_tool["annotations"]["readOnlyHint"] is True, two_d_tool
     task_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "run_animation_task")
@@ -1016,8 +1019,16 @@ def main():
                 {"create_procedural_object_kit"},
             ),
             (
+                "Design a futuristic wall-mounted coffee machine with chrome pipes, a small display, buttons, and beveled body.",
+                {"plan_object_design", "create_procedural_object_kit", "create_shader_material"},
+            ),
+            (
+                "Create a control panel with buttons and a display.",
+                {"plan_object_design", "create_procedural_object_kit"},
+            ),
+            (
                 "Create a believable architect desk lamp product prop with spring arms, counterweight, wide shade, bulb, and cable.",
-                {"create_procedural_object_kit"},
+                {"plan_object_design", "create_procedural_object_kit"},
             ),
             (
                 "Create a modular wall panel object kit with pipe run details and geometry nodes.",

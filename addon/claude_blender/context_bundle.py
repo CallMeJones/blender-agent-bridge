@@ -336,6 +336,7 @@ def build_context_bundle(context, *, include_visual=False, capture_dir=None, max
             "set_world_background",
             "plan_director_workflow",
             "plan_advanced_scene_workflow",
+            "plan_object_design",
             "plan_asset_import_workflow",
             "get_2d_animation_details",
             "create_storyboard_panels",

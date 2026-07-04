@@ -29,6 +29,11 @@ def main():
         assert contract["mutates_scene"] is True, contract
         assert contract["requires_live_preview"] is True, contract
         assert contract["input_schema"].get("additionalProperties") is False, contract
+    object_design_contract = bridge_protocol.normalized_tool_contract("plan_object_design")
+    assert "plan_object_design" in catalog_names, catalog_names
+    assert object_design_contract["mutates_scene"] is False, object_design_contract
+    assert object_design_contract["supports_headless"] is True, object_design_contract
+    assert "object_family" in object_design_contract["input_schema"]["properties"], object_design_contract
     kit_templates = bridge_protocol.normalized_tool_contract("create_procedural_object_kit")["input_schema"]["properties"]["template"]["enum"]
     assert "desk_lamp" in kit_templates, kit_templates
     kit_props = bridge_protocol.normalized_tool_contract("create_procedural_object_kit")["input_schema"]["properties"]

@@ -2323,6 +2323,16 @@ def plan_advanced_scene_workflow(context, args):
     )
 
 
+def plan_object_design(context, args):
+    return advanced_helpers.plan_object_design(
+        context,
+        prompt=str(args.get("prompt") or ""),
+        object_family=str(args.get("object_family") or ""),
+        target_objects=_name_list(args.get("target_objects")),
+        label=args.get("label", "Plan object design"),
+    )
+
+
 def plan_asset_import_workflow(context, args):
     return advanced_helpers.plan_asset_import_workflow(
         context,
@@ -3885,6 +3895,7 @@ TOOL_FUNCTIONS = {
     "set_camera_settings": set_camera_settings,
     "set_world_background": set_world_background,
     "plan_advanced_scene_workflow": plan_advanced_scene_workflow,
+    "plan_object_design": plan_object_design,
     "plan_asset_import_workflow": plan_asset_import_workflow,
     "plan_director_workflow": plan_director_workflow,
     "get_2d_animation_details": get_2d_animation_details,

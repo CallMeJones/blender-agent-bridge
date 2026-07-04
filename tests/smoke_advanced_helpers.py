@@ -18,6 +18,7 @@ from claude_blender import advanced_helpers, agent_tools, context_bundle, live_p
 
 ADVANCED_TOOLS = {
     "plan_advanced_scene_workflow",
+    "plan_object_design",
     "plan_asset_import_workflow",
     "plan_director_workflow",
     "get_2d_animation_details",
@@ -612,6 +613,60 @@ def main():
             {"prompt": "Plan advanced 2D storyboard, procedural 3D, cloth simulation, and camera animation helpers."},
         )
         assert {"two_d_storyboard", "procedural_3d", "advanced_animation", "simulation_setup"}.intersection(set(workflow["domains"]))
+        object_design = _execute(
+            context,
+            "plan_object_design",
+            {"prompt": "Design a futuristic wall-mounted coffee machine with chrome pipes, a small display, buttons, and beveled body."},
+        )
+        assert object_design["object_family"] == "appliance", object_design
+        assert object_design["strategy"] == "procedural_kit_plus_generic_modeling", object_design
+        assert object_design["template"] == "control_panel", object_design
+        assert "pipe_run" in object_design["companion_templates"], object_design
+        assert "display_screen" in object_design["features"], object_design
+        assert "pipe_run" in object_design["features"], object_design
+        assert "create_procedural_object_kit" in object_design["recommended_tools"], object_design
+        assert "edit_mesh" in object_design["recommended_tools"], object_design
+        assert "create_shader_material" in object_design["recommended_tools"], object_design
+        assert object_design["kit_arguments"]["template"] == "control_panel", object_design
+        assert object_design["fallback_reason"] == "", object_design
+        planned_names = [call["name"] for call in object_design["planned_tool_calls"]]
+        deferred_by_name = {call["name"]: call for call in object_design["deferred_tool_calls"]}
+        assert "create_procedural_object_kit" in planned_names, object_design
+        assert "inspect_modeling_quality" not in planned_names, object_design
+        assert "capture_object_inspection_renders" not in planned_names, object_design
+        assert deferred_by_name["inspect_modeling_quality"]["input_handoff"]["source_tool"] == "create_procedural_object_kit", object_design
+        assert deferred_by_name["inspect_modeling_quality"]["input_handoff"]["source_result_field"] == "objects", object_design
+        assert "object_names" not in deferred_by_name["inspect_modeling_quality"]["input"], object_design
+        assert deferred_by_name["capture_object_inspection_renders"]["input_handoff"]["source_tool"] == "create_procedural_object_kit", object_design
+        assert "object_names" not in deferred_by_name["capture_object_inspection_renders"]["input"], object_design
+        control_panel_design = _execute(
+            context,
+            "plan_object_design",
+            {"prompt": "Create a control panel."},
+        )
+        assert control_panel_design["object_family"] == "electronics", control_panel_design
+        assert control_panel_design["template"] == "control_panel", control_panel_design
+        exact_object_design = _execute(
+            context,
+            "plan_object_design",
+            {"prompt": "Make the exact Boeing 747 landing gear from a reference image."},
+        )
+        assert exact_object_design["strategy"] == "asset_reference_then_refine", exact_object_design
+        assert exact_object_design["template"] == "", exact_object_design
+        assert exact_object_design["kit_arguments"] == {}, exact_object_design
+        assert exact_object_design["fallback_reason"], exact_object_design
+        assert "plan_asset_import_workflow" in exact_object_design["recommended_tools"], exact_object_design
+        exact_control_panel_design = _execute(
+            context,
+            "plan_object_design",
+            {"prompt": "Make the exact Sony control panel from a reference image."},
+        )
+        assert exact_control_panel_design["object_family"] == "electronics", exact_control_panel_design
+        assert exact_control_panel_design["strategy"] == "asset_reference_then_refine", exact_control_panel_design
+        assert exact_control_panel_design["template"] == "", exact_control_panel_design
+        assert exact_control_panel_design["refinement_template"] == "control_panel", exact_control_panel_design
+        assert exact_control_panel_design["kit_arguments"] == {}, exact_control_panel_design
+        assert not any(call["name"] == "create_procedural_object_kit" for call in exact_control_panel_design["planned_tool_calls"]), exact_control_panel_design
         asset_plan = _execute(
             context,
             "plan_asset_import_workflow",

@@ -50,6 +50,7 @@ COMPACT_DIRECT_TOOL_NAMES = (
     "list_scene_objects",
     "plan_director_workflow",
     "plan_advanced_scene_workflow",
+    "plan_object_design",
     "plan_asset_import_workflow",
     "get_2d_animation_details",
     "plan_animation_workflow",
@@ -160,6 +161,10 @@ ADVANCED_ROUTE_TERMS = {
     "directed shot",
     "shot template",
     "object kit",
+    "object design",
+    "design brief",
+    "design mapper",
+    "object family",
     "kitbash",
     "scatter grid",
     "radial array",
@@ -174,6 +179,16 @@ ADVANCED_ROUTE_TERMS = {
     "spring arms",
     "counterweight",
     "wide shade",
+    "appliance",
+    "coffee machine",
+    "espresso",
+    "electronics",
+    "control panel",
+    "console",
+    "furniture",
+    "chair",
+    "table",
+    "shelf",
     "product prop",
     "edit mesh",
     "extrude",
@@ -207,6 +222,7 @@ ADVANCED_ROUTE_TERMS = {
 ADVANCED_ROUTE_TOOLS = {
     "plan_director_workflow",
     "plan_advanced_scene_workflow",
+    "plan_object_design",
     "plan_asset_import_workflow",
     "get_2d_animation_details",
     "create_storyboard_panels",
@@ -239,6 +255,10 @@ PROCEDURAL_ROUTE_TERMS = {
     "modifier stack",
     "hard surface",
     "object kit",
+    "object design",
+    "design brief",
+    "design mapper",
+    "object family",
     "kit",
     "kitbash",
     "scatter grid",
@@ -256,6 +276,16 @@ PROCEDURAL_ROUTE_TERMS = {
     "spring arms",
     "counterweight",
     "wide shade",
+    "appliance",
+    "coffee machine",
+    "espresso",
+    "electronics",
+    "control panel",
+    "console",
+    "furniture",
+    "chair",
+    "table",
+    "shelf",
     "product prop",
     "edit mesh",
     "extrude",
@@ -682,7 +712,8 @@ PROMPTS = {
             "Call plan_advanced_scene_workflow first when the helper path is not obvious. For 2D, storyboard, "
             "animatic, cutout, or motion-graphics tasks, call get_2d_animation_details, then prefer "
             "create_storyboard_panels, create_2d_cutout_layer, create_camera_dolly_animation, create_directed_animation_shot, "
-            "and visual review. For procedural 3D modifier-stack or object-kit tasks, inspect geometry nodes when relevant "
+            "and visual review. For open-ended object creation, call plan_object_design before choosing object kits, generic modeling helpers, asset import, or scripts. "
+            "For procedural 3D modifier-stack or object-kit tasks, inspect geometry nodes when relevant "
             "and prefer create_procedural_object_kit or apply_procedural_array_stack before custom geometry scripts. For cloth setup, use "
             "add_cloth_simulation_to_selected, then get_simulation_details or inspect_simulation_bake before any "
             "persistent bake. Use draft_script for custom advanced scene scripts when static checks pass; keep "
@@ -1159,7 +1190,7 @@ def _tool_category(tool):
         return "camera_render"
     if name in {"get_2d_animation_details", "create_storyboard_panels", "create_2d_cutout_layer"}:
         return "two_d"
-    if name == "plan_advanced_scene_workflow":
+    if name in {"plan_advanced_scene_workflow", "plan_object_design"}:
         return "inspect"
     if name.startswith("get_") or name.startswith("list_") or name in {
         "inspect_scene",
@@ -1359,6 +1390,8 @@ def _score_tool_match(tool, query):
             score += 3600
         if name == "plan_advanced_scene_workflow":
             score += 3000
+        if name == "plan_object_design" and any(term in normalized_query for term in ("object design", "design brief", "design mapper", "object family", "appliance", "coffee machine", "furniture", "lamp", "control panel", "electronics", "console")):
+            score += 2400
         if name == "plan_asset_import_workflow" and external_asset_query:
             score += 1800
         if two_d_query:
@@ -1387,6 +1420,8 @@ def _score_tool_match(tool, query):
                 score += 1200
             elif name == "screw_model" and any(term in normalized_query for term in ("screw", "thread", "spring", "spiral", "helix")):
                 score += 1200
+            elif name == "create_shader_material" and any(term in normalized_query for term in ("material", "chrome", "brass", "metal", "glass", "rubber", "wood", "screen", "display", "color", "colour")):
+                score += 850
             elif name in {"get_geometry_nodes_details", "add_geometry_nodes_modifier", "add_bevel_and_subsurf"}:
                 score += 500
         if simulation_setup_query:
