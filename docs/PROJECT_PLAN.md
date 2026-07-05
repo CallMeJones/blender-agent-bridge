@@ -138,7 +138,7 @@ Expose external agents to narrow client tools rather than raw Python first:
 - `solidify_model`: adds non-destructive Solidify modifiers for shell/wall thickness.
 - `screw_model`: adds non-destructive Screw modifiers for rotational forms, spirals, springs, threads, and screw-depth modeling.
 - `create_shader_material`: creates or updates a Principled BSDF material and optionally assigns it to selected mesh objects.
-- `create_image_texture_material`: creates or updates a Principled BSDF material from exact local image/PBR map paths and optionally assigns it to selected or named mesh objects.
+- `create_image_texture_material`: creates or updates a Principled BSDF material from exact local image/PBR map paths, packed ARM/ORM maps, AO, bump maps, and optional UV-map selection, and optionally assigns it to selected or named mesh objects.
 - `uv_unwrap`: creates or updates preview-safe UV coordinate maps on mesh objects with mesh-data rollback.
 - `add_geometry_nodes_modifier`: adds a valid passthrough Geometry Nodes modifier and starter node group.
 - `create_shape_key`: creates or updates a mesh shape key value.
@@ -148,7 +148,8 @@ Expose external agents to narrow client tools rather than raw Python first:
 - `add_particle_system_to_selected`: adds bounded particle systems to selected mesh objects.
 - `create_basic_armature`: creates a simple one-bone armature object.
 - `add_copy_transform_constraint`: adds Copy Location/Rotation/Scale/Transforms constraints to selected objects.
-- `set_render_settings`: sets render engine, resolution, FPS, frame range, and transparency.
+- `set_render_settings`: sets render engine, resolution, FPS, frame range, transparency, look-dev quality presets, samples, denoise, and color management.
+- `set_render_engine`: focused render-engine/look-dev helper for engine, preset, samples, denoise, and color-management changes.
 - `set_camera_settings`: sets camera lens, sensor width, and depth-of-field settings.
 - `set_world_background`: sets the scene world background color.
 - `shade_smooth_selected`: smooths selected mesh polygons and can add weighted normals.
@@ -251,7 +252,7 @@ Acceptance:
 - Riskier generated scripts still require explicit approval before mutating the scene.
 
 Status: Initial tool loop implemented for scene object listing, object selection, playhead changes, selected-object movement, absolute transform edits, primitive creation, material assignment, emission material assignment, collection creation/linking, bounded modifier creation, Track To constraints, timeline setup, active camera selection, selected-object transform keyframes, light creation, camera creation, camera orbit creation, scene inspection, docs lookup scaffold, commit, and revert.
-Advanced helper coverage is now implemented for Principled shader material setup, local image/PBR texture material wiring, Geometry Nodes starter modifiers, the read-only `plan_object_design` object-family mapper, procedural object-kit templates including bounded desk-lamp, coffee-machine, and product-prop design grammars with style, variant, detail-level, and semantic feature controls, bounded Phase 1 modeling helpers (`edit_mesh`, `inspect_modeling_quality`, `curve_to_mesh`, Booleans, mirror/symmetry, solidify, and screw depth), shape key creation/animation, text objects, curve paths, bounded particles, basic armatures, copy-transform constraints, render settings, camera settings, and world background colors. These tools still use the reversible live-preview transaction; complex custom node graphs, production rigs, and simulation setups remain approval-gated Python.
+Advanced helper coverage is now implemented for Principled shader material setup, local image/PBR texture material wiring with packed ARM/ORM channels, AO multiply, bump maps, displacement warnings, UV-map selection, Geometry Nodes starter modifiers, the read-only `plan_object_design` object-family mapper, procedural object-kit templates including bounded desk-lamp, coffee-machine, and product-prop design grammars with style, variant, detail-level, and semantic feature controls, bounded Phase 1 modeling helpers (`edit_mesh`, `inspect_modeling_quality`, `curve_to_mesh`, Booleans, mirror/symmetry, solidify, and screw depth), shape key creation/animation, text objects, curve paths, bounded particles, basic armatures, copy-transform constraints, render settings, focused render-engine/look-dev controls, camera settings, and world background colors. Render controls include quality presets, samples, denoise, and color management with preview rollback. These tools still use the reversible live-preview transaction; complex custom shader graphs, production rigs, baking, and simulation setups remain approval-gated Python.
 Model refinement helpers are now implemented for shade smoothing, bevel/subdivision stacks, wheel assemblies, panel seams, window/glass panels, and bounded vehicle, product, and character refinement templates.
 The bridge now uses request-specific tool schema selection so external agents receive a compact task-relevant subset instead of the whole growing toolbox.
 

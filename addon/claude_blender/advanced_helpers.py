@@ -275,6 +275,17 @@ IMAGE_TEXTURE_MAP_SPECS = {
     "normal": {"socket_names": ("Normal",), "colorspace": "Non-Color", "normal_map": True},
     "alpha": {"socket_names": ("Alpha",), "colorspace": "Non-Color", "output": "Alpha"},
     "emission": {"socket_names": ("Emission Color",), "colorspace": "sRGB", "output": "Color"},
+    "ambient_occlusion": {"colorspace": "Non-Color", "output": "Color"},
+    "arm": {"colorspace": "Non-Color", "packed_channels": {"ambient_occlusion": "Red", "roughness": "Green", "metallic": "Blue"}},
+    "orm": {"colorspace": "Non-Color", "packed_channels": {"ambient_occlusion": "Red", "roughness": "Green", "metallic": "Blue"}},
+    "bump": {"socket_names": ("Normal",), "colorspace": "Non-Color", "bump_map": True},
+    "displacement": {"colorspace": "Non-Color", "warn_only": True},
+}
+
+RENDER_QUALITY_PRESETS = {
+    "preview": {"resolution": (640, 360), "samples": 32, "denoise": False},
+    "lookdev": {"resolution": (1280, 720), "samples": 96, "denoise": True},
+    "final": {"resolution": (1920, 1080), "samples": 256, "denoise": True},
 }
 
 GEOMETRY_NODE_TEMPLATES = {"passthrough", "transform", "join_geometry", "set_position", "subdivide_mesh"}
@@ -452,6 +463,9 @@ def _record_scene_render(scene):
     key = f"scene:{scene.name}:render_settings"
     if key in transaction["before_state"]:
         return
+    view_settings = getattr(scene, "view_settings", None)
+    cycles = getattr(scene, "cycles", None)
+    eevee = getattr(scene, "eevee", None)
     transaction["before_state"][key] = {
         "kind": "scene_render_settings",
         "scene_name": scene.name,
@@ -463,7 +477,17 @@ def _record_scene_render(scene):
         "frame_end": int(scene.frame_end),
         "frame_current": int(scene.frame_current),
         "film_transparent": bool(scene.render.film_transparent),
+        "view_transform": getattr(view_settings, "view_transform", None),
+        "look": getattr(view_settings, "look", None),
+        "exposure": getattr(view_settings, "exposure", None),
+        "gamma": getattr(view_settings, "gamma", None),
+        "cycles_samples": getattr(cycles, "samples", None),
+        "cycles_preview_samples": getattr(cycles, "preview_samples", None),
+        "cycles_use_denoising": getattr(cycles, "use_denoising", None),
+        "eevee_taa_render_samples": getattr(eevee, "taa_render_samples", None),
+        "eevee_taa_samples": getattr(eevee, "taa_samples", None),
     }
+    transaction["changed_data_blocks"].append(scene.name)
 
 
 def _record_world_background(world):
@@ -1093,6 +1117,110 @@ def _remove_links_to_socket(node_tree, socket):
     return removed
 
 
+def _socket_by_name(sockets, *names):
+    for name in names:
+        socket = sockets.get(name)
+        if socket:
+            return socket
+    return None
+
+
+def _link_uv_map_node(material, image_node, uv_map_name, uv_nodes):
+    uv_name = str(uv_map_name or "").strip()
+    if not uv_name:
+        return ""
+    uv_node = uv_nodes.get(uv_name)
+    if uv_node is None:
+        uv_node = material.node_tree.nodes.new(type="ShaderNodeUVMap")
+        uv_node.name = f"Agent Bridge UV Map {uv_name}"
+        uv_node.label = uv_node.name
+        uv_node.uv_map = uv_name
+        uv_node.location = (-860, 320 - len(uv_nodes) * 160)
+        uv_nodes[uv_name] = uv_node
+    vector_input = image_node.inputs.get("Vector")
+    uv_output = uv_node.outputs.get("UV")
+    if vector_input and uv_output:
+        material.node_tree.links.new(uv_output, vector_input)
+    return uv_node.name
+
+
+def _create_texture_image_node(material, *, map_type, image, index, uv_map_name="", uv_nodes=None):
+    nodes = material.node_tree.nodes
+    image_node = nodes.new(type="ShaderNodeTexImage")
+    image_node.name = f"Agent Bridge {map_type.replace('_', ' ').title()} Texture"
+    image_node.label = image_node.name
+    image_node.image = image
+    image_node.location = (-620, 260 - index * 180)
+    if uv_nodes is None:
+        uv_nodes = {}
+    uv_node_name = _link_uv_map_node(material, image_node, uv_map_name, uv_nodes)
+    return image_node, uv_node_name
+
+
+def _make_separate_color_node(material, image_node, index):
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    separate_node = nodes.new(type="ShaderNodeSeparateColor")
+    separate_node.name = f"Agent Bridge Packed PBR Channels {index + 1}"
+    separate_node.label = separate_node.name
+    separate_node.location = (-350, 260 - index * 180)
+    color_output = image_node.outputs.get("Color")
+    color_input = separate_node.inputs.get("Color")
+    if color_output and color_input:
+        links.new(color_output, color_input)
+    return separate_node
+
+
+def _socket_link_blocker(socket, map_type, *, replace_existing_links, linked_sockets):
+    if socket is None:
+        return f"Skipped {map_type}: Principled socket is not available"
+    if socket.name in linked_sockets:
+        return f"Skipped {map_type}: {socket.name} already has a map from this material update"
+    if socket.is_linked and not replace_existing_links:
+        return f"Skipped {map_type}: target socket is already linked"
+    return ""
+
+
+def _ambient_occlusion_link_blocker(principled, *, replace_existing_links, linked_sockets):
+    base_socket = principled.inputs.get("Base Color")
+    if base_socket is None:
+        return "Skipped ambient occlusion: Principled Base Color socket is not available"
+    if not list(base_socket.links):
+        return "Loaded ambient occlusion map but did not multiply it: Base Color has no image link"
+    if base_socket.name not in linked_sockets and base_socket.is_linked and not replace_existing_links:
+        return "Skipped ambient occlusion multiply: target Base Color is already linked"
+    return ""
+
+
+def _link_ambient_occlusion(material, principled, ao_output, warnings, *, replace_existing_links, linked_sockets):
+    if ao_output is None:
+        warnings.append("Skipped ambient occlusion: image texture output is not available")
+        return None
+    blocker = _ambient_occlusion_link_blocker(
+        principled,
+        replace_existing_links=replace_existing_links,
+        linked_sockets=linked_sockets,
+    )
+    if blocker:
+        warnings.append(blocker)
+        return None
+    base_socket = principled.inputs["Base Color"]
+    existing_links = list(base_socket.links)
+    previous_output = existing_links[-1].from_socket
+    material.node_tree.links.remove(existing_links[-1])
+    mix_node = material.node_tree.nodes.new(type="ShaderNodeMixRGB")
+    mix_node.name = "Agent Bridge Ambient Occlusion Multiply"
+    mix_node.label = mix_node.name
+    mix_node.blend_type = "MULTIPLY"
+    mix_node.location = (-130, 260)
+    _set_socket_value(mix_node.inputs.get("Factor"), 1.0)
+    material.node_tree.links.new(previous_output, mix_node.inputs["Color1"])
+    material.node_tree.links.new(ao_output, mix_node.inputs["Color2"])
+    material.node_tree.links.new(mix_node.outputs["Color"], base_socket)
+    linked_sockets.add(base_socket.name)
+    return mix_node
+
+
 def create_image_texture_material(
     context,
     *,
@@ -1103,12 +1231,20 @@ def create_image_texture_material(
     normal_path=None,
     alpha_path=None,
     emission_path=None,
+    ambient_occlusion_path=None,
+    arm_path=None,
+    orm_path=None,
+    bump_path=None,
+    displacement_path=None,
     base_color=None,
     metallic=None,
     roughness=None,
     alpha=None,
     emission_strength=None,
     normal_strength=1.0,
+    bump_strength=0.12,
+    bump_distance=0.05,
+    uv_map_name="",
     replace_existing_links=True,
     assign_to_objects=True,
     object_names=None,
@@ -1122,6 +1258,11 @@ def create_image_texture_material(
         "normal": normal_path,
         "alpha": alpha_path,
         "emission": emission_path,
+        "ambient_occlusion": ambient_occlusion_path,
+        "arm": arm_path,
+        "orm": orm_path,
+        "bump": bump_path,
+        "displacement": displacement_path,
     }
     requested_paths = {key: value for key, value in requested_paths.items() if str(value or "").strip()}
     if not requested_paths:
@@ -1188,54 +1329,200 @@ def create_image_texture_material(
     links = material.node_tree.links
     linked_maps = []
     warnings = []
+    uv_nodes = {}
+    linked_sockets = set()
+
+    def link_output_to_socket(output, socket, map_type, source_node, target_node=None):
+        if output is None:
+            warnings.append(f"Skipped {map_type}: image texture output is not available")
+            return False
+        blocker = _socket_link_blocker(
+            socket,
+            map_type,
+            replace_existing_links=replace_existing_links,
+            linked_sockets=linked_sockets,
+        )
+        if blocker:
+            warnings.append(blocker)
+            return False
+        if socket.is_linked:
+            _remove_links_to_socket(material.node_tree, socket)
+        links.new(output, socket)
+        linked_sockets.add(socket.name)
+        linked_maps.append(
+            {
+                "map_type": map_type,
+                "path": source_node.image.filepath if getattr(source_node, "image", None) else "",
+                "image": source_node.image.name if getattr(source_node, "image", None) else "",
+                "image_node": source_node.name,
+                "target_node": target_node.name if target_node else source_node.name,
+                "socket": socket.name,
+            }
+        )
+        return True
+
     for index, (map_type, path) in enumerate(resolved_paths.items()):
         spec = IMAGE_TEXTURE_MAP_SPECS[map_type]
-        socket = _principled_socket(principled, spec["socket_names"])
-        if socket is None:
-            warnings.append(f"Skipped {map_type}: Principled socket is not available")
+        if spec.get("warn_only"):
+            warnings.append(f"Validated {map_type} map path but did not wire true displacement yet")
             continue
-        if socket.is_linked and not replace_existing_links:
-            warnings.append(f"Skipped {map_type}: target socket is already linked")
-            continue
-        if replace_existing_links:
-            _remove_links_to_socket(material.node_tree, socket)
+        if spec.get("packed_channels"):
+            packed_blockers = {}
+            for packed_target in spec["packed_channels"]:
+                if packed_target == "ambient_occlusion":
+                    blocker = _ambient_occlusion_link_blocker(
+                        principled,
+                        replace_existing_links=replace_existing_links,
+                        linked_sockets=linked_sockets,
+                    )
+                else:
+                    socket = _principled_socket(principled, IMAGE_TEXTURE_MAP_SPECS[packed_target]["socket_names"])
+                    blocker = _socket_link_blocker(
+                        socket,
+                        packed_target,
+                        replace_existing_links=replace_existing_links,
+                        linked_sockets=linked_sockets,
+                    )
+                if blocker:
+                    packed_blockers[packed_target] = blocker
+            if len(packed_blockers) == len(spec["packed_channels"]):
+                warnings.extend(packed_blockers.values())
+                continue
+        elif map_type == "ambient_occlusion":
+            blocker = _ambient_occlusion_link_blocker(
+                principled,
+                replace_existing_links=replace_existing_links,
+                linked_sockets=linked_sockets,
+            )
+            if blocker:
+                warnings.append(blocker)
+                continue
+        else:
+            socket = _principled_socket(principled, spec["socket_names"])
+            blocker = _socket_link_blocker(
+                socket,
+                map_type,
+                replace_existing_links=replace_existing_links,
+                linked_sockets=linked_sockets,
+            )
+            if blocker:
+                warnings.append(blocker)
+                continue
         image = _load_preview_image(path, colorspace=spec["colorspace"])
-        image_node = nodes.new(type="ShaderNodeTexImage")
-        image_node.name = f"Agent Bridge {map_type.replace('_', ' ').title()} Texture"
-        image_node.label = image_node.name
-        image_node.image = image
-        image_node.location = (-620, 260 - index * 180)
+        image_node, uv_node_name = _create_texture_image_node(
+            material,
+            map_type=map_type,
+            image=image,
+            index=index,
+            uv_map_name=uv_map_name,
+            uv_nodes=uv_nodes,
+        )
         target_node = image_node
+
+        if spec.get("packed_channels"):
+            separate_node = _make_separate_color_node(material, image_node, index)
+            channel_outputs = separate_node.outputs
+            for packed_target, channel_name in spec["packed_channels"].items():
+                output = _socket_by_name(channel_outputs, channel_name)
+                if packed_target == "ambient_occlusion":
+                    mix_node = _link_ambient_occlusion(
+                        material,
+                        principled,
+                        output,
+                        warnings,
+                        replace_existing_links=replace_existing_links,
+                        linked_sockets=linked_sockets,
+                    )
+                    if mix_node is not None:
+                        linked_maps.append(
+                            {
+                                "map_type": "ambient_occlusion",
+                                "source_map": map_type,
+                                "channel": channel_name,
+                                "path": path,
+                                "image": image.name,
+                                "image_node": image_node.name,
+                                "target_node": mix_node.name,
+                                "socket": "Base Color",
+                                "uv_map": uv_map_name,
+                                "uv_node": uv_node_name,
+                            }
+                        )
+                    continue
+                socket = _principled_socket(principled, IMAGE_TEXTURE_MAP_SPECS[packed_target]["socket_names"])
+                if link_output_to_socket(output, socket, packed_target, image_node, separate_node):
+                    linked_maps[-1]["source_map"] = map_type
+                    linked_maps[-1]["channel"] = channel_name
+                    linked_maps[-1]["uv_map"] = uv_map_name
+                    linked_maps[-1]["uv_node"] = uv_node_name
+            continue
+
+        if map_type == "ambient_occlusion":
+            output = image_node.outputs.get(spec.get("output", "Color"))
+            mix_node = _link_ambient_occlusion(
+                material,
+                principled,
+                output,
+                warnings,
+                replace_existing_links=replace_existing_links,
+                linked_sockets=linked_sockets,
+            )
+            if mix_node is not None:
+                linked_maps.append(
+                    {
+                        "map_type": map_type,
+                        "path": path,
+                        "image": image.name,
+                        "image_node": image_node.name,
+                        "target_node": mix_node.name,
+                        "socket": "Base Color",
+                        "uv_map": uv_map_name,
+                        "uv_node": uv_node_name,
+                    }
+                )
+            continue
+
         if spec.get("normal_map"):
+            socket = _principled_socket(principled, spec["socket_names"])
             normal_node = nodes.new(type="ShaderNodeNormalMap")
             normal_node.name = "Agent Bridge Normal Map"
             normal_node.label = normal_node.name
             normal_node.location = (-350, 260 - index * 180)
             _set_socket_value(normal_node.inputs.get("Strength"), max(0.0, min(10.0, float(normal_strength))))
             links.new(image_node.outputs["Color"], normal_node.inputs["Color"])
-            links.new(normal_node.outputs["Normal"], socket)
+            link_output_to_socket(normal_node.outputs["Normal"], socket, map_type, image_node, normal_node)
             target_node = normal_node
+            if linked_maps and linked_maps[-1]["map_type"] == map_type:
+                linked_maps[-1]["uv_map"] = uv_map_name
+                linked_maps[-1]["uv_node"] = uv_node_name
+            continue
+
+        if spec.get("bump_map"):
+            socket = _principled_socket(principled, spec["socket_names"])
+            bump_node = nodes.new(type="ShaderNodeBump")
+            bump_node.name = "Agent Bridge Bump Map"
+            bump_node.label = bump_node.name
+            bump_node.location = (-350, 260 - index * 180)
+            _set_socket_value(bump_node.inputs.get("Strength"), max(0.0, min(10.0, float(bump_strength))))
+            _set_socket_value(bump_node.inputs.get("Distance"), max(0.0, min(10.0, float(bump_distance))))
+            links.new(image_node.outputs["Color"], bump_node.inputs["Height"])
+            if not link_output_to_socket(bump_node.outputs["Normal"], socket, map_type, image_node, bump_node):
+                warnings.append("Bump map was loaded but not wired because the normal socket is already owned")
+            if linked_maps and linked_maps[-1]["map_type"] == map_type:
+                linked_maps[-1]["uv_map"] = uv_map_name
+                linked_maps[-1]["uv_node"] = uv_node_name
+            continue
+
+        socket = _principled_socket(principled, spec["socket_names"])
+        output_name = spec.get("output", "Color")
+        if output_name == "Alpha" and image_node.outputs.get("Alpha"):
+            output = image_node.outputs["Alpha"]
         else:
-            output_name = spec.get("output", "Color")
-            if output_name == "Alpha" and image_node.outputs.get("Alpha"):
-                output = image_node.outputs["Alpha"]
-            else:
-                output = image_node.outputs.get("Color")
-            if output is None:
-                warnings.append(f"Skipped {map_type}: image texture output is not available")
-                nodes.remove(image_node)
-                continue
-            links.new(output, socket)
-        linked_maps.append(
-            {
-                "map_type": map_type,
-                "path": path,
-                "image": image.name,
-                "image_node": image_node.name,
-                "target_node": target_node.name,
-                "socket": socket.name,
-            }
-        )
+            output = image_node.outputs.get("Color")
+        link_output_to_socket(output, socket, map_type, image_node, target_node)
+        if linked_maps and linked_maps[-1]["map_type"] == map_type:
+            linked_maps[-1]["uv_map"] = uv_map_name
+            linked_maps[-1]["uv_node"] = uv_node_name
 
     if (alpha is not None and float(alpha) < 1.0) or "alpha" in resolved_paths:
         if hasattr(material, "surface_render_method"):
@@ -1256,6 +1543,8 @@ def create_image_texture_material(
             else:
                 obj.data.materials.append(material)
             assigned.append(obj.name)
+            if uv_map_name and obj.data.uv_layers.get(str(uv_map_name)) is None:
+                warnings.append(f"Assigned {material.name} to {obj.name}, but UV map {uv_map_name!r} was not found on that mesh")
 
     transaction["applied_steps"].append(
         {
@@ -4417,6 +4706,69 @@ def _valid_render_engines(scene):
         return set()
 
 
+def _normalize_render_quality_preset(quality_preset):
+    key = str(quality_preset or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {"draft": "preview", "fast": "preview", "workbench": "preview", "look_dev": "lookdev", "production": "final"}
+    key = aliases.get(key, key)
+    return key if key in RENDER_QUALITY_PRESETS else ""
+
+
+def _set_render_sample_count(scene, samples):
+    applied = {}
+    value = max(1, min(4096, int(samples)))
+    cycles = getattr(scene, "cycles", None)
+    if cycles:
+        if hasattr(cycles, "samples"):
+            cycles.samples = value
+            applied["cycles_samples"] = value
+        if hasattr(cycles, "preview_samples"):
+            cycles.preview_samples = min(value, max(1, getattr(cycles, "preview_samples", value)))
+            applied["cycles_preview_samples"] = int(cycles.preview_samples)
+    eevee = getattr(scene, "eevee", None)
+    if eevee:
+        if hasattr(eevee, "taa_render_samples"):
+            eevee.taa_render_samples = value
+            applied["eevee_taa_render_samples"] = value
+        if hasattr(eevee, "taa_samples"):
+            eevee.taa_samples = min(value, max(1, getattr(eevee, "taa_samples", value)))
+            applied["eevee_taa_samples"] = int(eevee.taa_samples)
+    return applied
+
+
+def _set_render_denoise(scene, denoise):
+    applied = {}
+    cycles = getattr(scene, "cycles", None)
+    if cycles and hasattr(cycles, "use_denoising"):
+        cycles.use_denoising = bool(denoise)
+        applied["cycles_use_denoising"] = bool(cycles.use_denoising)
+    return applied
+
+
+def _set_color_management(scene, *, view_transform="", look="", exposure=None, gamma=None):
+    view_settings = getattr(scene, "view_settings", None)
+    applied = {}
+    warnings = []
+    if view_settings is None:
+        return applied, ["Scene has no color management view settings"]
+    for attr, value in (("view_transform", view_transform), ("look", look)):
+        if not str(value or "").strip():
+            continue
+        try:
+            setattr(view_settings, attr, str(value))
+            applied[attr] = getattr(view_settings, attr)
+        except Exception as exc:
+            warnings.append(f"Could not set color management {attr}={value!r}: {type(exc).__name__}: {exc}")
+    for attr, value in (("exposure", exposure), ("gamma", gamma)):
+        if value is None:
+            continue
+        try:
+            setattr(view_settings, attr, float(value))
+            applied[attr] = float(getattr(view_settings, attr))
+        except Exception as exc:
+            warnings.append(f"Could not set color management {attr}={value!r}: {type(exc).__name__}: {exc}")
+    return applied, warnings
+
+
 def set_render_settings(
     context,
     *,
@@ -4426,6 +4778,13 @@ def set_render_settings(
     frame_start=None,
     frame_end=None,
     film_transparent=None,
+    quality_preset="",
+    samples=None,
+    denoise=None,
+    view_transform="",
+    look="",
+    exposure=None,
+    gamma=None,
     label="Set render settings",
 ):
     scene = context.scene
@@ -4439,27 +4798,101 @@ def set_render_settings(
                     f"Available engines: {', '.join(sorted(valid_engines))}"
                 ),
             }
+    preset_key = _normalize_render_quality_preset(quality_preset)
+    preset = RENDER_QUALITY_PRESETS.get(preset_key, {})
     transaction = live_preview.begin(label)
     _record_scene_render(scene)
     if engine:
         scene.render.engine = str(engine)
+    applied = {"engine": scene.render.engine}
+    warnings = []
+    if preset and resolution is None:
+        resolution = preset["resolution"]
+    if preset and samples is None:
+        samples = preset["samples"]
+    if preset and denoise is None:
+        denoise = preset["denoise"]
     if resolution is not None:
         scene.render.resolution_x = max(16, min(16384, int(resolution[0])))
         scene.render.resolution_y = max(16, min(16384, int(resolution[1])))
+        applied["resolution"] = [scene.render.resolution_x, scene.render.resolution_y]
     if fps is not None:
         scene.render.fps = max(1, min(240, int(fps)))
+        applied["fps"] = scene.render.fps
     if frame_start is not None:
         scene.frame_start = int(frame_start)
     if frame_end is not None:
         scene.frame_end = int(frame_end)
     if scene.frame_start > scene.frame_end:
         scene.frame_start, scene.frame_end = scene.frame_end, scene.frame_start
+    if frame_start is not None or frame_end is not None:
+        applied["frame_range"] = [scene.frame_start, scene.frame_end]
     if film_transparent is not None:
         scene.render.film_transparent = bool(film_transparent)
-    transaction["applied_steps"].append({"type": "set_render_settings", "label": label, "scene": scene.name})
+        applied["film_transparent"] = scene.render.film_transparent
+    if samples is not None:
+        applied.update(_set_render_sample_count(scene, samples))
+    if denoise is not None:
+        denoise_applied = _set_render_denoise(scene, denoise)
+        if denoise_applied:
+            applied.update(denoise_applied)
+        else:
+            warnings.append("Denoise was requested but no supported denoise setting is available for this render engine")
+    color_applied, color_warnings = _set_color_management(
+        scene,
+        view_transform=view_transform,
+        look=look,
+        exposure=exposure,
+        gamma=gamma,
+    )
+    applied.update(color_applied)
+    warnings.extend(color_warnings)
+    transaction["applied_steps"].append(
+        {
+            "type": "set_render_settings",
+            "label": label,
+            "scene": scene.name,
+            "quality_preset": preset_key,
+            "applied": applied,
+        }
+    )
     live_preview.redraw(context)
     live_preview._mark_pending(context, label)
-    return {"ok": True, "message": "Updated render settings", "transaction_id": transaction["id"]}
+    return {
+        "ok": True,
+        "message": "Updated render settings",
+        "quality_preset": preset_key,
+        "applied": applied,
+        "warnings": warnings,
+        "transaction_id": transaction["id"],
+    }
+
+
+def set_render_engine(
+    context,
+    *,
+    engine="",
+    quality_preset="",
+    samples=None,
+    denoise=None,
+    view_transform="",
+    look="",
+    exposure=None,
+    gamma=None,
+    label="Set render engine",
+):
+    return set_render_settings(
+        context,
+        engine=engine,
+        quality_preset=quality_preset,
+        samples=samples,
+        denoise=denoise,
+        view_transform=view_transform,
+        look=look,
+        exposure=exposure,
+        gamma=gamma,
+        label=label,
+    )
 
 
 def set_camera_settings(
@@ -4812,6 +5245,7 @@ ADVANCED_WORKFLOW_DOMAINS = {
         "tools": [
             "get_render_camera_compositor_details",
             "set_render_settings",
+            "set_render_engine",
             "set_camera_settings",
             "render_scene_thumbnail",
             "start_render_job",

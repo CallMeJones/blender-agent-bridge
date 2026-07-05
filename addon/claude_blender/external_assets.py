@@ -995,6 +995,16 @@ def _texture_map_helper_args(maps):
             target = "base_color_path"
         elif any(term in lowered for term in ("normal", "nor")):
             target = "normal_path"
+        elif lowered in {"arm", "ao_rough_metal", "ambient_rough_metal"} or "arm" in lowered:
+            target = "arm_path"
+        elif lowered in {"orm", "occlusion_rough_metal"} or "orm" in lowered:
+            target = "orm_path"
+        elif lowered in {"ao", "ambient", "ambient_occlusion"} or "ambient" in lowered:
+            target = "ambient_occlusion_path"
+        elif "bump" in lowered:
+            target = "bump_path"
+        elif any(term in lowered for term in ("disp", "displacement", "height")):
+            target = "displacement_path"
         elif "rough" in lowered:
             target = "roughness_path"
         elif "metal" in lowered:

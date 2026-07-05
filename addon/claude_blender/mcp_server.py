@@ -314,6 +314,17 @@ PROCEDURAL_ROUTE_TERMS = {
 }
 SIMULATION_SETUP_ROUTE_TERMS = {"cloth simulation", "cloth sim", "simulation setup", "physics setup"}
 CAMERA_MOVE_ROUTE_TERMS = {"camera dolly", "dolly shot", "camera move", "camera animation", "lens keyframe", "directed shot", "shot template"}
+UV_UNWRAP_ROUTE_TERMS = {
+    "uv unwrap",
+    "unwrap",
+    "unwraps",
+    "uv coordinate",
+    "uv coordinates",
+    "texture coordinate",
+    "texture coordinates",
+    "texture-ready",
+    "texture ready",
+}
 GENERIC_SELECTED_OBJECT_TOOLS = {
     "set_selected_location_delta",
     "set_selected_transform",
@@ -1342,6 +1353,7 @@ def _score_tool_match(tool, query):
     procedural_query = _contains_any_phrase(normalized_query, PROCEDURAL_ROUTE_TERMS)
     simulation_setup_query = _contains_any_phrase(normalized_query, SIMULATION_SETUP_ROUTE_TERMS)
     camera_move_query = _contains_any_phrase(normalized_query, CAMERA_MOVE_ROUTE_TERMS)
+    uv_unwrap_query = _contains_any_phrase(normalized_query, UV_UNWRAP_ROUTE_TERMS)
     explicit_script_query = _contains_any_phrase(normalized_query, SCRIPT_EXPLICIT_TERMS)
     external_asset_query = _is_external_asset_route_query(normalized_query)
     explicit_direct_asset_query = _contains_any_phrase(normalized_query, EXTERNAL_ASSET_DIRECT_TERMS)
@@ -1368,6 +1380,11 @@ def _score_tool_match(tool, query):
         score += 500
     elif title.startswith(normalized_query):
         score += 100
+    if uv_unwrap_query:
+        if name == "uv_unwrap":
+            score += 1400
+        elif name == "create_image_texture_material":
+            score -= 150
     if animation_query:
         if name == "run_animation_task":
             score += 1200
@@ -1422,7 +1439,31 @@ def _score_tool_match(tool, query):
                 score += 1200
             elif name == "create_shader_material" and any(term in normalized_query for term in ("material", "chrome", "brass", "metal", "glass", "rubber", "wood", "screen", "display", "enamel", "paint", "color", "colour")):
                 score += 850
-            elif name == "create_image_texture_material" and any(term in normalized_query for term in ("image texture", "texture map", "texture maps", "pbr", "albedo", "diffuse map", "normal map", "roughness map", "metallic map")):
+            elif name == "create_image_texture_material" and any(
+                term in normalized_query
+                for term in (
+                    "image texture",
+                    "texture map",
+                    "texture maps",
+                    "pbr",
+                    "albedo",
+                    "diffuse map",
+                    "normal map",
+                    "roughness map",
+                    "metallic map",
+                    "arm map",
+                    "orm map",
+                    "ambient occlusion",
+                    "ao map",
+                    "bump map",
+                    "uv map",
+                )
+            ):
+                score += 900
+            elif name == "set_render_engine" and any(
+                term in normalized_query
+                for term in ("render engine", "cycles", "eevee", "denoise", "samples", "lookdev", "look-dev", "color management", "view transform")
+            ):
                 score += 900
             elif name == "uv_unwrap" and any(term in normalized_query for term in ("uv", "unwrap", "texture coordinate", "texture-ready", "texture ready")):
                 score += 850

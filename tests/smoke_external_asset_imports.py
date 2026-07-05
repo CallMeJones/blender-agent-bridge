@@ -71,6 +71,15 @@ def _fake_fetch_json(url, *, timeout=15):
                     }
                 }
             },
+            "arm": {
+                "2k": {
+                    "png": {
+                        "url": "https://cdn.example.invalid/oak_floor_arm_2k.png",
+                        "md5": "",
+                        "size": 1,
+                    }
+                }
+            },
         }
     if path == "/files/model_one":
         return {
@@ -270,11 +279,13 @@ def main():
         assert texture["material"].startswith(f"{existing_texture_material.name}."), texture
         assert bpy.data.materials.get(existing_texture_material.name) == existing_texture_material, texture
         assert [node.name for node in existing_texture_material.node_tree.nodes] == existing_texture_nodes, texture
-        assert {item["map_type"] for item in texture["texture_maps"]} == {"base_color", "normal"}, texture
+        assert {item["map_type"] for item in texture["texture_maps"]} == {"base_color", "normal", "ambient_occlusion", "roughness", "metallic"}, texture
         texture_material = bpy.data.materials[texture["material"]]
         texture_node_types = {node.type for node in texture_material.node_tree.nodes}
         assert "TEX_IMAGE" in texture_node_types, texture_node_types
         assert "NORMAL_MAP" in texture_node_types, texture_node_types
+        assert "SEPARATE_COLOR" in texture_node_types, texture_node_types
+        assert "MIX_RGB" in texture_node_types, texture_node_types
         assert texture["manifest"]["imported_texture_maps"] == texture["texture_maps"], texture
         assert live_preview.revert(bpy.context)["ok"] is True
 

@@ -334,6 +334,7 @@ def build_context_bundle(context, *, include_visual=False, capture_dir=None, max
             "create_basic_armature",
             "add_copy_transform_constraint",
             "set_render_settings",
+            "set_render_engine",
             "set_camera_settings",
             "set_world_background",
             "plan_director_workflow",

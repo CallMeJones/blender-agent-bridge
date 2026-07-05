@@ -1503,6 +1503,33 @@ def revert(context):
                 scene.frame_start = before["frame_start"]
                 scene.frame_end = before["frame_end"]
                 scene.render.film_transparent = before["film_transparent"]
+                view_settings = getattr(scene, "view_settings", None)
+                if view_settings:
+                    for attr in ("view_transform", "look", "exposure", "gamma"):
+                        value = before.get(attr)
+                        if value is not None and hasattr(view_settings, attr):
+                            try:
+                                setattr(view_settings, attr, value)
+                            except Exception as exc:
+                                rollback_warnings.append(
+                                    f"Could not restore color management {attr} for {before['scene_name']}: {type(exc).__name__}: {exc}"
+                                )
+                cycles = getattr(scene, "cycles", None)
+                if cycles:
+                    for attr, key_name in (
+                        ("samples", "cycles_samples"),
+                        ("preview_samples", "cycles_preview_samples"),
+                        ("use_denoising", "cycles_use_denoising"),
+                    ):
+                        value = before.get(key_name)
+                        if value is not None and hasattr(cycles, attr):
+                            setattr(cycles, attr, value)
+                eevee = getattr(scene, "eevee", None)
+                if eevee:
+                    for attr, key_name in (("taa_render_samples", "eevee_taa_render_samples"), ("taa_samples", "eevee_taa_samples")):
+                        value = before.get(key_name)
+                        if value is not None and hasattr(eevee, attr):
+                            setattr(eevee, attr, value)
                 scene.frame_set(before["frame_current"])
         elif before.get("scene_name") and "frame_start" in before:
             scene = bpy.data.scenes.get(before["scene_name"])

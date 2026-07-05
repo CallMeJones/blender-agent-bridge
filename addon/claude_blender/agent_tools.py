@@ -21,7 +21,7 @@ AGENT_GUIDANCE = (
     "When the user asks to change the scene, use safe helper tools first so Blender changes immediately. "
     "Use direct Blender data concepts: objects, collections, materials, cameras, lights, actions, keyframes. "
     "For broad multi-step scene, asset, animation, and evidence work, call plan_director_workflow first to get an ordered helper/evidence/preview plan without mutating the scene. For advanced 3D, 2D/storyboard, animation, simulation, compositor/render, asset-import, or script-heavy tasks, call plan_advanced_scene_workflow first when the helper path is not obvious. For object design prompts, call plan_object_design before choosing object kits, generic modeling helpers, asset import, or scripts. These planners return domain-specific helpers and script fallback boundaries. "
-    "For scene building and layout, prefer create_primitive, create_empty, duplicate_selected_objects, parent_selected_to_empty, align_selected_objects, distribute_selected_objects, set_object_visibility, set_object_display, assign_material_to_selected, assign_emission_material_to_selected, create_shader_material, create_image_texture_material, uv_unwrap, create_text_object, create_curve_path, create_collection, link_selected_to_collection, add_light, add_camera, add_modifier_to_selected, add_geometry_nodes_modifier, apply_procedural_array_stack, edit_mesh, inspect_modeling_quality, curve_to_mesh, boolean_op, mirror_model, symmetrize_model, solidify_model, screw_model, create_procedural_object_kit, add_track_to_constraint, add_copy_transform_constraint, create_basic_armature, add_particle_system_to_selected, add_cloth_simulation_to_selected, set_render_settings, set_camera_settings, and set_world_background. create_shader_material includes bounded material presets; create_image_texture_material wires exact local image/PBR maps into a Principled material; uv_unwrap creates preview-safe UV coordinate maps with mesh-data rollback; add_geometry_nodes_modifier includes passthrough, transform, join-geometry, set-position, and subdivide-mesh starter templates. "
+    "For scene building and layout, prefer create_primitive, create_empty, duplicate_selected_objects, parent_selected_to_empty, align_selected_objects, distribute_selected_objects, set_object_visibility, set_object_display, assign_material_to_selected, assign_emission_material_to_selected, create_shader_material, create_image_texture_material, uv_unwrap, create_text_object, create_curve_path, create_collection, link_selected_to_collection, add_light, add_camera, add_modifier_to_selected, add_geometry_nodes_modifier, apply_procedural_array_stack, edit_mesh, inspect_modeling_quality, curve_to_mesh, boolean_op, mirror_model, symmetrize_model, solidify_model, screw_model, create_procedural_object_kit, add_track_to_constraint, add_copy_transform_constraint, create_basic_armature, add_particle_system_to_selected, add_cloth_simulation_to_selected, set_render_settings, set_render_engine, set_camera_settings, and set_world_background. create_shader_material includes bounded material presets; create_image_texture_material wires exact local image/PBR maps into a Principled material, including packed ARM/ORM channels, AO, bump, and UV map selection; uv_unwrap creates preview-safe UV coordinate maps with mesh-data rollback; set_render_engine/set_render_settings cover look-dev presets, samples, denoise, and color management; add_geometry_nodes_modifier includes passthrough, transform, join-geometry, set-position, and subdivide-mesh starter templates. "
     "For 2D, storyboard, animatic, cutout, or motion-graphics work, inspect first with get_2d_animation_details, then prefer create_storyboard_panels, create_2d_cutout_layer, create_camera_dolly_animation, capture_animation_playblast, and render jobs before drafting custom Grease Pencil or SVG Python. "
     "For model refinement and production presentation, prefer shade_smooth_selected, add_bevel_and_subsurf, apply_procedural_array_stack, edit_mesh, inspect_modeling_quality, curve_to_mesh, boolean_op, mirror_model, symmetrize_model, solidify_model, screw_model, create_procedural_object_kit, create_wheel_assembly, add_panel_seams, add_window_materials, apply_vehicle_refinement_template, apply_product_refinement_template, apply_character_refinement_template, create_studio_product_stage, add_dimension_callouts, apply_lighting_preset, create_material_palette, create_product_turntable_setup, prepare_imported_asset_presentation, and organize_scene_for_production when they fit the task. create_procedural_object_kit includes kitbash, radial/scatter/product, mechanical-joint, control-panel, coffee-machine, studio-prop, mechanical-part, modular-wall-panel, pipe-run, and desk-lamp templates for bounded prop generation before custom mesh scripts; plan_object_design maps open-ended object prompts onto these families and helper paths. "
     "For shape-key animation, prefer create_shape_key and animate_shape_key before drafting Python. "
@@ -1346,7 +1346,7 @@ def blender_tool_definitions():
         },
         {
             "name": "create_image_texture_material",
-            "description": "Create or update a Principled BSDF material from exact local image/PBR map paths such as base color, roughness, metallic, normal, alpha, or emission. Optionally assigns it to selected or named mesh objects and applies immediately with preview revert support.",
+            "description": "Create or update a Principled BSDF material from exact local image/PBR map paths such as base color, roughness, metallic, normal, alpha, emission, AO, packed ARM/ORM, or bump. Optionally assigns it to selected or named mesh objects and applies immediately with preview revert support.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -1357,12 +1357,20 @@ def blender_tool_definitions():
                     "normal_path": {"type": "string"},
                     "alpha_path": {"type": "string"},
                     "emission_path": {"type": "string"},
+                    "ambient_occlusion_path": {"type": "string"},
+                    "arm_path": {"type": "string"},
+                    "orm_path": {"type": "string"},
+                    "bump_path": {"type": "string"},
+                    "displacement_path": {"type": "string"},
                     "base_color": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 4},
                     "metallic": {"type": "number"},
                     "roughness": {"type": "number"},
                     "alpha": {"type": "number"},
                     "emission_strength": {"type": "number"},
                     "normal_strength": {"type": "number"},
+                    "bump_strength": {"type": "number"},
+                    "bump_distance": {"type": "number"},
+                    "uv_map_name": {"type": "string"},
                     "replace_existing_links": {"type": "boolean"},
                     "assign_to_objects": {"type": "boolean"},
                     "object_names": {"type": "array", "items": {"type": "string"}},
@@ -2229,7 +2237,7 @@ def blender_tool_definitions():
         },
         {
             "name": "set_render_settings",
-            "description": "Set render engine, resolution, FPS, frame range, and transparency. Applies immediately with preview revert support.",
+            "description": "Set render engine, resolution, FPS, frame range, transparency, look-dev quality preset, samples, denoise, and color management. Applies immediately with preview revert support.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -2239,6 +2247,32 @@ def blender_tool_definitions():
                     "frame_start": {"type": "integer"},
                     "frame_end": {"type": "integer"},
                     "film_transparent": {"type": "boolean"},
+                    "quality_preset": {"type": "string", "enum": ["preview", "lookdev", "final"]},
+                    "samples": {"type": "integer", "minimum": 1, "maximum": 4096},
+                    "denoise": {"type": "boolean"},
+                    "view_transform": {"type": "string"},
+                    "look": {"type": "string"},
+                    "exposure": {"type": "number"},
+                    "gamma": {"type": "number"},
+                    "label": {"type": "string"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "set_render_engine",
+            "description": "Set the render engine plus optional look-dev preset, samples, denoise, and color-management controls. Use this for explicit engine/quality requests; use set_render_settings when resolution or timeline settings also change.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "engine": {"type": "string"},
+                    "quality_preset": {"type": "string", "enum": ["preview", "lookdev", "final"]},
+                    "samples": {"type": "integer", "minimum": 1, "maximum": 4096},
+                    "denoise": {"type": "boolean"},
+                    "view_transform": {"type": "string"},
+                    "look": {"type": "string"},
+                    "exposure": {"type": "number"},
+                    "gamma": {"type": "number"},
                     "label": {"type": "string"},
                 },
                 "additionalProperties": False,
@@ -3778,6 +3812,7 @@ _TOOL_GROUPS = {
         "prepare_imported_asset_presentation",
         "create_turntable_animation",
         "set_render_settings",
+        "set_render_engine",
         "set_camera_settings",
         "set_world_background",
         "animate_light_property",
@@ -3970,6 +4005,7 @@ _TOOL_GROUPS = {
         "apply_product_refinement_template",
         "organize_scene_for_production",
         "set_render_settings",
+        "set_render_engine",
         "set_camera_settings",
     },
     "character": {

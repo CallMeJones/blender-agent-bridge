@@ -132,6 +132,7 @@ Common changes should use typed helper tools before arbitrary code:
 - `create_camera_orbit`
 - `add_modifier`
 - `set_render_settings`
+- `set_render_engine`
 - `create_shader_material`
 - `create_image_texture_material`
 - `uv_unwrap`

@@ -1835,6 +1835,11 @@ def create_image_texture_material(context, args):
         normal_path=str(args.get("normal_path") or ""),
         alpha_path=str(args.get("alpha_path") or ""),
         emission_path=str(args.get("emission_path") or ""),
+        ambient_occlusion_path=str(args.get("ambient_occlusion_path") or ""),
+        arm_path=str(args.get("arm_path") or ""),
+        orm_path=str(args.get("orm_path") or ""),
+        bump_path=str(args.get("bump_path") or ""),
+        displacement_path=str(args.get("displacement_path") or ""),
         base_color=_float_list(args.get("base_color"), 4, (0.8, 0.8, 0.8, 1.0)) if "base_color" in args else None,
         metallic=_bounded_float(args.get("metallic"), 0.0, minimum=0.0, maximum=1.0) if "metallic" in args else None,
         roughness=_bounded_float(args.get("roughness"), 0.5, minimum=0.0, maximum=1.0) if "roughness" in args else None,
@@ -1843,6 +1848,9 @@ def create_image_texture_material(context, args):
         if "emission_strength" in args
         else None,
         normal_strength=_bounded_float(args.get("normal_strength"), 1.0, minimum=0.0, maximum=10.0),
+        bump_strength=_bounded_float(args.get("bump_strength"), 0.12, minimum=0.0, maximum=10.0),
+        bump_distance=_bounded_float(args.get("bump_distance"), 0.05, minimum=0.0, maximum=10.0),
+        uv_map_name=str(args.get("uv_map_name") or ""),
         replace_existing_links=bool(args.get("replace_existing_links", True)),
         assign_to_objects=bool(args.get("assign_to_objects", True)),
         object_names=args.get("object_names") if isinstance(args.get("object_names"), list) else None,
@@ -2329,7 +2337,29 @@ def set_render_settings(context, args):
         frame_start=args.get("frame_start"),
         frame_end=args.get("frame_end"),
         film_transparent=args.get("film_transparent"),
+        quality_preset=str(args.get("quality_preset") or ""),
+        samples=args.get("samples"),
+        denoise=args.get("denoise"),
+        view_transform=str(args.get("view_transform") or ""),
+        look=str(args.get("look") or ""),
+        exposure=args.get("exposure"),
+        gamma=args.get("gamma"),
         label=args.get("label", "Set render settings"),
+    )
+
+
+def set_render_engine(context, args):
+    return advanced_helpers.set_render_engine(
+        context,
+        engine=str(args.get("engine") or ""),
+        quality_preset=str(args.get("quality_preset") or ""),
+        samples=args.get("samples"),
+        denoise=args.get("denoise"),
+        view_transform=str(args.get("view_transform") or ""),
+        look=str(args.get("look") or ""),
+        exposure=args.get("exposure"),
+        gamma=args.get("gamma"),
+        label=args.get("label", "Set render engine"),
     )
 
 
@@ -3940,6 +3970,7 @@ TOOL_FUNCTIONS = {
     "create_basic_armature": create_basic_armature,
     "add_copy_transform_constraint": add_copy_transform_constraint,
     "set_render_settings": set_render_settings,
+    "set_render_engine": set_render_engine,
     "set_camera_settings": set_camera_settings,
     "set_world_background": set_world_background,
     "plan_advanced_scene_workflow": plan_advanced_scene_workflow,

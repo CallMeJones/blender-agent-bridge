@@ -51,6 +51,7 @@ ADVANCED_TOOLS = {
     "create_basic_armature",
     "add_copy_transform_constraint",
     "set_render_settings",
+    "set_render_engine",
     "set_camera_settings",
     "set_world_background",
 }
@@ -101,6 +102,13 @@ def _snapshot(scene, cube, camera):
         "fps": scene.render.fps,
         "frame_range": (scene.frame_start, scene.frame_end),
         "film_transparent": scene.render.film_transparent,
+        "render_engine": scene.render.engine,
+        "view_transform": getattr(scene.view_settings, "view_transform", None),
+        "look": getattr(scene.view_settings, "look", None),
+        "exposure": round(float(getattr(scene.view_settings, "exposure", 0.0)), 5),
+        "gamma": round(float(getattr(scene.view_settings, "gamma", 1.0)), 5),
+        "cycles_samples": getattr(getattr(scene, "cycles", None), "samples", None),
+        "cycles_use_denoising": getattr(getattr(scene, "cycles", None), "use_denoising", None),
         "world": scene.world.name if scene.world else None,
         "world_color": world_color,
     }
@@ -1014,30 +1022,98 @@ def main():
         assert uv_values and min(uv_values) >= 0.0 and max(uv_values) <= 1.0, uv_values
 
         base_texture_path = os.path.join(tempfile.gettempdir(), "agent-bridge-smoke-base-color.png")
-        normal_texture_path = os.path.join(tempfile.gettempdir(), "agent-bridge-smoke-normal.png")
+        arm_texture_path = os.path.join(tempfile.gettempdir(), "agent-bridge-smoke-arm.png")
+        bump_texture_path = os.path.join(tempfile.gettempdir(), "agent-bridge-smoke-bump.png")
+        displacement_texture_path = os.path.join(tempfile.gettempdir(), "agent-bridge-smoke-displacement.png")
         _write_test_image(base_texture_path, (0.8, 0.2, 0.1, 1.0))
-        _write_test_image(normal_texture_path, (0.5, 0.5, 1.0, 1.0))
+        _write_test_image(arm_texture_path, (0.6, 0.35, 0.85, 1.0))
+        _write_test_image(bump_texture_path, (0.5, 0.5, 0.5, 1.0))
+        _write_test_image(displacement_texture_path, (0.4, 0.4, 0.4, 1.0))
         image_material = _execute(
             context,
             "create_image_texture_material",
             {
                 "name": "Agent Bridge Advanced Image Texture Material",
                 "base_color_path": base_texture_path,
-                "roughness_path": persistent_roughness_path,
-                "normal_path": normal_texture_path,
+                "arm_path": arm_texture_path,
+                "bump_path": bump_texture_path,
+                "displacement_path": displacement_texture_path,
                 "object_names": ["Cube"],
                 "selected_only": False,
-                "normal_strength": 0.75,
+                "uv_map_name": "Agent Bridge Advanced UVs",
+                "bump_strength": 0.25,
+                "bump_distance": 0.08,
+                "replace_existing_links": False,
             },
         )
         assert image_material["material"] in bpy.data.materials
-        assert {item["map_type"] for item in image_material["maps"]} == {"base_color", "roughness", "normal"}, image_material
+        assert {item["map_type"] for item in image_material["maps"]} == {"base_color", "ambient_occlusion", "roughness", "metallic", "bump"}, image_material
+        assert any("displacement" in warning for warning in image_material["warnings"]), image_material
         assert cube.material_slots[0].material.name == image_material["material"]
         image_nodes = [node for node in bpy.data.materials[image_material["material"]].node_tree.nodes if node.type == "TEX_IMAGE"]
-        normal_nodes = [node for node in bpy.data.materials[image_material["material"]].node_tree.nodes if node.type == "NORMAL_MAP"]
+        material_nodes = {node.type for node in bpy.data.materials[image_material["material"]].node_tree.nodes}
         assert len(image_nodes) == 3, [node.name for node in image_nodes]
-        assert len(normal_nodes) == 1, [node.name for node in normal_nodes]
+        assert {"SEPARATE_COLOR", "MIX_RGB", "BUMP", "UVMAP"}.issubset(material_nodes), material_nodes
+        assert all(item.get("uv_map") == "Agent Bridge Advanced UVs" for item in image_material["maps"]), image_material
         assert "created_image" in image_material["preview_change_report"]["rollback_scopes"], image_material
+        material = bpy.data.materials[image_material["material"]]
+        node_names_before_cautious_update = [node.name for node in material.node_tree.nodes]
+        cautious_update = _execute(
+            context,
+            "create_image_texture_material",
+            {
+                "name": image_material["material"],
+                "base_color_path": base_texture_path,
+                "arm_path": arm_texture_path,
+                "bump_path": bump_texture_path,
+                "replace_existing_links": False,
+                "assign_to_objects": False,
+            },
+        )
+        assert cautious_update["maps"] == [], cautious_update
+        assert any("target socket is already linked" in warning for warning in cautious_update["warnings"]), cautious_update
+        assert [node.name for node in material.node_tree.nodes] == node_names_before_cautious_update, cautious_update
+
+        valid_engines = {
+            item.identifier
+            for item in scene.render.bl_rna.properties["engine"].enum_items
+        }
+        target_engine = "CYCLES" if "CYCLES" in valid_engines else scene.render.engine
+        render_engine = _execute(
+            context,
+            "set_render_engine",
+            {
+                "engine": target_engine,
+                "quality_preset": "preview",
+                "samples": 16,
+                "denoise": True,
+                "view_transform": scene.view_settings.view_transform,
+                "look": scene.view_settings.look,
+                "exposure": 0.15,
+                "gamma": 1.0,
+            },
+        )
+        assert render_engine["applied"]["engine"] == target_engine, render_engine
+        assert render_engine["quality_preset"] == "preview", render_engine
+        assert render_engine["applied"].get("cycles_samples", 16) <= 16 or scene.render.engine != "CYCLES", render_engine
+        assert round(float(scene.view_settings.exposure), 2) == 0.15
+
+        phase2_render = _execute(
+            context,
+            "capture_object_inspection_renders",
+            {
+                "object_names": ["Cube"],
+                "views": ["front"],
+                "resolution_x": 240,
+                "resolution_y": 180,
+                "distance_factor": 2.6,
+                "note": "Phase 2 packed PBR look-dev smoke",
+            },
+        )["inspection_render"]
+        assert phase2_render["available"] is True, phase2_render
+        assert len(phase2_render["images"]) == 1, phase2_render
+        assert phase2_render["images"][0]["available"] is True, phase2_render
+        assert os.path.isfile(phase2_render["images"][0]["path"]), phase2_render
 
         geometry_nodes = _execute(
             context,
