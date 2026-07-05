@@ -69,6 +69,11 @@ def main():
     assert material_guard["code"] == "material_helper_required", material_guard
     assert not material_guard["blocked"], material_guard
     assert "create_shader_material" in material_guard["recommended_tools"], material_guard
+    assert "create_image_texture_material" in material_guard["recommended_tools"], material_guard
+    texture_guard = helper_routing.helper_first_script_advisory(
+        "Apply a local base color image texture and normal map to the selected cube with a material script."
+    )
+    assert texture_guard and "create_image_texture_material" in texture_guard["recommended_tools"], texture_guard
     assert helper_routing.helper_first_script_guard(
         "Make the selected cube red with bpy.data.materials and a material script."
     ) is None

@@ -885,6 +885,14 @@ def _assert_material_texture_search_avoids_asset_route(response, *, query):
     assert all(category != "external_assets" for category in categories[:6]), (query, names, categories)
 
 
+def _assert_image_texture_material_search(response, *, query):
+    tools = response["result"]["structuredContent"]["tools"]
+    names = [tool["name"] for tool in tools]
+    assert "create_image_texture_material" in names[:5], (query, names)
+    assert "draft_script" not in names[:5], (query, names)
+    _assert_material_texture_search_avoids_asset_route(response, query=query)
+
+
 def main():
     _assert_legacy_status_hashes_are_unknown()
     assert not mcp_server._contains_any_phrase(
@@ -1126,6 +1134,22 @@ def main():
                 },
             )
             _assert_material_texture_search_avoids_asset_route(offline_material_search, query=query)
+        offline_image_texture_search = _send(
+            offline_proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 99,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_blender_tools",
+                    "arguments": {"query": "Apply local albedo roughness and normal map image textures as a PBR material.", "limit": 10},
+                },
+            },
+        )
+        _assert_image_texture_material_search(
+            offline_image_texture_search,
+            query="Apply local albedo roughness and normal map image textures as a PBR material.",
+        )
         offline_catalog_schema = _send(
             offline_proc,
             {
@@ -1466,6 +1490,22 @@ def main():
                 },
             )
             _assert_material_texture_search_avoids_asset_route(material_search, query=query)
+        image_texture_search = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 100,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_blender_tools",
+                    "arguments": {"query": "Apply local albedo roughness and normal map image textures as a PBR material.", "limit": 10},
+                },
+            },
+        )
+        _assert_image_texture_material_search(
+            image_texture_search,
+            query="Apply local albedo roughness and normal map image textures as a PBR material.",
+        )
 
         catalog_search = _send(
             proc,

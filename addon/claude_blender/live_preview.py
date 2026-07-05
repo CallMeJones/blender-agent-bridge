@@ -1527,6 +1527,13 @@ def revert(context):
             world = bpy.data.worlds.get(before["world_name"])
             if world:
                 world.color = before["color"]
+        elif before.get("kind") == "image_settings":
+            image = bpy.data.images.get(before["image_name"])
+            if image:
+                try:
+                    image.colorspace_settings.name = before["colorspace"]
+                except Exception as exc:
+                    rollback_warnings.append(f"Could not restore image settings for {before['image_name']}: {type(exc).__name__}: {exc}")
         elif before.get("kind") == "camera_settings":
             camera = bpy.data.cameras.get(before["camera_name"])
             if camera:
@@ -1827,6 +1834,12 @@ def revert(context):
         material = bpy.data.materials.get(before["material_name"])
         if material:
             rollback_warnings.extend(_restore_node_tree_links(material, before))
+    for before in list(transaction["before_state"].values()):
+        if not before.get("created") or before.get("kind") != "image":
+            continue
+        image = bpy.data.images.get(before["name"])
+        if image and image.users == 0:
+            bpy.data.images.remove(image)
     for before in list(transaction["before_state"].values()):
         if before.get("kind") == "selection_state":
             _restore_selection_state(context, before, rollback_warnings)

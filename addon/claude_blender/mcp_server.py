@@ -1422,6 +1422,8 @@ def _score_tool_match(tool, query):
                 score += 1200
             elif name == "create_shader_material" and any(term in normalized_query for term in ("material", "chrome", "brass", "metal", "glass", "rubber", "wood", "screen", "display", "enamel", "paint", "color", "colour")):
                 score += 850
+            elif name == "create_image_texture_material" and any(term in normalized_query for term in ("image texture", "texture map", "texture maps", "pbr", "albedo", "diffuse map", "normal map", "roughness map", "metallic map")):
+                score += 900
             elif name == "uv_unwrap" and any(term in normalized_query for term in ("uv", "unwrap", "texture coordinate", "texture-ready", "texture ready")):
                 score += 850
             elif name in {"get_geometry_nodes_details", "add_geometry_nodes_modifier", "add_bevel_and_subsurf"}:

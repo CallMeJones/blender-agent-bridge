@@ -317,6 +317,15 @@ def main():
         assert "create_shader_material" in lookdev_names, lookdev_meta
         assert "draft_script" not in lookdev_names, lookdev_meta
 
+        texture_tools, texture_meta = agent_tools.select_blender_tool_definitions(
+            "Apply local base color, roughness, and normal map image textures to the selected mesh as a PBR material.",
+            bundle,
+        )
+        texture_names = _names(texture_tools)
+        assert "create_image_texture_material" in texture_names, texture_meta
+        assert "uv_unwrap" in texture_names, texture_meta
+        assert "draft_script" not in texture_names, texture_meta
+
         modeling_tools, modeling_meta = agent_tools.select_blender_tool_definitions(
             "Use a boolean cutter, mirror the model, symmetrize it on X, solidify the wall thickness, and add a screw thread.",
             bundle,

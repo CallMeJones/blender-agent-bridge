@@ -1825,6 +1825,32 @@ def create_shader_material(context, args):
     )
 
 
+def create_image_texture_material(context, args):
+    return advanced_helpers.create_image_texture_material(
+        context,
+        name=str(args.get("name") or "Agent Bridge Image Texture Material"),
+        base_color_path=str(args.get("base_color_path") or ""),
+        roughness_path=str(args.get("roughness_path") or ""),
+        metallic_path=str(args.get("metallic_path") or ""),
+        normal_path=str(args.get("normal_path") or ""),
+        alpha_path=str(args.get("alpha_path") or ""),
+        emission_path=str(args.get("emission_path") or ""),
+        base_color=_float_list(args.get("base_color"), 4, (0.8, 0.8, 0.8, 1.0)) if "base_color" in args else None,
+        metallic=_bounded_float(args.get("metallic"), 0.0, minimum=0.0, maximum=1.0) if "metallic" in args else None,
+        roughness=_bounded_float(args.get("roughness"), 0.5, minimum=0.0, maximum=1.0) if "roughness" in args else None,
+        alpha=_bounded_float(args.get("alpha"), 1.0, minimum=0.0, maximum=1.0) if "alpha" in args else None,
+        emission_strength=_bounded_float(args.get("emission_strength"), 0.0, minimum=0.0, maximum=100.0)
+        if "emission_strength" in args
+        else None,
+        normal_strength=_bounded_float(args.get("normal_strength"), 1.0, minimum=0.0, maximum=10.0),
+        replace_existing_links=bool(args.get("replace_existing_links", True)),
+        assign_to_objects=bool(args.get("assign_to_objects", True)),
+        object_names=args.get("object_names") if isinstance(args.get("object_names"), list) else None,
+        selected_only=bool(args.get("selected_only", True)),
+        label=args.get("label", "Create image texture material"),
+    )
+
+
 def uv_unwrap(context, args):
     return advanced_helpers.uv_unwrap(
         context,
@@ -3749,6 +3775,9 @@ def _preview_expected_changes(step, label, kind, target_text):
         return f"{label}: creates {_format_count('mesh object', len(step.get('created') or []))} from curve/text sources."
     if kind == "uv_unwrap":
         return f"{label}: writes {step.get('method', 'smart_project')} UVs on {target_text} with mesh-data rollback."
+    if kind == "create_image_texture_material":
+        maps = ", ".join(step.get("maps") or []) or "image maps"
+        return f"{label}: wires {maps} into material {step.get('material') or 'material'} with preview rollback."
     if kind == "boolean_op":
         cutters = ", ".join(step.get("cutters") or []) or "selected cutters"
         return (
@@ -3875,6 +3904,7 @@ TOOL_FUNCTIONS = {
     "link_selected_to_collection": link_selected_to_collection,
     "add_modifier_to_selected": add_modifier_to_selected,
     "create_shader_material": create_shader_material,
+    "create_image_texture_material": create_image_texture_material,
     "uv_unwrap": uv_unwrap,
     "add_geometry_nodes_modifier": add_geometry_nodes_modifier,
     "create_shape_key": create_shape_key,

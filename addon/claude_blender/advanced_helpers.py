@@ -5,6 +5,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 import bmesh
 import math
+import os
 import re
 
 import bpy
@@ -266,6 +267,15 @@ SHADER_MATERIAL_PRESETS = {
 
 UV_UNWRAP_METHODS = {"smart_project", "cube_project", "planar_project"}
 UV_PROJECTION_AXES = {"X", "Y", "Z"}
+TEXTURE_IMAGE_EXTENSIONS = {".bmp", ".exr", ".hdr", ".jpeg", ".jpg", ".png", ".tga", ".tif", ".tiff", ".webp"}
+IMAGE_TEXTURE_MAP_SPECS = {
+    "base_color": {"socket_names": ("Base Color",), "colorspace": "sRGB", "output": "Color"},
+    "roughness": {"socket_names": ("Roughness",), "colorspace": "Non-Color", "output": "Color"},
+    "metallic": {"socket_names": ("Metallic",), "colorspace": "Non-Color", "output": "Color"},
+    "normal": {"socket_names": ("Normal",), "colorspace": "Non-Color", "normal_map": True},
+    "alpha": {"socket_names": ("Alpha",), "colorspace": "Non-Color", "output": "Alpha"},
+    "emission": {"socket_names": ("Emission Color",), "colorspace": "sRGB", "output": "Color"},
+}
 
 GEOMETRY_NODE_TEMPLATES = {"passthrough", "transform", "join_geometry", "set_position", "subdivide_mesh"}
 
@@ -1021,6 +1031,252 @@ def create_shader_material(
         "material": material.name,
         "preset": preset_key,
         "assigned_objects": assigned,
+        "transaction_id": transaction["id"],
+    }
+
+
+def _resolve_texture_image_path(path):
+    raw = str(path or "").strip()
+    if not raw:
+        return "", "empty path"
+    resolved = bpy.path.abspath(raw) if raw.startswith("//") else os.path.expanduser(raw)
+    resolved = os.path.abspath(resolved)
+    extension = os.path.splitext(resolved)[1].lower()
+    if extension not in TEXTURE_IMAGE_EXTENSIONS:
+        return resolved, f"unsupported image extension {extension or '(none)'}"
+    if not os.path.isfile(resolved):
+        return resolved, "file does not exist"
+    return resolved, ""
+
+
+def _load_preview_image(path, *, colorspace):
+    before_names = set(bpy.data.images.keys())
+    image = bpy.data.images.load(path, check_existing=True)
+    if image.name not in before_names:
+        live_preview._record_created_id("image", image.name)
+    else:
+        _record_image_settings(image)
+    try:
+        image.colorspace_settings.name = colorspace
+    except Exception:
+        pass
+    return image
+
+
+def _record_image_settings(image):
+    transaction = live_preview.begin()
+    key = f"image:{image.name}:settings"
+    if key in transaction["before_state"]:
+        return
+    transaction["before_state"][key] = {
+        "kind": "image_settings",
+        "image_name": image.name,
+        "colorspace": getattr(image.colorspace_settings, "name", ""),
+    }
+    transaction["changed_data_blocks"].append(image.name)
+
+
+def _principled_socket(principled, names):
+    for name in names:
+        socket = principled.inputs.get(name)
+        if socket:
+            return socket
+    return None
+
+
+def _remove_links_to_socket(node_tree, socket):
+    removed = 0
+    for link in list(node_tree.links):
+        if link.to_socket == socket:
+            node_tree.links.remove(link)
+            removed += 1
+    return removed
+
+
+def create_image_texture_material(
+    context,
+    *,
+    name,
+    base_color_path=None,
+    roughness_path=None,
+    metallic_path=None,
+    normal_path=None,
+    alpha_path=None,
+    emission_path=None,
+    base_color=None,
+    metallic=None,
+    roughness=None,
+    alpha=None,
+    emission_strength=None,
+    normal_strength=1.0,
+    replace_existing_links=True,
+    assign_to_objects=True,
+    object_names=None,
+    selected_only=True,
+    label="Create image texture material",
+):
+    requested_paths = {
+        "base_color": base_color_path,
+        "roughness": roughness_path,
+        "metallic": metallic_path,
+        "normal": normal_path,
+        "alpha": alpha_path,
+        "emission": emission_path,
+    }
+    requested_paths = {key: value for key, value in requested_paths.items() if str(value or "").strip()}
+    if not requested_paths:
+        return {
+            "ok": False,
+            "message": "create_image_texture_material needs at least one local image map path",
+            "required_hint": "Use create_shader_material for scalar-only materials.",
+        }
+
+    resolved_paths = {}
+    path_errors = []
+    for map_type, path in requested_paths.items():
+        resolved, error = _resolve_texture_image_path(path)
+        if error:
+            path_errors.append({"map_type": map_type, "path": str(path), "resolved_path": resolved, "error": error})
+        else:
+            resolved_paths[map_type] = resolved
+    if path_errors:
+        return {
+            "ok": False,
+            "message": "Texture image path validation failed",
+            "path_errors": path_errors,
+        }
+
+    transaction = live_preview.begin(label, context)
+    material = bpy.data.materials.get(name)
+    created = material is None
+    if material is None:
+        material = bpy.data.materials.new(name or "Agent Bridge Image Texture Material")
+        live_preview._record_created_id("material", material.name)
+    else:
+        _record_shader_material(material)
+
+    if base_color is None and created:
+        base_color = (0.8, 0.8, 0.8, 1.0)
+    if metallic is None and created:
+        metallic = 0.0
+    if roughness is None and created:
+        roughness = 0.5
+    if alpha is None and created:
+        alpha = 1.0
+    if emission_strength is None:
+        emission_strength = 0.0
+
+    principled = _ensure_principled_material(material)
+    if base_color is not None:
+        rgba = (
+            float(base_color[0]),
+            float(base_color[1]),
+            float(base_color[2]),
+            float(base_color[3]) if len(base_color) > 3 else float(alpha or 1.0),
+        )
+        material.diffuse_color = rgba
+        _set_socket_value(principled.inputs.get("Base Color"), rgba)
+    if metallic is not None:
+        _set_socket_value(principled.inputs.get("Metallic"), max(0.0, min(1.0, float(metallic))))
+    if roughness is not None:
+        _set_socket_value(principled.inputs.get("Roughness"), max(0.0, min(1.0, float(roughness))))
+    if alpha is not None:
+        _set_socket_value(principled.inputs.get("Alpha"), max(0.0, min(1.0, float(alpha))))
+    _set_socket_value(principled.inputs.get("Emission Strength"), max(0.0, float(emission_strength)))
+
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    linked_maps = []
+    warnings = []
+    for index, (map_type, path) in enumerate(resolved_paths.items()):
+        spec = IMAGE_TEXTURE_MAP_SPECS[map_type]
+        socket = _principled_socket(principled, spec["socket_names"])
+        if socket is None:
+            warnings.append(f"Skipped {map_type}: Principled socket is not available")
+            continue
+        if socket.is_linked and not replace_existing_links:
+            warnings.append(f"Skipped {map_type}: target socket is already linked")
+            continue
+        if replace_existing_links:
+            _remove_links_to_socket(material.node_tree, socket)
+        image = _load_preview_image(path, colorspace=spec["colorspace"])
+        image_node = nodes.new(type="ShaderNodeTexImage")
+        image_node.name = f"Agent Bridge {map_type.replace('_', ' ').title()} Texture"
+        image_node.label = image_node.name
+        image_node.image = image
+        image_node.location = (-620, 260 - index * 180)
+        target_node = image_node
+        if spec.get("normal_map"):
+            normal_node = nodes.new(type="ShaderNodeNormalMap")
+            normal_node.name = "Agent Bridge Normal Map"
+            normal_node.label = normal_node.name
+            normal_node.location = (-350, 260 - index * 180)
+            _set_socket_value(normal_node.inputs.get("Strength"), max(0.0, min(10.0, float(normal_strength))))
+            links.new(image_node.outputs["Color"], normal_node.inputs["Color"])
+            links.new(normal_node.outputs["Normal"], socket)
+            target_node = normal_node
+        else:
+            output_name = spec.get("output", "Color")
+            if output_name == "Alpha" and image_node.outputs.get("Alpha"):
+                output = image_node.outputs["Alpha"]
+            else:
+                output = image_node.outputs.get("Color")
+            if output is None:
+                warnings.append(f"Skipped {map_type}: image texture output is not available")
+                nodes.remove(image_node)
+                continue
+            links.new(output, socket)
+        linked_maps.append(
+            {
+                "map_type": map_type,
+                "path": path,
+                "image": image.name,
+                "image_node": image_node.name,
+                "target_node": target_node.name,
+                "socket": socket.name,
+            }
+        )
+
+    if (alpha is not None and float(alpha) < 1.0) or "alpha" in resolved_paths:
+        if hasattr(material, "surface_render_method"):
+            material.surface_render_method = "BLENDED"
+        elif hasattr(material, "blend_method"):
+            material.blend_method = "BLEND"
+
+    assigned = []
+    missing = []
+    if assign_to_objects:
+        objects, missing = _resolve_edit_objects(context, object_names=object_names, selected_only=selected_only)
+        for obj in objects:
+            if obj.type != "MESH" or obj.data is None:
+                continue
+            live_preview._record_object_materials(obj)
+            if obj.material_slots:
+                obj.material_slots[0].material = material
+            else:
+                obj.data.materials.append(material)
+            assigned.append(obj.name)
+
+    transaction["applied_steps"].append(
+        {
+            "type": "create_image_texture_material",
+            "label": label,
+            "material": material.name,
+            "created": created,
+            "maps": [item["map_type"] for item in linked_maps],
+            "assigned_objects": assigned,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"{'Created' if created else 'Updated'} image texture material {material.name}",
+        "material": material.name,
+        "maps": linked_maps,
+        "assigned_objects": assigned,
+        "missing_object_names": missing,
+        "warnings": warnings,
         "transaction_id": transaction["id"],
     }
 

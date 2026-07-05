@@ -133,6 +133,7 @@ Common changes should use typed helper tools before arbitrary code:
 - `add_modifier`
 - `set_render_settings`
 - `create_shader_material`
+- `create_image_texture_material`
 - `uv_unwrap`
 - `add_geometry_nodes_modifier`
 - `create_shape_key`

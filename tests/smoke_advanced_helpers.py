@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 
 import bpy
 
@@ -40,6 +41,7 @@ ADVANCED_TOOLS = {
     "prepare_imported_asset_presentation",
     "add_cloth_simulation_to_selected",
     "create_shader_material",
+    "create_image_texture_material",
     "add_geometry_nodes_modifier",
     "create_shape_key",
     "animate_shape_key",
@@ -72,6 +74,8 @@ def _snapshot(scene, cube, camera):
         "objects": set(bpy.data.objects.keys()),
         "curves": set(bpy.data.curves.keys()),
         "materials": set(bpy.data.materials.keys()),
+        "images": {image.name for image in bpy.data.images if image.type == "IMAGE"},
+        "image_colorspaces": {image.name: image.colorspace_settings.name for image in bpy.data.images if image.type == "IMAGE"},
         "node_groups": set(bpy.data.node_groups.keys()),
         "armatures": set(bpy.data.armatures.keys()),
         "particles": set(bpy.data.particles.keys()),
@@ -119,6 +123,16 @@ def _material_topology(material):
             for link in node_tree.links
         ),
     }
+
+
+def _write_test_image(path, color):
+    image = bpy.data.images.new(name=os.path.basename(path), width=2, height=2, alpha=True)
+    image.pixels = list(color) * 4
+    image.filepath_raw = path
+    image.file_format = "PNG"
+    image.save()
+    bpy.data.images.remove(image)
+    assert os.path.isfile(path), path
 
 
 def _run_phase1_modeling_helper_prop_test(context):
@@ -583,6 +597,10 @@ def main():
     failure_spline.points[1].co = (1.0, 0.0, 0.0, 1.0)
     failure_curve = bpy.data.objects.new("Agent Bridge Failure Curve", failure_curve_data)
     context.collection.objects.link(failure_curve)
+    persistent_roughness_path = os.path.join(tempfile.gettempdir(), "agent-bridge-smoke-existing-roughness.png")
+    _write_test_image(persistent_roughness_path, (0.55, 0.55, 0.55, 1.0))
+    persistent_roughness_image = bpy.data.images.load(persistent_roughness_path, check_existing=True)
+    persistent_roughness_image.colorspace_settings.name = "sRGB"
     initial = _snapshot(scene, cube, camera)
 
     try:
@@ -994,6 +1012,32 @@ def main():
         assert uv_layer is not None, uv_result
         uv_values = [component for item in uv_layer.data for component in item.uv]
         assert uv_values and min(uv_values) >= 0.0 and max(uv_values) <= 1.0, uv_values
+
+        base_texture_path = os.path.join(tempfile.gettempdir(), "agent-bridge-smoke-base-color.png")
+        normal_texture_path = os.path.join(tempfile.gettempdir(), "agent-bridge-smoke-normal.png")
+        _write_test_image(base_texture_path, (0.8, 0.2, 0.1, 1.0))
+        _write_test_image(normal_texture_path, (0.5, 0.5, 1.0, 1.0))
+        image_material = _execute(
+            context,
+            "create_image_texture_material",
+            {
+                "name": "Agent Bridge Advanced Image Texture Material",
+                "base_color_path": base_texture_path,
+                "roughness_path": persistent_roughness_path,
+                "normal_path": normal_texture_path,
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "normal_strength": 0.75,
+            },
+        )
+        assert image_material["material"] in bpy.data.materials
+        assert {item["map_type"] for item in image_material["maps"]} == {"base_color", "roughness", "normal"}, image_material
+        assert cube.material_slots[0].material.name == image_material["material"]
+        image_nodes = [node for node in bpy.data.materials[image_material["material"]].node_tree.nodes if node.type == "TEX_IMAGE"]
+        normal_nodes = [node for node in bpy.data.materials[image_material["material"]].node_tree.nodes if node.type == "NORMAL_MAP"]
+        assert len(image_nodes) == 3, [node.name for node in image_nodes]
+        assert len(normal_nodes) == 1, [node.name for node in normal_nodes]
+        assert "created_image" in image_material["preview_change_report"]["rollback_scopes"], image_material
 
         geometry_nodes = _execute(
             context,

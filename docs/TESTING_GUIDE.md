@@ -403,6 +403,7 @@ Tools:
 assign_material_to_selected
 assign_emission_material_to_selected
 create_shader_material
+create_image_texture_material
 uv_unwrap
 add_geometry_nodes_modifier
 create_material_palette

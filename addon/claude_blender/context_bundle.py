@@ -297,6 +297,7 @@ def build_context_bundle(context, *, include_visual=False, capture_dir=None, max
             "link_selected_to_collection",
             "add_modifier_to_selected",
             "create_shader_material",
+            "create_image_texture_material",
             "uv_unwrap",
             "add_geometry_nodes_modifier",
             "create_shape_key",
