@@ -7,8 +7,8 @@ Current project snapshot, checked on 2026-06-20:
 - Extension: `Blender Agent Bridge`, manifest id `claude_blender`; version comes from `addon/claude_blender/blender_manifest.toml` and is checked against `build_info.py` and `CHANGELOG.md`.
 - Minimum Blender: `5.0.0`.
 - Local Blender detected on this workstation: `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`.
-- Dispatcher inventory: 178 tool functions in `addon/claude_blender/tool_dispatcher.py`.
-- Normal agent catalog inventory: 177 tool definitions in `addon/claude_blender/agent_tools.py`.
+- Dispatcher inventory: 179 tool functions in `addon/claude_blender/tool_dispatcher.py`.
+- Normal agent catalog inventory: 178 tool definitions in `addon/claude_blender/agent_tools.py`.
 - Intentional catalog difference: `run_approved_script` is a dispatcher path for external approval/trust execution, but it is not exposed in the normal agent helper catalog.
 - Fast baseline verified on 2026-06-20: `compileall`, pure-Python smoke tests, extension repository smoke, external assets catalog smoke, script analysis, and stdio MCP smoke passed.
 
@@ -436,6 +436,7 @@ set_active_camera
 set_camera_settings
 set_render_settings
 set_render_engine
+create_lookdev_turntable_review
 create_camera_orbit
 analyze_camera_framing
 render_scene_thumbnail
@@ -453,6 +454,7 @@ Required scenarios:
 - Camera added and assigned active camera.
 - DOF settings validate focus object existence.
 - Render engine/settings helpers cover quality presets, samples, denoise, color management, and preview rollback.
+- Look-dev turntable review creates bounded staging/turntable setup, captures inspection stills, and validates rendered artifacts without draft scripts.
 - Thumbnail render restores render settings and exposes `blender://render-thumbnails/...` resources.
 - Large thumbnail requests recommend `start_render_job` unless `allow_blocking_render=true`.
 
@@ -592,6 +594,7 @@ create_studio_product_stage
 add_dimension_callouts
 apply_lighting_preset
 create_product_turntable_setup
+create_lookdev_turntable_review
 organize_scene_for_production
 add_modifier_to_selected
 add_track_to_constraint

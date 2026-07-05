@@ -374,6 +374,7 @@ def build_context_bundle(context, *, include_visual=False, capture_dir=None, max
             "apply_lighting_preset",
             "create_material_palette",
             "create_product_turntable_setup",
+            "create_lookdev_turntable_review",
             "prepare_imported_asset_presentation",
             "organize_scene_for_production",
             "add_track_to_constraint",

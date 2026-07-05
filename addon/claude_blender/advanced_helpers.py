@@ -11,7 +11,7 @@ import re
 import bpy
 from mathutils import Vector
 
-from . import live_preview
+from . import inspection_render, live_preview
 
 
 KEYFRAME_INTERPOLATIONS = {
@@ -10069,6 +10069,177 @@ def create_product_turntable_setup(
         "stage": stage_result,
         "animation": animation_result,
         "camera_orbit": orbit_result,
+        "transaction_id": transaction["id"],
+    }
+
+
+def _lookdev_render_engine(scene, render_engine):
+    requested = str(render_engine or "").strip()
+    valid = _valid_render_engines(scene)
+    if not requested or requested.lower() == "auto":
+        return "CYCLES" if "CYCLES" in valid else scene.render.engine
+    requested_upper = requested.upper()
+    aliases = {
+        "EEVEE": "BLENDER_EEVEE_NEXT" if "BLENDER_EEVEE_NEXT" in valid else "BLENDER_EEVEE",
+        "WORKBENCH": "BLENDER_WORKBENCH",
+    }
+    candidate = aliases.get(requested_upper, requested_upper)
+    return candidate
+
+
+def _validate_inspection_artifacts(metadata):
+    images = list((metadata or {}).get("images") or [])
+    available = []
+    missing = []
+    for image in images:
+        path = str(image.get("path") or "")
+        exists = bool(path and os.path.isfile(path))
+        size_bytes = os.path.getsize(path) if exists else int(image.get("size_bytes") or 0)
+        item = {
+            "image_id": image.get("image_id", ""),
+            "object": image.get("object", ""),
+            "view": image.get("view", ""),
+            "path": path,
+            "resource_uri": image.get("resource_uri", ""),
+            "size_bytes": int(size_bytes),
+            "width": int(image.get("width") or 0),
+            "height": int(image.get("height") or 0),
+        }
+        if bool(image.get("available")) and exists and size_bytes > 0:
+            available.append(item)
+        else:
+            missing.append(item)
+    return {
+        "ok": bool(images) and len(available) == len(images),
+        "requested_image_count": len(images),
+        "available_image_count": len(available),
+        "missing_image_count": len(missing),
+        "metadata_uri": (metadata or {}).get("metadata_uri", ""),
+        "latest_metadata_uri": (metadata or {}).get("latest_metadata_uri", ""),
+        "images": available,
+        "missing_images": missing,
+    }
+
+
+def create_lookdev_turntable_review(
+    context,
+    *,
+    target_name="",
+    frame_start=1,
+    frame_end=96,
+    revolutions=1.0,
+    setup_name="Agent Bridge Lookdev Turntable",
+    create_stage=True,
+    create_turntable=True,
+    render_engine="auto",
+    quality_preset="preview",
+    samples=None,
+    denoise=True,
+    view_transform="",
+    look="",
+    exposure=None,
+    gamma=None,
+    capture_inspection=True,
+    views=None,
+    resolution_x=320,
+    resolution_y=240,
+    distance_factor=2.6,
+    label="Create look-dev turntable review",
+):
+    """Create a bounded look-dev/turntable setup and render review evidence."""
+
+    target = bpy.data.objects.get(target_name) if target_name else context.active_object
+    if target is None or not hasattr(target, "bound_box"):
+        return {"ok": False, "message": "A target object with bounds is required for look-dev turntable review"}
+    frame_start, frame_end, error = _normalize_frame_range(frame_start, frame_end, "Look-dev turntable review")
+    if error:
+        return error
+
+    render_result = set_render_engine(
+        context,
+        engine=_lookdev_render_engine(context.scene, render_engine),
+        quality_preset=quality_preset,
+        samples=samples,
+        denoise=denoise,
+        view_transform=view_transform,
+        look=look,
+        exposure=exposure,
+        gamma=gamma,
+        label=label,
+    )
+    if not render_result.get("ok"):
+        return render_result
+
+    setup_result = {}
+    with _preserve_selection(context):
+        if create_turntable:
+            setup_result = create_product_turntable_setup(
+                context,
+                target_name=target.name,
+                frame_start=frame_start,
+                frame_end=frame_end,
+                revolutions=revolutions,
+                setup_name=setup_name,
+                create_stage=create_stage,
+                label=label,
+            )
+        elif create_stage:
+            setup_result = create_studio_product_stage(
+                context,
+                target_name=target.name,
+                stage_name=f"{setup_name} Stage",
+                floor=True,
+                backdrop=False,
+                lighting=True,
+                camera=True,
+                label=label,
+            )
+
+    inspection_result = {}
+    validation = {"ok": True, "requested_image_count": 0, "available_image_count": 0, "missing_image_count": 0, "images": [], "missing_images": []}
+    if capture_inspection:
+        requested_views = [str(view) for view in (views or ("front", "side", "front_below")) if str(view).strip()]
+        inspection_result = inspection_render.capture_object_inspection_renders(
+            context,
+            object_names=[target.name],
+            views=requested_views,
+            frame=frame_start,
+            resolution_x=resolution_x,
+            resolution_y=resolution_y,
+            lens=70.0,
+            distance_factor=distance_factor,
+            camera_name=f"{setup_name} Inspection Camera",
+            note=f"Look-dev turntable review for {target.name}",
+        )
+        validation = _validate_inspection_artifacts(inspection_result.get("inspection_render") or {})
+
+    transaction = live_preview.begin(label, context)
+    transaction["applied_steps"].append(
+        {
+            "type": "create_lookdev_turntable_review",
+            "label": label,
+            "target": target.name,
+            "frame_start": frame_start,
+            "frame_end": frame_end,
+            "render_engine": render_result.get("applied", {}).get("engine", ""),
+            "quality_preset": render_result.get("quality_preset", ""),
+            "created_turntable": bool(create_turntable and setup_result.get("ok")),
+            "capture_inspection": bool(capture_inspection),
+            "artifact_validation": validation,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    setup_ok = (not (create_turntable or create_stage)) or bool(setup_result.get("ok"))
+    evidence_ok = (not capture_inspection) or bool(validation.get("ok"))
+    return {
+        "ok": bool(render_result.get("ok") and setup_ok and evidence_ok),
+        "message": f"Created look-dev turntable review for {target.name}",
+        "target": target.name,
+        "render_settings": render_result,
+        "setup": setup_result,
+        "inspection_render": inspection_result.get("inspection_render", {}),
+        "artifact_validation": validation,
         "transaction_id": transaction["id"],
     }
 

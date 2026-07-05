@@ -479,6 +479,12 @@ HELPER_FIRST_SCRIPT_RULES = (
         "terms": {
             "render settings",
             "render engine",
+            "lookdev",
+            "look-dev",
+            "turntable review",
+            "inspection still",
+            "artifact validation",
+            "render evidence",
             "denoise",
             "color management",
             "set resolution",
@@ -499,6 +505,7 @@ HELPER_FIRST_SCRIPT_RULES = (
         "recommended_tools": [
             "set_render_settings",
             "set_render_engine",
+            "create_lookdev_turntable_review",
             "set_camera_settings",
             "set_world_background",
             "add_light",

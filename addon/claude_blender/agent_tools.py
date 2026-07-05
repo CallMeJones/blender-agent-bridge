@@ -23,7 +23,7 @@ AGENT_GUIDANCE = (
     "For broad multi-step scene, asset, animation, and evidence work, call plan_director_workflow first to get an ordered helper/evidence/preview plan without mutating the scene. For advanced 3D, 2D/storyboard, animation, simulation, compositor/render, asset-import, or script-heavy tasks, call plan_advanced_scene_workflow first when the helper path is not obvious. For object design prompts, call plan_object_design before choosing object kits, generic modeling helpers, asset import, or scripts. These planners return domain-specific helpers and script fallback boundaries. "
     "For scene building and layout, prefer create_primitive, create_empty, duplicate_selected_objects, parent_selected_to_empty, align_selected_objects, distribute_selected_objects, set_object_visibility, set_object_display, assign_material_to_selected, assign_emission_material_to_selected, create_shader_material, create_image_texture_material, uv_unwrap, create_text_object, create_curve_path, create_collection, link_selected_to_collection, add_light, add_camera, add_modifier_to_selected, add_geometry_nodes_modifier, apply_procedural_array_stack, edit_mesh, inspect_modeling_quality, curve_to_mesh, boolean_op, mirror_model, symmetrize_model, solidify_model, screw_model, create_procedural_object_kit, add_track_to_constraint, add_copy_transform_constraint, create_basic_armature, add_particle_system_to_selected, add_cloth_simulation_to_selected, set_render_settings, set_render_engine, set_camera_settings, and set_world_background. create_shader_material includes bounded material presets; create_image_texture_material wires exact local image/PBR maps into a Principled material, including packed ARM/ORM channels, AO, bump, and UV map selection; uv_unwrap creates preview-safe UV coordinate maps with mesh-data rollback; set_render_engine/set_render_settings cover look-dev presets, samples, denoise, and color management; add_geometry_nodes_modifier includes passthrough, transform, join-geometry, set-position, and subdivide-mesh starter templates. "
     "For 2D, storyboard, animatic, cutout, or motion-graphics work, inspect first with get_2d_animation_details, then prefer create_storyboard_panels, create_2d_cutout_layer, create_camera_dolly_animation, capture_animation_playblast, and render jobs before drafting custom Grease Pencil or SVG Python. "
-    "For model refinement and production presentation, prefer shade_smooth_selected, add_bevel_and_subsurf, apply_procedural_array_stack, edit_mesh, inspect_modeling_quality, curve_to_mesh, boolean_op, mirror_model, symmetrize_model, solidify_model, screw_model, create_procedural_object_kit, create_wheel_assembly, add_panel_seams, add_window_materials, apply_vehicle_refinement_template, apply_product_refinement_template, apply_character_refinement_template, create_studio_product_stage, add_dimension_callouts, apply_lighting_preset, create_material_palette, create_product_turntable_setup, prepare_imported_asset_presentation, and organize_scene_for_production when they fit the task. create_procedural_object_kit includes kitbash, radial/scatter/product, mechanical-joint, control-panel, coffee-machine, studio-prop, mechanical-part, modular-wall-panel, pipe-run, and desk-lamp templates for bounded prop generation before custom mesh scripts; plan_object_design maps open-ended object prompts onto these families and helper paths. "
+    "For model refinement and production presentation, prefer shade_smooth_selected, add_bevel_and_subsurf, apply_procedural_array_stack, edit_mesh, inspect_modeling_quality, curve_to_mesh, boolean_op, mirror_model, symmetrize_model, solidify_model, screw_model, create_procedural_object_kit, create_wheel_assembly, add_panel_seams, add_window_materials, apply_vehicle_refinement_template, apply_product_refinement_template, apply_character_refinement_template, create_studio_product_stage, add_dimension_callouts, apply_lighting_preset, create_material_palette, create_product_turntable_setup, create_lookdev_turntable_review, prepare_imported_asset_presentation, and organize_scene_for_production when they fit the task. create_lookdev_turntable_review creates a bounded stage/turntable, applies look-dev render settings, captures inspection stills, and validates image artifacts before custom render Python; create_procedural_object_kit includes kitbash, radial/scatter/product, mechanical-joint, control-panel, coffee-machine, studio-prop, mechanical-part, modular-wall-panel, pipe-run, and desk-lamp templates for bounded prop generation before custom mesh scripts; plan_object_design maps open-ended object prompts onto these families and helper paths. "
     "For shape-key animation, prefer create_shape_key and animate_shape_key before drafting Python. "
     "For quick animation playblasts and visual review, use low-resolution preview defaults unless the user explicitly asks for HD/final/1080p/4K quality. For long-running or high-resolution renders, frame sequences, 1080p/4K previews, or MP4 quality checks, use start_render_job and poll get_render_job_status instead of blocking render_scene_thumbnail, capture tools, or draft_script; report the returned rough estimate/poll interval to the user; use assemble_render_job_video for PNG sequences and validate_render_job_output before reporting success; use cancel_render_job if the user wants to stop it. If a render, playblast, or visual-review tool times out, treat it as recoverable: wait the returned poll_after_seconds, call blender_bridge_status, inspect get_visual_evidence_resources and the audit log, and only rerun if no artifact/result appears. "
     "For simulation setup, prefer add_cloth_simulation_to_selected or add_particle_system_to_selected for bounded setup, then inspect with get_simulation_details or inspect_simulation_bake. For persistent simulation/cache bakes or cache-freeing operations, use stage_persistent_simulation_bake for a fixed approval-gated script. Session-wide external script trust is not enough for bpy.ops.fluid.* or bpy.ops.ptcache.* bake/free operators; they require explicit one-time user approval. Do not hand the user a checkpoint or recovery .blend path unless you just verified that it exists and is restorable through checkpoint metadata, diagnostics, or a filesystem check. "
@@ -3073,6 +3073,37 @@ def blender_tool_definitions():
             },
         },
         {
+            "name": "create_lookdev_turntable_review",
+            "description": "Create a bounded look-dev review setup around a target: optional stage, turntable animation, render engine/quality controls, inspection still capture, and artifact validation. Applies scene changes with preview revert support while render evidence remains as MCP resources.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "target_name": {"type": "string"},
+                    "frame_start": {"type": "integer"},
+                    "frame_end": {"type": "integer"},
+                    "revolutions": {"type": "number"},
+                    "setup_name": {"type": "string"},
+                    "create_stage": {"type": "boolean"},
+                    "create_turntable": {"type": "boolean"},
+                    "render_engine": {"type": "string"},
+                    "quality_preset": {"type": "string", "enum": ["preview", "lookdev", "final"]},
+                    "samples": {"type": "integer", "minimum": 1, "maximum": 4096},
+                    "denoise": {"type": "boolean"},
+                    "view_transform": {"type": "string"},
+                    "look": {"type": "string"},
+                    "exposure": {"type": "number"},
+                    "gamma": {"type": "number"},
+                    "capture_inspection": {"type": "boolean"},
+                    "views": {"type": "array", "items": {"type": "string"}},
+                    "resolution_x": {"type": "integer", "minimum": 64, "maximum": 4096},
+                    "resolution_y": {"type": "integer", "minimum": 64, "maximum": 4096},
+                    "distance_factor": {"type": "number"},
+                    "label": {"type": "string"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "prepare_imported_asset_presentation",
             "description": "Organize imported asset objects, fill missing mesh materials without overwriting imported materials, create a bounded studio/turntable presentation setup, and leave the result in preview. Use after an external asset import job completes.",
             "input_schema": {
@@ -3809,6 +3840,7 @@ _TOOL_GROUPS = {
         "create_studio_product_stage",
         "apply_lighting_preset",
         "create_product_turntable_setup",
+        "create_lookdev_turntable_review",
         "prepare_imported_asset_presentation",
         "create_turntable_animation",
         "set_render_settings",
@@ -3950,6 +3982,7 @@ _TOOL_GROUPS = {
         "apply_lighting_preset",
         "create_material_palette",
         "create_product_turntable_setup",
+        "create_lookdev_turntable_review",
         "prepare_imported_asset_presentation",
         "apply_product_refinement_template",
         "apply_character_refinement_template",
@@ -3970,6 +4003,7 @@ _TOOL_GROUPS = {
         "apply_lighting_preset",
         "create_material_palette",
         "create_product_turntable_setup",
+        "create_lookdev_turntable_review",
         "prepare_imported_asset_presentation",
         "apply_product_refinement_template",
         "apply_character_refinement_template",
@@ -3987,6 +4021,7 @@ _TOOL_GROUPS = {
         "apply_lighting_preset",
         "create_material_palette",
         "create_product_turntable_setup",
+        "create_lookdev_turntable_review",
         "organize_scene_for_production",
         "create_shader_material",
         "add_light",
@@ -4001,6 +4036,7 @@ _TOOL_GROUPS = {
         "apply_lighting_preset",
         "create_material_palette",
         "create_product_turntable_setup",
+        "create_lookdev_turntable_review",
         "prepare_imported_asset_presentation",
         "apply_product_refinement_template",
         "organize_scene_for_production",
@@ -4182,7 +4218,10 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
 
     budget = max(4000, int(max_schema_chars or TOOL_SCHEMA_CHAR_BUDGET))
     protected = set(_CORE_TOOL_NAMES)
+    specific_refinement_groups = {"vehicle", "product", "character"}.intersection(matched_groups)
     for group in matched_groups:
+        if group == "refinement" and specific_refinement_groups:
+            continue
         if group in {"vehicle", "product", "character", "refinement", "camera_render", "rigging", "curves_text", "particles", "geometry_nodes", "external_assets", "advanced_workflow", "two_d_storyboard", "procedural_3d", "simulation_setup"}:
             protected.update(_TOOL_GROUPS.get(group, set()))
     if "animation" in matched_groups:
@@ -4414,6 +4453,7 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "apply_lighting_preset",
     "create_material_palette",
     "create_product_turntable_setup",
+    "create_lookdev_turntable_review",
     "prepare_imported_asset_presentation",
     "organize_scene_for_production",
     "apply_vehicle_refinement_template",

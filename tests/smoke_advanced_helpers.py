@@ -52,6 +52,7 @@ ADVANCED_TOOLS = {
     "add_copy_transform_constraint",
     "set_render_settings",
     "set_render_engine",
+    "create_lookdev_turntable_review",
     "set_camera_settings",
     "set_world_background",
 }
@@ -1114,6 +1115,29 @@ def main():
         assert len(phase2_render["images"]) == 1, phase2_render
         assert phase2_render["images"][0]["available"] is True, phase2_render
         assert os.path.isfile(phase2_render["images"][0]["path"]), phase2_render
+
+        lookdev_review = _execute(
+            context,
+            "create_lookdev_turntable_review",
+            {
+                "target_name": "Cube",
+                "frame_start": 1,
+                "frame_end": 48,
+                "quality_preset": "preview",
+                "samples": 8,
+                "views": ["front"],
+                "resolution_x": 160,
+                "resolution_y": 120,
+                "distance_factor": 2.6,
+            },
+        )
+        assert lookdev_review["setup"]["ok"] is True, lookdev_review
+        assert lookdev_review["render_settings"]["quality_preset"] == "preview", lookdev_review
+        validation = lookdev_review["artifact_validation"]
+        assert validation["ok"] is True, lookdev_review
+        assert validation["available_image_count"] == 1, lookdev_review
+        assert validation["images"][0]["size_bytes"] > 0, lookdev_review
+        assert os.path.isfile(validation["images"][0]["path"]), lookdev_review
 
         geometry_nodes = _execute(
             context,

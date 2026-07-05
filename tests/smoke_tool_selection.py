@@ -317,6 +317,15 @@ def main():
         assert "create_shader_material" in lookdev_names, lookdev_meta
         assert "draft_script" not in lookdev_names, lookdev_meta
 
+        lookdev_review_tools, lookdev_review_meta = agent_tools.select_blender_tool_definitions(
+            "Create a lookdev turntable review with Cycles denoise, inspection stills, and artifact validation.",
+            bundle,
+        )
+        lookdev_review_names = _names(lookdev_review_tools)
+        assert "plan_advanced_scene_workflow" in lookdev_review_names, lookdev_review_meta
+        assert "create_lookdev_turntable_review" in lookdev_review_names, lookdev_review_meta
+        assert "draft_script" not in lookdev_review_names, lookdev_review_meta
+
         texture_tools, texture_meta = agent_tools.select_blender_tool_definitions(
             "Apply local base color, roughness, and normal map image textures to the selected mesh as a PBR material.",
             bundle,

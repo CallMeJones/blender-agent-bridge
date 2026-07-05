@@ -2917,6 +2917,33 @@ def create_product_turntable_setup(context, args):
     )
 
 
+def create_lookdev_turntable_review(context, args):
+    return advanced_helpers.create_lookdev_turntable_review(
+        context,
+        target_name=str(args.get("target_name") or ""),
+        frame_start=int(args.get("frame_start", 1)),
+        frame_end=int(args.get("frame_end", 96)),
+        revolutions=float(args.get("revolutions", 1.0)),
+        setup_name=str(args.get("setup_name") or "Agent Bridge Lookdev Turntable"),
+        create_stage=bool(args.get("create_stage", True)),
+        create_turntable=bool(args.get("create_turntable", True)),
+        render_engine=str(args.get("render_engine") or "auto"),
+        quality_preset=str(args.get("quality_preset") or "preview"),
+        samples=args.get("samples"),
+        denoise=bool(args.get("denoise", True)),
+        view_transform=str(args.get("view_transform") or ""),
+        look=str(args.get("look") or ""),
+        exposure=args.get("exposure"),
+        gamma=args.get("gamma"),
+        capture_inspection=bool(args.get("capture_inspection", True)),
+        views=_name_list(args.get("views")),
+        resolution_x=_bounded_int(args.get("resolution_x"), 320, minimum=64, maximum=4096),
+        resolution_y=_bounded_int(args.get("resolution_y"), 240, minimum=64, maximum=4096),
+        distance_factor=float(args.get("distance_factor", 2.6)),
+        label=args.get("label", "Create look-dev turntable review"),
+    )
+
+
 def prepare_imported_asset_presentation(context, args):
     return advanced_helpers.prepare_imported_asset_presentation(
         context,
@@ -4013,6 +4040,7 @@ TOOL_FUNCTIONS = {
     "apply_lighting_preset": apply_lighting_preset,
     "create_material_palette": create_material_palette,
     "create_product_turntable_setup": create_product_turntable_setup,
+    "create_lookdev_turntable_review": create_lookdev_turntable_review,
     "prepare_imported_asset_presentation": prepare_imported_asset_presentation,
     "organize_scene_for_production": organize_scene_for_production,
     "add_track_to_constraint": add_track_to_constraint,

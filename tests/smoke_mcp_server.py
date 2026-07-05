@@ -987,6 +987,7 @@ def main():
             "Make the selected cube bounce twice and get smaller each bounce.",
             "Block a jump animation with anticipation, contact, apex, settle.",
             "Review this animation for spacing and contact sliding.",
+            "Create a simple turntable animation for the selected cube.",
         ):
             offline_animation_search = _send(
                 offline_proc,
@@ -1025,6 +1026,10 @@ def main():
             (
                 "Create an advanced procedural object kit with a kitbash scatter grid.",
                 {"create_procedural_object_kit"},
+            ),
+            (
+                "Create a lookdev turntable review with Cycles denoise, inspection stills, and artifact validation.",
+                {"create_lookdev_turntable_review"},
             ),
             (
                 "Design a futuristic wall-mounted coffee machine with chrome pipes, a small display, buttons, and beveled body.",
@@ -1441,6 +1446,7 @@ def main():
             "Make the selected cube bounce twice and get smaller each bounce.",
             "Block a jump animation with anticipation, contact, apex, settle.",
             "Review this animation for spacing and contact sliding.",
+            "Create a simple turntable animation for the selected cube.",
         ):
             animation_search = _send(
                 proc,
@@ -1505,6 +1511,26 @@ def main():
         _assert_image_texture_material_search(
             image_texture_search,
             query="Apply local albedo roughness and normal map image textures as a PBR material.",
+        )
+        lookdev_review_search = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 101,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_blender_tools",
+                    "arguments": {
+                        "query": "Create a lookdev turntable review with Cycles denoise, inspection stills, and artifact validation.",
+                        "limit": 10,
+                    },
+                },
+            },
+        )
+        _assert_advanced_search_routes_first(
+            lookdev_review_search,
+            query="Create a lookdev turntable review with Cycles denoise, inspection stills, and artifact validation.",
+            expected={"create_lookdev_turntable_review"},
         )
 
         catalog_search = _send(
@@ -2015,6 +2041,7 @@ def main():
         assert "apply_procedural_array_stack" in advanced_prompt_text, advanced_prompt
         assert "create_procedural_object_kit" in advanced_prompt_text, advanced_prompt
         assert "create_directed_animation_shot" in advanced_prompt_text, advanced_prompt
+        assert "create_lookdev_turntable_review" in advanced_prompt_text, advanced_prompt
         assert "add_cloth_simulation_to_selected" in advanced_prompt_text, advanced_prompt
         asset_prompt = _send(
             proc,
