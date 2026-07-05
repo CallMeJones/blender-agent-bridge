@@ -985,26 +985,41 @@ def _texture_map_files(manifest):
     return result
 
 
-def _ensure_principled(material):
-    material.use_nodes = True
-    nodes = material.node_tree.nodes
-    principled = next((node for node in nodes if node.type == "BSDF_PRINCIPLED"), None)
-    if principled is None:
-        principled = nodes.new("ShaderNodeBsdfPrincipled")
-    output = next((node for node in nodes if node.type == "OUTPUT_MATERIAL"), None)
-    if output is None:
-        output = nodes.new("ShaderNodeOutputMaterial")
-    if not output.inputs["Surface"].links:
-        material.node_tree.links.new(principled.outputs["BSDF"], output.inputs["Surface"])
-    return principled
+def _texture_map_helper_args(maps):
+    args = {}
+    ignored = {}
+    for key, path in sorted((maps or {}).items()):
+        lowered = str(key or "").lower()
+        target = ""
+        if any(term in lowered for term in ("diff", "albedo", "color", "base")):
+            target = "base_color_path"
+        elif any(term in lowered for term in ("normal", "nor")):
+            target = "normal_path"
+        elif "rough" in lowered:
+            target = "roughness_path"
+        elif "metal" in lowered:
+            target = "metallic_path"
+        elif any(term in lowered for term in ("alpha", "opacity")):
+            target = "alpha_path"
+        elif any(term in lowered for term in ("emission", "emissive")):
+            target = "emission_path"
+        if target and target not in args:
+            args[target] = path
+        else:
+            ignored[key] = path
+    return args, ignored
 
 
-def _socket(principled, *names):
-    for name in names:
-        socket = principled.inputs.get(name)
-        if socket:
-            return socket
-    return None
+def _unique_data_block_name(data_blocks, base_name):
+    base = str(base_name or "").strip() or "Imported Asset"
+    if data_blocks.get(base) is None:
+        return base
+    index = 1
+    while True:
+        candidate = f"{base}.{index:03d}"
+        if data_blocks.get(candidate) is None:
+            return candidate
+        index += 1
 
 
 def _load_image(path, *, colorspace="sRGB"):
@@ -1015,23 +1030,6 @@ def _load_image(path, *, colorspace="sRGB"):
     except Exception:
         pass
     return image
-
-
-def _link_image_to_socket(material, image, socket, *, normal_map=False):
-    if socket is None:
-        return None
-    nodes = material.node_tree.nodes
-    links = material.node_tree.links
-    image_node = nodes.new("ShaderNodeTexImage")
-    image_node.image = image
-    if normal_map:
-        normal_node = nodes.new("ShaderNodeNormalMap")
-        links.new(image_node.outputs["Color"], normal_node.inputs["Color"])
-        links.new(normal_node.outputs["Normal"], socket)
-        return normal_node
-    output_name = "Alpha" if socket.name == "Alpha" and "Alpha" in image_node.outputs else "Color"
-    links.new(image_node.outputs[output_name], socket)
-    return image_node
 
 
 def _apply_hdri_world(context, manifest, *, label="Import Poly Haven HDRI"):
@@ -1098,60 +1096,66 @@ def _apply_texture_material(context, manifest, *, target_object_name="", label="
     maps = _texture_map_files(manifest)
     if not maps:
         return {"ok": False, "message": "No texture map files were cached", "manifest": manifest}
-    transaction = live_preview.begin(label, context)
-    material = bpy.data.materials.new(f"Poly Haven {manifest.get('asset_id', 'Texture')}")
-    live_preview._record_created_id("material", material.name)
-    material.diffuse_color = (1.0, 1.0, 1.0, 1.0)
-    principled = _ensure_principled(material)
-    imported_images = []
-    for key, path in maps.items():
-        lowered = key.lower()
-        colorspace = "sRGB" if any(term in lowered for term in ("diff", "albedo", "color", "base")) else "Non-Color"
-        image = _load_image(path, colorspace=colorspace)
-        imported_images.append(image.name)
-        if any(term in lowered for term in ("diff", "albedo", "color", "base")):
-            _link_image_to_socket(material, image, _socket(principled, "Base Color"))
-        elif any(term in lowered for term in ("normal", "nor")):
-            _link_image_to_socket(material, image, _socket(principled, "Normal"), normal_map=True)
-        elif "rough" in lowered:
-            _link_image_to_socket(material, image, _socket(principled, "Roughness"))
-        elif "metal" in lowered:
-            _link_image_to_socket(material, image, _socket(principled, "Metallic"))
-        elif any(term in lowered for term in ("alpha", "opacity")):
-            _link_image_to_socket(material, image, _socket(principled, "Alpha"))
-    assigned_object = ""
     target = bpy.data.objects.get(target_object_name) if target_object_name else context.active_object
-    if target and getattr(target, "type", "") == "MESH":
-        live_preview._record_object_materials(target)
-        if target.material_slots:
-            target.material_slots[0].material = material
-        else:
-            target.data.materials.append(material)
-        assigned_object = target.name
+    object_names = [target.name] if target and getattr(target, "type", "") == "MESH" else None
+    helper_args, ignored_maps = _texture_map_helper_args(maps)
+    if not helper_args:
+        return {
+            "ok": False,
+            "message": "No supported texture map files were cached for material import",
+            "map_files": maps,
+            "manifest": manifest,
+        }
+    try:
+        from . import advanced_helpers
+    except ImportError:
+        import advanced_helpers
+    material_name = _unique_data_block_name(bpy.data.materials, f"Poly Haven {manifest.get('asset_id', 'Texture')}")
+    helper_result = advanced_helpers.create_image_texture_material(
+        context,
+        name=material_name,
+        assign_to_objects=bool(object_names),
+        object_names=object_names,
+        selected_only=False,
+        label=label,
+        **helper_args,
+    )
+    if not helper_result.get("ok"):
+        helper_result["manifest"] = manifest
+        helper_result["map_files"] = maps
+        return helper_result
+    transaction = live_preview.current_transaction() or live_preview.begin(label, context)
+    assigned_object = (helper_result.get("assigned_objects") or [""])[0]
+    imported_images = [item.get("image") for item in helper_result.get("maps") or [] if item.get("image")]
     transaction["applied_steps"].append(
         {
             "type": "import_external_asset",
             "label": label,
             "provider": manifest.get("provider"),
             "asset_id": manifest.get("asset_id"),
-            "material": material.name,
+            "material": helper_result["material"],
             "assigned_object": assigned_object,
+            "maps": [item.get("map_type") for item in helper_result.get("maps") or []],
         }
     )
     live_preview.redraw(context)
     live_preview._mark_pending(context, label)
     manifest["import_status"] = "imported"
-    manifest["imported_materials"] = [material.name]
+    manifest["imported_materials"] = [helper_result["material"]]
     manifest["imported_images"] = imported_images
+    manifest["imported_texture_maps"] = helper_result.get("maps") or []
+    manifest["ignored_texture_maps"] = sorted(ignored_maps)
     manifest["assigned_object"] = assigned_object
     manifest["transaction_id"] = transaction["id"]
     _write_manifest(manifest["cache_dir"], manifest)
     return {
         "ok": True,
         "message": f"Created texture material from {manifest.get('asset_id')}",
-        "material": material.name,
+        "material": helper_result["material"],
         "assigned_object": assigned_object,
         "images": imported_images,
+        "texture_maps": helper_result.get("maps") or [],
+        "ignored_texture_maps": sorted(ignored_maps),
         "manifest": manifest,
         "transaction_id": transaction["id"],
     }

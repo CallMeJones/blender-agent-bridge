@@ -269,7 +269,7 @@ Official Blender Lab parity helpers are exposed as direct tools:
 
 External asset helpers are provider-neutral bridge tools. They do not add provider API keys to Blender preferences; Sketchfab download/import takes a per-call `api_token` or reads a Sketchfab-specific token from `SKETCHFAB_API_TOKEN` or `BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN` in the MCP server environment.
 
-For real MCP clients, the normal route is discovery, `start_external_asset_download`, `get_external_asset_job_status` until completion, `start_external_asset_import_job` for scene import, then `get_external_asset_import_job_status` until completion. Direct provider download/import tools remain available as synchronous fallback/debug paths, but clients should not choose them for ordinary asset-import requests.
+For real MCP clients, the normal route is discovery, `start_external_asset_download`, `get_external_asset_job_status` until completion, `start_external_asset_import_job` for scene import, then `get_external_asset_import_job_status` until completion. Poly Haven texture imports use the same bounded image/PBR material wiring as `create_image_texture_material`, so cached base-color, roughness, metallic, normal, alpha, and emission maps become preview-safe Principled materials instead of custom node scripts. Direct provider download/import tools remain available as synchronous fallback/debug paths, but clients should not choose them for ordinary asset-import requests.
 
 - `list_poly_haven_categories` lists Poly Haven category slugs for HDRIs, textures, and models.
 - `search_poly_haven_assets` searches Poly Haven's CC0 catalog and returns source/file API URLs.

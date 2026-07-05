@@ -250,6 +250,8 @@ def main():
         assert bpy.context.scene.claude_blender.pending_preview is True, hdri
         assert live_preview.revert(bpy.context)["ok"] is True
 
+        existing_texture_material = bpy.data.materials.new("Poly Haven oak_floor")
+        existing_texture_nodes = [node.name for node in existing_texture_material.node_tree.nodes]
         texture = _execute(
             bpy.context,
             "import_poly_haven_asset",
@@ -264,6 +266,16 @@ def main():
         )
         assert texture["ok"] is True, texture
         assert cube.material_slots and cube.material_slots[0].material.name == texture["material"], texture
+        assert texture["material"] != existing_texture_material.name, texture
+        assert texture["material"].startswith(f"{existing_texture_material.name}."), texture
+        assert bpy.data.materials.get(existing_texture_material.name) == existing_texture_material, texture
+        assert [node.name for node in existing_texture_material.node_tree.nodes] == existing_texture_nodes, texture
+        assert {item["map_type"] for item in texture["texture_maps"]} == {"base_color", "normal"}, texture
+        texture_material = bpy.data.materials[texture["material"]]
+        texture_node_types = {node.type for node in texture_material.node_tree.nodes}
+        assert "TEX_IMAGE" in texture_node_types, texture_node_types
+        assert "NORMAL_MAP" in texture_node_types, texture_node_types
+        assert texture["manifest"]["imported_texture_maps"] == texture["texture_maps"], texture
         assert live_preview.revert(bpy.context)["ok"] is True
 
         model = _execute(
