@@ -765,6 +765,8 @@ def _create_cylinder_between(context, name, start, end, radius, material=None, *
 
 
 def _parent_objects_to_root(context, root, objects):
+    if getattr(context, "view_layer", None) is not None:
+        context.view_layer.update()
     for obj in objects:
         if obj == root:
             continue
@@ -837,6 +839,8 @@ def _create_area_light(context, name, location, *, energy, size, color, target=N
     data.color = (float(color[0]), float(color[1]), float(color[2]))
     obj = bpy.data.objects.new(name=name, object_data=data)
     obj.location = _coerce_vector(location, (0.0, 0.0, 0.0))
+    if hasattr(obj, "visible_camera"):
+        obj.visible_camera = False
     context.scene.collection.objects.link(obj)
     live_preview._record_created_id("object", obj.name)
     live_preview._record_created_id("light", data.name)
@@ -7523,28 +7527,100 @@ def create_procedural_object_kit(
             remember(_create_cube_object(context, f"{prefix} Pipe Clamp {index + 1:02d}", (x, origin[1], origin[2] + height * 0.02), (radius * 0.06, radius * 0.2, height * 0.045), accent))
 
     else:
+        panel_children = []
+
+        def panel_part(obj, show_name=False):
+            panel_children.append(obj)
+            obj.show_name = bool(show_name)
+            return obj
+
         panel_width = radius * 1.6
         panel_height = height * 0.82
         panel_depth = max(0.05, radius * 0.08)
         face_y = origin[1] - panel_depth * 0.65
-        panel = remember(
-            _create_cube_object(
+        root = remember(
+            _create_empty_target(
                 context,
-                f"{prefix} Control Panel Body",
-                (origin[0], origin[1], origin[2] + panel_height * 0.45),
-                (panel_width, panel_depth, panel_height),
-                primary,
+                f"{prefix} Root",
+                (origin[0], origin[1], origin[2] + panel_height * 0.48),
+                display_size=radius * 0.18,
             )
         )
-        panel.show_name = True
-        remember(
-            _create_cube_object(
-                context,
-                f"{prefix} Display Screen",
-                (origin[0] - panel_width * 0.18, face_y, origin[2] + panel_height * 0.68),
-                (panel_width * 0.42, panel_depth * 0.28, panel_height * 0.16),
-                accent,
+        root.show_name = True
+        body_material = _material_for_color(f"{prefix} Enclosure Slate", (0.34, 0.39, 0.42, 1.0))
+        screen_material = _material_for_color(f"{prefix} Screen Blue", (0.04, 0.2, 0.68, 1.0))
+        dark_material = _material_for_color(f"{prefix} Dark Faceplate", (0.07, 0.08, 0.09, 1.0))
+        red_material = _material_for_color(f"{prefix} Emergency Red", (0.88, 0.04, 0.03, 1.0))
+        green_material = _material_for_color(f"{prefix} Indicator Green", (0.02, 0.72, 0.24, 1.0))
+        yellow_material = _material_for_color(f"{prefix} Indicator Amber", (1.0, 0.7, 0.08, 1.0))
+        white_material = _material_for_color(f"{prefix} Label White", (0.88, 0.9, 0.86, 1.0))
+
+        panel = panel_part(
+            remember(
+                _create_cube_object(
+                    context,
+                    f"{prefix} Control Panel Enclosure",
+                    (origin[0], origin[1], origin[2] + panel_height * 0.45),
+                    (panel_width, panel_depth, panel_height),
+                    body_material,
+                )
+            ),
+            show_name=True,
+        )
+        panel_part(
+            remember(
+                _create_cube_object(
+                    context,
+                    f"{prefix} Recessed Faceplate",
+                    (origin[0], face_y - panel_depth * 0.02, origin[2] + panel_height * 0.46),
+                    (panel_width * 0.88, panel_depth * 0.16, panel_height * 0.82),
+                    dark_material,
+                )
+            ),
+            show_name=True,
+        )
+        panel_part(
+            remember(
+                _create_cube_object(
+                    context,
+                    f"{prefix} Status Display Screen",
+                    (origin[0] - panel_width * 0.2, face_y - panel_depth * 0.24, origin[2] + panel_height * 0.68),
+                    (panel_width * 0.36, panel_depth * 0.24, panel_height * 0.14),
+                    screen_material,
+                )
+            ),
+            show_name=True,
+        )
+        for index, material in enumerate((green_material, yellow_material, red_material), start=1):
+            panel_part(
+                remember(
+                    _create_cylinder_object(
+                        context,
+                        f"{prefix} Status Indicator {index:02d}",
+                        (origin[0] + panel_width * (0.08 + index * 0.08), face_y - panel_depth * 0.3, origin[2] + panel_height * 0.7),
+                        radius * 0.035,
+                        panel_depth * 0.28,
+                        material,
+                        vertices=24,
+                        rotation=_axis_rotation("Y"),
+                    )
+                ),
+                show_name=index == 1,
             )
+        panel_part(
+            remember(
+                _create_cylinder_object(
+                    context,
+                    f"{prefix} Emergency Stop Button",
+                    (origin[0] + panel_width * 0.27, face_y - panel_depth * 0.34, origin[2] + panel_height * 0.52),
+                    radius * 0.09,
+                    panel_depth * 0.35,
+                    red_material,
+                    vertices=40,
+                    rotation=_axis_rotation("Y"),
+                )
+            ),
+            show_name=True,
         )
         knob_count = max(3, min(18, count))
         columns = max(2, min(6, int(math.ceil(math.sqrt(knob_count)))))
@@ -7552,34 +7628,101 @@ def create_procedural_object_kit(
         for index in range(knob_count):
             col = index % columns
             row = index // columns
-            x = origin[0] + (col - (columns - 1) / 2.0) * (panel_width * 0.16)
-            z = origin[2] + panel_height * (0.42 - row * 0.16 / max(1, rows - 1))
-            control_material = accent if index % 3 == 0 else primary
-            knob = remember(
-                _create_cylinder_object(
-                    context,
-                    f"{prefix} Control Knob {index + 1:02d}",
-                    (x, face_y - panel_depth * 0.12, z),
-                    radius * 0.045,
-                    panel_depth * 0.55,
-                    control_material,
-                    vertices=24,
-                    rotation=_axis_rotation("Y"),
+            x = origin[0] + (col - (columns - 1) / 2.0) * (panel_width * 0.14)
+            z = origin[2] + panel_height * (0.43 - row * 0.15 / max(1, rows - 1))
+            control_material = accent if index % 3 == 0 else white_material
+            knob = panel_part(
+                remember(
+                    _create_cylinder_object(
+                        context,
+                        f"{prefix} Rotary Control Knob {index + 1:02d}",
+                        (x, face_y - panel_depth * 0.3, z),
+                        radius * 0.043,
+                        panel_depth * 0.32,
+                        control_material,
+                        vertices=24,
+                        rotation=_axis_rotation("Y"),
+                    )
                 )
             )
             knob.show_name = index == 0
+        for index in range(4):
+            x = origin[0] - panel_width * 0.3 + index * panel_width * 0.13
+            toggle = panel_part(
+                remember(
+                    _create_cylinder_between(
+                        context,
+                        f"{prefix} Toggle Switch {index + 1:02d}",
+                        (x, face_y - panel_depth * 0.3, origin[2] + panel_height * 0.23),
+                        (x + panel_width * 0.03, face_y - panel_depth * 0.43, origin[2] + panel_height * 0.31),
+                        radius * 0.013,
+                        white_material,
+                        vertices=16,
+                    )
+                )
+            )
+            toggle.show_name = index == 0
         for index in range(3):
             z = origin[2] + panel_height * (0.18 + index * 0.09)
-            slot = remember(
-                _create_cube_object(
-                    context,
-                    f"{prefix} Slider Slot {index + 1:02d}",
-                    (origin[0] + panel_width * 0.24, face_y - panel_depth * 0.08, z),
-                    (panel_width * 0.32, panel_depth * 0.18, panel_height * 0.025),
-                    accent if index == 1 else primary,
+            slot = panel_part(
+                remember(
+                    _create_cube_object(
+                        context,
+                        f"{prefix} Slider Track {index + 1:02d}",
+                        (origin[0] + panel_width * 0.23, face_y - panel_depth * 0.24, z),
+                        (panel_width * 0.28, panel_depth * 0.12, panel_height * 0.018),
+                        white_material,
+                    )
                 )
             )
             slot.show_name = index == 0
+            panel_part(
+                remember(
+                    _create_cube_object(
+                        context,
+                        f"{prefix} Slider Handle {index + 1:02d}",
+                        (origin[0] + panel_width * (0.13 + index * 0.05), face_y - panel_depth * 0.34, z),
+                        (panel_width * 0.035, panel_depth * 0.18, panel_height * 0.04),
+                        accent,
+                    )
+                )
+            )
+        for index in range(8):
+            x = origin[0] + (index - 3.5) * panel_width * 0.09
+            panel_part(
+                remember(
+                    _create_cube_object(
+                        context,
+                        f"{prefix} Terminal Strip Port {index + 1:02d}",
+                        (x, face_y - panel_depth * 0.24, origin[2] + panel_height * 0.08),
+                        (panel_width * 0.045, panel_depth * 0.12, panel_height * 0.035),
+                        accent if index % 2 else white_material,
+                    )
+                )
+            )
+        remember(
+            _create_area_light(
+                context,
+                f"{prefix} Inspection Key",
+                (origin[0] - radius * 0.45, face_y - radius * 1.1, origin[2] + panel_height * 0.9),
+                energy=420.0,
+                size=radius * 0.85,
+                color=(1.0, 0.94, 0.84),
+                target=root,
+            )
+        )
+        remember(
+            _create_area_light(
+                context,
+                f"{prefix} Screen Fill",
+                (origin[0] + radius * 0.75, face_y - radius * 0.8, origin[2] + panel_height * 0.55),
+                energy=120.0,
+                size=radius * 0.75,
+                color=(0.64, 0.78, 1.0),
+                target=root,
+            )
+        )
+        _parent_objects_to_root(context, root, panel_children)
 
     transaction["applied_steps"].append(
         {

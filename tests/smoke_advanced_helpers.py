@@ -1316,15 +1316,55 @@ def main():
             {
                 "template": "control_panel",
                 "name_prefix": "Agent Bridge Control Panel Kit",
-                "location": [0.0, 3.0, 0.0],
+                "location": [12.0, 8.0, 0.0],
                 "count": 6,
                 "radius": 1.1,
                 "height": 1.5,
             },
         )
         assert control_panel["template"] == "control_panel", control_panel
-        assert any("Display Screen" in name for name in control_panel["objects"]), control_panel
-        assert any("Control Knob" in name for name in control_panel["objects"]), control_panel
+        for term in (
+            "Root",
+            "Control Panel Enclosure",
+            "Recessed Faceplate",
+            "Status Display Screen",
+            "Status Indicator",
+            "Emergency Stop Button",
+            "Rotary Control Knob",
+            "Toggle Switch",
+            "Slider Track",
+            "Terminal Strip Port",
+        ):
+            assert any(term in name for name in control_panel["objects"]), (term, control_panel)
+        for name in control_panel["objects"]:
+            if "Terminal Strip Port" in name:
+                assert max(bpy.data.objects[name].dimensions) < 0.2, (name, bpy.data.objects[name].dimensions[:])
+        control_panel_root = next(name for name in control_panel["objects"] if name.endswith(" Root"))
+        control_panel_quality = _execute(
+            context,
+            "inspect_modeling_quality",
+            {"object_names": [control_panel_root], "selected_only": False, "include_children": True, "require_materials": True},
+        )
+        assert control_panel_quality["passed"] is True, control_panel_quality
+        control_panel_render = _execute(
+            context,
+            "capture_object_inspection_renders",
+            {
+                "object_names": [control_panel_root],
+                "views": ["front", "front_below"],
+                "resolution_x": 320,
+                "resolution_y": 240,
+                "distance_factor": 4.0,
+                "note": "Control-panel kit visual exit evidence",
+            },
+        )["inspection_render"]
+        assert control_panel_render["available"] is True, control_panel_render
+        assert len(control_panel_render["images"]) == 2, control_panel_render
+        for image in control_panel_render["images"]:
+            assert image["available"] is True, image
+            assert image["width"] == 320 and image["height"] == 240, image
+            assert image["size_bytes"] > 128, image
+            assert os.path.isfile(image["path"]), image
 
         modular_panel = _execute(
             context,
