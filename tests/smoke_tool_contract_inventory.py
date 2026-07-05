@@ -36,6 +36,7 @@ def main():
     assert "object_family" in object_design_contract["input_schema"]["properties"], object_design_contract
     kit_templates = bridge_protocol.normalized_tool_contract("create_procedural_object_kit")["input_schema"]["properties"]["template"]["enum"]
     assert "desk_lamp" in kit_templates, kit_templates
+    assert "coffee_machine" in kit_templates, kit_templates
     kit_props = bridge_protocol.normalized_tool_contract("create_procedural_object_kit")["input_schema"]["properties"]
     assert {"style", "variant", "detail_level", "features"}.issubset(kit_props), kit_props
     assert "architect" in kit_props["style"]["enum"], kit_props["style"]

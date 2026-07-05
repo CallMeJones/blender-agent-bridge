@@ -69,6 +69,7 @@ PROCEDURAL_OBJECT_KIT_TEMPLATES = {
     "mechanical_joint",
     "mechanical_assembly",
     "control_panel",
+    "coffee_machine",
     "studio_prop_set",
     "mechanical_part",
     "modular_wall_panel",
@@ -4475,6 +4476,8 @@ def _infer_object_kit_template(prompt):
     text = str(prompt or "").lower()
     if any(term in text for term in ("lamp", "desk light", "task light", "architect light", "clamp light")):
         return "desk_lamp"
+    if any(term in text for term in ("coffee machine", "espresso machine", "coffee maker", "espresso maker")):
+        return "coffee_machine"
     if any(term in text for term in ("mechanical assembly", "actuator", "exploded assembly", "bracket assembly")):
         return "mechanical_assembly"
     if any(term in text for term in ("product display", "product rig", "display rig", "presentation rig", "turntable plinth")):
@@ -4658,7 +4661,9 @@ def _infer_object_design_template(prompt, family):
     if family == "electronics":
         return "control_panel"
     if family == "appliance":
-        return "control_panel" if any(term in text for term in ("display", "screen", "button", "coffee", "espresso", "vending")) else "product_stack"
+        if any(term in text for term in ("coffee", "espresso")):
+            return "coffee_machine"
+        return "control_panel" if any(term in text for term in ("display", "screen", "button", "vending")) else "product_stack"
     if family == "architecture":
         return "pipe_run" if any(term in text for term in ("pipe", "conduit")) else "modular_wall_panel"
     if family == "mechanical":
@@ -6878,6 +6883,464 @@ def create_procedural_object_kit(
             )
         _parent_objects_to_root(context, root, lamp_children)
         base.show_name = True
+
+    elif template == "coffee_machine":
+        coffee_children = []
+
+        def coffee_part(obj, show_name=False):
+            coffee_children.append(obj)
+            obj.show_name = bool(show_name)
+            return obj
+
+        machine_width = radius * 1.18
+        machine_depth = radius * 0.82
+        machine_height = height * 0.76
+        face_y = origin[1] - machine_depth * 0.5
+        root = remember(
+            _create_empty_target(
+                context,
+                f"{prefix} Root",
+                (origin[0], origin[1], origin[2] + machine_height * 0.55),
+                display_size=radius * 0.2,
+            )
+        )
+        root.show_name = True
+        shell = _material_for_color(f"{prefix} Polished Chrome Shell", (0.88, 0.89, 0.86, 1.0))
+        chrome = _material_for_color(f"{prefix} Chrome", (0.72, 0.74, 0.75, 1.0))
+        mirror = _material_for_color(f"{prefix} Mirrored Front", (0.76, 0.78, 0.76, 1.0))
+        wood = _material_for_color(f"{prefix} Walnut Wood", (0.28, 0.13, 0.055, 1.0))
+        dark = _material_for_color(f"{prefix} Dark Rubber", (0.035, 0.035, 0.04, 1.0))
+        red = _material_for_color(f"{prefix} Red Logo", (0.85, 0.05, 0.035, 1.0))
+        screen = _material_for_color(f"{prefix} Blue Screen", (0.04, 0.34, 0.82, 1.0))
+        gauge_face = _material_for_color(f"{prefix} Gauge Face", (0.94, 0.92, 0.88, 1.0))
+        glass = _material_for_color(f"{prefix} Water Reservoir Glass", (0.45, 0.72, 0.92, 0.62))
+
+        def tune_principled(material, *, metallic=0.0, roughness=0.35):
+            principled = _ensure_principled_material(material)
+            _set_socket_value(principled.inputs.get("Metallic"), float(metallic))
+            _set_socket_value(principled.inputs.get("Roughness"), float(roughness))
+
+        tune_principled(shell, metallic=0.0, roughness=0.22)
+        tune_principled(mirror, metallic=0.0, roughness=0.18)
+        tune_principled(chrome, metallic=0.25, roughness=0.2)
+        tune_principled(wood, metallic=0.0, roughness=0.48)
+
+        housing = coffee_part(
+            remember(
+                _create_cube_object(
+                    context,
+                    f"{prefix} Chrome Rectangular Body",
+                    (origin[0], origin[1] + machine_depth * 0.04, origin[2] + machine_height * 0.56),
+                    (machine_width * 0.9, machine_depth * 0.76, machine_height * 0.9),
+                    shell,
+                )
+            ),
+            show_name=True,
+        )
+        coffee_part(
+            remember(
+                _create_cube_object(
+                    context,
+                    f"{prefix} Top Shell Cap",
+                    (origin[0], origin[1] - machine_depth * 0.02, origin[2] + machine_height * 1.03),
+                    (machine_width * 0.92, machine_depth * 0.82, machine_height * 0.075),
+                    shell,
+                )
+            )
+        )
+        coffee_part(
+            remember(
+                _create_cube_object(
+                    context,
+                    f"{prefix} Base Plinth",
+                    (origin[0], face_y - machine_depth * 0.02, origin[2] + machine_height * 0.1),
+                    (machine_width * 0.96, machine_depth * 0.38, machine_height * 0.11),
+                    shell,
+                )
+            )
+        )
+        coffee_part(
+            remember(
+                _create_cube_object(
+                    context,
+                    f"{prefix} Mirrored Front Panel",
+                    (origin[0], face_y - machine_depth * 0.035, origin[2] + machine_height * 0.56),
+                    (machine_width * 0.78, machine_depth * 0.035, machine_height * 0.66),
+                    mirror,
+                )
+            ),
+            show_name=True,
+        )
+        for side, sx in (("Left", -1.0), ("Right", 1.0)):
+            coffee_part(
+                remember(
+                    _create_cube_object(
+                        context,
+                        f"{prefix} {side} Front Shell Column",
+                        (origin[0] + sx * machine_width * 0.44, face_y - machine_depth * 0.02, origin[2] + machine_height * 0.52),
+                        (machine_width * 0.045, machine_depth * 0.08, machine_height * 0.7),
+                        shell,
+                    )
+                )
+            )
+        coffee_part(
+            remember(
+                _create_cube_object(
+                    context,
+                    f"{prefix} Dispensing Bay Backplate",
+                    (origin[0], face_y - machine_depth * 0.06, origin[2] + machine_height * 0.45),
+                    (machine_width * 0.38, machine_depth * 0.04, machine_height * 0.36),
+                    dark,
+                )
+            ),
+            show_name=True,
+        )
+        for side, sx in (("Left", -1.0), ("Right", 1.0)):
+            coffee_part(
+                remember(
+                    _create_cube_object(
+                        context,
+                        f"{prefix} {side} Mirror Trim",
+                        (origin[0] + sx * machine_width * 0.405, face_y - machine_depth * 0.07, origin[2] + machine_height * 0.56),
+                        (machine_width * 0.018, machine_depth * 0.025, machine_height * 0.64),
+                        dark,
+                    )
+                )
+            )
+        coffee_part(
+            remember(
+                _create_cube_object(
+                    context,
+                    f"{prefix} Red Logo Badge",
+                    (origin[0] - machine_width * 0.24, face_y - machine_depth * 0.155, origin[2] + machine_height * 0.31),
+                    (machine_width * 0.16, machine_depth * 0.018, machine_height * 0.045),
+                    red,
+                )
+            ),
+            show_name=True,
+        )
+        coffee_part(
+            remember(
+                _create_cube_object(
+                    context,
+                    f"{prefix} Top Cup Warmer Tray",
+                    (origin[0], origin[1] - machine_depth * 0.04, origin[2] + machine_height * 1.095),
+                    (machine_width * 0.82, machine_depth * 0.72, machine_height * 0.018),
+                    chrome,
+                )
+            ),
+            show_name=True,
+        )
+        for index in range(12):
+            y = origin[1] - machine_depth * 0.36 + index * (machine_depth * 0.062)
+            coffee_part(
+                remember(
+                    _create_cube_object(
+                        context,
+                        f"{prefix} Top Cup Warmer Grate Bar {index + 1:02d}",
+                        (origin[0], y, origin[2] + machine_height * 1.1),
+                        (machine_width * 0.76, machine_depth * 0.006, machine_height * 0.012),
+                        chrome,
+                    )
+                )
+            )
+        for side, sx in (("Left", -0.34), ("Right", 0.34)):
+            coffee_part(
+                remember(
+                    _create_cylinder_object(
+                    context,
+                    f"{prefix} {side} Walnut Steam Knob",
+                    (origin[0] + sx * machine_width * 0.42, face_y - machine_depth * 0.22, origin[2] + machine_height * 0.78),
+                    radius * 0.085,
+                    machine_depth * 0.12,
+                    wood,
+                        vertices=32,
+                        rotation=_axis_rotation("Y"),
+                    )
+                ),
+                show_name=True,
+            )
+            coffee_part(
+                remember(
+                    _create_cylinder_object(
+                    context,
+                    f"{prefix} {side} Knob Chrome Cap",
+                    (origin[0] + sx * machine_width * 0.42, face_y - machine_depth * 0.3, origin[2] + machine_height * 0.78),
+                    radius * 0.032,
+                    machine_depth * 0.035,
+                    chrome,
+                        vertices=24,
+                        rotation=_axis_rotation("Y"),
+                    )
+                )
+            )
+        for gauge_name, x_factor, z_factor, gauge_radius in (
+            ("Upper Pressure Gauge", 0.07, 0.64, 0.068),
+            ("Lower Pump Gauge", 0.22, 0.36, 0.062),
+            ("Round Display Badge", -0.25, 0.34, 0.058),
+        ):
+            coffee_part(
+                remember(
+                    _create_cylinder_object(
+                        context,
+                        f"{prefix} {gauge_name} Chrome Rim",
+                        (origin[0] + machine_width * x_factor, face_y - machine_depth * 0.135, origin[2] + machine_height * z_factor),
+                        radius * gauge_radius,
+                        machine_depth * 0.055,
+                        chrome,
+                        vertices=40,
+                        rotation=_axis_rotation("Y"),
+                    )
+                ),
+                show_name="Pressure Gauge" in gauge_name,
+            )
+            coffee_part(
+                remember(
+                    _create_cylinder_object(
+                        context,
+                        f"{prefix} {gauge_name} Face",
+                        (origin[0] + machine_width * x_factor, face_y - machine_depth * 0.17, origin[2] + machine_height * z_factor),
+                        radius * gauge_radius * 0.78,
+                        machine_depth * 0.018,
+                        gauge_face if "Display" not in gauge_name else screen,
+                        vertices=40,
+                        rotation=_axis_rotation("Y"),
+                    )
+                )
+            )
+            coffee_part(
+                remember(
+                    _create_curve_line(
+                        context,
+                        f"{prefix} {gauge_name} Needle",
+                        [
+                            (origin[0] + machine_width * x_factor, face_y - machine_depth * 0.265, origin[2] + machine_height * z_factor),
+                            (origin[0] + machine_width * (x_factor + 0.035), face_y - machine_depth * 0.175, origin[2] + machine_height * (z_factor + 0.025)),
+                        ],
+                        radius * 0.004,
+                        dark,
+                    )
+                )
+            )
+        coffee_part(
+            remember(
+                _create_cylinder_object(
+                    context,
+                    f"{prefix} Left Top Reservoir Cap",
+                    (origin[0] - machine_width * 0.25, origin[1] + machine_depth * 0.24, origin[2] + machine_height * 1.16),
+                    radius * 0.045,
+                    machine_height * 0.022,
+                    dark,
+                    vertices=32,
+                )
+            ),
+            show_name=True,
+        )
+        coffee_part(
+            remember(
+                _create_cylinder_object(
+                    context,
+                    f"{prefix} Right Top Reservoir Cap",
+                    (origin[0] + machine_width * 0.25, origin[1] + machine_depth * 0.24, origin[2] + machine_height * 1.16),
+                    radius * 0.045,
+                    machine_height * 0.022,
+                    dark,
+                    vertices=32,
+                )
+            )
+        )
+        coffee_part(
+            remember(
+                _create_cylinder_object(
+                    context,
+                    f"{prefix} Center Top Pressure Pin",
+                    (origin[0], origin[1] + machine_depth * 0.24, origin[2] + machine_height * 1.19),
+                    radius * 0.014,
+                    machine_height * 0.16,
+                    chrome,
+                    vertices=16,
+                )
+            )
+        )
+        coffee_part(
+            remember(
+                _create_cube_object(
+                    context,
+                    f"{prefix} Rear Water Reservoir",
+                    (origin[0] - machine_width * 0.48, origin[1] + machine_depth * 0.1, origin[2] + machine_height * 0.55),
+                    (machine_width * 0.1, machine_depth * 0.68, machine_height * 0.78),
+                    glass,
+                )
+            )
+        )
+        for index in range(3):
+            x = origin[0] + machine_width * (0.15 + (index - 1) * 0.08)
+            z = origin[2] + machine_height * 0.53
+            button = coffee_part(
+                remember(
+                    _create_cylinder_object(
+                        context,
+                        f"{prefix} Control Button {index + 1:02d}",
+                        (x, face_y - machine_depth * 0.145, z),
+                        radius * 0.035,
+                        machine_depth * 0.16,
+                        accent if index % 2 == 0 else chrome,
+                        vertices=24,
+                        rotation=_axis_rotation("Y"),
+                    )
+                )
+            )
+            button.show_name = index == 0
+        brew_head = coffee_part(
+            remember(
+                _create_cylinder_object(
+                    context,
+                    f"{prefix} Brew Head",
+                    (origin[0], face_y - machine_depth * 0.12, origin[2] + machine_height * 0.56),
+                    radius * 0.11,
+                    machine_depth * 0.2,
+                    chrome,
+                    vertices=48,
+                    rotation=_axis_rotation("Y"),
+                )
+            ),
+            show_name=True,
+        )
+        coffee_part(
+            remember(
+                _create_cylinder_object(
+                    context,
+                    f"{prefix} Portafilter Basket",
+                    (origin[0] + machine_width * 0.08, face_y - machine_depth * 0.18, origin[2] + machine_height * 0.5),
+                    radius * 0.11,
+                    machine_depth * 0.13,
+                    chrome,
+                    vertices=40,
+                    rotation=_axis_rotation("Y"),
+                )
+            ),
+            show_name=True,
+        )
+        coffee_part(
+            remember(
+                _create_cylinder_between(
+                    context,
+                    f"{prefix} Walnut Portafilter Handle",
+                    (origin[0] + machine_width * 0.13, face_y - machine_depth * 0.24, origin[2] + machine_height * 0.5),
+                    (origin[0] + machine_width * 0.5, face_y - machine_depth * 0.31, origin[2] + machine_height * 0.5),
+                    radius * 0.035,
+                    wood,
+                    vertices=24,
+                )
+            ),
+            show_name=True,
+        )
+        for side, sx in (("Left", -0.055), ("Right", 0.055)):
+            coffee_part(
+                remember(
+                    _create_cylinder_object(
+                        context,
+                        f"{prefix} {side} Twin Nozzle",
+                        (origin[0] + machine_width * sx, face_y - machine_depth * 0.18, origin[2] + machine_height * 0.4),
+                        radius * 0.016,
+                        machine_height * 0.17,
+                        chrome,
+                        vertices=16,
+                    )
+                )
+            )
+        coffee_part(
+            remember(
+                _create_cube_object(
+                    context,
+                    f"{prefix} Drip Tray",
+                    (origin[0], face_y - machine_depth * 0.08, origin[2] + machine_height * 0.22),
+                    (machine_width * 0.82, machine_depth * 0.34, machine_height * 0.055),
+                    chrome,
+                )
+            ),
+            show_name=True,
+        )
+        for index in range(12):
+            x = origin[0] + (index - 5.5) * machine_width * 0.055
+            coffee_part(
+                remember(
+                    _create_cube_object(
+                        context,
+                        f"{prefix} Drip Tray Grate Bar {index + 1:02d}",
+                        (x, face_y - machine_depth * 0.21, origin[2] + machine_height * 0.265),
+                        (machine_width * 0.012, machine_depth * 0.25, machine_height * 0.014),
+                        dark,
+                    )
+                )
+            )
+        for foot_name, sx, sy in (
+            ("Front Left", -0.38, -0.36),
+            ("Front Right", 0.38, -0.36),
+            ("Rear Left", -0.38, 0.28),
+            ("Rear Right", 0.38, 0.28),
+        ):
+            coffee_part(
+                remember(
+                    _create_cylinder_object(
+                        context,
+                        f"{prefix} {foot_name} Walnut Foot",
+                        (origin[0] + machine_width * sx, origin[1] + machine_depth * sy, origin[2] - machine_height * 0.02),
+                        radius * 0.055,
+                        machine_height * 0.1,
+                        wood,
+                        vertices=24,
+                    )
+                ),
+                show_name=foot_name == "Front Left",
+            )
+        left_wand_start = Vector((origin[0] - machine_width * 0.43, face_y - machine_depth * 0.03, origin[2] + machine_height * 0.67))
+        left_wand_mid = Vector((origin[0] - machine_width * 0.56, face_y - machine_depth * 0.16, origin[2] + machine_height * 0.51))
+        left_wand_end = Vector((origin[0] - machine_width * 0.5, face_y - machine_depth * 0.24, origin[2] + machine_height * 0.3))
+        coffee_part(remember(_create_curve_line(context, f"{prefix} Left Hot Water Wand", [left_wand_start, left_wand_mid, left_wand_end], radius * 0.014, chrome)), show_name=True)
+        wand_start = Vector((origin[0] + machine_width * 0.43, face_y - machine_depth * 0.03, origin[2] + machine_height * 0.67))
+        wand_mid = Vector((origin[0] + machine_width * 0.56, face_y - machine_depth * 0.16, origin[2] + machine_height * 0.51))
+        wand_end = Vector((origin[0] + machine_width * 0.5, face_y - machine_depth * 0.24, origin[2] + machine_height * 0.3))
+        coffee_part(remember(_create_curve_line(context, f"{prefix} Right Steam Wand", [wand_start, wand_mid, wand_end], radius * 0.014, chrome)), show_name=True)
+        pipe_points = [
+            (
+                (origin[0] - machine_width * 0.42, origin[1] + machine_depth * 0.36, origin[2] + machine_height * 0.88),
+                (origin[0] - machine_width * 0.55, origin[1] + machine_depth * 0.2, origin[2] + machine_height * 0.65),
+                (origin[0] - machine_width * 0.44, face_y - machine_depth * 0.02, origin[2] + machine_height * 0.44),
+            ),
+            (
+                (origin[0] + machine_width * 0.43, origin[1] + machine_depth * 0.34, origin[2] + machine_height * 0.86),
+                (origin[0] + machine_width * 0.56, origin[1] + machine_depth * 0.18, origin[2] + machine_height * 0.62),
+                (origin[0] + machine_width * 0.44, face_y - machine_depth * 0.03, origin[2] + machine_height * 0.44),
+            ),
+        ]
+        for index, points in enumerate(pipe_points, start=1):
+            coffee_part(remember(_create_curve_line(context, f"{prefix} Chrome Pipe {index:02d}", points, radius * 0.012, chrome)))
+        remember(
+            _create_area_light(
+                context,
+                f"{prefix} Inspection Key",
+                (origin[0] - radius * 0.9, origin[1] - radius * 1.2, origin[2] + height * 1.1),
+                energy=450.0,
+                size=radius * 0.9,
+                color=(1.0, 0.93, 0.82),
+                target=root,
+            )
+        )
+        remember(
+            _create_area_light(
+                context,
+                f"{prefix} Screen Fill",
+                (origin[0] + radius * 0.9, origin[1] - radius * 0.8, origin[2] + height * 0.65),
+                energy=160.0,
+                size=radius * 0.8,
+                color=(0.62, 0.78, 1.0),
+                target=root,
+            )
+        )
+        _parent_objects_to_root(context, root, coffee_children)
+        housing.show_name = True
+        brew_head.show_name = True
 
     elif template == "mechanical_joint":
         arm_count = max(3, min(16, count))

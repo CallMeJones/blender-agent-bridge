@@ -367,6 +367,101 @@ def _run_desk_lamp_design_grammar_test(context):
     return {"kit": kit, "root": root_name, "quality": quality, "inspection_render": render}
 
 
+def _run_coffee_machine_kit_exit_test(context):
+    kit = _execute(
+        context,
+        "create_procedural_object_kit",
+        {
+            "template": "coffee_machine",
+            "name_prefix": "Agent Bridge Coffee Machine Kit",
+            "location": [21.0, -6.0, 0.0],
+            "count": 7,
+            "radius": 1.25,
+            "height": 1.8,
+            "style": "industrial",
+            "primary_color": [0.13, 0.14, 0.15, 1.0],
+            "accent_color": [0.82, 0.48, 0.2, 1.0],
+        },
+    )
+    assert kit["template"] == "coffee_machine", kit
+    expected_terms = (
+        "Root",
+        "Chrome Rectangular Body",
+        "Top Shell Cap",
+        "Base Plinth",
+        "Mirrored Front Panel",
+        "Front Shell Column",
+        "Dispensing Bay Backplate",
+        "Mirror Trim",
+        "Red Logo Badge",
+        "Top Cup Warmer Tray",
+        "Top Cup Warmer Grate Bar",
+        "Top Reservoir Cap",
+        "Center Top Pressure Pin",
+        "Rear Water Reservoir",
+        "Walnut Steam Knob",
+        "Pressure Gauge",
+        "Round Display Badge",
+        "Control Button 01",
+        "Brew Head",
+        "Portafilter Basket",
+        "Walnut Portafilter Handle",
+        "Twin Nozzle",
+        "Drip Tray",
+        "Drip Tray Grate Bar",
+        "Walnut Foot",
+        "Left Hot Water Wand",
+        "Right Steam Wand",
+        "Chrome Pipe",
+    )
+    for term in expected_terms:
+        assert any(term in name for name in kit["objects"]), (term, kit)
+    forbidden_terms = (
+        "Rear Frame Spine",
+        "Frame Rail",
+        "Right Side Control Fascia",
+        "Right Side Status Screen",
+        "Right Side Brew Head",
+        "Right Side Demo Cup",
+        "Demo Cup",
+        "Coffee Surface",
+    )
+    for term in forbidden_terms:
+        assert not any(term in name for name in kit["objects"]), (term, kit)
+    root_name = next(name for name in kit["objects"] if name.endswith(" Root"))
+    mesh_names = [name for name in kit["objects"] if bpy.data.objects[name].type == "MESH"]
+    assert len(mesh_names) >= 18, kit
+    quality = _execute(
+        context,
+        "inspect_modeling_quality",
+        {"object_names": [root_name], "selected_only": False, "include_children": True, "require_materials": True},
+    )
+    assert quality["passed"] is True, quality
+    assert quality["object_count"] >= 18, quality
+    assert quality["issue_count"] == 0, quality
+    render_result = _execute(
+        context,
+        "capture_object_inspection_renders",
+        {
+            "object_names": [root_name],
+            "views": ["front", "side"],
+            "resolution_x": 320,
+            "resolution_y": 240,
+            "distance_factor": 3.0,
+            "note": "Coffee-machine kit visual exit evidence",
+        },
+    )
+    render = render_result["inspection_render"]
+    assert render["available"] is True, render
+    assert len(render["images"]) == 2, render
+    for image in render["images"]:
+        assert image["available"] is True, image
+        assert image["width"] == 320 and image["height"] == 240, image
+        assert image["size_bytes"] > 128, image
+        assert os.path.isfile(image["path"]), image
+    return {"kit": kit, "root": root_name, "quality": quality, "inspection_render": render}
+
+
 def main():
     claude_blender.register()
     context = bpy.context
@@ -620,14 +715,14 @@ def main():
         )
         assert object_design["object_family"] == "appliance", object_design
         assert object_design["strategy"] == "procedural_kit_plus_generic_modeling", object_design
-        assert object_design["template"] == "control_panel", object_design
+        assert object_design["template"] == "coffee_machine", object_design
         assert "pipe_run" in object_design["companion_templates"], object_design
         assert "display_screen" in object_design["features"], object_design
         assert "pipe_run" in object_design["features"], object_design
         assert "create_procedural_object_kit" in object_design["recommended_tools"], object_design
         assert "edit_mesh" in object_design["recommended_tools"], object_design
         assert "create_shader_material" in object_design["recommended_tools"], object_design
-        assert object_design["kit_arguments"]["template"] == "control_panel", object_design
+        assert object_design["kit_arguments"]["template"] == "coffee_machine", object_design
         assert object_design["fallback_reason"] == "", object_design
         planned_names = [call["name"] for call in object_design["planned_tool_calls"]]
         deferred_by_name = {call["name"]: call for call in object_design["deferred_tool_calls"]}
@@ -1148,6 +1243,8 @@ def main():
         assert desk_lamp["quality"]["passed"] is True, desk_lamp
         architect_lamp = _run_desk_lamp_design_grammar_test(context)
         assert architect_lamp["quality"]["passed"] is True, architect_lamp
+        coffee_machine = _run_coffee_machine_kit_exit_test(context)
+        assert coffee_machine["quality"]["passed"] is True, coffee_machine
 
         object_kit = _execute(
             context,

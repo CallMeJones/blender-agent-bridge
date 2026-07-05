@@ -1743,6 +1743,7 @@ TOOL_CONTRACTS = {
                         "mechanical_joint",
                         "mechanical_assembly",
                         "control_panel",
+                        "coffee_machine",
                         "studio_prop_set",
                         "mechanical_part",
                         "modular_wall_panel",
