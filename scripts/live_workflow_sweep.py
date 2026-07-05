@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -199,6 +200,36 @@ def main() -> int:
         if "create_directed_animation_shot" not in executed:
             raise RuntimeError(f"directed shot helper was not executed: {animation}")
         _print_step("animation workflow", animation, ",".join(executed))
+
+        lookdev_review = _post_tool(
+            base_url,
+            "create_lookdev_turntable_review",
+            {
+                "target_name": target,
+                "frame_start": 1,
+                "frame_end": 36,
+                "quality_preset": "preview",
+                "samples": 8,
+                "views": ["front"],
+                "resolution_x": 160,
+                "resolution_y": 120,
+                "distance_factor": 2.6,
+            },
+            timeout=max(args.timeout, 60.0),
+        )
+        _require_ok("create_lookdev_turntable_review", lookdev_review)
+        validation = lookdev_review.get("artifact_validation") or {}
+        if not validation.get("ok") or int(validation.get("available_image_count") or 0) < 1:
+            raise RuntimeError(f"look-dev artifact validation failed: {lookdev_review}")
+        first_image = (validation.get("images") or [{}])[0]
+        image_path = str(first_image.get("path") or "")
+        if image_path and not os.path.isfile(image_path):
+            raise RuntimeError(f"look-dev artifact path does not exist: {image_path}")
+        _print_step(
+            "look-dev turntable review",
+            lookdev_review,
+            f"{validation.get('available_image_count', 0)} artifact(s)",
+        )
 
         if not args.skip_viewport:
             viewport = _post_tool(base_url, "capture_viewport", {"max_bytes": 900000}, timeout=args.timeout)

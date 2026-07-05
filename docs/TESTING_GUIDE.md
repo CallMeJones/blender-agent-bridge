@@ -880,7 +880,7 @@ At the end of a comprehensive run, report these gaps explicitly if they were not
 
 Known current gaps to prioritize:
 
-- `scripts\live_workflow_sweep.py` now covers the major bridge workflow families, but there is still no exhaustive automated happy-path sweep that invokes every dispatcher tool through the live bridge.
+- `scripts\live_workflow_sweep.py` now covers the major bridge workflow families, including a live look-dev turntable review artifact, but there is still no exhaustive automated happy-path sweep that invokes every dispatcher tool through the live bridge.
 - Background tests verify many visual paths, but true viewport/playblast capture still needs a foreground Blender window for full confidence.
 - Real-client MCP routing is still necessary after tool-surface changes because clients can cache old tools and configs.
 
