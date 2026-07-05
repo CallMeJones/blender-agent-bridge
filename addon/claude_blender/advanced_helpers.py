@@ -197,6 +197,20 @@ SHADER_MATERIAL_PRESETS = {
         "alpha": 1.0,
         "emission_strength": 0.0,
     },
+    "brushed_chrome": {
+        "base_color": (0.82, 0.84, 0.82, 1.0),
+        "metallic": 1.0,
+        "roughness": 0.16,
+        "alpha": 1.0,
+        "emission_strength": 0.0,
+    },
+    "painted_enamel": {
+        "base_color": (0.86, 0.08, 0.04, 1.0),
+        "metallic": 0.0,
+        "roughness": 0.24,
+        "alpha": 1.0,
+        "emission_strength": 0.0,
+    },
     "matte_plastic": {
         "base_color": (0.08, 0.18, 0.42, 1.0),
         "metallic": 0.0,
@@ -249,6 +263,9 @@ SHADER_MATERIAL_PRESETS = {
         "emission_strength": 2.4,
     },
 }
+
+UV_UNWRAP_METHODS = {"smart_project", "cube_project", "planar_project"}
+UV_PROJECTION_AXES = {"X", "Y", "Z"}
 
 GEOMETRY_NODE_TEMPLATES = {"passthrough", "transform", "join_geometry", "set_position", "subdivide_mesh"}
 
@@ -1004,6 +1021,191 @@ def create_shader_material(
         "material": material.name,
         "preset": preset_key,
         "assigned_objects": assigned,
+        "transaction_id": transaction["id"],
+    }
+
+
+def _normalize_uv_unwrap_method(method):
+    key = str(method or "smart_project").strip().lower().replace("-", "_").replace(" ", "_")
+    if key in {"smart", "smart_uv", "smart_uv_project"}:
+        key = "smart_project"
+    if key in {"cube", "box", "box_project"}:
+        key = "cube_project"
+    if key in {"planar", "plane"}:
+        key = "planar_project"
+    return key if key in UV_UNWRAP_METHODS else "smart_project"
+
+
+def _normalize_uv_projection_axis(axis):
+    key = str(axis or "Z").strip().upper()
+    return key if key in UV_PROJECTION_AXES else "Z"
+
+
+def _mesh_axis_bounds(mesh):
+    if mesh is None or not mesh.vertices:
+        return [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)]
+    bounds = []
+    for axis_index in range(3):
+        values = [float(vertex.co[axis_index]) for vertex in mesh.vertices]
+        low = min(values)
+        high = max(values)
+        if abs(high - low) <= 0.000001:
+            high = low + 1.0
+        bounds.append((low, high))
+    return bounds
+
+
+def _project_uv_value(co, axis_index, bounds, margin):
+    low, high = bounds[axis_index]
+    value = (float(co[axis_index]) - low) / max(0.000001, high - low)
+    value = max(0.0, min(1.0, value))
+    return margin + value * (1.0 - margin * 2.0)
+
+
+def _uv_projection_axes(method, normal, projection_axis):
+    if method == "planar_project":
+        axis_index = {"X": 0, "Y": 1, "Z": 2}.get(projection_axis, 2)
+        if axis_index == 0:
+            return (1, 2), (0, 1)
+        if axis_index == 1:
+            return (0, 2), (1, 1)
+        return (0, 1), (2, 1)
+
+    normal_values = [abs(float(normal[index])) for index in range(3)]
+    dominant = max(range(3), key=lambda index: normal_values[index])
+    sign = 1 if float(normal[dominant]) >= 0.0 else -1
+    if dominant == 0:
+        return (1, 2), (0, sign)
+    if dominant == 1:
+        return (0, 2), (1, sign)
+    return (0, 1), (2, sign)
+
+
+def _uv_atlas_cell(axis_key):
+    cells = {
+        (2, 1): (0, 0),
+        (2, -1): (1, 0),
+        (0, 1): (2, 0),
+        (0, -1): (0, 1),
+        (1, 1): (1, 1),
+        (1, -1): (2, 1),
+    }
+    return cells.get(axis_key, (0, 0))
+
+
+def _write_uv_projection(mesh, uv_layer, *, method, projection_axis, margin, pack_islands):
+    bounds = _mesh_axis_bounds(mesh)
+    loop_count = 0
+    polygons = 0
+    margin = max(0.0, min(0.25, float(margin)))
+    for polygon in mesh.polygons:
+        axes, axis_key = _uv_projection_axes(method, polygon.normal, projection_axis)
+        cell_x, cell_y = _uv_atlas_cell(axis_key)
+        use_atlas = bool(pack_islands and method in {"smart_project", "cube_project"})
+        for loop_index in polygon.loop_indices:
+            vertex = mesh.vertices[mesh.loops[loop_index].vertex_index]
+            u = _project_uv_value(vertex.co, axes[0], bounds, margin)
+            v = _project_uv_value(vertex.co, axes[1], bounds, margin)
+            if use_atlas:
+                cell_width = 1.0 / 3.0
+                cell_height = 1.0 / 2.0
+                u = cell_x * cell_width + u * cell_width
+                v = cell_y * cell_height + v * cell_height
+            uv_layer.data[loop_index].uv = (u, v)
+            loop_count += 1
+        polygons += 1
+    return {"polygons": polygons, "loops": loop_count}
+
+
+def uv_unwrap(
+    context,
+    *,
+    object_names=None,
+    selected_only=True,
+    method="smart_project",
+    uv_map_name="Agent Bridge UVs",
+    replace_existing=False,
+    margin=0.02,
+    pack_islands=True,
+    projection_axis="Z",
+    label="UV unwrap",
+):
+    method = _normalize_uv_unwrap_method(method)
+    projection_axis = _normalize_uv_projection_axis(projection_axis)
+    objects, missing = _resolve_edit_objects(context, object_names=object_names, selected_only=selected_only)
+    meshes = [obj for obj in objects if obj.type == "MESH"]
+    if not meshes:
+        return {"ok": False, "message": "No mesh objects found for uv_unwrap", "missing_object_names": missing}
+
+    transaction = live_preview.begin(label, context)
+    changed = []
+    skipped = []
+    for obj in meshes:
+        blockers = _mesh_edit_blockers(obj, allow_shape_keys=True)
+        if blockers:
+            skipped.append({"object": obj.name, "reasons": blockers})
+            continue
+        mesh = obj.data
+        live_preview._record_mesh_data_snapshot(obj)
+        layer_name = str(uv_map_name or "Agent Bridge UVs").strip() or "Agent Bridge UVs"
+        existing = mesh.uv_layers.get(layer_name)
+        replaced = False
+        if existing is not None and replace_existing:
+            mesh.uv_layers.remove(existing)
+            existing = None
+            replaced = True
+        uv_layer = existing or mesh.uv_layers.new(name=layer_name, do_init=False)
+        mesh.uv_layers.active = uv_layer
+        counts = _write_uv_projection(
+            mesh,
+            uv_layer,
+            method=method,
+            projection_axis=projection_axis,
+            margin=margin,
+            pack_islands=pack_islands,
+        )
+        mesh.update()
+        changed.append(
+            {
+                "object": obj.name,
+                "mesh": mesh.name,
+                "uv_map": uv_layer.name,
+                "method": method,
+                "projection_axis": projection_axis,
+                "replaced_existing": replaced,
+                **counts,
+            }
+        )
+
+    if not changed:
+        return {
+            "ok": False,
+            "message": "No mesh UVs were changed",
+            "objects": changed,
+            "skipped": skipped,
+            "missing_object_names": missing,
+            "transaction_id": transaction["id"],
+        }
+    transaction["applied_steps"].append(
+        {
+            "type": "uv_unwrap",
+            "label": label,
+            "objects": changed,
+            "method": method,
+            "uv_map_name": str(uv_map_name or "Agent Bridge UVs"),
+            "pack_islands": bool(pack_islands),
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Created or updated UV maps on {len(changed)} mesh object(s)",
+        "objects": changed,
+        "skipped": skipped,
+        "method": method,
+        "uv_map_name": str(uv_map_name or "Agent Bridge UVs"),
+        "missing_object_names": missing,
         "transaction_id": transaction["id"],
     }
 
@@ -4559,7 +4761,9 @@ OBJECT_DESIGN_FEATURE_TERMS = {
 
 OBJECT_DESIGN_MATERIAL_TERMS = {
     "brass": ("brushed_metal", "Warm brass/gold accent material"),
-    "chrome": ("brushed_metal", "Chrome or polished metal material"),
+    "chrome": ("brushed_chrome", "Chrome or polished metal material"),
+    "enamel": ("painted_enamel", "Glossy painted enamel material"),
+    "painted": ("painted_enamel", "Glossy painted enamel material"),
     "steel": ("brushed_metal", "Steel material"),
     "metal": ("brushed_metal", "Generic metal material"),
     "glass": ("clear_glass", "Transparent glass material"),

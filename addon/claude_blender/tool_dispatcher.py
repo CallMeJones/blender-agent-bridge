@@ -1825,6 +1825,21 @@ def create_shader_material(context, args):
     )
 
 
+def uv_unwrap(context, args):
+    return advanced_helpers.uv_unwrap(
+        context,
+        object_names=args.get("object_names") if isinstance(args.get("object_names"), list) else None,
+        selected_only=bool(args.get("selected_only", True)),
+        method=str(args.get("method") or "smart_project"),
+        uv_map_name=str(args.get("uv_map_name") or "Agent Bridge UVs"),
+        replace_existing=bool(args.get("replace_existing", False)),
+        margin=float(args.get("margin", 0.02)),
+        pack_islands=bool(args.get("pack_islands", True)),
+        projection_axis=str(args.get("projection_axis") or "Z"),
+        label=args.get("label", "UV unwrap"),
+    )
+
+
 def add_geometry_nodes_modifier(context, args):
     return advanced_helpers.add_geometry_nodes_modifier(
         context,
@@ -3732,6 +3747,8 @@ def _preview_expected_changes(step, label, kind, target_text):
         return f"{label}: applies {step.get('operation', 'edit_mesh')} to {target_text} with mesh-data rollback."
     if kind == "curve_to_mesh":
         return f"{label}: creates {_format_count('mesh object', len(step.get('created') or []))} from curve/text sources."
+    if kind == "uv_unwrap":
+        return f"{label}: writes {step.get('method', 'smart_project')} UVs on {target_text} with mesh-data rollback."
     if kind == "boolean_op":
         cutters = ", ".join(step.get("cutters") or []) or "selected cutters"
         return (
@@ -3858,6 +3875,7 @@ TOOL_FUNCTIONS = {
     "link_selected_to_collection": link_selected_to_collection,
     "add_modifier_to_selected": add_modifier_to_selected,
     "create_shader_material": create_shader_material,
+    "uv_unwrap": uv_unwrap,
     "add_geometry_nodes_modifier": add_geometry_nodes_modifier,
     "create_shape_key": create_shape_key,
     "animate_shape_key": animate_shape_key,

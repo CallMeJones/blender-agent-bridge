@@ -1420,7 +1420,9 @@ def _score_tool_match(tool, query):
                 score += 1200
             elif name == "screw_model" and any(term in normalized_query for term in ("screw", "thread", "spring", "spiral", "helix")):
                 score += 1200
-            elif name == "create_shader_material" and any(term in normalized_query for term in ("material", "chrome", "brass", "metal", "glass", "rubber", "wood", "screen", "display", "color", "colour")):
+            elif name == "create_shader_material" and any(term in normalized_query for term in ("material", "chrome", "brass", "metal", "glass", "rubber", "wood", "screen", "display", "enamel", "paint", "color", "colour")):
+                score += 850
+            elif name == "uv_unwrap" and any(term in normalized_query for term in ("uv", "unwrap", "texture coordinate", "texture-ready", "texture ready")):
                 score += 850
             elif name in {"get_geometry_nodes_details", "add_geometry_nodes_modifier", "add_bevel_and_subsurf"}:
                 score += 500

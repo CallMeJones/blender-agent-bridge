@@ -1057,6 +1057,21 @@ def main():
                 },
             )
             _assert_advanced_search_routes_first(offline_advanced_search, query=query, expected=expected)
+        offline_uv_search = _send(
+            offline_proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 98,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_blender_tools",
+                    "arguments": {"query": "UV unwrap the selected mesh so it is texture ready before applying material presets.", "limit": 10},
+                },
+            },
+        )
+        offline_uv_names = [tool["name"] for tool in offline_uv_search["result"]["structuredContent"]["tools"]]
+        assert offline_uv_names[0] == "uv_unwrap", offline_uv_search
+        assert "create_shader_material" in offline_uv_names, offline_uv_search
         for query in (
             "Search Poly Haven for a sunset HDRI and import it into the world.",
             "Import a downloadable Sketchfab Falcon 9 model if auth is present.",

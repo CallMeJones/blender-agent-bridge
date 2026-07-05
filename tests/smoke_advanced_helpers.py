@@ -28,6 +28,7 @@ ADVANCED_TOOLS = {
     "edit_mesh",
     "inspect_modeling_quality",
     "curve_to_mesh",
+    "uv_unwrap",
     "boolean_op",
     "mirror_model",
     "symmetrize_model",
@@ -205,6 +206,18 @@ def _run_phase1_modeling_helper_prop_test(context):
     _execute(context, "assign_emission_material_to_selected", {"name": "Agent Bridge Phase1 Warm Bulb", "color": [1.0, 0.74, 0.38, 1.0], "strength": 2.4})
 
     lamp_object_names = [obj.name for obj in (base, pole, arm, shade, bulb, thread_seed)]
+    uv_result = _execute(
+        context,
+        "uv_unwrap",
+        {
+            "object_names": lamp_object_names,
+            "selected_only": False,
+            "method": "smart_project",
+            "uv_map_name": "Agent Bridge Phase2 Lookdev UVs",
+            "replace_existing": True,
+        },
+    )
+    assert len(uv_result["objects"]) == len(lamp_object_names), uv_result
     bpy.ops.object.select_all(action="DESELECT")
     root_result = _execute(
         context,
@@ -230,6 +243,7 @@ def _run_phase1_modeling_helper_prop_test(context):
         assert obj.name in bpy.data.objects
         assert obj.type == "MESH"
         assert obj.material_slots and obj.material_slots[0].material, obj.name
+        assert obj.data.uv_layers.get("Agent Bridge Phase2 Lookdev UVs"), obj.name
     assert shade.modifiers.get("Agent Bridge Phase1 Shade Thickness")
     assert thread_seed.modifiers.get("Agent Bridge Phase1 Thread Screw")
     return {
@@ -913,6 +927,28 @@ def main():
         glow_material = bpy.data.materials[glow["material"]]
         glow_principled = next(node for node in glow_material.node_tree.nodes if node.type == "BSDF_PRINCIPLED")
         assert round(float(glow_principled.inputs["Emission Strength"].default_value), 1) == 2.4, glow["material"]
+        chrome = _execute(
+            context,
+            "create_shader_material",
+            {
+                "name": "Agent Bridge Advanced Brushed Chrome Preset",
+                "preset": "brushed_chrome",
+            },
+        )
+        assert chrome["preset"] == "brushed_chrome", chrome
+        chrome_material = bpy.data.materials[chrome["material"]]
+        chrome_principled = next(node for node in chrome_material.node_tree.nodes if node.type == "BSDF_PRINCIPLED")
+        assert round(float(chrome_principled.inputs["Metallic"].default_value), 1) == 1.0, chrome["material"]
+        assert round(float(chrome_principled.inputs["Roughness"].default_value), 2) == 0.16, chrome["material"]
+        enamel = _execute(
+            context,
+            "create_shader_material",
+            {
+                "name": "Agent Bridge Advanced Painted Enamel Preset",
+                "preset": "painted_enamel",
+            },
+        )
+        assert enamel["preset"] == "painted_enamel", enamel
         bpy.ops.object.select_all(action="DESELECT")
         unassigned_material = _execute(
             context,
@@ -938,6 +974,26 @@ def main():
         shader_snapshot = live_preview.current_transaction()["before_state"][f"material:{existing_material.name}:shader"]
         assert "Principled BSDF" not in shader_snapshot["node_names"], shader_snapshot
         assert _material_topology(existing_material) != existing_topology
+
+        uv_result = _execute(
+            context,
+            "uv_unwrap",
+            {
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "method": "smart_project",
+                "uv_map_name": "Agent Bridge Advanced UVs",
+                "replace_existing": True,
+                "margin": 0.03,
+            },
+        )
+        assert uv_result["method"] == "smart_project", uv_result
+        assert uv_result["objects"][0]["uv_map"] == "Agent Bridge Advanced UVs", uv_result
+        assert "mesh_data_snapshot" in uv_result["preview_change_report"]["rollback_scopes"], uv_result
+        uv_layer = cube.data.uv_layers.get("Agent Bridge Advanced UVs")
+        assert uv_layer is not None, uv_result
+        uv_values = [component for item in uv_layer.data for component in item.uv]
+        assert uv_values and min(uv_values) >= 0.0 and max(uv_values) <= 1.0, uv_values
 
         geometry_nodes = _execute(
             context,

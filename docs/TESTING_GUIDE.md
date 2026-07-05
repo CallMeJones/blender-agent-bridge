@@ -403,6 +403,7 @@ Tools:
 assign_material_to_selected
 assign_emission_material_to_selected
 create_shader_material
+uv_unwrap
 add_geometry_nodes_modifier
 create_material_palette
 set_world_background
@@ -418,6 +419,7 @@ Owner tests:
 Required scenarios:
 
 - Existing material reuse, new material creation, alpha/emission inputs, object with no material slots, invalid color values.
+- UV unwrap creates a named UV layer with bounded coordinates and mesh-data rollback.
 - Geometry Nodes starter modifier creates bounded nodes and rollback restores node group/material/link topology.
 - Material palette swatches and optional assignment stay in preview rollback.
 

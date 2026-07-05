@@ -138,6 +138,7 @@ Expose external agents to narrow client tools rather than raw Python first:
 - `solidify_model`: adds non-destructive Solidify modifiers for shell/wall thickness.
 - `screw_model`: adds non-destructive Screw modifiers for rotational forms, spirals, springs, threads, and screw-depth modeling.
 - `create_shader_material`: creates or updates a Principled BSDF material and optionally assigns it to selected mesh objects.
+- `uv_unwrap`: creates or updates texture-ready UV maps on mesh objects with mesh-data rollback.
 - `add_geometry_nodes_modifier`: adds a valid passthrough Geometry Nodes modifier and starter node group.
 - `create_shape_key`: creates or updates a mesh shape key value.
 - `animate_shape_key`: keyframes a mesh shape key over a frame range.

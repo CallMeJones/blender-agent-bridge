@@ -308,6 +308,15 @@ def main():
         assert "create_shader_material" in appliance_names, appliance_meta
         assert "draft_script" not in appliance_names, appliance_meta
 
+        lookdev_tools, lookdev_meta = agent_tools.select_blender_tool_definitions(
+            "UV unwrap the selected mesh and make it texture ready with chrome and painted enamel material presets.",
+            bundle,
+        )
+        lookdev_names = _names(lookdev_tools)
+        assert "uv_unwrap" in lookdev_names, lookdev_meta
+        assert "create_shader_material" in lookdev_names, lookdev_meta
+        assert "draft_script" not in lookdev_names, lookdev_meta
+
         modeling_tools, modeling_meta = agent_tools.select_blender_tool_definitions(
             "Use a boolean cutter, mirror the model, symmetrize it on X, solidify the wall thickness, and add a screw thread.",
             bundle,
