@@ -1806,6 +1806,97 @@ def _node_has_outgoing_links(material, node):
     return any(link.from_node == node for link in material.node_tree.links)
 
 
+def _socket_identity(socket):
+    node = getattr(socket, "node", None)
+    return (getattr(node, "name", ""), getattr(socket, "identifier", getattr(socket, "name", "")))
+
+
+def _socket_reaches_socket(material, output_socket, target_socket, *, max_depth=8):
+    if material is None or material.node_tree is None or output_socket is None or target_socket is None:
+        return False
+    links = list(material.node_tree.links)
+    stack = [(output_socket, 0)]
+    seen = set()
+    while stack:
+        socket, depth = stack.pop()
+        key = _socket_identity(socket)
+        if key in seen:
+            continue
+        seen.add(key)
+        for link in links:
+            if link.from_socket != socket:
+                continue
+            if link.to_socket == target_socket:
+                return True
+            if depth >= max_depth:
+                continue
+            for next_output in getattr(link.to_node, "outputs", []) or []:
+                stack.append((next_output, depth + 1))
+    return False
+
+
+def _material_texture_target_socket(principled, map_type):
+    if principled is None:
+        return None
+    if map_type == "ambient_occlusion":
+        return principled.inputs.get("Base Color")
+    spec = IMAGE_TEXTURE_MAP_SPECS.get(map_type) or {}
+    socket_names = spec.get("socket_names")
+    if not socket_names:
+        return None
+    return _principled_socket(principled, socket_names)
+
+
+def _image_color_output(node):
+    if node is None:
+        return None
+    return node.outputs.get("Color") or (node.outputs[0] if node.outputs else None)
+
+
+def _shader_path_issue_for_texture(material, principled, node, map_type):
+    if map_type not in IMAGE_TEXTURE_MAP_SPECS:
+        return ""
+    spec = IMAGE_TEXTURE_MAP_SPECS.get(map_type) or {}
+    if spec.get("warn_only"):
+        return ""
+    target_socket = _material_texture_target_socket(principled, map_type)
+    if target_socket is None:
+        return ""
+    output = _image_color_output(node)
+    if not _socket_reaches_socket(material, output, target_socket):
+        return f"{node.name}: {map_type} map does not reach Principled {target_socket.name}"
+    return ""
+
+
+def _packed_channel_shader_path_issues(material, principled, node, map_type):
+    spec = IMAGE_TEXTURE_MAP_SPECS.get(map_type) or {}
+    packed_channels = spec.get("packed_channels") or {}
+    if not packed_channels:
+        return []
+    image_output = _image_color_output(node)
+    separate_nodes = []
+    for link in list(material.node_tree.links):
+        if link.from_socket == image_output and getattr(link.to_node, "type", "") == "SEPARATE_COLOR":
+            separate_nodes.append(link.to_node)
+    if not separate_nodes:
+        return [f"{node.name}: packed {map_type} map is not connected to a Separate Color node"]
+
+    issues = []
+    for packed_target, channel_name in packed_channels.items():
+        target_socket = _material_texture_target_socket(principled, packed_target)
+        if target_socket is None:
+            continue
+        channel_reaches_target = False
+        for separate_node in separate_nodes:
+            channel_output = _socket_by_name(separate_node.outputs, channel_name)
+            if _socket_reaches_socket(material, channel_output, target_socket):
+                channel_reaches_target = True
+                break
+        if not channel_reaches_target:
+            issues.append(f"{node.name}: packed {map_type} {channel_name} channel does not reach Principled {target_socket.name}")
+    return issues
+
+
 def _image_node_uv_map_name(node):
     vector_input = node.inputs.get("Vector") if node else None
     if vector_input is None:
@@ -1881,6 +1972,11 @@ def _material_setup_quality(context, material, *, assigned_objects=None, require
         file_report = _image_file_report(image)
         uv_map = _image_node_uv_map_name(node)
         linked = _node_has_outgoing_links(material, node)
+        shader_path_issues = _packed_channel_shader_path_issues(material, principled, node, map_type)
+        if not shader_path_issues:
+            shader_path_issue = _shader_path_issue_for_texture(material, principled, node, map_type)
+            if shader_path_issue:
+                shader_path_issues = [shader_path_issue]
         texture_report = {
             "node": node.name,
             "map_type": map_type,
@@ -1892,6 +1988,7 @@ def _material_setup_quality(context, material, *, assigned_objects=None, require
             "expected_colorspace": expected_colorspace,
             "uv_map": uv_map,
             "linked": linked,
+            "shader_path_ok": not shader_path_issues,
         }
         texture_reports.append(texture_report)
         if file_report["missing"]:
@@ -1902,6 +1999,7 @@ def _material_setup_quality(context, material, *, assigned_objects=None, require
             issues.append(f"{node.name}: {map_type} map uses {actual_colorspace} colorspace, expected {expected_colorspace}")
         if not linked:
             issues.append(f"{node.name}: image texture node is not linked to the shader graph")
+        issues.extend(shader_path_issues)
         if require_uv and not uv_map:
             issues.append(f"{node.name}: image texture node has no UV Map vector input")
         if expected_uv and uv_map and uv_map != expected_uv:

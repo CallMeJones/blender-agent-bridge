@@ -1163,6 +1163,26 @@ def main():
         )
         assert material_inspection["passed"] is True, material_inspection
         assert material_inspection["issue_count"] == 0, material_inspection
+        packed_channel_links = []
+        for link in list(material.node_tree.links):
+            if link.from_node.type == "SEPARATE_COLOR":
+                packed_channel_links.append((link.from_socket, link.to_socket))
+                material.node_tree.links.remove(link)
+        broken_packed_inspection = _execute(
+            context,
+            "inspect_material_setup",
+            {
+                "material_names": [image_material["material"]],
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "require_uv_maps": True,
+                "expected_uv_map_name": "Agent Bridge Advanced UVs",
+            },
+        )
+        assert broken_packed_inspection["passed"] is False, broken_packed_inspection
+        assert any("packed arm" in issue for issue in broken_packed_inspection["materials"][0]["issues"]), broken_packed_inspection
+        for from_socket, to_socket in packed_channel_links:
+            material.node_tree.links.new(from_socket, to_socket)
         arm_image_name = next(item["image"] for item in image_material["maps"] if item.get("source_map") == "arm")
         bpy.data.images[arm_image_name].colorspace_settings.name = "sRGB"
         for node in image_nodes:
