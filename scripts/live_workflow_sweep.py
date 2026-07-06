@@ -201,6 +201,30 @@ def main() -> int:
             raise RuntimeError(f"directed shot helper was not executed: {animation}")
         _print_step("animation workflow", animation, ",".join(executed))
 
+        render_outputs = _post_tool(
+            base_url,
+            "configure_render_outputs",
+            {
+                "enabled_passes": ["normal", "depth", "ambient_occlusion", "cryptomatte_object"],
+                "aovs": [
+                    {"name": "AgentBridgeLiveMask", "type": "COLOR"},
+                    {"name": "AgentBridgeLiveDepthHint", "type": "VALUE"},
+                ],
+                "clear_existing_aovs": True,
+                "pass_cryptomatte_depth": 4,
+                "pass_alpha_threshold": 0.2,
+            },
+            timeout=args.timeout,
+        )
+        _require_ok("configure_render_outputs", render_outputs)
+        applied_passes = render_outputs.get("applied_passes") or {}
+        if not applied_passes.get("use_pass_normal") or not applied_passes.get("use_pass_z"):
+            raise RuntimeError(f"render output pass configuration failed: {render_outputs}")
+        aov_names = {item.get("name") for item in render_outputs.get("aovs") or []}
+        if not {"AgentBridgeLiveMask", "AgentBridgeLiveDepthHint"}.issubset(aov_names):
+            raise RuntimeError(f"render output AOV configuration failed: {render_outputs}")
+        _print_step("render output passes/AOVs", render_outputs, ",".join(sorted(aov_names)))
+
         lookdev_review = _post_tool(
             base_url,
             "create_lookdev_turntable_review",

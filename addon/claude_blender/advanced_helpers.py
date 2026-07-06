@@ -287,6 +287,45 @@ RENDER_QUALITY_PRESETS = {
     "lookdev": {"resolution": (1280, 720), "samples": 96, "denoise": True},
     "final": {"resolution": (1920, 1080), "samples": 256, "denoise": True},
 }
+RENDER_PASS_ALIASES = {
+    "combined": "use_pass_combined",
+    "z": "use_pass_z",
+    "depth": "use_pass_z",
+    "mist": "use_pass_mist",
+    "normal": "use_pass_normal",
+    "position": "use_pass_position",
+    "vector": "use_pass_vector",
+    "uv": "use_pass_uv",
+    "object_index": "use_pass_object_index",
+    "material_index": "use_pass_material_index",
+    "diffuse_color": "use_pass_diffuse_color",
+    "diffuse_direct": "use_pass_diffuse_direct",
+    "diffuse_indirect": "use_pass_diffuse_indirect",
+    "glossy_color": "use_pass_glossy_color",
+    "glossy_direct": "use_pass_glossy_direct",
+    "glossy_indirect": "use_pass_glossy_indirect",
+    "transmission_color": "use_pass_transmission_color",
+    "transmission_direct": "use_pass_transmission_direct",
+    "transmission_indirect": "use_pass_transmission_indirect",
+    "subsurface_color": "use_pass_subsurface_color",
+    "subsurface_direct": "use_pass_subsurface_direct",
+    "subsurface_indirect": "use_pass_subsurface_indirect",
+    "emit": "use_pass_emit",
+    "emission": "use_pass_emit",
+    "environment": "use_pass_environment",
+    "shadow": "use_pass_shadow",
+    "ambient_occlusion": "use_pass_ambient_occlusion",
+    "ao": "use_pass_ambient_occlusion",
+    "cryptomatte_object": "use_pass_cryptomatte_object",
+    "crypto_object": "use_pass_cryptomatte_object",
+    "cryptomatte_material": "use_pass_cryptomatte_material",
+    "crypto_material": "use_pass_cryptomatte_material",
+    "cryptomatte_asset": "use_pass_cryptomatte_asset",
+    "crypto_asset": "use_pass_cryptomatte_asset",
+    "cryptomatte_accurate": "use_pass_cryptomatte_accurate",
+    "grease_pencil": "use_pass_grease_pencil",
+}
+AOV_TYPES = {"COLOR", "VALUE"}
 
 GEOMETRY_NODE_TEMPLATES = {"passthrough", "transform", "join_geometry", "set_position", "subdivide_mesh"}
 
@@ -488,6 +527,43 @@ def _record_scene_render(scene):
         "eevee_taa_samples": getattr(eevee, "taa_samples", None),
     }
     transaction["changed_data_blocks"].append(scene.name)
+
+
+def _view_layer_render_state(view_layer):
+    pass_flags = {}
+    rna = getattr(view_layer, "bl_rna", None)
+    if view_layer is not None and rna is not None:
+        for prop in rna.properties:
+            identifier = getattr(prop, "identifier", "")
+            if identifier.startswith("use_pass_") or identifier in {"pass_alpha_threshold", "pass_cryptomatte_depth"}:
+                try:
+                    value = getattr(view_layer, identifier)
+                except Exception:
+                    continue
+                if isinstance(value, bool):
+                    pass_flags[identifier] = bool(value)
+                elif isinstance(value, (int, float)):
+                    pass_flags[identifier] = value
+    aovs = []
+    for aov in list(getattr(view_layer, "aovs", []) or []):
+        aovs.append({"name": str(getattr(aov, "name", "")), "type": str(getattr(aov, "type", "COLOR"))})
+    return {"pass_flags": pass_flags, "aovs": aovs}
+
+
+def _record_view_layer_render_outputs(scene, view_layer):
+    transaction = live_preview.begin()
+    key = f"scene:{scene.name}:view_layer:{view_layer.name}:render_outputs"
+    if key in transaction["before_state"]:
+        return
+    state = _view_layer_render_state(view_layer)
+    transaction["before_state"][key] = {
+        "kind": "view_layer_render_outputs",
+        "scene_name": scene.name,
+        "view_layer_name": view_layer.name,
+        "pass_flags": state["pass_flags"],
+        "aovs": state["aovs"],
+    }
+    transaction["changed_data_blocks"].append(f"{scene.name}:{view_layer.name}")
 
 
 def _record_world_background(world):
@@ -4895,6 +4971,148 @@ def set_render_engine(
     )
 
 
+def _normalize_render_pass_name(name):
+    key = str(name or "").strip().lower().replace("-", "_").replace(" ", "_")
+    return RENDER_PASS_ALIASES.get(key, "")
+
+
+def _normalize_aov_spec(item):
+    if not isinstance(item, dict):
+        return None, "AOV entries must be objects with name and type"
+    name = str(item.get("name") or "").strip()
+    if not name:
+        return None, "AOV name is required"
+    if len(name) > 64:
+        return None, f"AOV name is too long: {name[:32]}..."
+    aov_type = str(item.get("type") or "COLOR").strip().upper()
+    if aov_type not in AOV_TYPES:
+        return None, f"Unsupported AOV type for {name}: {aov_type}. Use COLOR or VALUE."
+    return {"name": name, "type": aov_type}, ""
+
+
+def configure_render_outputs(
+    context,
+    *,
+    view_layer_name="",
+    enabled_passes=None,
+    disabled_passes=None,
+    aovs=None,
+    clear_existing_aovs=False,
+    pass_alpha_threshold=None,
+    pass_cryptomatte_depth=None,
+    label="Configure render outputs",
+):
+    scene = context.scene
+    view_layer = scene.view_layers.get(str(view_layer_name or "")) if view_layer_name else getattr(context, "view_layer", None)
+    if view_layer is None:
+        return {"ok": False, "message": f"View layer not found: {view_layer_name}" if view_layer_name else "No active view layer"}
+
+    enabled_passes = enabled_passes or []
+    disabled_passes = disabled_passes or []
+    aovs = aovs or []
+    requested_changes = bool(enabled_passes or disabled_passes or aovs or clear_existing_aovs)
+    if pass_alpha_threshold is not None or pass_cryptomatte_depth is not None:
+        requested_changes = True
+    if not requested_changes:
+        return {"ok": False, "message": "Provide at least one render pass, AOV, or pass setting to change"}
+
+    normalized_aovs = []
+    for item in aovs:
+        spec, error = _normalize_aov_spec(item)
+        if error:
+            return {"ok": False, "message": error}
+        normalized_aovs.append(spec)
+    aov_collection = getattr(view_layer, "aovs", None)
+    if normalized_aovs or clear_existing_aovs:
+        if aov_collection is None or not hasattr(aov_collection, "add"):
+            return {"ok": False, "message": "Shader AOVs are not available on this Blender version"}
+
+    pass_requests = [(name, True) for name in enabled_passes] + [(name, False) for name in disabled_passes]
+    valid_pass_requests = []
+    unsupported_passes = []
+    for pass_name, state in pass_requests:
+        attr = _normalize_render_pass_name(pass_name)
+        if not attr or not hasattr(view_layer, attr):
+            unsupported_passes.append(str(pass_name))
+            continue
+        valid_pass_requests.append((pass_name, attr, state))
+    has_non_pass_change = bool(normalized_aovs or clear_existing_aovs or pass_alpha_threshold is not None or pass_cryptomatte_depth is not None)
+    if pass_requests and not valid_pass_requests and not has_non_pass_change:
+        return {"ok": False, "message": f"Unsupported render pass name(s): {', '.join(unsupported_passes)}"}
+
+    warnings = []
+    applied_passes = {}
+    transaction = live_preview.begin(label)
+    _record_view_layer_render_outputs(scene, view_layer)
+
+    for pass_name, attr, state in valid_pass_requests:
+        try:
+            setattr(view_layer, attr, bool(state))
+            applied_passes[attr] = bool(getattr(view_layer, attr))
+        except Exception as exc:
+            warnings.append(f"Could not set render pass {pass_name}: {type(exc).__name__}: {exc}")
+
+    applied_settings = {}
+    if pass_alpha_threshold is not None:
+        if hasattr(view_layer, "pass_alpha_threshold"):
+            value = _clamped_float(pass_alpha_threshold, 0.5, 0.0, 1.0)
+            view_layer.pass_alpha_threshold = value
+            applied_settings["pass_alpha_threshold"] = float(view_layer.pass_alpha_threshold)
+        else:
+            warnings.append("Alpha threshold pass setting is not available on this Blender version")
+    if pass_cryptomatte_depth is not None:
+        if hasattr(view_layer, "pass_cryptomatte_depth"):
+            value = max(2, min(16, int(pass_cryptomatte_depth)))
+            view_layer.pass_cryptomatte_depth = value
+            applied_settings["pass_cryptomatte_depth"] = int(view_layer.pass_cryptomatte_depth)
+        else:
+            warnings.append("Cryptomatte depth pass setting is not available on this Blender version")
+
+    if unsupported_passes:
+        warnings.append(f"Unsupported render pass name(s): {', '.join(unsupported_passes)}")
+
+    applied_aovs = []
+    if normalized_aovs or clear_existing_aovs:
+        if clear_existing_aovs:
+            for existing in list(aov_collection):
+                aov_collection.remove(existing)
+        for spec in normalized_aovs:
+            aov = aov_collection.get(spec["name"]) if hasattr(aov_collection, "get") else None
+            if aov is None:
+                aov = aov_collection.add()
+                aov.name = spec["name"]
+            aov.type = spec["type"]
+            applied_aovs.append({"name": aov.name, "type": aov.type})
+
+    state = _view_layer_render_state(view_layer)
+    transaction["applied_steps"].append(
+        {
+            "type": "configure_render_outputs",
+            "label": label,
+            "scene": scene.name,
+            "view_layer": view_layer.name,
+            "enabled_passes": [str(name) for name in enabled_passes],
+            "disabled_passes": [str(name) for name in disabled_passes],
+            "applied_passes": applied_passes,
+            "applied_settings": applied_settings,
+            "aovs": applied_aovs,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": "Configured render outputs",
+        "view_layer": view_layer.name,
+        "applied_passes": applied_passes,
+        "applied_settings": applied_settings,
+        "aovs": state["aovs"],
+        "enabled_passes": sorted(name for name, enabled in state["pass_flags"].items() if enabled),
+        "warnings": warnings,
+        "transaction_id": transaction["id"],
+    }
+
+
 def set_camera_settings(
     context,
     *,
@@ -5241,11 +5459,12 @@ ADVANCED_WORKFLOW_DOMAINS = {
         "script_boundary": "Use the async asset job workflow first; custom provider/project lifecycle scripts require draft_privileged_script with declared paths, URLs, and actions.",
     },
     "compositor_render": {
-        "keywords": {"compositor", "compositing", "post", "post process", "transparent", "alpha", "render preset", "render pass", "mp4", "preview"},
+        "keywords": {"compositor", "compositing", "post", "post process", "transparent", "alpha", "render preset", "render pass", "render passes", "aov", "aovs", "cryptomatte", "normal pass", "depth pass", "mp4", "preview"},
         "tools": [
             "get_render_camera_compositor_details",
             "set_render_settings",
             "set_render_engine",
+            "configure_render_outputs",
             "set_camera_settings",
             "render_scene_thumbnail",
             "start_render_job",

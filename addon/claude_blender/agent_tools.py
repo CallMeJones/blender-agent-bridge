@@ -21,7 +21,7 @@ AGENT_GUIDANCE = (
     "When the user asks to change the scene, use safe helper tools first so Blender changes immediately. "
     "Use direct Blender data concepts: objects, collections, materials, cameras, lights, actions, keyframes. "
     "For broad multi-step scene, asset, animation, and evidence work, call plan_director_workflow first to get an ordered helper/evidence/preview plan without mutating the scene. For advanced 3D, 2D/storyboard, animation, simulation, compositor/render, asset-import, or script-heavy tasks, call plan_advanced_scene_workflow first when the helper path is not obvious. For object design prompts, call plan_object_design before choosing object kits, generic modeling helpers, asset import, or scripts. These planners return domain-specific helpers and script fallback boundaries. "
-    "For scene building and layout, prefer create_primitive, create_empty, duplicate_selected_objects, parent_selected_to_empty, align_selected_objects, distribute_selected_objects, set_object_visibility, set_object_display, assign_material_to_selected, assign_emission_material_to_selected, create_shader_material, create_image_texture_material, uv_unwrap, create_text_object, create_curve_path, create_collection, link_selected_to_collection, add_light, add_camera, add_modifier_to_selected, add_geometry_nodes_modifier, apply_procedural_array_stack, edit_mesh, inspect_modeling_quality, curve_to_mesh, boolean_op, mirror_model, symmetrize_model, solidify_model, screw_model, create_procedural_object_kit, add_track_to_constraint, add_copy_transform_constraint, create_basic_armature, add_particle_system_to_selected, add_cloth_simulation_to_selected, set_render_settings, set_render_engine, set_camera_settings, and set_world_background. create_shader_material includes bounded material presets; create_image_texture_material wires exact local image/PBR maps into a Principled material, including packed ARM/ORM channels, AO, bump, and UV map selection; uv_unwrap creates preview-safe UV coordinate maps with mesh-data rollback; set_render_engine/set_render_settings cover look-dev presets, samples, denoise, and color management; add_geometry_nodes_modifier includes passthrough, transform, join-geometry, set-position, and subdivide-mesh starter templates. "
+    "For scene building and layout, prefer create_primitive, create_empty, duplicate_selected_objects, parent_selected_to_empty, align_selected_objects, distribute_selected_objects, set_object_visibility, set_object_display, assign_material_to_selected, assign_emission_material_to_selected, create_shader_material, create_image_texture_material, uv_unwrap, create_text_object, create_curve_path, create_collection, link_selected_to_collection, add_light, add_camera, add_modifier_to_selected, add_geometry_nodes_modifier, apply_procedural_array_stack, edit_mesh, inspect_modeling_quality, curve_to_mesh, boolean_op, mirror_model, symmetrize_model, solidify_model, screw_model, create_procedural_object_kit, add_track_to_constraint, add_copy_transform_constraint, create_basic_armature, add_particle_system_to_selected, add_cloth_simulation_to_selected, set_render_settings, set_render_engine, configure_render_outputs, set_camera_settings, and set_world_background. create_shader_material includes bounded material presets; create_image_texture_material wires exact local image/PBR maps into a Principled material, including packed ARM/ORM channels, AO, bump, and UV map selection; uv_unwrap creates preview-safe UV coordinate maps with mesh-data rollback; set_render_engine/set_render_settings cover look-dev presets, samples, denoise, and color management; configure_render_outputs enables render passes and shader AOVs with preview rollback; add_geometry_nodes_modifier includes passthrough, transform, join-geometry, set-position, and subdivide-mesh starter templates. "
     "For 2D, storyboard, animatic, cutout, or motion-graphics work, inspect first with get_2d_animation_details, then prefer create_storyboard_panels, create_2d_cutout_layer, create_camera_dolly_animation, capture_animation_playblast, and render jobs before drafting custom Grease Pencil or SVG Python. "
     "For model refinement and production presentation, prefer shade_smooth_selected, add_bevel_and_subsurf, apply_procedural_array_stack, edit_mesh, inspect_modeling_quality, curve_to_mesh, boolean_op, mirror_model, symmetrize_model, solidify_model, screw_model, create_procedural_object_kit, create_wheel_assembly, add_panel_seams, add_window_materials, apply_vehicle_refinement_template, apply_product_refinement_template, apply_character_refinement_template, create_studio_product_stage, add_dimension_callouts, apply_lighting_preset, create_material_palette, create_product_turntable_setup, create_lookdev_turntable_review, prepare_imported_asset_presentation, and organize_scene_for_production when they fit the task. create_lookdev_turntable_review creates a bounded stage/turntable, applies look-dev render settings, captures inspection stills, and validates image artifacts before custom render Python; create_procedural_object_kit includes kitbash, radial/scatter/product, mechanical-joint, control-panel, coffee-machine, studio-prop, mechanical-part, modular-wall-panel, pipe-run, and desk-lamp templates for bounded prop generation before custom mesh scripts; plan_object_design maps open-ended object prompts onto these families and helper paths. "
     "For shape-key animation, prefer create_shape_key and animate_shape_key before drafting Python. "
@@ -2279,6 +2279,43 @@ def blender_tool_definitions():
             },
         },
         {
+            "name": "configure_render_outputs",
+            "description": "Enable or disable ViewLayer render passes and configure shader AOVs. Use this for render-pass, cryptomatte, depth/normal/AO, or custom AOV requests before custom compositor/render Python. Applies immediately with preview revert support.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "view_layer_name": {"type": "string"},
+                    "enabled_passes": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Pass aliases such as normal, depth/z, ambient_occlusion/ao, cryptomatte_object, diffuse_color, vector, uv, shadow, emit, and environment.",
+                    },
+                    "disabled_passes": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Pass aliases to turn off; unsupported names are reported as warnings.",
+                    },
+                    "aovs": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string", "minLength": 1, "maxLength": 64},
+                                "type": {"type": "string", "enum": ["COLOR", "VALUE"]},
+                            },
+                            "required": ["name"],
+                            "additionalProperties": False,
+                        },
+                    },
+                    "clear_existing_aovs": {"type": "boolean"},
+                    "pass_alpha_threshold": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                    "pass_cryptomatte_depth": {"type": "integer", "minimum": 2, "maximum": 16},
+                    "label": {"type": "string"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "set_camera_settings",
             "description": "Set camera lens, sensor width, and depth-of-field settings. Applies immediately with preview revert support.",
             "input_schema": {
@@ -4133,7 +4170,7 @@ _GROUP_KEYWORDS = {
     "basic_edit": {"make", "create", "add", "move", "scale", "rotate", "transform", "object", "primitive", "empty", "marker", "collection", "duplicate", "copy", "parent", "align", "distribute", "layout", "arrange", "hide", "unhide", "visibility", "visible", "display", "wireframe", "show name", "in front", "edit mesh", "extrude", "inset", "loop cut", "loop-cut", "knife", "proportional edit", "bridge", "dissolve", "merge", "curve to mesh", "convert curve", "uv", "unwrap", "uv unwrap", "uv map", "boolean", "cutter", "mirror", "symmetry", "symmetrize", "solidify", "screw", "mesh quality", "modeling quality"},
     "materials": {"material", "shader", "texture", "textures", "texture map", "texture maps", "image texture", "pbr", "albedo", "diffuse map", "normal map", "roughness map", "metallic map", "texture ready", "texture-ready", "texture coordinate", "uv", "unwrap", "uv unwrap", "uv map", "color", "colour", "red", "blue", "green", "metal", "metallic", "chrome", "glass", "emission", "glow", "window"},
     "animation": {"animate", "animation", "animation brief", "prompt contract", "success criteria", "timing chart", "key pose", "key poses", "hold", "breakdown", "keyframe", "timeline", "frame", "orbit", "dolly", "camera move", "crane", "truck", "bounce", "driver", "motion", "motion arc", "arc", "follow path", "path", "retime", "interpolation", "easing", "loop", "cycles", "turntable", "pulse", "reveal", "stagger", "playblast", "timing", "spacing", "blocking", "anticipation", "squash", "stretch", "settle", "follow-through", "principles", "center of mass", "support", "contact sliding", "simulation", "physics bake", "persistent bake", "directed shot", "shot template"},
-    "camera_render": {"camera", "render", "render job", "render output", "output resource", "quality check", "thumbnail", "still", "mp4", "video assembly", "assemble video", "validate render", "1080p", "4k", "frame sequence", "samples", "light", "lighting", "world", "background", "dof", "depth of field", "lens", "compositor", "compositing", "post process", "alpha", "transparent", "resolution", "intensity", "studio", "product stage", "presentation", "close-up", "closeup", "underside"},
+    "camera_render": {"camera", "render", "render job", "render output", "render pass", "render passes", "output resource", "quality check", "thumbnail", "still", "mp4", "video assembly", "assemble video", "validate render", "1080p", "4k", "frame sequence", "samples", "light", "lighting", "world", "background", "dof", "depth of field", "lens", "compositor", "compositing", "post process", "alpha", "transparent", "resolution", "intensity", "studio", "product stage", "presentation", "close-up", "closeup", "underside", "aov", "aovs", "shader aov", "cryptomatte", "normal pass", "depth pass", "z pass", "vector pass", "uv pass", "ambient occlusion pass"},
     "project_files": {"save", "save as", "save-as", "save copy", "autosave", "auto save", "open blend", "open file", "load blend", "new project", "create project", "blend file", ".blend", "project folder", "project directory", "checkpoint"},
     "deep_inspect": {"inspect", "analyze", "analyse", "summarize", "summary", "details", "world model", "what", "list", "screenshot", "viewport", "visual", "visual evidence", "evidence resource", "resource uri", "image", "capture", "playblast", "review", "diagnostic", "diagnostics", "quality", "mesh quality", "modeling quality", "validate model", "non-manifold", "loose geometry", "missing materials", "missing external", "linked library", "linked libraries", "blend file", "data-block", "datablock", "backup", "workspace", "layout json", "underside", "gear"},
     "external_assets": {"asset", "assets", "asset catalog", "asset library", "external asset", "external assets", "asset cache", "cache diagnostics", "poly haven", "polyhaven", "sketchfab", "hdri", "hdris", "environment map", "texture", "textures", "model library", "download model", "download asset", "import model", "import asset", "import hdri", "import texture", "sketchfab uid"},
@@ -4151,6 +4188,24 @@ _GROUP_KEYWORDS = {
     "particles": {"particle", "particles", "simulation", "sim", "physics", "bake", "persistent bake", "cache", "point cache", "spark", "dust", "cloth"},
     "geometry_nodes": {"geometry node", "geometry-node", "geometry nodes", "geometry-node network", "node network", "node group", "procedural array", "array stack", "radial array"},
     "preview_control": {"commit", "revert", "undo", "cancel preview", "accept preview"},
+}
+_RENDER_OUTPUT_KEYWORDS = {
+    "render pass",
+    "render passes",
+    "view layer pass",
+    "aov",
+    "aovs",
+    "shader aov",
+    "custom aov",
+    "cryptomatte",
+    "normal pass",
+    "depth pass",
+    "z pass",
+    "position pass",
+    "vector pass",
+    "uv pass",
+    "ambient occlusion pass",
+    "ao pass",
 }
 
 def _tool_map():
@@ -4205,6 +4260,11 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
                 selected.update(_TOOL_GROUPS[group])
                 matched_groups.append(group)
 
+    if _contains_keyword(text, _RENDER_OUTPUT_KEYWORDS):
+        selected.update({"configure_render_outputs", "set_render_engine", "set_render_settings", "get_render_camera_compositor_details"})
+        matched_groups.append("camera_render")
+        matched_groups.append("render_outputs")
+
     if helper_routing.should_include_draft_script(text, matched_groups):
         selected.update(_FALLBACK_TOOL_NAMES)
     if helper_routing.should_include_privileged_script(text, matched_groups):
@@ -4224,6 +4284,8 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
             continue
         if group in {"vehicle", "product", "character", "refinement", "camera_render", "rigging", "curves_text", "particles", "geometry_nodes", "external_assets", "advanced_workflow", "two_d_storyboard", "procedural_3d", "simulation_setup"}:
             protected.update(_TOOL_GROUPS.get(group, set()))
+    if _contains_keyword(text, _RENDER_OUTPUT_KEYWORDS):
+        protected.add("configure_render_outputs")
     if "animation" in matched_groups:
         protected.update(
             {
@@ -4454,6 +4516,7 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "create_material_palette",
     "create_product_turntable_setup",
     "create_lookdev_turntable_review",
+    "configure_render_outputs",
     "prepare_imported_asset_presentation",
     "organize_scene_for_production",
     "apply_vehicle_refinement_template",

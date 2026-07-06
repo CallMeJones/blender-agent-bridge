@@ -1032,6 +1032,10 @@ def main():
                 {"create_lookdev_turntable_review"},
             ),
             (
+                "Enable normal, depth, ambient occlusion, cryptomatte render passes and add a custom shader AOV.",
+                {"configure_render_outputs"},
+            ),
+            (
                 "Design a futuristic wall-mounted coffee machine with chrome pipes, a small display, buttons, and beveled body.",
                 {"plan_object_design", "create_procedural_object_kit", "create_shader_material"},
             ),
@@ -1531,6 +1535,27 @@ def main():
             lookdev_review_search,
             query="Create a lookdev turntable review with Cycles denoise, inspection stills, and artifact validation.",
             expected={"create_lookdev_turntable_review"},
+        )
+
+        render_outputs_search = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 102,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_blender_tools",
+                    "arguments": {
+                        "query": "Enable normal, depth, ambient occlusion, cryptomatte render passes and add a custom shader AOV.",
+                        "limit": 10,
+                    },
+                },
+            },
+        )
+        _assert_advanced_search_routes_first(
+            render_outputs_search,
+            query="Enable normal, depth, ambient occlusion, cryptomatte render passes and add a custom shader AOV.",
+            expected={"configure_render_outputs"},
         )
 
         catalog_search = _send(
@@ -2042,6 +2067,7 @@ def main():
         assert "create_procedural_object_kit" in advanced_prompt_text, advanced_prompt
         assert "create_directed_animation_shot" in advanced_prompt_text, advanced_prompt
         assert "create_lookdev_turntable_review" in advanced_prompt_text, advanced_prompt
+        assert "configure_render_outputs" in advanced_prompt_text, advanced_prompt
         assert "add_cloth_simulation_to_selected" in advanced_prompt_text, advanced_prompt
         asset_prompt = _send(
             proc,

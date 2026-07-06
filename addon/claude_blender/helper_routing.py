@@ -103,6 +103,25 @@ HELPER_FIRST_SCRIPT_GROUPS = {
 STRICT_HELPER_FIRST_SCRIPT_GROUPS = {
     "external_assets",
     "project_files",
+    "render_outputs",
+}
+PRIVILEGED_SCRIPT_FALLBACK_GROUPS = {
+    "external_assets",
+    "project_files",
+}
+RENDER_OUTPUT_SCRIPT_ESCALATION_TERMS = {
+    "custom node",
+    "custom nodes",
+    "custom node network",
+    "custom shader node",
+    "custom shader nodes",
+    "custom shader graph",
+    "custom material",
+    "custom compositor",
+    "compositor graph",
+    "procedural material",
+    "procedural shader",
+    "procedural geometry",
 }
 
 STRICT_HELPER_FIRST_SCRIPT_CODES = {
@@ -489,10 +508,19 @@ HELPER_FIRST_SCRIPT_RULES = (
             "color management",
             "set resolution",
             "frame range",
+            "render pass",
+            "render passes",
+            "aov",
+            "aovs",
+            "cryptomatte",
+            "normal pass",
+            "depth pass",
             "world background",
             "camera lens",
             "depth of field",
             "scene.render",
+            "view_layer.use_pass",
+            "view_layer.aovs",
             "scene.frame_start",
             "scene.frame_end",
             "scene.world",
@@ -505,6 +533,7 @@ HELPER_FIRST_SCRIPT_RULES = (
         "recommended_tools": [
             "set_render_settings",
             "set_render_engine",
+            "configure_render_outputs",
             "create_lookdev_turntable_review",
             "set_camera_settings",
             "set_world_background",
@@ -549,6 +578,9 @@ def should_include_draft_script(text, matched_groups):
         return False
     matched = set(matched_groups or [])
     if matched.intersection(STRICT_HELPER_FIRST_SCRIPT_GROUPS):
+        strict = matched.intersection(STRICT_HELPER_FIRST_SCRIPT_GROUPS)
+        if strict == {"render_outputs"} and contains_any_guard_term(text, RENDER_OUTPUT_SCRIPT_ESCALATION_TERMS):
+            return True
         return False
     if contains_keyword(text, EXPLICIT_SCRIPT_FALLBACK_KEYWORDS):
         return True
@@ -559,7 +591,7 @@ def should_include_privileged_script(text, matched_groups):
     if not contains_keyword(text, SCRIPT_FALLBACK_KEYWORDS):
         return False
     matched = set(matched_groups or [])
-    return bool(matched.intersection(STRICT_HELPER_FIRST_SCRIPT_GROUPS))
+    return bool(matched.intersection(PRIVILEGED_SCRIPT_FALLBACK_GROUPS))
 
 
 def iter_helper_first_script_rules():

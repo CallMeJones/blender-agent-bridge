@@ -2363,6 +2363,20 @@ def set_render_engine(context, args):
     )
 
 
+def configure_render_outputs(context, args):
+    return advanced_helpers.configure_render_outputs(
+        context,
+        view_layer_name=str(args.get("view_layer_name") or ""),
+        enabled_passes=args.get("enabled_passes") or [],
+        disabled_passes=args.get("disabled_passes") or [],
+        aovs=args.get("aovs") or [],
+        clear_existing_aovs=bool(args.get("clear_existing_aovs", False)),
+        pass_alpha_threshold=args.get("pass_alpha_threshold"),
+        pass_cryptomatte_depth=args.get("pass_cryptomatte_depth"),
+        label=args.get("label", "Configure render outputs"),
+    )
+
+
 def set_camera_settings(context, args):
     return advanced_helpers.set_camera_settings(
         context,
@@ -3998,6 +4012,7 @@ TOOL_FUNCTIONS = {
     "add_copy_transform_constraint": add_copy_transform_constraint,
     "set_render_settings": set_render_settings,
     "set_render_engine": set_render_engine,
+    "configure_render_outputs": configure_render_outputs,
     "set_camera_settings": set_camera_settings,
     "set_world_background": set_world_background,
     "plan_advanced_scene_workflow": plan_advanced_scene_workflow,

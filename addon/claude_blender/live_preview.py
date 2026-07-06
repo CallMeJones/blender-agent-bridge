@@ -1531,6 +1531,40 @@ def revert(context):
                         if value is not None and hasattr(eevee, attr):
                             setattr(eevee, attr, value)
                 scene.frame_set(before["frame_current"])
+        elif before.get("kind") == "view_layer_render_outputs":
+            scene = bpy.data.scenes.get(before["scene_name"])
+            view_layer = scene.view_layers.get(before["view_layer_name"]) if scene else None
+            if view_layer:
+                for attr, value in (before.get("pass_flags") or {}).items():
+                    if hasattr(view_layer, attr):
+                        try:
+                            setattr(view_layer, attr, value)
+                        except Exception as exc:
+                            rollback_warnings.append(
+                                f"Could not restore render pass {attr} for {before['view_layer_name']}: {type(exc).__name__}: {exc}"
+                            )
+                aovs = getattr(view_layer, "aovs", None)
+                if aovs is not None:
+                    for aov in list(aovs):
+                        try:
+                            aovs.remove(aov)
+                        except Exception as exc:
+                            rollback_warnings.append(
+                                f"Could not remove temporary AOV {getattr(aov, 'name', '<unnamed>')}: {type(exc).__name__}: {exc}"
+                            )
+                    for item in before.get("aovs") or []:
+                        try:
+                            aov = aovs.add()
+                            aov.name = item.get("name") or "AOV"
+                            aov.type = item.get("type") or "COLOR"
+                        except Exception as exc:
+                            rollback_warnings.append(
+                                f"Could not restore AOV {item.get('name', '<unnamed>')}: {type(exc).__name__}: {exc}"
+                            )
+            else:
+                rollback_warnings.append(
+                    f"Missing scene/view layer for render-output restore: {before.get('scene_name')} / {before.get('view_layer_name')}"
+                )
         elif before.get("scene_name") and "frame_start" in before:
             scene = bpy.data.scenes.get(before["scene_name"])
             if scene:

@@ -1590,6 +1590,36 @@ TOOL_CONTRACTS = {
             "additionalProperties": False,
         },
     },
+    "configure_render_outputs": {
+        "description": "Enable or disable ViewLayer render passes and configure shader AOVs",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "view_layer_name": {"type": "string"},
+                "enabled_passes": {"type": "array", "items": {"type": "string"}},
+                "disabled_passes": {"type": "array", "items": {"type": "string"}},
+                "aovs": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string", "minLength": 1, "maxLength": 64},
+                            "type": {"type": "string", "enum": ["COLOR", "VALUE"]},
+                        },
+                        "required": ["name"],
+                        "additionalProperties": False,
+                    },
+                },
+                "clear_existing_aovs": {"type": "boolean"},
+                "pass_alpha_threshold": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                "pass_cryptomatte_depth": {"type": "integer", "minimum": 2, "maximum": 16},
+                "label": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
+    },
     "set_camera_settings": {
         "description": "Set active or named camera lens and depth-of-field settings",
         "mutates_scene": True,

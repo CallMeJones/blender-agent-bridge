@@ -133,6 +133,7 @@ Common changes should use typed helper tools before arbitrary code:
 - `add_modifier`
 - `set_render_settings`
 - `set_render_engine`
+- `configure_render_outputs`
 - `create_shader_material`
 - `create_image_texture_material`
 - `uv_unwrap`
@@ -164,7 +165,7 @@ Common changes should use typed helper tools before arbitrary code:
 
 Helpers can validate object names, expected types, frame ranges, and value ranges before applying changes. When a helper is too limited, an external agent can fall back to a proposed Python script.
 
-Advanced helpers live in `advanced_helpers.py` and still write through the live-preview transaction layer. They cover bounded starter actions for deep systems plus reusable procedural object kits, directed animation shot templates, and look-dev turntable review setup with inspection artifact validation, while arbitrary custom node graphs, rigs, simulations, and destructive edits stay in the approval-gated script path.
+Advanced helpers live in `advanced_helpers.py` and still write through the live-preview transaction layer. They cover bounded starter actions for deep systems plus reusable procedural object kits, directed animation shot templates, render-output pass/AOV setup, and look-dev turntable review setup with inspection artifact validation, while arbitrary custom node graphs, rigs, simulations, and destructive edits stay in the approval-gated script path.
 Refinement helpers also live in `advanced_helpers.py` for now. If product/character/vehicle kits grow further, split them into a dedicated template module with shared bounds/material/primitive utilities.
 
 ## Live Preview Strategy

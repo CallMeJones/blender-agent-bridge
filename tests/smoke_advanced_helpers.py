@@ -52,6 +52,7 @@ ADVANCED_TOOLS = {
     "add_copy_transform_constraint",
     "set_render_settings",
     "set_render_engine",
+    "configure_render_outputs",
     "create_lookdev_turntable_review",
     "set_camera_settings",
     "set_world_background",
@@ -1098,6 +1099,36 @@ def main():
         assert render_engine["quality_preset"] == "preview", render_engine
         assert render_engine["applied"].get("cycles_samples", 16) <= 16 or scene.render.engine != "CYCLES", render_engine
         assert round(float(scene.view_settings.exposure), 2) == 0.15
+
+        render_outputs = _execute(
+            context,
+            "configure_render_outputs",
+            {
+                "enabled_passes": ["normal", "depth", "ambient_occlusion", "cryptomatte_object"],
+                "disabled_passes": ["vector"],
+                "aovs": [{"name": "AgentBridgeMask", "type": "COLOR"}, {"name": "AgentBridgeDepthHint", "type": "VALUE"}],
+                "clear_existing_aovs": True,
+                "pass_cryptomatte_depth": 4,
+                "pass_alpha_threshold": 0.2,
+            },
+        )
+        assert render_outputs["applied_passes"].get("use_pass_normal") is True, render_outputs
+        assert render_outputs["applied_passes"].get("use_pass_z") is True, render_outputs
+        assert render_outputs["applied_passes"].get("use_pass_ambient_occlusion") is True, render_outputs
+        assert render_outputs["applied_passes"].get("use_pass_vector") is False, render_outputs
+        if hasattr(context.view_layer, "use_pass_cryptomatte_object"):
+            assert context.view_layer.use_pass_cryptomatte_object is True, render_outputs
+        if hasattr(context.view_layer, "pass_cryptomatte_depth"):
+            assert context.view_layer.pass_cryptomatte_depth == 4, render_outputs
+        aov_summary = {(item["name"], item["type"]) for item in render_outputs["aovs"]}
+        assert ("AgentBridgeMask", "COLOR") in aov_summary, render_outputs
+        assert ("AgentBridgeDepthHint", "VALUE") in aov_summary, render_outputs
+
+        invalid_render_outputs = json.loads(
+            tool_dispatcher.execute_tool(context, "configure_render_outputs", {"enabled_passes": ["not_a_render_pass"]})
+        )
+        assert invalid_render_outputs["ok"] is False, invalid_render_outputs
+        assert "Unsupported render pass" in invalid_render_outputs["message"], invalid_render_outputs
 
         phase2_render = _execute(
             context,

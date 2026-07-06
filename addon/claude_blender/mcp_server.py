@@ -151,6 +151,26 @@ LOOKDEV_REVIEW_ROUTE_TERMS = {
     "render evidence",
     "review still",
 }
+RENDER_OUTPUT_ROUTE_TERMS = {
+    "render pass",
+    "render passes",
+    "view layer pass",
+    "viewlayer pass",
+    "aov",
+    "aovs",
+    "shader aov",
+    "custom aov",
+    "cryptomatte",
+    "crypto matte",
+    "normal pass",
+    "depth pass",
+    "z pass",
+    "position pass",
+    "vector pass",
+    "uv pass",
+    "ambient occlusion pass",
+    "ao pass",
+}
 ADVANCED_ROUTE_TERMS = {
     "advanced",
     "advanced 3d",
@@ -233,6 +253,7 @@ ADVANCED_ROUTE_TERMS = {
     "director workflow",
     "asset import",
     *LOOKDEV_REVIEW_ROUTE_TERMS,
+    *RENDER_OUTPUT_ROUTE_TERMS,
 }
 ADVANCED_ROUTE_TOOLS = {
     "plan_director_workflow",
@@ -255,6 +276,7 @@ ADVANCED_ROUTE_TOOLS = {
     "create_camera_dolly_animation",
     "create_directed_animation_shot",
     "create_lookdev_turntable_review",
+    "configure_render_outputs",
     "add_cloth_simulation_to_selected",
     "capture_viewport",
     "get_visual_evidence_resources",
@@ -743,7 +765,8 @@ PROMPTS = {
             "For procedural 3D modifier-stack or object-kit tasks, inspect geometry nodes when relevant "
             "and prefer create_procedural_object_kit or apply_procedural_array_stack before custom geometry scripts. For cloth setup, use "
             "add_cloth_simulation_to_selected, then get_simulation_details or inspect_simulation_bake before any "
-            "persistent bake. For look-dev review, prefer create_lookdev_turntable_review to set up bounded staging/turntable, render controls, inspection stills, and artifact validation. "
+            "persistent bake. For render-pass, cryptomatte, or shader AOV setup, prefer configure_render_outputs before custom compositor/render Python. "
+            "For look-dev review, prefer create_lookdev_turntable_review to set up bounded staging/turntable, render controls, inspection stills, and artifact validation. "
             "Use draft_script for custom advanced scene scripts when static checks pass; keep "
             "external asset, project-file, and persistent bake/free work on their dedicated approval paths."
         ),
@@ -1214,7 +1237,7 @@ def _tool_category(tool):
         return "navigation"
     if name in {"get_blend_file_diagnostics", "save_blend_file", "open_blend_file", "create_new_blender_project", "autosave_current_blend_file"}:
         return "project_files"
-    if name in {"start_render_job", "get_render_job_status", "cancel_render_job", "assemble_render_job_video", "validate_render_job_output", "create_lookdev_turntable_review"}:
+    if name in {"start_render_job", "get_render_job_status", "cancel_render_job", "assemble_render_job_video", "validate_render_job_output", "create_lookdev_turntable_review", "configure_render_outputs"}:
         return "camera_render"
     if name in {"get_2d_animation_details", "create_storyboard_panels", "create_2d_cutout_layer"}:
         return "two_d"
@@ -1428,6 +1451,8 @@ def _score_tool_match(tool, query):
             score += 2400
         if name == "plan_asset_import_workflow" and external_asset_query:
             score += 1800
+        if name == "configure_render_outputs" and _contains_any_phrase(normalized_query, RENDER_OUTPUT_ROUTE_TERMS):
+            score += 1900
         if name == "create_lookdev_turntable_review" and _contains_any_phrase(
             normalized_query, LOOKDEV_REVIEW_ROUTE_TERMS
         ):
@@ -1486,6 +1511,8 @@ def _score_tool_match(tool, query):
                 for term in ("render engine", "cycles", "eevee", "denoise", "samples", "lookdev", "look-dev", "color management", "view transform")
             ):
                 score += 900
+            elif name == "configure_render_outputs" and _contains_any_phrase(normalized_query, RENDER_OUTPUT_ROUTE_TERMS):
+                score += 1200
             elif name == "create_lookdev_turntable_review" and _contains_any_phrase(
                 normalized_query, LOOKDEV_REVIEW_ROUTE_TERMS
             ):

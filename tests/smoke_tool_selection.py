@@ -326,6 +326,31 @@ def main():
         assert "create_lookdev_turntable_review" in lookdev_review_names, lookdev_review_meta
         assert "draft_script" not in lookdev_review_names, lookdev_review_meta
 
+        render_output_tools, render_output_meta = agent_tools.select_blender_tool_definitions(
+            "Enable normal, depth, ambient occlusion, cryptomatte render passes and add a custom shader AOV.",
+            bundle,
+        )
+        render_output_names = _names(render_output_tools)
+        assert "configure_render_outputs" in render_output_names, render_output_meta
+        assert "set_render_engine" in render_output_names, render_output_meta
+        assert "draft_script" not in render_output_names, render_output_meta
+
+        aov_only_tools, aov_only_meta = agent_tools.select_blender_tool_definitions(
+            "Add a custom shader AOV.",
+            bundle,
+        )
+        aov_only_names = _names(aov_only_tools)
+        assert "configure_render_outputs" in aov_only_names, aov_only_meta
+        assert "draft_script" not in aov_only_names, aov_only_meta
+
+        shader_graph_tools, shader_graph_meta = agent_tools.select_blender_tool_definitions(
+            "Build a custom shader node network and add a custom shader AOV.",
+            bundle,
+        )
+        shader_graph_names = _names(shader_graph_tools)
+        assert "configure_render_outputs" in shader_graph_names, shader_graph_meta
+        assert "draft_script" in shader_graph_names, shader_graph_meta
+
         texture_tools, texture_meta = agent_tools.select_blender_tool_definitions(
             "Apply local base color, roughness, and normal map image textures to the selected mesh as a PBR material.",
             bundle,
