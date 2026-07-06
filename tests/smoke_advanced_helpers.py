@@ -44,6 +44,8 @@ ADVANCED_TOOLS = {
     "add_cloth_simulation_to_selected",
     "create_shader_material",
     "create_image_texture_material",
+    "inspect_material_setup",
+    "repair_material_setup",
     "create_procedural_texture_material",
     "add_geometry_nodes_modifier",
     "create_shape_key",
@@ -1148,6 +1150,69 @@ def main():
         assert all(item.get("uv_map") == "Agent Bridge Advanced UVs" for item in image_material["maps"]), image_material
         assert "created_image" in image_material["preview_change_report"]["rollback_scopes"], image_material
         material = bpy.data.materials[image_material["material"]]
+        material_inspection = _execute(
+            context,
+            "inspect_material_setup",
+            {
+                "material_names": [image_material["material"]],
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "require_uv_maps": True,
+                "expected_uv_map_name": "Agent Bridge Advanced UVs",
+            },
+        )
+        assert material_inspection["passed"] is True, material_inspection
+        assert material_inspection["issue_count"] == 0, material_inspection
+        arm_image_name = next(item["image"] for item in image_material["maps"] if item.get("source_map") == "arm")
+        bpy.data.images[arm_image_name].colorspace_settings.name = "sRGB"
+        for node in image_nodes:
+            vector_input = node.inputs.get("Vector")
+            if vector_input:
+                for link in list(vector_input.links):
+                    material.node_tree.links.remove(link)
+        broken_material_inspection = _execute(
+            context,
+            "inspect_material_setup",
+            {
+                "material_names": [image_material["material"]],
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "require_uv_maps": True,
+                "expected_uv_map_name": "Agent Bridge Advanced UVs",
+            },
+        )
+        assert broken_material_inspection["passed"] is False, broken_material_inspection
+        assert any("colorspace" in issue for issue in broken_material_inspection["materials"][0]["issues"]), broken_material_inspection
+        assert any("UV Map vector input" in issue for issue in broken_material_inspection["materials"][0]["issues"]), broken_material_inspection
+        material_repair = _execute(
+            context,
+            "repair_material_setup",
+            {
+                "material_names": [image_material["material"]],
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "uv_map_name": "Agent Bridge Advanced UVs",
+            },
+        )
+        repair_types = {
+            repair["type"]
+            for material_item in material_repair["materials"]
+            for repair in material_item["repairs"]
+        }
+        assert {"color_space", "uv_relink"}.issubset(repair_types), material_repair
+        assert material_repair["post_inspection"]["passed"] is True, material_repair
+        repaired_material_inspection = _execute(
+            context,
+            "inspect_material_setup",
+            {
+                "material_names": [image_material["material"]],
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "require_uv_maps": True,
+                "expected_uv_map_name": "Agent Bridge Advanced UVs",
+            },
+        )
+        assert repaired_material_inspection["passed"] is True, repaired_material_inspection
         node_names_before_cautious_update = [node.name for node in material.node_tree.nodes]
         cautious_update = _execute(
             context,

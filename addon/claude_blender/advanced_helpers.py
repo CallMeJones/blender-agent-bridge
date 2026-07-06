@@ -1709,6 +1709,431 @@ def create_image_texture_material(
     }
 
 
+MATERIAL_TEXTURE_MAP_ALIASES = {
+    "base_color": ("base color", "base_color", "albedo", "diffuse", "color texture"),
+    "roughness": ("roughness", "rough"),
+    "metallic": ("metallic", "metalness", "metal"),
+    "normal": ("normal", "normal map"),
+    "alpha": ("alpha", "opacity", "transparent"),
+    "emission": ("emission", "emissive"),
+    "ambient_occlusion": ("ambient occlusion", "ambient_occlusion", " occlusion", " ao "),
+    "arm": (" arm ", "arm texture", "arm map"),
+    "orm": (" orm ", "orm texture", "orm map"),
+    "bump": ("bump", "height"),
+    "displacement": ("displacement", "displace"),
+}
+
+
+def _normalize_material_name_list(names):
+    if not isinstance(names, list):
+        return []
+    return [str(name).strip() for name in names if str(name or "").strip()]
+
+
+def _resolve_material_setup_targets(context, *, material_names=None, object_names=None, selected_only=True, max_materials=32):
+    requested_materials = _normalize_material_name_list(material_names)
+    max_count = max(1, min(128, int(max_materials or 32)))
+    materials = []
+    missing_materials = []
+    seen = set()
+    objects = []
+    missing_objects = []
+
+    should_resolve_objects = bool(object_names) or (not requested_materials and selected_only)
+    if should_resolve_objects:
+        objects, missing_objects = _resolve_edit_objects(context, object_names=object_names, selected_only=selected_only)
+
+    for material_name in requested_materials:
+        material = bpy.data.materials.get(material_name)
+        if material is None:
+            missing_materials.append(material_name)
+            continue
+        if material.name not in seen:
+            seen.add(material.name)
+            materials.append(material)
+        if len(materials) >= max_count:
+            break
+
+    if not requested_materials:
+        for obj in objects:
+            for slot in getattr(obj, "material_slots", []) or []:
+                material = slot.material
+                if material and material.name not in seen:
+                    seen.add(material.name)
+                    materials.append(material)
+                if len(materials) >= max_count:
+                    break
+            if len(materials) >= max_count:
+                break
+
+    return materials, objects, missing_materials, missing_objects
+
+
+def _objects_using_material(context, material, candidate_objects=None):
+    if material is None:
+        return []
+    pool = candidate_objects if candidate_objects else list(getattr(context.scene, "objects", []) or [])
+    objects = []
+    for obj in pool:
+        for slot in getattr(obj, "material_slots", []) or []:
+            if slot.material == material:
+                objects.append(obj)
+                break
+    return objects
+
+
+def _infer_material_texture_map_type(node):
+    text_parts = [getattr(node, "name", ""), getattr(node, "label", "")]
+    image = getattr(node, "image", None)
+    if image:
+        text_parts.extend([getattr(image, "name", ""), getattr(image, "filepath", "")])
+    normalized = f" {' '.join(text_parts).lower().replace('_', ' ')} "
+    for map_type, aliases in MATERIAL_TEXTURE_MAP_ALIASES.items():
+        if any(alias in normalized for alias in aliases):
+            return map_type
+    return "unknown"
+
+
+def _image_texture_nodes(material):
+    if material is None or not material.use_nodes or not material.node_tree:
+        return []
+    return [node for node in material.node_tree.nodes if getattr(node, "type", "") == "TEX_IMAGE"]
+
+
+def _node_has_outgoing_links(material, node):
+    if material is None or not material.node_tree:
+        return False
+    return any(link.from_node == node for link in material.node_tree.links)
+
+
+def _image_node_uv_map_name(node):
+    vector_input = node.inputs.get("Vector") if node else None
+    if vector_input is None:
+        return ""
+    for link in list(getattr(vector_input, "links", []) or []):
+        from_node = link.from_node
+        if getattr(from_node, "type", "") == "UVMAP":
+            return str(getattr(from_node, "uv_map", "") or "")
+    return ""
+
+
+def _image_file_report(image):
+    if image is None:
+        return {"image": "", "filepath": "", "packed": False, "missing": True, "message": "image texture node has no image"}
+    raw_path = str(getattr(image, "filepath", "") or "")
+    resolved = bpy.path.abspath(raw_path) if raw_path.startswith("//") else os.path.expanduser(raw_path)
+    resolved = os.path.abspath(resolved) if resolved else ""
+    packed = bool(getattr(image, "packed_file", None))
+    missing = bool(resolved and not packed and not os.path.isfile(resolved))
+    return {
+        "image": image.name,
+        "filepath": resolved,
+        "packed": packed,
+        "missing": missing,
+        "message": "image file does not exist" if missing else "",
+    }
+
+
+def _expected_material_colorspace(map_type):
+    spec = IMAGE_TEXTURE_MAP_SPECS.get(map_type)
+    return str((spec or {}).get("colorspace") or "")
+
+
+def _material_setup_quality(context, material, *, assigned_objects=None, require_uv_maps=False, expected_uv_map_name=""):
+    issues = []
+    warnings = []
+    image_nodes = _image_texture_nodes(material)
+    principled = _find_node(material, "BSDF_PRINCIPLED") if material and material.use_nodes else None
+    require_uv = bool(require_uv_maps or str(expected_uv_map_name or "").strip())
+    expected_uv = str(expected_uv_map_name or "").strip()
+    assigned_objects = list(assigned_objects or [])
+    texture_reports = []
+
+    result = {
+        "material": material.name if material else "",
+        "use_nodes": bool(material and material.use_nodes),
+        "has_principled": bool(principled),
+        "image_texture_count": len(image_nodes),
+        "assigned_objects": [obj.name for obj in assigned_objects],
+        "textures": texture_reports,
+        "issues": issues,
+        "warnings": warnings,
+        "passed": True,
+    }
+    if material is None:
+        issues.append("material not found")
+        result["passed"] = False
+        return result
+    if not material.use_nodes or material.node_tree is None:
+        issues.append("material does not use shader nodes")
+        result["passed"] = False
+        return result
+    if principled is None:
+        warnings.append("material has no Principled BSDF node")
+    if not image_nodes:
+        warnings.append("material has no image texture nodes")
+
+    for node in image_nodes:
+        image = getattr(node, "image", None)
+        map_type = _infer_material_texture_map_type(node)
+        expected_colorspace = _expected_material_colorspace(map_type)
+        actual_colorspace = str(getattr(getattr(image, "colorspace_settings", None), "name", "") or "") if image else ""
+        file_report = _image_file_report(image)
+        uv_map = _image_node_uv_map_name(node)
+        linked = _node_has_outgoing_links(material, node)
+        texture_report = {
+            "node": node.name,
+            "map_type": map_type,
+            "image": file_report["image"],
+            "filepath": file_report["filepath"],
+            "packed": file_report["packed"],
+            "file_missing": file_report["missing"],
+            "colorspace": actual_colorspace,
+            "expected_colorspace": expected_colorspace,
+            "uv_map": uv_map,
+            "linked": linked,
+        }
+        texture_reports.append(texture_report)
+        if file_report["missing"]:
+            issues.append(f"{node.name}: {file_report['message']}")
+        if image is None:
+            issues.append(f"{node.name}: image texture node has no image")
+        if expected_colorspace and actual_colorspace and actual_colorspace != expected_colorspace:
+            issues.append(f"{node.name}: {map_type} map uses {actual_colorspace} colorspace, expected {expected_colorspace}")
+        if not linked:
+            issues.append(f"{node.name}: image texture node is not linked to the shader graph")
+        if require_uv and not uv_map:
+            issues.append(f"{node.name}: image texture node has no UV Map vector input")
+        if expected_uv and uv_map and uv_map != expected_uv:
+            issues.append(f"{node.name}: uses UV map {uv_map!r}, expected {expected_uv!r}")
+        checked_uv = expected_uv or uv_map
+        if checked_uv:
+            for obj in assigned_objects:
+                mesh = obj.data if getattr(obj, "type", "") == "MESH" else None
+                if mesh and mesh.uv_layers.get(checked_uv) is None:
+                    issues.append(f"{node.name}: assigned object {obj.name} is missing UV map {checked_uv!r}")
+
+    result["passed"] = not issues
+    return result
+
+
+def inspect_material_setup(
+    context,
+    *,
+    material_names=None,
+    object_names=None,
+    selected_only=True,
+    require_uv_maps=False,
+    expected_uv_map_name="",
+    max_materials=32,
+):
+    materials, objects, missing_materials, missing_objects = _resolve_material_setup_targets(
+        context,
+        material_names=material_names,
+        object_names=object_names,
+        selected_only=selected_only,
+        max_materials=max_materials,
+    )
+    if not materials:
+        return {
+            "ok": False,
+            "passed": False,
+            "message": "No materials found for material setup inspection",
+            "materials": [],
+            "missing_material_names": missing_materials,
+            "missing_object_names": missing_objects,
+        }
+    results = []
+    for material in materials:
+        assigned_objects = _objects_using_material(context, material, objects)
+        results.append(
+            _material_setup_quality(
+                context,
+                material,
+                assigned_objects=assigned_objects,
+                require_uv_maps=require_uv_maps,
+                expected_uv_map_name=expected_uv_map_name,
+            )
+        )
+    issue_count = sum(len(item["issues"]) for item in results)
+    warning_count = sum(len(item["warnings"]) for item in results)
+    return {
+        "ok": True,
+        "passed": issue_count == 0,
+        "message": "Material setup inspection passed" if issue_count == 0 else "Material setup inspection found issues",
+        "materials": results,
+        "material_count": len(results),
+        "issue_count": issue_count,
+        "warning_count": warning_count,
+        "missing_material_names": missing_materials,
+        "missing_object_names": missing_objects,
+        "policy": {
+            "require_uv_maps": bool(require_uv_maps),
+            "expected_uv_map_name": str(expected_uv_map_name or ""),
+        },
+    }
+
+
+def _active_uv_name_from_objects(objects):
+    for obj in objects or []:
+        mesh = obj.data if getattr(obj, "type", "") == "MESH" else None
+        active = mesh.uv_layers.active if mesh and mesh.uv_layers else None
+        if active:
+            return active.name
+    return ""
+
+
+def repair_material_setup(
+    context,
+    *,
+    material_names=None,
+    object_names=None,
+    selected_only=True,
+    uv_map_name="",
+    fix_color_spaces=True,
+    reconnect_uv_maps=True,
+    max_materials=32,
+    label="Repair material setup",
+):
+    materials, objects, missing_materials, missing_objects = _resolve_material_setup_targets(
+        context,
+        material_names=material_names,
+        object_names=object_names,
+        selected_only=selected_only,
+        max_materials=max_materials,
+    )
+    if not materials:
+        return {
+            "ok": False,
+            "message": "No materials found for material setup repair",
+            "materials": [],
+            "missing_material_names": missing_materials,
+            "missing_object_names": missing_objects,
+        }
+
+    target_uv_map = str(uv_map_name or "").strip() or _active_uv_name_from_objects(objects)
+    transaction = None
+    repaired = []
+    warnings = []
+
+    def ensure_transaction():
+        nonlocal transaction
+        if transaction is None:
+            transaction = live_preview.begin(label, context)
+        return transaction
+
+    for material in materials:
+        if not material.use_nodes or material.node_tree is None:
+            warnings.append(f"Skipped {material.name}: material does not use shader nodes")
+            continue
+        image_nodes = _image_texture_nodes(material)
+        material_repairs = []
+
+        if fix_color_spaces:
+            for node in image_nodes:
+                image = getattr(node, "image", None)
+                map_type = _infer_material_texture_map_type(node)
+                expected = _expected_material_colorspace(map_type)
+                if not image or not expected:
+                    continue
+                actual = str(getattr(image.colorspace_settings, "name", "") or "")
+                if actual == expected:
+                    continue
+                ensure_transaction()
+                _record_image_settings(image)
+                try:
+                    image.colorspace_settings.name = expected
+                    material_repairs.append(
+                        {
+                            "type": "color_space",
+                            "node": node.name,
+                            "image": image.name,
+                            "map_type": map_type,
+                            "from": actual,
+                            "to": expected,
+                        }
+                    )
+                except Exception as exc:
+                    warnings.append(f"Could not set colorspace for {image.name}: {type(exc).__name__}: {exc}")
+
+        if reconnect_uv_maps and target_uv_map:
+            assigned_objects = _objects_using_material(context, material, objects)
+            missing_uv = []
+            for obj in assigned_objects:
+                mesh = obj.data if getattr(obj, "type", "") == "MESH" else None
+                if mesh and mesh.uv_layers.get(target_uv_map) is None:
+                    missing_uv.append(obj.name)
+            if missing_uv:
+                warnings.append(f"Skipped UV relink for {material.name}: {', '.join(missing_uv[:5])} missing UV map {target_uv_map!r}")
+            else:
+                nodes_to_relink = [node for node in image_nodes if _image_node_uv_map_name(node) != target_uv_map]
+                if nodes_to_relink:
+                    ensure_transaction()
+                    _record_shader_material(material)
+                    uv_node = material.node_tree.nodes.new(type="ShaderNodeUVMap")
+                    uv_node.name = f"Agent Bridge Repair UV Map {target_uv_map}"
+                    uv_node.label = uv_node.name
+                    uv_node.uv_map = target_uv_map
+                    uv_node.location = (-900, 480)
+                    uv_output = uv_node.outputs.get("UV")
+                    for node in nodes_to_relink:
+                        vector_input = node.inputs.get("Vector")
+                        if vector_input is None or uv_output is None:
+                            continue
+                        _remove_links_to_socket(material.node_tree, vector_input)
+                        material.node_tree.links.new(uv_output, vector_input)
+                    material_repairs.append(
+                        {
+                            "type": "uv_relink",
+                            "uv_map": target_uv_map,
+                            "image_nodes": [node.name for node in nodes_to_relink],
+                        }
+                    )
+
+        if material_repairs:
+            repaired.append({"material": material.name, "repairs": material_repairs})
+
+    if transaction is None:
+        return {
+            "ok": True,
+            "message": "No material setup repairs were needed",
+            "materials": repaired,
+            "warnings": warnings,
+            "missing_material_names": missing_materials,
+            "missing_object_names": missing_objects,
+        }
+
+    transaction["applied_steps"].append(
+        {
+            "type": "repair_material_setup",
+            "label": label,
+            "materials": repaired,
+            "uv_map_name": target_uv_map,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    post_inspection = inspect_material_setup(
+        context,
+        material_names=[item["material"] for item in repaired],
+        object_names=[obj.name for obj in objects],
+        selected_only=False,
+        require_uv_maps=bool(target_uv_map),
+        expected_uv_map_name=target_uv_map,
+        max_materials=max_materials,
+    )
+    return {
+        "ok": True,
+        "message": f"Repaired material setup for {len(repaired)} material(s)",
+        "materials": repaired,
+        "warnings": warnings,
+        "post_inspection": post_inspection,
+        "missing_material_names": missing_materials,
+        "missing_object_names": missing_objects,
+        "transaction_id": transaction["id"],
+    }
+
+
 def _normalize_procedural_texture_type(texture_type):
     key = str(texture_type or "noise").strip().lower().replace("-", "_").replace(" ", "_")
     if key in {"musgrave", "fractal", "fractal_noise", "clouds"}:

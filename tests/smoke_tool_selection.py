@@ -317,7 +317,18 @@ def main():
         assert "mark_uv_seams" in lookdev_names, lookdev_meta
         assert "inspect_uv_layout" in lookdev_names, lookdev_meta
         assert "create_shader_material" in lookdev_names, lookdev_meta
+        assert "inspect_material_setup" in lookdev_names, lookdev_meta
         assert "draft_script" not in lookdev_names, lookdev_meta
+
+        material_quality_tools, material_quality_meta = agent_tools.select_blender_tool_definitions(
+            "Inspect and repair the PBR material setup: missing texture files, wrong color spaces, shader links, and UV map vector inputs.",
+            bundle,
+        )
+        material_quality_names = _names(material_quality_tools)
+        assert "inspect_material_setup" in material_quality_names, material_quality_meta
+        assert "repair_material_setup" in material_quality_names, material_quality_meta
+        assert "create_image_texture_material" in material_quality_names, material_quality_meta
+        assert "draft_script" not in material_quality_names, material_quality_meta
 
         uv_quality_tools, uv_quality_meta = agent_tools.select_blender_tool_definitions(
             "Mark hard-edge UV seams, pack UV islands, then inspect the UV layout for overlapping UVs and texel density.",

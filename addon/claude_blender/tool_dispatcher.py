@@ -1859,6 +1859,32 @@ def create_image_texture_material(context, args):
     )
 
 
+def inspect_material_setup(context, args):
+    return advanced_helpers.inspect_material_setup(
+        context,
+        material_names=_name_list(args.get("material_names")),
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", True)),
+        require_uv_maps=bool(args.get("require_uv_maps", False)),
+        expected_uv_map_name=str(args.get("expected_uv_map_name") or ""),
+        max_materials=_bounded_int(args.get("max_materials"), 32, minimum=1, maximum=128),
+    )
+
+
+def repair_material_setup(context, args):
+    return advanced_helpers.repair_material_setup(
+        context,
+        material_names=_name_list(args.get("material_names")),
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", True)),
+        uv_map_name=str(args.get("uv_map_name") or ""),
+        fix_color_spaces=bool(args.get("fix_color_spaces", True)),
+        reconnect_uv_maps=bool(args.get("reconnect_uv_maps", True)),
+        max_materials=_bounded_int(args.get("max_materials"), 32, minimum=1, maximum=128),
+        label=args.get("label", "Repair material setup"),
+    )
+
+
 def create_procedural_texture_material(context, args):
     return advanced_helpers.create_procedural_texture_material(
         context,
@@ -3907,6 +3933,8 @@ def _preview_expected_changes(step, label, kind, target_text):
     if kind == "create_image_texture_material":
         maps = ", ".join(step.get("maps") or []) or "image maps"
         return f"{label}: wires {maps} into material {step.get('material') or 'material'} with preview rollback."
+    if kind == "repair_material_setup":
+        return f"{label}: repairs material texture color spaces and UV map links with preview rollback."
     if kind == "boolean_op":
         cutters = ", ".join(step.get("cutters") or []) or "selected cutters"
         return (
@@ -4034,6 +4062,8 @@ TOOL_FUNCTIONS = {
     "add_modifier_to_selected": add_modifier_to_selected,
     "create_shader_material": create_shader_material,
     "create_image_texture_material": create_image_texture_material,
+    "inspect_material_setup": inspect_material_setup,
+    "repair_material_setup": repair_material_setup,
     "create_procedural_texture_material": create_procedural_texture_material,
     "uv_unwrap": uv_unwrap,
     "mark_uv_seams": mark_uv_seams,

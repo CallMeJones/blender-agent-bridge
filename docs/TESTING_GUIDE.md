@@ -404,6 +404,8 @@ assign_material_to_selected
 assign_emission_material_to_selected
 create_shader_material
 create_image_texture_material
+inspect_material_setup
+repair_material_setup
 create_procedural_texture_material
 uv_unwrap
 mark_uv_seams
@@ -424,6 +426,7 @@ Required scenarios:
 
 - Existing material reuse, new material creation, alpha/emission inputs, object with no material slots, invalid color values.
 - Image/PBR materials wire base color, packed ARM/ORM roughness/metallic channels, AO multiply, bump maps, UV-map selection, and displacement warnings with preview rollback.
+- Material setup inspection catches missing texture files, wrong image color spaces, unlinked texture nodes, and missing UV-vector inputs; bounded repair fixes color spaces and UV-vector links with preview rollback.
 - UV helpers mark hard-edge/boundary seams, create a named packed UV layer with bounded coordinates and mesh-data rollback, and inspect missing UVs, layout bounds/area, possible overlap bounds, seam counts, and scale warnings. Possible overlap bounds fail the quality gate when overlap scanning is enabled; `max_overlap_pairs=0` disables that heuristic.
 - Geometry Nodes starter modifier creates bounded nodes and rollback restores node group/material/link topology.
 - Material palette swatches and optional assignment stay in preview rollback.

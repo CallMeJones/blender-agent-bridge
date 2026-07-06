@@ -1355,6 +1355,41 @@ TOOL_CONTRACTS = {
             "additionalProperties": False,
         },
     },
+    "inspect_material_setup": {
+        "description": "Read-only material quality gate for texture image files, PBR map color spaces, shader links, and UV map assignments",
+        "mutates_scene": False,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "material_names": {"type": "array", "items": {"type": "string"}},
+                "object_names": {"type": "array", "items": {"type": "string"}},
+                "selected_only": {"type": "boolean"},
+                "require_uv_maps": {"type": "boolean"},
+                "expected_uv_map_name": {"type": "string"},
+                "max_materials": {"type": "integer"},
+            },
+            "additionalProperties": False,
+        },
+    },
+    "repair_material_setup": {
+        "description": "Repair bounded material setup issues by fixing image color spaces and relinking image texture vectors to a UV map",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "material_names": {"type": "array", "items": {"type": "string"}},
+                "object_names": {"type": "array", "items": {"type": "string"}},
+                "selected_only": {"type": "boolean"},
+                "uv_map_name": {"type": "string"},
+                "fix_color_spaces": {"type": "boolean"},
+                "reconnect_uv_maps": {"type": "boolean"},
+                "max_materials": {"type": "integer"},
+                "label": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
+    },
     "create_procedural_texture_material": {
         "description": "Create or update a bounded procedural Principled material from noise, voronoi, wave, or checker texture nodes",
         "mutates_scene": True,

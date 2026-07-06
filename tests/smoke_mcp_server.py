@@ -1120,6 +1120,25 @@ def main():
         assert "uv_unwrap" in offline_uv_quality_names[:5], offline_uv_quality_search
         assert "inspect_uv_layout" in offline_uv_quality_names[:5], offline_uv_quality_search
         assert "draft_script" not in offline_uv_quality_names[:6], offline_uv_quality_search
+        offline_material_quality_search = _send(
+            offline_proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 96,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_blender_tools",
+                    "arguments": {
+                        "query": "Inspect and repair the PBR material setup for missing texture files, wrong color spaces, shader links, and UV map vector inputs.",
+                        "limit": 10,
+                    },
+                },
+            },
+        )
+        offline_material_quality_names = [tool["name"] for tool in offline_material_quality_search["result"]["structuredContent"]["tools"]]
+        assert "inspect_material_setup" in offline_material_quality_names[:5], offline_material_quality_search
+        assert "repair_material_setup" in offline_material_quality_names[:5], offline_material_quality_search
+        assert "draft_script" not in offline_material_quality_names[:6], offline_material_quality_search
         for query in (
             "Search Poly Haven for a sunset HDRI and import it into the world.",
             "Import a downloadable Sketchfab Falcon 9 model if auth is present.",

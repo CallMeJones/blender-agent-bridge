@@ -1275,6 +1275,8 @@ def _tool_category(tool):
         return "two_d"
     if name in {"plan_advanced_scene_workflow", "plan_object_design"}:
         return "inspect"
+    if name in {"inspect_material_setup", "repair_material_setup"}:
+        return "materials"
     if name.startswith("get_") or name.startswith("list_") or name.startswith("inspect_") or name in {
         "inspect_scene",
         "search_blender_docs",
@@ -1521,6 +1523,38 @@ def _score_tool_match(tool, query):
                 score += 1200
             elif name == "screw_model" and any(term in normalized_query for term in ("screw", "thread", "spring", "spiral", "helix")):
                 score += 1200
+            elif name == "inspect_material_setup" and any(
+                term in normalized_query
+                for term in (
+                    "inspect material",
+                    "validate material",
+                    "material setup",
+                    "material quality",
+                    "texture setup",
+                    "texture wiring",
+                    "pbr setup",
+                    "colorspace",
+                    "color space",
+                    "missing texture",
+                )
+            ):
+                score += 1300
+            elif name == "repair_material_setup" and any(
+                term in normalized_query
+                for term in (
+                    "repair material",
+                    "fix material",
+                    "fix texture",
+                    "repair texture",
+                    "fix pbr",
+                    "repair pbr",
+                    "colorspace",
+                    "color space",
+                    "uv map link",
+                    "uv vector",
+                )
+            ):
+                score += 1250
             elif name == "create_shader_material" and any(term in normalized_query for term in ("material", "chrome", "brass", "metal", "glass", "rubber", "wood", "screen", "display", "enamel", "paint", "color", "colour")):
                 score += 850
             elif name == "create_procedural_texture_material" and _contains_any_phrase(normalized_query, PROCEDURAL_TEXTURE_ROUTE_TERMS):

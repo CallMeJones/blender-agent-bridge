@@ -298,6 +298,8 @@ def build_context_bundle(context, *, include_visual=False, capture_dir=None, max
             "add_modifier_to_selected",
             "create_shader_material",
             "create_image_texture_material",
+            "inspect_material_setup",
+            "repair_material_setup",
             "create_procedural_texture_material",
             "uv_unwrap",
             "mark_uv_seams",
