@@ -360,6 +360,23 @@ def main():
         assert "uv_unwrap" in texture_names, texture_meta
         assert "draft_script" not in texture_names, texture_meta
 
+        procedural_texture_tools, procedural_texture_meta = agent_tools.select_blender_tool_definitions(
+            "Create a procedural marble texture material with noise bump for the selected mesh.",
+            bundle,
+        )
+        procedural_texture_names = _names(procedural_texture_tools)
+        assert "create_procedural_texture_material" in procedural_texture_names, procedural_texture_meta
+        assert "create_shader_material" in procedural_texture_names, procedural_texture_meta
+        assert "draft_script" not in procedural_texture_names, procedural_texture_meta
+
+        procedural_node_tools, procedural_node_meta = agent_tools.select_blender_tool_definitions(
+            "Build a custom shader node network for a procedural marble material.",
+            bundle,
+        )
+        procedural_node_names = _names(procedural_node_tools)
+        assert "create_procedural_texture_material" in procedural_node_names, procedural_node_meta
+        assert "draft_script" in procedural_node_names, procedural_node_meta
+
         modeling_tools, modeling_meta = agent_tools.select_blender_tool_definitions(
             "Use a boolean cutter, mirror the model, symmetrize it on X, solidify the wall thickness, and add a screw thread.",
             bundle,

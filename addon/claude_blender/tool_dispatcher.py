@@ -1859,6 +1859,37 @@ def create_image_texture_material(context, args):
     )
 
 
+def create_procedural_texture_material(context, args):
+    return advanced_helpers.create_procedural_texture_material(
+        context,
+        name=str(args.get("name") or "Agent Bridge Procedural Texture Material"),
+        preset=str(args.get("preset") or "custom"),
+        texture_type=str(args.get("texture_type") or ""),
+        color_a=_float_list(args.get("color_a"), 4, (0.08, 0.08, 0.085, 1.0)) if "color_a" in args else None,
+        color_b=_float_list(args.get("color_b"), 4, (0.82, 0.78, 0.68, 1.0)) if "color_b" in args else None,
+        scale=_bounded_float(args.get("scale"), 18.0, minimum=0.01, maximum=500.0) if "scale" in args else None,
+        detail=_bounded_float(args.get("detail"), 8.0, minimum=0.0, maximum=16.0) if "detail" in args else None,
+        texture_roughness=_bounded_float(args.get("texture_roughness"), 0.55, minimum=0.0, maximum=1.0)
+        if "texture_roughness" in args
+        else None,
+        distortion=_bounded_float(args.get("distortion"), 0.0, minimum=0.0, maximum=100.0) if "distortion" in args else None,
+        randomness=_bounded_float(args.get("randomness"), 0.5, minimum=0.0, maximum=1.0) if "randomness" in args else None,
+        metallic=_bounded_float(args.get("metallic"), 0.0, minimum=0.0, maximum=1.0) if "metallic" in args else None,
+        material_roughness=_bounded_float(args.get("material_roughness"), 0.58, minimum=0.0, maximum=1.0)
+        if "material_roughness" in args
+        else None,
+        alpha=_bounded_float(args.get("alpha"), 1.0, minimum=0.0, maximum=1.0) if "alpha" in args else None,
+        bump_strength=_bounded_float(args.get("bump_strength"), 0.0, minimum=0.0, maximum=10.0) if "bump_strength" in args else None,
+        bump_distance=_bounded_float(args.get("bump_distance"), 0.04, minimum=0.0, maximum=10.0) if "bump_distance" in args else None,
+        wave_type=str(args.get("wave_type") or "BANDS"),
+        replace_existing_links=bool(args.get("replace_existing_links", True)),
+        assign_to_objects=bool(args.get("assign_to_objects", True)),
+        object_names=args.get("object_names") if isinstance(args.get("object_names"), list) else None,
+        selected_only=bool(args.get("selected_only", True)),
+        label=args.get("label", "Create procedural texture material"),
+    )
+
+
 def uv_unwrap(context, args):
     return advanced_helpers.uv_unwrap(
         context,
@@ -3976,6 +4007,7 @@ TOOL_FUNCTIONS = {
     "add_modifier_to_selected": add_modifier_to_selected,
     "create_shader_material": create_shader_material,
     "create_image_texture_material": create_image_texture_material,
+    "create_procedural_texture_material": create_procedural_texture_material,
     "uv_unwrap": uv_unwrap,
     "add_geometry_nodes_modifier": add_geometry_nodes_modifier,
     "create_shape_key": create_shape_key,

@@ -893,6 +893,14 @@ def _assert_image_texture_material_search(response, *, query):
     _assert_material_texture_search_avoids_asset_route(response, query=query)
 
 
+def _assert_procedural_texture_material_search(response, *, query):
+    tools = response["result"]["structuredContent"]["tools"]
+    names = [tool["name"] for tool in tools]
+    assert "create_procedural_texture_material" in names[:6], (query, names)
+    assert "draft_script" not in names[:6], (query, names)
+    _assert_material_texture_search_avoids_asset_route(response, query=query)
+
+
 def main():
     _assert_legacy_status_hashes_are_unknown()
     assert not mcp_server._contains_any_phrase(
@@ -1034,6 +1042,10 @@ def main():
             (
                 "Enable normal, depth, ambient occlusion, cryptomatte render passes and add a custom shader AOV.",
                 {"configure_render_outputs"},
+            ),
+            (
+                "Create a procedural marble texture material with noise bump for the selected mesh.",
+                {"create_procedural_texture_material"},
             ),
             (
                 "Design a futuristic wall-mounted coffee machine with chrome pipes, a small display, buttons, and beveled body.",
@@ -1556,6 +1568,31 @@ def main():
             render_outputs_search,
             query="Enable normal, depth, ambient occlusion, cryptomatte render passes and add a custom shader AOV.",
             expected={"configure_render_outputs"},
+        )
+
+        procedural_texture_search = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 103,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_blender_tools",
+                    "arguments": {
+                        "query": "Create a procedural marble texture material with noise bump for the selected mesh.",
+                        "limit": 10,
+                    },
+                },
+            },
+        )
+        _assert_advanced_search_routes_first(
+            procedural_texture_search,
+            query="Create a procedural marble texture material with noise bump for the selected mesh.",
+            expected={"create_procedural_texture_material"},
+        )
+        _assert_procedural_texture_material_search(
+            procedural_texture_search,
+            query="Create a procedural marble texture material with noise bump for the selected mesh.",
         )
 
         catalog_search = _send(

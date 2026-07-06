@@ -150,6 +150,23 @@ def main() -> int:
         preview_started = True
         _print_step("material preset", material, material.get("preset") or "")
 
+        procedural_material = _post_tool(
+            base_url,
+            "create_procedural_texture_material",
+            {
+                "name": "Agent Bridge Sweep Procedural Wood",
+                "preset": "wood_wave",
+                "object_names": [target],
+                "selected_only": False,
+                "bump_strength": 0.05,
+            },
+            timeout=args.timeout,
+        )
+        _require_ok("create_procedural_texture_material", procedural_material)
+        if not procedural_material.get("nodes") or target not in (procedural_material.get("assigned_objects") or []):
+            raise RuntimeError(f"procedural texture material did not create nodes/assignment: {procedural_material}")
+        _print_step("procedural texture material", procedural_material, procedural_material.get("texture_type") or "")
+
         geometry_nodes = _post_tool(
             base_url,
             "add_geometry_nodes_modifier",

@@ -104,12 +104,13 @@ STRICT_HELPER_FIRST_SCRIPT_GROUPS = {
     "external_assets",
     "project_files",
     "render_outputs",
+    "procedural_textures",
 }
 PRIVILEGED_SCRIPT_FALLBACK_GROUPS = {
     "external_assets",
     "project_files",
 }
-RENDER_OUTPUT_SCRIPT_ESCALATION_TERMS = {
+BOUNDED_HELPER_SCRIPT_ESCALATION_TERMS = {
     "custom node",
     "custom nodes",
     "custom node network",
@@ -119,10 +120,9 @@ RENDER_OUTPUT_SCRIPT_ESCALATION_TERMS = {
     "custom material",
     "custom compositor",
     "compositor graph",
-    "procedural material",
-    "procedural shader",
     "procedural geometry",
 }
+BOUNDED_HELPER_SCRIPT_ESCALATION_GROUPS = {"render_outputs", "procedural_textures"}
 
 STRICT_HELPER_FIRST_SCRIPT_CODES = {
     "external_asset_workflow_required",
@@ -431,6 +431,17 @@ HELPER_FIRST_SCRIPT_RULES = (
             "roughness",
             "metallic",
             "image texture",
+            "procedural texture",
+            "procedural material",
+            "procedural shader",
+            "noise texture",
+            "voronoi",
+            "wave texture",
+            "checker texture",
+            "musgrave",
+            "marble texture",
+            "wood texture",
+            "fabric texture",
             "texture map",
             "pbr",
             "normal map",
@@ -461,6 +472,7 @@ HELPER_FIRST_SCRIPT_RULES = (
             "assign_emission_material_to_selected",
             "create_shader_material",
             "create_image_texture_material",
+            "create_procedural_texture_material",
             "uv_unwrap",
             "get_material_node_details",
             "get_shader_nodes_details",
@@ -579,7 +591,7 @@ def should_include_draft_script(text, matched_groups):
     matched = set(matched_groups or [])
     if matched.intersection(STRICT_HELPER_FIRST_SCRIPT_GROUPS):
         strict = matched.intersection(STRICT_HELPER_FIRST_SCRIPT_GROUPS)
-        if strict == {"render_outputs"} and contains_any_guard_term(text, RENDER_OUTPUT_SCRIPT_ESCALATION_TERMS):
+        if strict.issubset(BOUNDED_HELPER_SCRIPT_ESCALATION_GROUPS) and contains_any_guard_term(text, BOUNDED_HELPER_SCRIPT_ESCALATION_TERMS):
             return True
         return False
     if contains_keyword(text, EXPLICIT_SCRIPT_FALLBACK_KEYWORDS):

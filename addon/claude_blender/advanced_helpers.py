@@ -326,6 +326,68 @@ RENDER_PASS_ALIASES = {
     "grease_pencil": "use_pass_grease_pencil",
 }
 AOV_TYPES = {"COLOR", "VALUE"}
+PROCEDURAL_TEXTURE_TYPES = {"noise", "voronoi", "wave", "checker"}
+PROCEDURAL_TEXTURE_PRESETS = {
+    "custom": {},
+    "stone_noise": {
+        "texture_type": "noise",
+        "color_a": (0.18, 0.17, 0.15, 1.0),
+        "color_b": (0.68, 0.66, 0.58, 1.0),
+        "scale": 38.0,
+        "detail": 12.0,
+        "texture_roughness": 0.58,
+        "distortion": 8.0,
+        "material_roughness": 0.82,
+        "bump_strength": 0.08,
+        "bump_distance": 0.04,
+    },
+    "marble_noise": {
+        "texture_type": "noise",
+        "color_a": (0.05, 0.05, 0.052, 1.0),
+        "color_b": (0.86, 0.84, 0.78, 1.0),
+        "scale": 18.0,
+        "detail": 14.0,
+        "texture_roughness": 0.62,
+        "distortion": 15.0,
+        "material_roughness": 0.28,
+        "bump_strength": 0.035,
+        "bump_distance": 0.025,
+    },
+    "wood_wave": {
+        "texture_type": "wave",
+        "color_a": (0.28, 0.13, 0.045, 1.0),
+        "color_b": (0.78, 0.46, 0.19, 1.0),
+        "scale": 14.0,
+        "detail": 7.0,
+        "texture_roughness": 0.56,
+        "distortion": 12.0,
+        "material_roughness": 0.46,
+        "bump_strength": 0.05,
+        "bump_distance": 0.035,
+        "wave_type": "RINGS",
+    },
+    "cellular_voronoi": {
+        "texture_type": "voronoi",
+        "color_a": (0.04, 0.055, 0.065, 1.0),
+        "color_b": (0.5, 0.74, 0.78, 1.0),
+        "scale": 28.0,
+        "detail": 4.0,
+        "texture_roughness": 0.5,
+        "randomness": 0.82,
+        "material_roughness": 0.55,
+        "bump_strength": 0.04,
+        "bump_distance": 0.025,
+    },
+    "fabric_checker": {
+        "texture_type": "checker",
+        "color_a": (0.06, 0.07, 0.08, 1.0),
+        "color_b": (0.34, 0.38, 0.39, 1.0),
+        "scale": 34.0,
+        "material_roughness": 0.92,
+        "bump_strength": 0.025,
+        "bump_distance": 0.015,
+    },
+}
 
 GEOMETRY_NODE_TEMPLATES = {"passthrough", "transform", "join_geometry", "set_position", "subdivide_mesh"}
 
@@ -1639,6 +1701,297 @@ def create_image_texture_material(
         "message": f"{'Created' if created else 'Updated'} image texture material {material.name}",
         "material": material.name,
         "maps": linked_maps,
+        "assigned_objects": assigned,
+        "missing_object_names": missing,
+        "warnings": warnings,
+        "transaction_id": transaction["id"],
+    }
+
+
+def _normalize_procedural_texture_type(texture_type):
+    key = str(texture_type or "noise").strip().lower().replace("-", "_").replace(" ", "_")
+    if key in {"musgrave", "fractal", "fractal_noise", "clouds"}:
+        key = "noise"
+    if key in {"cellular", "cells"}:
+        key = "voronoi"
+    if key in {"wood", "rings"}:
+        key = "wave"
+    return key if key in PROCEDURAL_TEXTURE_TYPES else ""
+
+
+def _normalize_procedural_texture_preset(preset):
+    key = str(preset or "custom").strip().lower().replace("-", "_").replace(" ", "_")
+    return key if key in PROCEDURAL_TEXTURE_PRESETS else "custom"
+
+
+def _rgba_tuple(value, fallback):
+    source = value if value is not None else fallback
+    return (
+        float(source[0]),
+        float(source[1]),
+        float(source[2]),
+        float(source[3]) if len(source) > 3 else 1.0,
+    )
+
+
+def _set_procedural_texture_inputs(texture_node, *, texture_type, scale, detail, texture_roughness, distortion, randomness, wave_type):
+    _set_socket_value(texture_node.inputs.get("Scale"), max(0.01, min(500.0, float(scale))))
+    if texture_node.inputs.get("Detail"):
+        _set_socket_value(texture_node.inputs.get("Detail"), max(0.0, min(16.0, float(detail))))
+    for socket_name in ("Roughness", "Detail Roughness"):
+        if texture_node.inputs.get(socket_name):
+            _set_socket_value(texture_node.inputs.get(socket_name), max(0.0, min(1.0, float(texture_roughness))))
+    if texture_node.inputs.get("Distortion"):
+        _set_socket_value(texture_node.inputs.get("Distortion"), max(0.0, min(100.0, float(distortion))))
+    if texture_node.inputs.get("Randomness"):
+        _set_socket_value(texture_node.inputs.get("Randomness"), max(0.0, min(1.0, float(randomness))))
+    if texture_type == "wave" and hasattr(texture_node, "wave_type"):
+        wave = str(wave_type or "BANDS").strip().upper()
+        if wave in {"BANDS", "RINGS"}:
+            texture_node.wave_type = wave
+
+
+def create_procedural_texture_material(
+    context,
+    *,
+    name,
+    preset="custom",
+    texture_type="",
+    color_a=None,
+    color_b=None,
+    scale=None,
+    detail=None,
+    texture_roughness=None,
+    distortion=None,
+    randomness=None,
+    metallic=None,
+    material_roughness=None,
+    alpha=None,
+    bump_strength=None,
+    bump_distance=None,
+    wave_type="BANDS",
+    replace_existing_links=True,
+    assign_to_objects=True,
+    object_names=None,
+    selected_only=True,
+    label="Create procedural texture material",
+):
+    preset_key = _normalize_procedural_texture_preset(preset)
+    preset_spec = PROCEDURAL_TEXTURE_PRESETS[preset_key]
+    texture_key = _normalize_procedural_texture_type(texture_type or preset_spec.get("texture_type") or "noise")
+    if not texture_key:
+        return {
+            "ok": False,
+            "message": f"Unsupported procedural texture type: {texture_type}",
+            "supported_texture_types": sorted(PROCEDURAL_TEXTURE_TYPES),
+        }
+
+    color_a = _rgba_tuple(color_a, preset_spec.get("color_a", (0.08, 0.08, 0.085, 1.0)))
+    color_b = _rgba_tuple(color_b, preset_spec.get("color_b", (0.82, 0.78, 0.68, 1.0)))
+    scale = _clamped_float(scale, preset_spec.get("scale", 18.0), 0.01, 500.0)
+    detail = _clamped_float(detail, preset_spec.get("detail", 8.0), 0.0, 16.0)
+    texture_roughness = _clamped_float(texture_roughness, preset_spec.get("texture_roughness", 0.55), 0.0, 1.0)
+    distortion = _clamped_float(distortion, preset_spec.get("distortion", 0.0), 0.0, 100.0)
+    randomness = _clamped_float(randomness, preset_spec.get("randomness", 0.5), 0.0, 1.0)
+    metallic = _clamped_float(metallic, preset_spec.get("metallic", 0.0), 0.0, 1.0)
+    material_roughness = _clamped_float(material_roughness, preset_spec.get("material_roughness", 0.58), 0.0, 1.0)
+    alpha = _clamped_float(alpha, preset_spec.get("alpha", 1.0), 0.0, 1.0)
+    bump_strength = _clamped_float(bump_strength, preset_spec.get("bump_strength", 0.0), 0.0, 10.0)
+    bump_distance = _clamped_float(bump_distance, preset_spec.get("bump_distance", 0.04), 0.0, 10.0)
+    wave_type = str(wave_type or preset_spec.get("wave_type", "BANDS")).strip().upper()
+
+    transaction = live_preview.begin(label, context)
+    material = bpy.data.materials.get(name)
+    created = material is None
+    if material is None:
+        material = bpy.data.materials.new(name or "Agent Bridge Procedural Texture Material")
+        live_preview._record_created_id("material", material.name)
+    else:
+        _record_shader_material(material)
+
+    material.diffuse_color = color_a
+    principled = _ensure_principled_material(material)
+    _set_socket_value(principled.inputs.get("Metallic"), metallic)
+    _set_socket_value(principled.inputs.get("Roughness"), material_roughness)
+    _set_socket_value(principled.inputs.get("Alpha"), alpha)
+    if alpha < 1.0:
+        if hasattr(material, "surface_render_method"):
+            material.surface_render_method = "BLENDED"
+        elif hasattr(material, "blend_method"):
+            material.blend_method = "BLEND"
+
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    warnings = []
+    created_nodes = []
+    linked_sockets = set()
+
+    base_socket = principled.inputs.get("Base Color")
+    base_blocker = _socket_link_blocker(
+        base_socket,
+        "procedural_base_color",
+        replace_existing_links=replace_existing_links,
+        linked_sockets=linked_sockets,
+    )
+    if base_blocker:
+        warnings.append(base_blocker)
+    can_link_base_color = not base_blocker and base_socket is not None
+
+    normal_socket = None
+    bump_blocker = ""
+    can_link_bump = False
+    if bump_strength > 0.0:
+        normal_socket = _principled_socket(principled, ("Normal",))
+        bump_blocker = _socket_link_blocker(
+            normal_socket,
+            "procedural_bump",
+            replace_existing_links=replace_existing_links,
+            linked_sockets=linked_sockets,
+        )
+        if bump_blocker:
+            warnings.append(bump_blocker)
+        can_link_bump = not bump_blocker and normal_socket is not None
+
+    if not can_link_base_color and not can_link_bump:
+        transaction["applied_steps"].append(
+            {
+                "type": "create_procedural_texture_material",
+                "label": label,
+                "material": material.name,
+                "created": created,
+                "preset": preset_key,
+                "texture_type": texture_key,
+                "assigned_objects": [],
+            }
+        )
+        live_preview.redraw(context)
+        live_preview._mark_pending(context, label)
+        return {
+            "ok": True,
+            "message": f"{'Created' if created else 'Updated'} procedural texture material {material.name}",
+            "material": material.name,
+            "preset": preset_key,
+            "texture_type": texture_key,
+            "nodes": [],
+            "base_color_linked": False,
+            "bump_linked": False,
+            "assigned_objects": [],
+            "missing_object_names": [],
+            "warnings": warnings,
+            "transaction_id": transaction["id"],
+        }
+
+    node_type = {
+        "noise": "ShaderNodeTexNoise",
+        "voronoi": "ShaderNodeTexVoronoi",
+        "wave": "ShaderNodeTexWave",
+        "checker": "ShaderNodeTexChecker",
+    }[texture_key]
+    texture_node = nodes.new(type=node_type)
+    texture_node.name = f"Agent Bridge {texture_key.title()} Procedural Texture"
+    texture_node.label = texture_node.name
+    texture_node.location = (-620, 180)
+    created_nodes.append(texture_node.name)
+    _set_procedural_texture_inputs(
+        texture_node,
+        texture_type=texture_key,
+        scale=scale,
+        detail=detail,
+        texture_roughness=texture_roughness,
+        distortion=distortion,
+        randomness=randomness,
+        wave_type=wave_type,
+    )
+
+    color_output = None
+    factor_output = None
+    if texture_key == "checker":
+        _set_socket_value(texture_node.inputs.get("Color1"), color_a)
+        _set_socket_value(texture_node.inputs.get("Color2"), color_b)
+        color_output = texture_node.outputs.get("Color")
+        factor_output = texture_node.outputs.get("Factor")
+    else:
+        factor_output = texture_node.outputs.get("Factor") or texture_node.outputs.get("Distance")
+        if texture_key == "voronoi":
+            factor_output = texture_node.outputs.get("Distance") or factor_output
+
+    if can_link_base_color and texture_key != "checker":
+        ramp_node = nodes.new(type="ShaderNodeValToRGB")
+        ramp_node.name = "Agent Bridge Procedural Color Ramp"
+        ramp_node.label = ramp_node.name
+        ramp_node.location = (-350, 180)
+        created_nodes.append(ramp_node.name)
+        ramp_node.color_ramp.elements[0].position = 0.18
+        ramp_node.color_ramp.elements[0].color = color_a
+        ramp_node.color_ramp.elements[1].position = 1.0
+        ramp_node.color_ramp.elements[1].color = color_b
+        if factor_output and ramp_node.inputs.get("Factor"):
+            links.new(factor_output, ramp_node.inputs["Factor"])
+        color_output = ramp_node.outputs.get("Color")
+
+    base_color_linked = False
+    if can_link_base_color and color_output and base_socket:
+        if base_socket.is_linked:
+            _remove_links_to_socket(material.node_tree, base_socket)
+        links.new(color_output, base_socket)
+        linked_sockets.add(base_socket.name)
+        base_color_linked = True
+
+    bump_linked = False
+    if can_link_bump:
+        bump_node = nodes.new(type="ShaderNodeBump")
+        bump_node.name = "Agent Bridge Procedural Bump"
+        bump_node.label = bump_node.name
+        bump_node.location = (-120, -80)
+        created_nodes.append(bump_node.name)
+        _set_socket_value(bump_node.inputs.get("Strength"), bump_strength)
+        _set_socket_value(bump_node.inputs.get("Distance"), bump_distance)
+        height_output = factor_output or texture_node.outputs.get("Factor") or texture_node.outputs.get("Distance")
+        if height_output and bump_node.inputs.get("Height"):
+            links.new(height_output, bump_node.inputs["Height"])
+        if normal_socket and normal_socket.is_linked:
+            _remove_links_to_socket(material.node_tree, normal_socket)
+        if normal_socket and bump_node.outputs.get("Normal"):
+            links.new(bump_node.outputs["Normal"], normal_socket)
+            linked_sockets.add(normal_socket.name)
+            bump_linked = True
+
+    assigned = []
+    missing = []
+    if assign_to_objects:
+        objects, missing = _resolve_edit_objects(context, object_names=object_names, selected_only=selected_only)
+        for obj in objects:
+            if obj.type != "MESH" or obj.data is None:
+                continue
+            live_preview._record_object_materials(obj)
+            if obj.material_slots:
+                obj.material_slots[0].material = material
+            else:
+                obj.data.materials.append(material)
+            assigned.append(obj.name)
+
+    transaction["applied_steps"].append(
+        {
+            "type": "create_procedural_texture_material",
+            "label": label,
+            "material": material.name,
+            "created": created,
+            "preset": preset_key,
+            "texture_type": texture_key,
+            "assigned_objects": assigned,
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"{'Created' if created else 'Updated'} procedural texture material {material.name}",
+        "material": material.name,
+        "preset": preset_key,
+        "texture_type": texture_key,
+        "nodes": created_nodes,
+        "base_color_linked": base_color_linked,
+        "bump_linked": bump_linked,
         "assigned_objects": assigned,
         "missing_object_names": missing,
         "warnings": warnings,

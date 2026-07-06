@@ -42,6 +42,7 @@ ADVANCED_TOOLS = {
     "add_cloth_simulation_to_selected",
     "create_shader_material",
     "create_image_texture_material",
+    "create_procedural_texture_material",
     "add_geometry_nodes_modifier",
     "create_shape_key",
     "animate_shape_key",
@@ -1075,6 +1076,47 @@ def main():
         assert cautious_update["maps"] == [], cautious_update
         assert any("target socket is already linked" in warning for warning in cautious_update["warnings"]), cautious_update
         assert [node.name for node in material.node_tree.nodes] == node_names_before_cautious_update, cautious_update
+
+        procedural_material = _execute(
+            context,
+            "create_procedural_texture_material",
+            {
+                "name": "Agent Bridge Procedural Wood Smoke",
+                "preset": "wood_wave",
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "bump_strength": 0.07,
+            },
+        )
+        assert procedural_material["texture_type"] == "wave", procedural_material
+        assert procedural_material["base_color_linked"] is True, procedural_material
+        assert procedural_material["bump_linked"] is True, procedural_material
+        assert "Cube" in procedural_material["assigned_objects"], procedural_material
+        procedural = bpy.data.materials[procedural_material["material"]]
+        procedural_node_names = {node.name for node in procedural.node_tree.nodes}
+        assert "Agent Bridge Wave Procedural Texture" in procedural_node_names, procedural_node_names
+        assert "Agent Bridge Procedural Color Ramp" in procedural_node_names, procedural_node_names
+        procedural_nodes_before_cautious_update = [node.name for node in procedural.node_tree.nodes]
+        cautious_procedural_update = _execute(
+            context,
+            "create_procedural_texture_material",
+            {
+                "name": procedural_material["material"],
+                "preset": "marble_noise",
+                "replace_existing_links": False,
+                "assign_to_objects": False,
+            },
+        )
+        assert cautious_procedural_update["nodes"] == [], cautious_procedural_update
+        assert cautious_procedural_update["base_color_linked"] is False, cautious_procedural_update
+        assert cautious_procedural_update["bump_linked"] is False, cautious_procedural_update
+        assert len([warning for warning in cautious_procedural_update["warnings"] if "target socket is already linked" in warning]) >= 2, cautious_procedural_update
+        assert [node.name for node in procedural.node_tree.nodes] == procedural_nodes_before_cautious_update, cautious_procedural_update
+        invalid_procedural = json.loads(
+            tool_dispatcher.execute_tool(context, "create_procedural_texture_material", {"texture_type": "not_a_texture"})
+        )
+        assert invalid_procedural["ok"] is False, invalid_procedural
+        assert "Unsupported procedural texture type" in invalid_procedural["message"], invalid_procedural
 
         valid_engines = {
             item.identifier

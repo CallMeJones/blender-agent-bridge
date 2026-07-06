@@ -171,6 +171,26 @@ RENDER_OUTPUT_ROUTE_TERMS = {
     "ambient occlusion pass",
     "ao pass",
 }
+PROCEDURAL_TEXTURE_ROUTE_TERMS = {
+    "procedural texture",
+    "procedural material",
+    "procedural shader",
+    "noise texture",
+    "voronoi",
+    "wave texture",
+    "checker texture",
+    "musgrave",
+    "procedural marble",
+    "procedural wood",
+    "procedural fabric",
+    "marble texture",
+    "marble material",
+    "wood texture",
+    "wood material",
+    "fabric texture",
+    "fabric material",
+    "cellular texture",
+}
 ADVANCED_ROUTE_TERMS = {
     "advanced",
     "advanced 3d",
@@ -254,6 +274,7 @@ ADVANCED_ROUTE_TERMS = {
     "asset import",
     *LOOKDEV_REVIEW_ROUTE_TERMS,
     *RENDER_OUTPUT_ROUTE_TERMS,
+    *PROCEDURAL_TEXTURE_ROUTE_TERMS,
 }
 ADVANCED_ROUTE_TOOLS = {
     "plan_director_workflow",
@@ -1485,6 +1506,8 @@ def _score_tool_match(tool, query):
                 score += 1200
             elif name == "create_shader_material" and any(term in normalized_query for term in ("material", "chrome", "brass", "metal", "glass", "rubber", "wood", "screen", "display", "enamel", "paint", "color", "colour")):
                 score += 850
+            elif name == "create_procedural_texture_material" and _contains_any_phrase(normalized_query, PROCEDURAL_TEXTURE_ROUTE_TERMS):
+                score += 1050
             elif name == "create_image_texture_material" and any(
                 term in normalized_query
                 for term in (
