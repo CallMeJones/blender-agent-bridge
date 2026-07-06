@@ -1100,7 +1100,26 @@ def main():
         )
         offline_uv_names = [tool["name"] for tool in offline_uv_search["result"]["structuredContent"]["tools"]]
         assert offline_uv_names[0] == "uv_unwrap", offline_uv_search
+        assert "mark_uv_seams" in offline_uv_names[:6], offline_uv_search
+        assert "inspect_uv_layout" in offline_uv_names[:6], offline_uv_search
         assert "create_shader_material" in offline_uv_names, offline_uv_search
+        offline_uv_quality_search = _send(
+            offline_proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 97,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_blender_tools",
+                    "arguments": {"query": "Mark hard-edge UV seams, pack UV islands, and inspect for overlapping UVs and texel density.", "limit": 10},
+                },
+            },
+        )
+        offline_uv_quality_names = [tool["name"] for tool in offline_uv_quality_search["result"]["structuredContent"]["tools"]]
+        assert "mark_uv_seams" in offline_uv_quality_names[:5], offline_uv_quality_search
+        assert "uv_unwrap" in offline_uv_quality_names[:5], offline_uv_quality_search
+        assert "inspect_uv_layout" in offline_uv_quality_names[:5], offline_uv_quality_search
+        assert "draft_script" not in offline_uv_quality_names[:6], offline_uv_quality_search
         for query in (
             "Search Poly Haven for a sunset HDRI and import it into the world.",
             "Import a downloadable Sketchfab Falcon 9 model if auth is present.",

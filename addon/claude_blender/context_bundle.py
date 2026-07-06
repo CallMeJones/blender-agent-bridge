@@ -300,6 +300,8 @@ def build_context_bundle(context, *, include_visual=False, capture_dir=None, max
             "create_image_texture_material",
             "create_procedural_texture_material",
             "uv_unwrap",
+            "mark_uv_seams",
+            "inspect_uv_layout",
             "add_geometry_nodes_modifier",
             "create_shape_key",
             "animate_shape_key",

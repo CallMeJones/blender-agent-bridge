@@ -1407,6 +1407,40 @@ TOOL_CONTRACTS = {
             "additionalProperties": False,
         },
     },
+    "mark_uv_seams": {
+        "description": "Mark or clear bounded UV seams on mesh objects by boundary edges or face-angle threshold",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "object_names": {"type": "array", "items": {"type": "string"}},
+                "selected_only": {"type": "boolean"},
+                "mode": {"type": "string", "enum": ["sharp_angle", "boundary", "sharp_and_boundary", "clear"]},
+                "angle_degrees": {"type": "number"},
+                "include_boundary": {"type": "boolean"},
+                "clear_existing": {"type": "boolean"},
+                "label": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
+    },
+    "inspect_uv_layout": {
+        "description": "Inspect mesh UV maps for missing coordinates, near-zero area, possible overlap bounds, seam counts, layout stats, and scale warnings. max_overlap_pairs=0 disables overlap scanning",
+        "mutates_scene": False,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "object_names": {"type": "array", "items": {"type": "string"}},
+                "selected_only": {"type": "boolean"},
+                "include_children": {"type": "boolean"},
+                "uv_map_name": {"type": "string"},
+                "max_objects": {"type": "integer"},
+                "max_overlap_pairs": {"type": "integer"},
+            },
+            "additionalProperties": False,
+        },
+    },
     "add_geometry_nodes_modifier": {
         "description": "Add a valid Geometry Nodes modifier and starter node group",
         "mutates_scene": True,

@@ -1905,6 +1905,31 @@ def uv_unwrap(context, args):
     )
 
 
+def mark_uv_seams(context, args):
+    return advanced_helpers.mark_uv_seams(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", True)),
+        mode=str(args.get("mode") or "sharp_angle"),
+        angle_degrees=_bounded_float(args.get("angle_degrees"), 60.0, minimum=0.0, maximum=180.0),
+        include_boundary=bool(args.get("include_boundary", True)),
+        clear_existing=bool(args.get("clear_existing", False)),
+        label=args.get("label", "Mark UV seams"),
+    )
+
+
+def inspect_uv_layout(context, args):
+    return advanced_helpers.inspect_uv_layout(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", True)),
+        include_children=bool(args.get("include_children", True)),
+        uv_map_name=str(args.get("uv_map_name") or ""),
+        max_objects=_bounded_int(args.get("max_objects"), 64, minimum=1, maximum=256),
+        max_overlap_pairs=_bounded_int(args.get("max_overlap_pairs"), 200, minimum=0, maximum=1000),
+    )
+
+
 def add_geometry_nodes_modifier(context, args):
     return advanced_helpers.add_geometry_nodes_modifier(
         context,
@@ -3877,6 +3902,8 @@ def _preview_expected_changes(step, label, kind, target_text):
         return f"{label}: creates {_format_count('mesh object', len(step.get('created') or []))} from curve/text sources."
     if kind == "uv_unwrap":
         return f"{label}: writes {step.get('method', 'smart_project')} UVs on {target_text} with mesh-data rollback."
+    if kind == "mark_uv_seams":
+        return f"{label}: marks {step.get('mode', 'sharp_angle')} UV seams on {target_text} with mesh-data rollback."
     if kind == "create_image_texture_material":
         maps = ", ".join(step.get("maps") or []) or "image maps"
         return f"{label}: wires {maps} into material {step.get('material') or 'material'} with preview rollback."
@@ -4009,6 +4036,8 @@ TOOL_FUNCTIONS = {
     "create_image_texture_material": create_image_texture_material,
     "create_procedural_texture_material": create_procedural_texture_material,
     "uv_unwrap": uv_unwrap,
+    "mark_uv_seams": mark_uv_seams,
+    "inspect_uv_layout": inspect_uv_layout,
     "add_geometry_nodes_modifier": add_geometry_nodes_modifier,
     "create_shape_key": create_shape_key,
     "animate_shape_key": animate_shape_key,

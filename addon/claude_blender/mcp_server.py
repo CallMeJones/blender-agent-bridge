@@ -383,6 +383,17 @@ UV_UNWRAP_ROUTE_TERMS = {
     "texture coordinates",
     "texture-ready",
     "texture ready",
+    "uv map",
+    "uv layout",
+    "uv island",
+    "uv islands",
+    "pack islands",
+    "pack uv",
+    "mark seams",
+    "uv seams",
+    "overlapping uvs",
+    "overlap uvs",
+    "texel density",
 }
 GENERIC_SELECTED_OBJECT_TOOLS = {
     "set_selected_location_delta",
@@ -1264,7 +1275,7 @@ def _tool_category(tool):
         return "two_d"
     if name in {"plan_advanced_scene_workflow", "plan_object_design"}:
         return "inspect"
-    if name.startswith("get_") or name.startswith("list_") or name in {
+    if name.startswith("get_") or name.startswith("list_") or name.startswith("inspect_") or name in {
         "inspect_scene",
         "search_blender_docs",
         "capture_viewport",
@@ -1283,7 +1294,7 @@ def _tool_category(tool):
         return "camera_render"
     if "animate" in name or "animation" in name or "frame" in name:
         return "animation"
-    if name in {"edit_mesh", "curve_to_mesh", "boolean_op", "mirror_model", "symmetrize_model", "solidify_model", "screw_model"}:
+    if name in {"edit_mesh", "curve_to_mesh", "boolean_op", "mirror_model", "symmetrize_model", "solidify_model", "screw_model", "uv_unwrap", "mark_uv_seams"}:
         return "geometry"
     if "geometry" in name or "modifier" in name or "bevel" in name or "subsurf" in name or "shape_key" in name:
         return "geometry"
@@ -1444,6 +1455,12 @@ def _score_tool_match(tool, query):
     if uv_unwrap_query:
         if name == "uv_unwrap":
             score += 1400
+        elif name == "mark_uv_seams" and any(term in normalized_query for term in ("seam", "seams", "hard edge", "sharp edge", "boundary")):
+            score += 1350
+        elif name == "inspect_uv_layout" and any(term in normalized_query for term in ("inspect", "validate", "quality", "overlap", "overlapping", "texel", "coverage", "uv layout")):
+            score += 1300
+        elif name == "inspect_uv_layout":
+            score += 900
         elif name == "create_image_texture_material":
             score -= 150
     if animation_query:
@@ -1541,6 +1558,10 @@ def _score_tool_match(tool, query):
             ):
                 score += 1200
             elif name == "uv_unwrap" and any(term in normalized_query for term in ("uv", "unwrap", "texture coordinate", "texture-ready", "texture ready")):
+                score += 850
+            elif name == "mark_uv_seams" and any(term in normalized_query for term in ("uv seam", "mark seam", "seam unwrap", "hard edge")):
+                score += 850
+            elif name == "inspect_uv_layout" and any(term in normalized_query for term in ("uv layout", "overlapping uv", "texel density", "uv coverage")):
                 score += 850
             elif name in {"get_geometry_nodes_details", "add_geometry_nodes_modifier", "add_bevel_and_subsurf"}:
                 score += 500

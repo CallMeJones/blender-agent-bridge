@@ -30,6 +30,8 @@ ADVANCED_TOOLS = {
     "inspect_modeling_quality",
     "curve_to_mesh",
     "uv_unwrap",
+    "mark_uv_seams",
+    "inspect_uv_layout",
     "boolean_op",
     "mirror_model",
     "symmetrize_model",
@@ -1004,6 +1006,21 @@ def main():
         assert "Principled BSDF" not in shader_snapshot["node_names"], shader_snapshot
         assert _material_topology(existing_material) != existing_topology
 
+        seam_result = _execute(
+            context,
+            "mark_uv_seams",
+            {
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "mode": "sharp_angle",
+                "angle_degrees": 45.0,
+                "clear_existing": True,
+            },
+        )
+        assert seam_result["objects"][0]["marked_edges"] == 12, seam_result
+        assert seam_result["objects"][0]["seams_after"] == 12, seam_result
+        assert "mesh_data_snapshot" in seam_result["preview_change_report"]["rollback_scopes"], seam_result
+
         uv_result = _execute(
             context,
             "uv_unwrap",
@@ -1018,11 +1035,82 @@ def main():
         )
         assert uv_result["method"] == "smart_project", uv_result
         assert uv_result["objects"][0]["uv_map"] == "Agent Bridge Advanced UVs", uv_result
+        assert uv_result["objects"][0]["seam_count"] == 12, uv_result
+        assert uv_result["objects"][0]["uv_bounds"], uv_result
+        assert uv_result["objects"][0]["uv_area_sum"] > 0.0, uv_result
         assert "mesh_data_snapshot" in uv_result["preview_change_report"]["rollback_scopes"], uv_result
         uv_layer = cube.data.uv_layers.get("Agent Bridge Advanced UVs")
         assert uv_layer is not None, uv_result
         uv_values = [component for item in uv_layer.data for component in item.uv]
         assert uv_values and min(uv_values) >= 0.0 and max(uv_values) <= 1.0, uv_values
+        uv_inspection = _execute(
+            context,
+            "inspect_uv_layout",
+            {
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "uv_map_name": "Agent Bridge Advanced UVs",
+                "max_overlap_pairs": 100,
+            },
+        )
+        assert uv_inspection["passed"] is True, uv_inspection
+        assert uv_inspection["issue_count"] == 0, uv_inspection
+        assert uv_inspection["objects"][0]["seam_count"] == 12, uv_inspection
+        assert uv_inspection["objects"][0]["has_uvs"] is True, uv_inspection
+        assert uv_inspection["objects"][0]["uv_area_sum"] > 0.0, uv_inspection
+        missing_uv_inspection = _execute(
+            context,
+            "inspect_uv_layout",
+            {
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "uv_map_name": "Missing Agent Bridge UVs",
+            },
+        )
+        assert missing_uv_inspection["passed"] is False, missing_uv_inspection
+        assert missing_uv_inspection["issue_count"] == 1, missing_uv_inspection
+        overlap_uv_result = _execute(
+            context,
+            "uv_unwrap",
+            {
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "method": "planar_project",
+                "uv_map_name": "Agent Bridge Overlap UVs",
+                "replace_existing": True,
+                "pack_islands": False,
+                "projection_axis": "Z",
+            },
+        )
+        assert overlap_uv_result["objects"][0]["possible_overlap_pairs"] > 0, overlap_uv_result
+        assert overlap_uv_result["objects"][0]["layout_issues"], overlap_uv_result
+        overlap_inspection = _execute(
+            context,
+            "inspect_uv_layout",
+            {
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "uv_map_name": "Agent Bridge Overlap UVs",
+                "max_overlap_pairs": 10,
+            },
+        )
+        assert overlap_inspection["passed"] is False, overlap_inspection
+        assert overlap_inspection["issue_count"] > 0, overlap_inspection
+        assert overlap_inspection["objects"][0]["possible_overlap_pairs"] > 0, overlap_inspection
+        assert any("overlapping UV" in issue for issue in overlap_inspection["objects"][0]["issues"]), overlap_inspection
+        overlap_scan_disabled = _execute(
+            context,
+            "inspect_uv_layout",
+            {
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "uv_map_name": "Agent Bridge Overlap UVs",
+                "max_overlap_pairs": 0,
+            },
+        )
+        assert overlap_scan_disabled["passed"] is True, overlap_scan_disabled
+        assert overlap_scan_disabled["objects"][0]["possible_overlap_pairs"] == 0, overlap_scan_disabled
+        assert overlap_scan_disabled["objects"][0]["overlap_pair_checks"] == 0, overlap_scan_disabled
 
         base_texture_path = os.path.join(tempfile.gettempdir(), "agent-bridge-smoke-base-color.png")
         arm_texture_path = os.path.join(tempfile.gettempdir(), "agent-bridge-smoke-arm.png")

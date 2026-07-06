@@ -314,8 +314,20 @@ def main():
         )
         lookdev_names = _names(lookdev_tools)
         assert "uv_unwrap" in lookdev_names, lookdev_meta
+        assert "mark_uv_seams" in lookdev_names, lookdev_meta
+        assert "inspect_uv_layout" in lookdev_names, lookdev_meta
         assert "create_shader_material" in lookdev_names, lookdev_meta
         assert "draft_script" not in lookdev_names, lookdev_meta
+
+        uv_quality_tools, uv_quality_meta = agent_tools.select_blender_tool_definitions(
+            "Mark hard-edge UV seams, pack UV islands, then inspect the UV layout for overlapping UVs and texel density.",
+            bundle,
+        )
+        uv_quality_names = _names(uv_quality_tools)
+        assert "mark_uv_seams" in uv_quality_names, uv_quality_meta
+        assert "uv_unwrap" in uv_quality_names, uv_quality_meta
+        assert "inspect_uv_layout" in uv_quality_names, uv_quality_meta
+        assert "draft_script" not in uv_quality_names, uv_quality_meta
 
         lookdev_review_tools, lookdev_review_meta = agent_tools.select_blender_tool_definitions(
             "Create a lookdev turntable review with Cycles denoise, inspection stills, and artifact validation.",

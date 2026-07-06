@@ -140,6 +140,56 @@ def main() -> int:
         )
         _require_ok("select_objects", selected)
 
+        uv_seams = _post_tool(
+            base_url,
+            "mark_uv_seams",
+            {
+                "object_names": [target],
+                "selected_only": False,
+                "mode": "sharp_angle",
+                "angle_degrees": 45.0,
+                "clear_existing": True,
+            },
+            timeout=args.timeout,
+        )
+        _require_ok("mark_uv_seams", uv_seams)
+        if not (uv_seams.get("objects") or [{}])[0].get("seams_after"):
+            raise RuntimeError(f"UV seam helper did not mark seams: {uv_seams}")
+        _print_step("uv seams", uv_seams, f"{(uv_seams.get('objects') or [{}])[0].get('seams_after')} seams")
+
+        uv_unwrap = _post_tool(
+            base_url,
+            "uv_unwrap",
+            {
+                "object_names": [target],
+                "selected_only": False,
+                "uv_map_name": "Agent Bridge Sweep UVs",
+                "replace_existing": True,
+                "pack_islands": True,
+                "margin": 0.03,
+            },
+            timeout=args.timeout,
+        )
+        _require_ok("uv_unwrap", uv_unwrap)
+        if (uv_unwrap.get("objects") or [{}])[0].get("uv_map") != "Agent Bridge Sweep UVs":
+            raise RuntimeError(f"UV unwrap helper did not create expected UV map: {uv_unwrap}")
+        _print_step("uv unwrap", uv_unwrap, (uv_unwrap.get("objects") or [{}])[0].get("uv_map") or "")
+
+        uv_inspection = _post_tool(
+            base_url,
+            "inspect_uv_layout",
+            {
+                "object_names": [target],
+                "selected_only": False,
+                "uv_map_name": "Agent Bridge Sweep UVs",
+            },
+            timeout=args.timeout,
+        )
+        _require_ok("inspect_uv_layout", uv_inspection)
+        if not uv_inspection.get("passed"):
+            raise RuntimeError(f"UV inspection did not pass after unwrap: {uv_inspection}")
+        _print_step("uv inspection", uv_inspection, f"{uv_inspection.get('warning_count', 0)} warning(s)")
+
         material = _post_tool(
             base_url,
             "create_shader_material",

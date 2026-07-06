@@ -267,6 +267,7 @@ SHADER_MATERIAL_PRESETS = {
 
 UV_UNWRAP_METHODS = {"smart_project", "cube_project", "planar_project"}
 UV_PROJECTION_AXES = {"X", "Y", "Z"}
+UV_SEAM_MODES = {"sharp_angle", "boundary", "sharp_and_boundary", "clear"}
 TEXTURE_IMAGE_EXTENSIONS = {".bmp", ".exr", ".hdr", ".jpeg", ".jpg", ".png", ".tga", ".tif", ".tiff", ".webp"}
 IMAGE_TEXTURE_MAP_SPECS = {
     "base_color": {"socket_names": ("Base Color",), "colorspace": "sRGB", "output": "Color"},
@@ -2091,6 +2092,390 @@ def _write_uv_projection(mesh, uv_layer, *, method, projection_axis, margin, pac
     return {"polygons": polygons, "loops": loop_count}
 
 
+def _normalize_uv_seam_mode(mode):
+    key = str(mode or "sharp_angle").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "sharp": "sharp_angle",
+        "angle": "sharp_angle",
+        "hard_edges": "sharp_angle",
+        "boundaries": "boundary",
+        "boundary_edges": "boundary",
+        "both": "sharp_and_boundary",
+        "all": "sharp_and_boundary",
+        "clear_existing": "clear",
+        "remove": "clear",
+    }
+    key = aliases.get(key, key)
+    return key if key in UV_SEAM_MODES else "sharp_angle"
+
+
+def _mesh_edge_face_map(mesh):
+    face_map = {}
+    if mesh is None:
+        return face_map
+    for polygon in mesh.polygons:
+        for edge_key in polygon.edge_keys:
+            key = tuple(sorted(edge_key))
+            face_map.setdefault(key, []).append(polygon.index)
+    return face_map
+
+
+def _edge_face_angle_degrees(mesh, polygon_indices):
+    if mesh is None or len(polygon_indices or []) < 2:
+        return 0.0
+    max_angle = 0.0
+    indices = list(polygon_indices)
+    for left_index, left_poly_index in enumerate(indices[:-1]):
+        left_normal = Vector(mesh.polygons[left_poly_index].normal)
+        if left_normal.length <= 1e-9:
+            continue
+        left_normal.normalize()
+        for right_poly_index in indices[left_index + 1 :]:
+            right_normal = Vector(mesh.polygons[right_poly_index].normal)
+            if right_normal.length <= 1e-9:
+                continue
+            right_normal.normalize()
+            dot = max(-1.0, min(1.0, float(left_normal.dot(right_normal))))
+            max_angle = max(max_angle, math.degrees(math.acos(dot)))
+    return max_angle
+
+
+def _uv_layer_for_mesh(mesh, uv_map_name=""):
+    if mesh is None or not mesh.uv_layers:
+        return None
+    name = str(uv_map_name or "").strip()
+    if name:
+        return mesh.uv_layers.get(name)
+    return mesh.uv_layers.active or mesh.uv_layers[0]
+
+
+def _uv_polygon_area(coords):
+    if len(coords) < 3:
+        return 0.0
+    area = 0.0
+    ax, ay = coords[0]
+    for index in range(1, len(coords) - 1):
+        bx, by = coords[index]
+        cx, cy = coords[index + 1]
+        area += abs((bx - ax) * (cy - ay) - (by - ay) * (cx - ax)) * 0.5
+    return area
+
+
+def _world_polygon_area(obj, polygon):
+    if obj is None or obj.type != "MESH" or obj.data is None or len(polygon.vertices) < 3:
+        return 0.0
+    vertices = [obj.matrix_world @ obj.data.vertices[index].co for index in polygon.vertices]
+    area = 0.0
+    origin = vertices[0]
+    for index in range(1, len(vertices) - 1):
+        area += ((vertices[index] - origin).cross(vertices[index + 1] - origin)).length * 0.5
+    return area
+
+
+def _uv_bbox(coords):
+    if not coords:
+        return None
+    u_values = [item[0] for item in coords]
+    v_values = [item[1] for item in coords]
+    return (min(u_values), min(v_values), max(u_values), max(v_values))
+
+
+def _uv_bbox_positive_overlap(left, right, epsilon=1e-6):
+    if left is None or right is None:
+        return False
+    width = min(left[2], right[2]) - max(left[0], right[0])
+    height = min(left[3], right[3]) - max(left[1], right[1])
+    return width > epsilon and height > epsilon
+
+
+def _uv_layout_quality(obj, *, uv_map_name="", max_overlap_pairs=200):
+    mesh = obj.data if obj and obj.type == "MESH" else None
+    issues = []
+    warnings = []
+    seam_count = sum(1 for edge in mesh.edges if edge.use_seam) if mesh else 0
+    result = {
+        "object": obj.name if obj else "",
+        "mesh": mesh.name if mesh else "",
+        "uv_map": "",
+        "has_uvs": False,
+        "active_uv_map": "",
+        "face_count": len(mesh.polygons) if mesh else 0,
+        "loop_count": len(mesh.loops) if mesh else 0,
+        "seam_count": seam_count,
+        "edge_count": len(mesh.edges) if mesh else 0,
+        "out_of_bounds_loops": 0,
+        "possible_overlap_pairs": 0,
+        "overlap_pair_checks": 0,
+        "overlap_samples": [],
+        "uv_bounds": None,
+        "uv_bounds_area": 0.0,
+        "uv_area_sum": 0.0,
+        "world_surface_area": 0.0,
+        "uv_area_to_surface_area": 0.0,
+        "issues": issues,
+        "warnings": warnings,
+        "passed": True,
+    }
+    if mesh is None:
+        issues.append("not a mesh")
+        result["passed"] = False
+        return result
+
+    active_layer = mesh.uv_layers.active
+    result["active_uv_map"] = active_layer.name if active_layer else ""
+    uv_layer = _uv_layer_for_mesh(mesh, uv_map_name)
+    requested_name = str(uv_map_name or "").strip()
+    if uv_layer is None:
+        issues.append(f"UV map not found: {requested_name}" if requested_name else "no UV map")
+        result["passed"] = False
+        return result
+
+    result["uv_map"] = uv_layer.name
+    result["has_uvs"] = True
+    all_coords = []
+    face_bboxes = []
+    uv_area = 0.0
+    surface_area = 0.0
+    out_of_bounds = 0
+    for polygon in mesh.polygons:
+        coords = []
+        for loop_index in polygon.loop_indices:
+            if loop_index >= len(uv_layer.data):
+                continue
+            uv = uv_layer.data[loop_index].uv
+            coord = (float(uv.x), float(uv.y))
+            coords.append(coord)
+            all_coords.append(coord)
+            if coord[0] < -1e-6 or coord[0] > 1.0 + 1e-6 or coord[1] < -1e-6 or coord[1] > 1.0 + 1e-6:
+                out_of_bounds += 1
+        face_area = _uv_polygon_area(coords)
+        if face_area > 1e-12:
+            bbox = _uv_bbox(coords)
+            if bbox is not None:
+                face_bboxes.append((polygon.index, bbox))
+        uv_area += face_area
+        surface_area += _world_polygon_area(obj, polygon)
+
+    if not all_coords:
+        issues.append("UV map has no loop coordinates")
+    else:
+        bounds = _uv_bbox(all_coords)
+        bounds_area = max(0.0, (bounds[2] - bounds[0]) * (bounds[3] - bounds[1])) if bounds else 0.0
+        result["uv_bounds"] = [round(value, 6) for value in bounds]
+        result["uv_bounds_area"] = round(bounds_area, 6)
+    result["out_of_bounds_loops"] = out_of_bounds
+    if out_of_bounds:
+        warnings.append(f"{out_of_bounds} UV loop coordinate(s) outside 0..1")
+    result["uv_area_sum"] = round(uv_area, 6)
+    result["world_surface_area"] = round(surface_area, 6)
+    result["uv_area_to_surface_area"] = round(uv_area / surface_area, 6) if surface_area > 1e-12 else 0.0
+    if uv_area <= 1e-9 and mesh.polygons:
+        issues.append("UV layout has near-zero area")
+
+    max_reported_overlaps = max(0, min(1000, int(max_overlap_pairs or 0)))
+    max_faces = min(len(face_bboxes), 300)
+    overlap_count = 0
+    checks = 0
+    if max_reported_overlaps > 0:
+        for left_index in range(max_faces):
+            left_face, left_bbox = face_bboxes[left_index]
+            for right_index in range(left_index + 1, max_faces):
+                right_face, right_bbox = face_bboxes[right_index]
+                checks += 1
+                if _uv_bbox_positive_overlap(left_bbox, right_bbox):
+                    overlap_count += 1
+                    if len(result["overlap_samples"]) < 12:
+                        result["overlap_samples"].append([left_face, right_face])
+                    if overlap_count >= max_reported_overlaps:
+                        break
+            if overlap_count >= max_reported_overlaps:
+                break
+    result["possible_overlap_pairs"] = overlap_count
+    result["overlap_pair_checks"] = checks
+    if overlap_count:
+        issues.append(f"{overlap_count} possible overlapping UV face-bound pair(s)")
+
+    scale = tuple(float(component) for component in getattr(obj, "scale", (1.0, 1.0, 1.0)))
+    if any(abs(abs(component) - 1.0) > 0.001 for component in scale):
+        warnings.append("object has unapplied scale")
+    if seam_count == 0 and len(mesh.edges) > 0 and len(mesh.polygons) > 6:
+        warnings.append("mesh has no marked UV seams")
+
+    result["passed"] = not issues
+    return result
+
+
+def mark_uv_seams(
+    context,
+    *,
+    object_names=None,
+    selected_only=True,
+    mode="sharp_angle",
+    angle_degrees=60.0,
+    include_boundary=True,
+    clear_existing=False,
+    label="Mark UV seams",
+):
+    mode = _normalize_uv_seam_mode(mode)
+    angle = _clamped_float(angle_degrees, 60.0, 0.0, 180.0)
+    objects, missing = _resolve_edit_objects(context, object_names=object_names, selected_only=selected_only)
+    meshes = [obj for obj in objects if obj.type == "MESH"]
+    if not meshes:
+        return {"ok": False, "message": "No mesh objects found for mark_uv_seams", "missing_object_names": missing}
+
+    transaction = live_preview.begin(label, context)
+    changed = []
+    skipped = []
+    for obj in meshes:
+        blockers = _mesh_edit_blockers(obj, allow_shape_keys=True)
+        if blockers:
+            skipped.append({"object": obj.name, "reasons": blockers})
+            continue
+        mesh = obj.data
+        live_preview._record_mesh_data_snapshot(obj)
+        mesh.update(calc_edges=True)
+        seams_before = sum(1 for edge in mesh.edges if edge.use_seam)
+        cleared = 0
+        marked = 0
+        boundary_edges = 0
+        sharp_angle_edges = 0
+        if mode == "clear" or clear_existing:
+            for edge in mesh.edges:
+                if edge.use_seam:
+                    edge.use_seam = False
+                    cleared += 1
+        if mode != "clear":
+            face_map = _mesh_edge_face_map(mesh)
+            for edge in mesh.edges:
+                edge_key = tuple(sorted(int(index) for index in edge.vertices))
+                polygon_indices = face_map.get(edge_key, [])
+                is_boundary = len(polygon_indices) < 2
+                if is_boundary:
+                    boundary_edges += 1
+                edge_angle = _edge_face_angle_degrees(mesh, polygon_indices)
+                is_sharp = edge_angle >= angle
+                if is_sharp:
+                    sharp_angle_edges += 1
+                should_mark = False
+                if mode == "boundary":
+                    should_mark = is_boundary
+                elif mode == "sharp_and_boundary":
+                    should_mark = is_sharp or is_boundary
+                else:
+                    should_mark = is_sharp or (bool(include_boundary) and is_boundary)
+                if should_mark and not edge.use_seam:
+                    edge.use_seam = True
+                    marked += 1
+        mesh.update()
+        seams_after = sum(1 for edge in mesh.edges if edge.use_seam)
+        changed.append(
+            {
+                "object": obj.name,
+                "mesh": mesh.name,
+                "mode": mode,
+                "angle_degrees": round(angle, 4),
+                "include_boundary": bool(include_boundary),
+                "cleared_existing": cleared,
+                "marked_edges": marked,
+                "boundary_edges": boundary_edges,
+                "sharp_angle_edges": sharp_angle_edges,
+                "seams_before": seams_before,
+                "seams_after": seams_after,
+            }
+        )
+
+    if not changed:
+        return {
+            "ok": False,
+            "message": "No mesh UV seams were changed",
+            "objects": changed,
+            "skipped": skipped,
+            "missing_object_names": missing,
+            "transaction_id": transaction["id"],
+        }
+    transaction["applied_steps"].append(
+        {
+            "type": "mark_uv_seams",
+            "label": label,
+            "objects": changed,
+            "mode": mode,
+            "angle_degrees": round(angle, 4),
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Updated UV seams on {len(changed)} mesh object(s)",
+        "objects": changed,
+        "skipped": skipped,
+        "mode": mode,
+        "angle_degrees": round(angle, 4),
+        "missing_object_names": missing,
+        "transaction_id": transaction["id"],
+    }
+
+
+def inspect_uv_layout(
+    context,
+    *,
+    object_names=None,
+    selected_only=True,
+    include_children=True,
+    uv_map_name="",
+    max_objects=64,
+    max_overlap_pairs=200,
+):
+    roots, missing = _resolve_edit_objects(context, object_names=object_names, selected_only=selected_only, max_objects=max_objects)
+    seen = set()
+    objects = []
+    for root in roots:
+        candidates = [root]
+        if include_children:
+            candidates.extend(list(getattr(root, "children_recursive", []) or []))
+        for obj in candidates:
+            if obj.name in seen:
+                continue
+            seen.add(obj.name)
+            objects.append(obj)
+            if len(objects) >= max(1, int(max_objects or 1)):
+                break
+    mesh_objects = [obj for obj in objects if obj.type == "MESH"]
+    if not mesh_objects:
+        return {
+            "ok": False,
+            "passed": False,
+            "message": "No mesh objects found for UV layout inspection",
+            "objects": [],
+            "missing_object_names": missing,
+        }
+    results = [
+        _uv_layout_quality(
+            obj,
+            uv_map_name=uv_map_name,
+            max_overlap_pairs=max_overlap_pairs,
+        )
+        for obj in mesh_objects
+    ]
+    issue_count = sum(len(item["issues"]) for item in results)
+    warning_count = sum(len(item["warnings"]) for item in results)
+    return {
+        "ok": True,
+        "passed": issue_count == 0,
+        "message": "UV layout inspection passed" if issue_count == 0 else "UV layout inspection found issues",
+        "objects": results,
+        "object_count": len(results),
+        "issue_count": issue_count,
+        "warning_count": warning_count,
+        "missing_object_names": missing,
+        "policy": {
+            "include_children": bool(include_children),
+            "uv_map_name": str(uv_map_name or ""),
+            "max_overlap_pairs": max(0, min(1000, int(max_overlap_pairs or 0))),
+        },
+    }
+
+
 def uv_unwrap(
     context,
     *,
@@ -2139,6 +2524,7 @@ def uv_unwrap(
             pack_islands=pack_islands,
         )
         mesh.update()
+        layout = _uv_layout_quality(obj, uv_map_name=uv_layer.name, max_overlap_pairs=80)
         changed.append(
             {
                 "object": obj.name,
@@ -2147,6 +2533,13 @@ def uv_unwrap(
                 "method": method,
                 "projection_axis": projection_axis,
                 "replaced_existing": replaced,
+                "seam_count": layout.get("seam_count", 0),
+                "uv_bounds": layout.get("uv_bounds"),
+                "uv_bounds_area": layout.get("uv_bounds_area", 0.0),
+                "uv_area_sum": layout.get("uv_area_sum", 0.0),
+                "possible_overlap_pairs": layout.get("possible_overlap_pairs", 0),
+                "layout_issues": layout.get("issues", []),
+                "layout_warnings": layout.get("warnings", []),
                 **counts,
             }
         )
