@@ -7,11 +7,12 @@ import bmesh
 import math
 import os
 import re
+import time
 
 import bpy
 from mathutils import Vector
 
-from . import inspection_render, live_preview
+from . import inspection_render, live_preview, viewport_capture
 
 
 KEYFRAME_INTERPOLATIONS = {
@@ -281,6 +282,29 @@ IMAGE_TEXTURE_MAP_SPECS = {
     "orm": {"colorspace": "Non-Color", "packed_channels": {"ambient_occlusion": "Red", "roughness": "Green", "metallic": "Blue"}},
     "bump": {"socket_names": ("Normal",), "colorspace": "Non-Color", "bump_map": True},
     "displacement": {"colorspace": "Non-Color", "warn_only": True},
+}
+BAKE_MAP_SPECS = {
+    "ambient_occlusion": {"bake_type": "AO", "suffix": "ao", "colorspace": "Non-Color"},
+    "normal": {"bake_type": "NORMAL", "suffix": "normal", "colorspace": "Non-Color"},
+    "base_color": {"bake_type": "DIFFUSE", "suffix": "base_color", "colorspace": "sRGB", "pass_filter": {"COLOR"}},
+}
+BAKE_MAP_ALIASES = {
+    "ao": "ambient_occlusion",
+    "ambient_occlusion": "ambient_occlusion",
+    "ambient-occlusion": "ambient_occlusion",
+    "ambient occlusion": "ambient_occlusion",
+    "normal": "normal",
+    "normal_map": "normal",
+    "normal-map": "normal",
+    "normal map": "normal",
+    "base_color": "base_color",
+    "base-color": "base_color",
+    "base color": "base_color",
+    "diffuse": "base_color",
+    "diffuse_color": "base_color",
+    "diffuse-color": "base_color",
+    "diffuse color": "base_color",
+    "albedo": "base_color",
 }
 
 RENDER_QUALITY_PRESETS = {
@@ -2228,6 +2252,347 @@ def repair_material_setup(
         "post_inspection": post_inspection,
         "missing_material_names": missing_materials,
         "missing_object_names": missing_objects,
+        "transaction_id": transaction["id"],
+    }
+
+
+def _normalize_bake_map_type(map_type):
+    key = str(map_type or "").strip().lower().replace("_", " ")
+    return BAKE_MAP_ALIASES.get(key.replace(" ", "_")) or BAKE_MAP_ALIASES.get(key.replace(" ", "-")) or BAKE_MAP_ALIASES.get(key, "")
+
+
+def _normalize_bake_map_types(map_types):
+    requested = map_types or ["ambient_occlusion", "normal", "base_color"]
+    normalized = []
+    unsupported = []
+    for item in requested:
+        map_type = _normalize_bake_map_type(item)
+        if map_type:
+            if map_type not in normalized:
+                normalized.append(map_type)
+        else:
+            unsupported.append(str(item))
+    return normalized, unsupported
+
+
+def _safe_bake_name(value, fallback="bake"):
+    text = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value or "").strip()).strip("._")
+    return text[:96] or fallback
+
+
+def _resolve_bake_output_dir(context, output_dir):
+    raw = str(output_dir or "").strip()
+    if raw:
+        resolved = bpy.path.abspath(raw) if raw.startswith("//") else os.path.expanduser(raw)
+        resolved = os.path.abspath(resolved)
+    else:
+        capture_info = viewport_capture.resolve_capture_dir(context, create=True)
+        run_id = time.strftime("%Y%m%d-%H%M%S")
+        resolved = os.path.join(capture_info["capture_dir"], "bake-maps", run_id)
+    os.makedirs(resolved, exist_ok=True)
+    return resolved
+
+
+def _unique_bake_path(output_dir, filename, *, overwrite=False):
+    path = os.path.join(output_dir, filename)
+    if overwrite or not os.path.exists(path):
+        return path
+    stem, extension = os.path.splitext(filename)
+    for index in range(2, 1000):
+        candidate = os.path.join(output_dir, f"{stem}-{index}{extension}")
+        if not os.path.exists(candidate):
+            return candidate
+    return path
+
+
+def _resolve_uv_layer_for_bake(obj, uv_map_name):
+    mesh = obj.data if obj and obj.type == "MESH" else None
+    if mesh is None:
+        return None, "Object is not a mesh"
+    uv_layers = getattr(mesh, "uv_layers", None)
+    if not uv_layers or not len(uv_layers):
+        return None, "Mesh has no UV map; run uv_unwrap first"
+    requested = str(uv_map_name or "").strip()
+    uv_layer = uv_layers.get(requested) if requested else uv_layers.active
+    if uv_layer is None and not requested:
+        uv_layer = uv_layers[0]
+    if uv_layer is None:
+        return None, f"UV map not found: {requested}"
+    return uv_layer, ""
+
+
+def _active_uv_layer_for_bake(obj, uv_map_name):
+    uv_layer, error = _resolve_uv_layer_for_bake(obj, uv_map_name)
+    if error:
+        return None, error
+    mesh = obj.data if obj and obj.type == "MESH" else None
+    if mesh is not None:
+        mesh.uv_layers.active = uv_layer
+    return uv_layer, ""
+
+
+def _bake_materials_for_object(obj):
+    materials = []
+    for slot in list(getattr(obj, "material_slots", []) or []):
+        material = getattr(slot, "material", None)
+        if material and material.node_tree:
+            materials.append(material)
+    return materials
+
+
+def _preflight_bake_objects(objects, uv_map_name):
+    issues = []
+    for obj in objects:
+        _, uv_error = _resolve_uv_layer_for_bake(obj, uv_map_name)
+        if uv_error:
+            issues.append({"object": obj.name, "message": uv_error})
+        if not _bake_materials_for_object(obj):
+            issues.append({"object": obj.name, "message": "Object has no node-based material to bake"})
+    return issues
+
+
+def _add_bake_target_nodes(materials, image):
+    created = []
+    previous_active = []
+    for material in materials:
+        nodes = material.node_tree.nodes
+        previous_active.append((material, getattr(nodes, "active", None)))
+        node = nodes.new(type="ShaderNodeTexImage")
+        node.name = "Agent Bridge Bake Target"
+        node.label = "Agent Bridge Bake Target"
+        node.image = image
+        node.location = (-780, -520)
+        nodes.active = node
+        created.append((material, node))
+    return created, previous_active
+
+
+def _remove_bake_target_nodes(created_nodes, previous_active_nodes):
+    for material, node in reversed(created_nodes):
+        if material and material.node_tree and node and node.name in material.node_tree.nodes:
+            material.node_tree.nodes.remove(node)
+    for material, active_node in previous_active_nodes:
+        if not material or not material.node_tree or active_node is None:
+            continue
+        if active_node.name in material.node_tree.nodes:
+            material.node_tree.nodes.active = active_node
+
+
+def _bake_artifact_report(path, *, object_name, map_type, image, width, height):
+    exists = bool(path and os.path.isfile(path))
+    size_bytes = os.path.getsize(path) if exists else 0
+    return {
+        "object": object_name,
+        "map_type": map_type,
+        "image": image.name if image else "",
+        "path": path,
+        "available": bool(exists and size_bytes > 0),
+        "size_bytes": int(size_bytes),
+        "width": int(width),
+        "height": int(height),
+    }
+
+
+def bake_maps(
+    context,
+    *,
+    object_names=None,
+    selected_only=True,
+    map_types=None,
+    output_dir="",
+    resolution=512,
+    margin=16,
+    samples=32,
+    uv_map_name="",
+    overwrite=False,
+    label="Bake maps",
+):
+    """Bake bounded material maps to PNG artifacts."""
+
+    requested_map_types, unsupported = _normalize_bake_map_types(map_types)
+    if unsupported:
+        return {
+            "ok": False,
+            "message": f"Unsupported bake map type(s): {', '.join(unsupported)}",
+            "supported_map_types": sorted(BAKE_MAP_SPECS),
+        }
+    if not requested_map_types:
+        return {"ok": False, "message": "At least one bake map type is required", "supported_map_types": sorted(BAKE_MAP_SPECS)}
+
+    resolution = max(16, min(4096, int(resolution or 512)))
+    margin = max(0, min(128, int(margin or 0)))
+    samples = max(1, min(4096, int(samples or 1)))
+    objects, missing = _resolve_edit_objects(
+        context,
+        object_names=object_names,
+        selected_only=selected_only,
+        include_active=True,
+        max_objects=16,
+    )
+    objects = [obj for obj in objects if obj and obj.type == "MESH"]
+    if not objects:
+        return {
+            "ok": False,
+            "message": "bake_maps needs at least one mesh object",
+            "missing_object_names": missing,
+        }
+    preflight_issues = _preflight_bake_objects(objects, uv_map_name)
+    if missing or preflight_issues:
+        return {
+            "ok": False,
+            "message": "bake_maps preflight failed",
+            "objects": [obj.name for obj in objects],
+            "missing_object_names": missing,
+            "map_types": requested_map_types,
+            "resolution": resolution,
+            "margin": margin,
+            "samples": samples,
+            "uv_map_name": str(uv_map_name or ""),
+            "baked_maps": [],
+            "baked_map_count": 0,
+            "issues": preflight_issues,
+            "issue_count": len(preflight_issues) + len(missing),
+        }
+
+    try:
+        resolved_output_dir = _resolve_bake_output_dir(context, output_dir)
+    except OSError as exc:
+        return {"ok": False, "message": f"Could not create bake output directory: {type(exc).__name__}: {exc}"}
+
+    scene = context.scene
+    transaction = live_preview.begin(label, context)
+    _record_scene_render(scene)
+
+    previous_frame = int(scene.frame_current)
+    previous_engine = str(scene.render.engine)
+    previous_samples = getattr(getattr(scene, "cycles", None), "samples", None)
+    issues = []
+    warnings = []
+    baked_maps = []
+    previous_uv_layers = {}
+    previous_mode = getattr(context.object, "mode", "OBJECT") if getattr(context, "object", None) else "OBJECT"
+
+    try:
+        if previous_mode != "OBJECT":
+            try:
+                bpy.ops.object.mode_set(mode="OBJECT")
+            except Exception as exc:
+                warnings.append(f"Could not leave {previous_mode} mode before baking: {type(exc).__name__}: {exc}")
+        try:
+            scene.render.engine = "CYCLES"
+        except Exception as exc:
+            return {"ok": False, "message": f"Cycles render engine is required for baking: {type(exc).__name__}: {exc}"}
+        cycles = getattr(scene, "cycles", None)
+        if cycles is not None and hasattr(cycles, "samples"):
+            cycles.samples = samples
+
+        with _preserve_selection(context):
+            for obj in objects:
+                mesh = obj.data
+                previous_uv_layers[obj.name] = getattr(mesh.uv_layers, "active", None)
+                uv_layer, uv_error = _active_uv_layer_for_bake(obj, uv_map_name)
+                if uv_error:
+                    issues.append({"object": obj.name, "message": uv_error})
+                    continue
+                materials = _bake_materials_for_object(obj)
+                if not materials:
+                    issues.append({"object": obj.name, "message": "Object has no node-based material to bake"})
+                    continue
+
+                for material in materials:
+                    _record_shader_material(material)
+
+                bpy.ops.object.select_all(action="DESELECT")
+                obj.select_set(True)
+                context.view_layer.objects.active = obj
+
+                for map_type in requested_map_types:
+                    spec = BAKE_MAP_SPECS[map_type]
+                    filename = f"{_safe_bake_name(obj.name)}_{spec['suffix']}_{resolution}.png"
+                    path = _unique_bake_path(resolved_output_dir, filename, overwrite=overwrite)
+                    image_name = f"Agent Bridge Bake {obj.name} {map_type}"
+                    image = bpy.data.images.new(image_name, width=resolution, height=resolution, alpha=True, float_buffer=False)
+                    try:
+                        image.colorspace_settings.name = spec["colorspace"]
+                    except Exception:
+                        pass
+                    created_nodes, previous_active_nodes = _add_bake_target_nodes(materials, image)
+                    try:
+                        bake_kwargs = {
+                            "type": spec["bake_type"],
+                            "margin": margin,
+                            "use_clear": True,
+                            "save_mode": "INTERNAL",
+                        }
+                        if spec.get("pass_filter"):
+                            bake_kwargs["pass_filter"] = spec["pass_filter"]
+                        bpy.ops.object.bake(**bake_kwargs)
+                        image.filepath_raw = path
+                        image.file_format = "PNG"
+                        image.save()
+                        report = _bake_artifact_report(
+                            path,
+                            object_name=obj.name,
+                            map_type=map_type,
+                            image=image,
+                            width=resolution,
+                            height=resolution,
+                        )
+                        if not report["available"]:
+                            issues.append({"object": obj.name, "map_type": map_type, "message": f"Bake output is missing or empty: {path}"})
+                        baked_maps.append(report)
+                    except Exception as exc:
+                        issues.append({"object": obj.name, "map_type": map_type, "message": f"{type(exc).__name__}: {exc}"})
+                    finally:
+                        _remove_bake_target_nodes(created_nodes, previous_active_nodes)
+                        if image and image.name in bpy.data.images:
+                            bpy.data.images.remove(image)
+    finally:
+        for object_name, uv_layer in previous_uv_layers.items():
+            obj = bpy.data.objects.get(object_name)
+            if obj and obj.type == "MESH" and uv_layer and uv_layer.name in obj.data.uv_layers:
+                obj.data.uv_layers.active = obj.data.uv_layers[uv_layer.name]
+        scene.frame_set(previous_frame)
+        if previous_engine and scene.render.engine != previous_engine:
+            try:
+                scene.render.engine = previous_engine
+            except Exception:
+                pass
+        cycles = getattr(scene, "cycles", None)
+        if cycles is not None and previous_samples is not None and hasattr(cycles, "samples"):
+            cycles.samples = previous_samples
+
+    transaction["applied_steps"].append(
+        {
+            "type": "bake_maps",
+            "label": label,
+            "objects": [obj.name for obj in objects],
+            "map_types": requested_map_types,
+            "output_dir": resolved_output_dir,
+            "baked_map_count": len([item for item in baked_maps if item.get("available")]),
+            "resolution": resolution,
+            "uv_map_name": str(uv_map_name or ""),
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    ok = bool(baked_maps) and all(item.get("available") for item in baked_maps) and not issues and not missing
+    return {
+        "ok": ok,
+        "message": "Baked maps" if ok else "Baked maps with issues",
+        "objects": [obj.name for obj in objects],
+        "missing_object_names": missing,
+        "map_types": requested_map_types,
+        "output_dir": resolved_output_dir,
+        "resolution": resolution,
+        "margin": margin,
+        "samples": samples,
+        "uv_map_name": str(uv_map_name or ""),
+        "baked_maps": baked_maps,
+        "baked_map_count": len([item for item in baked_maps if item.get("available")]),
+        "issues": issues,
+        "issue_count": len(issues) + len(missing),
+        "warnings": warnings,
         "transaction_id": transaction["id"],
     }
 

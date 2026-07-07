@@ -1048,6 +1048,10 @@ def main():
                 {"create_procedural_texture_material"},
             ),
             (
+                "Bake AO, normal, and diffuse maps for a game-ready textured asset.",
+                {"bake_maps"},
+            ),
+            (
                 "Design a futuristic wall-mounted coffee machine with chrome pipes, a small display, buttons, and beveled body.",
                 {"plan_object_design", "create_procedural_object_kit", "create_shader_material"},
             ),
@@ -1632,6 +1636,43 @@ def main():
             procedural_texture_search,
             query="Create a procedural marble texture material with noise bump for the selected mesh.",
         )
+
+        bake_map_search = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 104,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_blender_tools",
+                    "arguments": {
+                        "query": "Bake AO, normal, and diffuse maps for a game-ready textured asset.",
+                        "limit": 10,
+                    },
+                },
+            },
+        )
+        _assert_advanced_search_routes_first(
+            bake_map_search,
+            query="Bake AO, normal, and diffuse maps for a game-ready textured asset.",
+            expected={"bake_maps"},
+        )
+        bake_schema = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 105,
+                "method": "tools/call",
+                "params": {"name": "get_blender_tool_schema", "arguments": {"name": "bake_maps"}},
+            },
+        )
+        bake_tool_schema = bake_schema["result"]["structuredContent"]["tool"]
+        assert bake_tool_schema["annotations"]["requiresUserPath"] is True, bake_schema
+        assert "Omit output_dir" in bake_tool_schema["annotations"]["pathPolicy"], bake_schema
+        bake_schema_warning_codes = {
+            warning["code"] for warning in bake_tool_schema["guardrail_warnings"]
+        }
+        assert "user_confirmed_path_required" in bake_schema_warning_codes, bake_schema
 
         catalog_search = _send(
             proc,

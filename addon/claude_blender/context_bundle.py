@@ -300,6 +300,7 @@ def build_context_bundle(context, *, include_visual=False, capture_dir=None, max
             "create_image_texture_material",
             "inspect_material_setup",
             "repair_material_setup",
+            "bake_maps",
             "create_procedural_texture_material",
             "uv_unwrap",
             "mark_uv_seams",

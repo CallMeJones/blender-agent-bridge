@@ -88,6 +88,30 @@ def main():
     assert failing_name not in bpy.data.objects, failed
     assert not scene.claude_blender.pending_preview, scene.claude_blender.pending_preview_summary
 
+    clean_failing_name = "Agent Bridge Clean Failed Preview Object"
+
+    def _clean_failed_preview_helper(fail_context, _args):
+        created = live_preview.create_primitive(
+            fail_context,
+            primitive_type="CUBE",
+            name=clean_failing_name,
+            location=[6.0, 0.0, 0.0],
+            rotation=[0.0, 0.0, 0.0],
+            scale=[1.0, 1.0, 1.0],
+            label="Clean failed preview smoke",
+        )
+        return {"ok": False, "message": "intentional clean preview failure", "transaction_id": created["transaction_id"]}
+
+    tool_dispatcher.TOOL_FUNCTIONS["_smoke_clean_failed_preview"] = _clean_failed_preview_helper
+    try:
+        clean_failed = json.loads(tool_dispatcher.execute_tool(context, "_smoke_clean_failed_preview", {}))
+    finally:
+        tool_dispatcher.TOOL_FUNCTIONS.pop("_smoke_clean_failed_preview", None)
+    assert not clean_failed["ok"], clean_failed
+    assert clean_failed.get("auto_reverted_preview") is True, clean_failed
+    assert clean_failing_name not in bpy.data.objects, clean_failed
+    assert not scene.claude_blender.pending_preview, scene.claude_blender.pending_preview_summary
+
     created = _execute(
         context,
         "create_primitive",

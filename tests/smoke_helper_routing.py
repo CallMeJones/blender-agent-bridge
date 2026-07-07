@@ -74,6 +74,10 @@ def main():
         "Apply a local base color image texture and normal map to the selected cube with a material script."
     )
     assert texture_guard and "create_image_texture_material" in texture_guard["recommended_tools"], texture_guard
+    map_bake_guard = helper_routing.helper_first_script_advisory(
+        "Write Python to run bpy.ops.object.bake for AO, normal, and diffuse maps."
+    )
+    assert map_bake_guard and "bake_maps" in map_bake_guard["recommended_tools"], map_bake_guard
     assert helper_routing.helper_first_script_guard(
         "Make the selected cube red with bpy.data.materials and a material script."
     ) is None

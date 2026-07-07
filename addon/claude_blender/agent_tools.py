@@ -21,7 +21,7 @@ AGENT_GUIDANCE = (
     "When the user asks to change the scene, use safe helper tools first so Blender changes immediately. "
     "Use direct Blender data concepts: objects, collections, materials, cameras, lights, actions, keyframes. "
     "For broad multi-step scene, asset, animation, and evidence work, call plan_director_workflow first to get an ordered helper/evidence/preview plan without mutating the scene. For advanced 3D, 2D/storyboard, animation, simulation, compositor/render, asset-import, or script-heavy tasks, call plan_advanced_scene_workflow first when the helper path is not obvious. For object design prompts, call plan_object_design before choosing object kits, generic modeling helpers, asset import, or scripts. These planners return domain-specific helpers and script fallback boundaries. "
-    "For scene building and layout, prefer create_primitive, create_empty, duplicate_selected_objects, parent_selected_to_empty, align_selected_objects, distribute_selected_objects, set_object_visibility, set_object_display, assign_material_to_selected, assign_emission_material_to_selected, create_shader_material, create_image_texture_material, inspect_material_setup, repair_material_setup, create_procedural_texture_material, uv_unwrap, mark_uv_seams, inspect_uv_layout, create_text_object, create_curve_path, create_collection, link_selected_to_collection, add_light, add_camera, add_modifier_to_selected, add_geometry_nodes_modifier, apply_procedural_array_stack, edit_mesh, inspect_modeling_quality, curve_to_mesh, boolean_op, mirror_model, symmetrize_model, solidify_model, screw_model, create_procedural_object_kit, add_track_to_constraint, add_copy_transform_constraint, create_basic_armature, add_particle_system_to_selected, add_cloth_simulation_to_selected, set_render_settings, set_render_engine, configure_render_outputs, set_camera_settings, and set_world_background. create_shader_material includes bounded material presets; create_image_texture_material wires exact local image/PBR maps into a Principled material, including packed ARM/ORM channels, AO, bump, and UV map selection; inspect_material_setup and repair_material_setup validate/fix texture files, PBR color spaces, shader links, and UV map vector links before custom shader Python; create_procedural_texture_material builds bounded noise/voronoi/wave/checker procedural materials with optional bump; uv_unwrap creates preview-safe UV coordinate maps with mesh-data rollback, mark_uv_seams adds bounded boundary/angle seams, and inspect_uv_layout fails on missing UVs, near-zero area, and detected overlap bounds while reporting seam counts, layout stats, and scale warnings; set_render_engine/set_render_settings cover look-dev presets, samples, denoise, and color management; configure_render_outputs enables render passes and shader AOVs with preview rollback; add_geometry_nodes_modifier includes passthrough, transform, join-geometry, set-position, and subdivide-mesh starter templates. "
+    "For scene building and layout, prefer create_primitive, create_empty, duplicate_selected_objects, parent_selected_to_empty, align_selected_objects, distribute_selected_objects, set_object_visibility, set_object_display, assign_material_to_selected, assign_emission_material_to_selected, create_shader_material, create_image_texture_material, inspect_material_setup, repair_material_setup, bake_maps, create_procedural_texture_material, uv_unwrap, mark_uv_seams, inspect_uv_layout, create_text_object, create_curve_path, create_collection, link_selected_to_collection, add_light, add_camera, add_modifier_to_selected, add_geometry_nodes_modifier, apply_procedural_array_stack, edit_mesh, inspect_modeling_quality, curve_to_mesh, boolean_op, mirror_model, symmetrize_model, solidify_model, screw_model, create_procedural_object_kit, add_track_to_constraint, add_copy_transform_constraint, create_basic_armature, add_particle_system_to_selected, add_cloth_simulation_to_selected, set_render_settings, set_render_engine, configure_render_outputs, set_camera_settings, and set_world_background. create_shader_material includes bounded material presets; create_image_texture_material wires exact local image/PBR maps into a Principled material, including packed ARM/ORM channels, AO, bump, and UV map selection; inspect_material_setup and repair_material_setup validate/fix texture files, PBR color spaces, shader links, and UV map vector links before custom shader Python; bake_maps writes bounded AO, normal, and base-color/diffuse PNG artifacts from UV-mapped mesh materials before custom bake Python; create_procedural_texture_material builds bounded noise/voronoi/wave/checker procedural materials with optional bump; uv_unwrap creates preview-safe UV coordinate maps with mesh-data rollback, mark_uv_seams adds bounded boundary/angle seams, and inspect_uv_layout fails on missing UVs, near-zero area, and detected overlap bounds while reporting seam counts, layout stats, and scale warnings; set_render_engine/set_render_settings cover look-dev presets, samples, denoise, and color management; configure_render_outputs enables render passes and shader AOVs with preview rollback; add_geometry_nodes_modifier includes passthrough, transform, join-geometry, set-position, and subdivide-mesh starter templates. "
     "For 2D, storyboard, animatic, cutout, or motion-graphics work, inspect first with get_2d_animation_details, then prefer create_storyboard_panels, create_2d_cutout_layer, create_camera_dolly_animation, capture_animation_playblast, and render jobs before drafting custom Grease Pencil or SVG Python. "
     "For model refinement and production presentation, prefer shade_smooth_selected, add_bevel_and_subsurf, apply_procedural_array_stack, edit_mesh, inspect_modeling_quality, curve_to_mesh, boolean_op, mirror_model, symmetrize_model, solidify_model, screw_model, create_procedural_object_kit, create_wheel_assembly, add_panel_seams, add_window_materials, apply_vehicle_refinement_template, apply_product_refinement_template, apply_character_refinement_template, create_studio_product_stage, add_dimension_callouts, apply_lighting_preset, create_material_palette, create_product_turntable_setup, create_lookdev_turntable_review, prepare_imported_asset_presentation, and organize_scene_for_production when they fit the task. create_lookdev_turntable_review creates a bounded stage/turntable, applies look-dev render settings, captures inspection stills, and validates image artifacts before custom render Python; create_procedural_object_kit includes kitbash, radial/scatter/product, mechanical-joint, control-panel, coffee-machine, studio-prop, mechanical-part, modular-wall-panel, pipe-run, and desk-lamp templates for bounded prop generation before custom mesh scripts; plan_object_design maps open-ended object prompts onto these families and helper paths. "
     "For shape-key animation, prefer create_shape_key and animate_shape_key before drafting Python. "
@@ -1409,6 +1409,32 @@ def blender_tool_definitions():
                     "fix_color_spaces": {"type": "boolean"},
                     "reconnect_uv_maps": {"type": "boolean"},
                     "max_materials": {"type": "integer"},
+                    "label": {"type": "string"},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "bake_maps",
+            "description": "Bake bounded material maps such as ambient occlusion, normal, and base color/diffuse to PNG files from selected or named mesh objects. Use after UV unwrap/material setup and before custom bake Python.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "object_names": {"type": "array", "items": {"type": "string"}},
+                    "selected_only": {"type": "boolean"},
+                    "map_types": {
+                        "type": "array",
+                        "items": {"type": "string", "enum": ["ambient_occlusion", "ao", "normal", "base_color", "diffuse", "albedo"]},
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Optional exact local output directory from the user, file picker, or prior artifact. Omit to write under the project/session capture directory; do not invent custom paths.",
+                    },
+                    "resolution": {"type": "integer", "minimum": 16, "maximum": 4096},
+                    "margin": {"type": "integer", "minimum": 0, "maximum": 128},
+                    "samples": {"type": "integer", "minimum": 1, "maximum": 4096},
+                    "uv_map_name": {"type": "string"},
+                    "overwrite": {"type": "boolean"},
                     "label": {"type": "string"},
                 },
                 "additionalProperties": False,
@@ -3893,6 +3919,7 @@ _TOOL_GROUPS = {
         "create_image_texture_material",
         "inspect_material_setup",
         "repair_material_setup",
+        "bake_maps",
         "create_procedural_texture_material",
         "uv_unwrap",
         "mark_uv_seams",
@@ -4277,7 +4304,7 @@ _TOOL_GROUPS = {
 _GROUP_KEYWORDS = {
     "selection": {"select", "selected", "active", "frame", "playhead", "inspect", "workspace", "tab", "focus", "viewport focus", "front view", "top view", "camera view"},
     "basic_edit": {"make", "create", "add", "move", "scale", "rotate", "transform", "object", "primitive", "empty", "marker", "collection", "duplicate", "copy", "parent", "align", "distribute", "layout", "arrange", "hide", "unhide", "visibility", "visible", "display", "wireframe", "show name", "in front", "edit mesh", "extrude", "inset", "loop cut", "loop-cut", "knife", "proportional edit", "bridge", "dissolve", "merge", "curve to mesh", "convert curve", "uv", "unwrap", "uv unwrap", "uv map", "boolean", "cutter", "mirror", "symmetry", "symmetrize", "solidify", "screw", "mesh quality", "modeling quality"},
-    "materials": {"material", "shader", "texture", "textures", "texture map", "texture maps", "image texture", "pbr", "albedo", "diffuse map", "normal map", "roughness map", "metallic map", "texture ready", "texture-ready", "texture coordinate", "uv", "unwrap", "uv unwrap", "uv map", "color", "colour", "red", "blue", "green", "metal", "metallic", "chrome", "glass", "emission", "glow", "window"},
+    "materials": {"material", "shader", "texture", "textures", "texture map", "texture maps", "image texture", "pbr", "albedo", "diffuse map", "normal map", "roughness map", "metallic map", "bake map", "bake maps", "baked map", "baked maps", "texture bake", "map bake", "bake ao", "bake normal", "bake diffuse", "bake base color", "game ready", "game-ready", "texture ready", "texture-ready", "texture coordinate", "uv", "unwrap", "uv unwrap", "uv map", "color", "colour", "red", "blue", "green", "metal", "metallic", "chrome", "glass", "emission", "glow", "window"},
     "animation": {"animate", "animation", "animation brief", "prompt contract", "success criteria", "timing chart", "key pose", "key poses", "hold", "breakdown", "keyframe", "timeline", "frame", "orbit", "dolly", "camera move", "crane", "truck", "bounce", "driver", "motion", "motion arc", "arc", "follow path", "path", "retime", "interpolation", "easing", "loop", "cycles", "turntable", "pulse", "reveal", "stagger", "playblast", "timing", "spacing", "blocking", "anticipation", "squash", "stretch", "settle", "follow-through", "principles", "center of mass", "support", "contact sliding", "simulation", "physics bake", "persistent bake", "directed shot", "shot template"},
     "camera_render": {"camera", "render", "render job", "render output", "render pass", "render passes", "output resource", "quality check", "thumbnail", "still", "mp4", "video assembly", "assemble video", "validate render", "1080p", "4k", "frame sequence", "samples", "light", "lighting", "world", "background", "dof", "depth of field", "lens", "compositor", "compositing", "post process", "alpha", "transparent", "resolution", "intensity", "studio", "product stage", "presentation", "close-up", "closeup", "underside", "aov", "aovs", "shader aov", "cryptomatte", "normal pass", "depth pass", "z pass", "vector pass", "uv pass", "ambient occlusion pass"},
     "project_files": {"save", "save as", "save-as", "save copy", "autosave", "auto save", "open blend", "open file", "load blend", "new project", "create project", "blend file", ".blend", "project folder", "project directory", "checkpoint"},
@@ -4422,7 +4449,7 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         matched_groups.append("procedural_textures")
 
     if _contains_keyword(text, _UV_LAYOUT_KEYWORDS):
-        selected.update({"mark_uv_seams", "uv_unwrap", "inspect_uv_layout", "create_image_texture_material", "inspect_material_setup", "repair_material_setup", "create_shader_material"})
+        selected.update({"mark_uv_seams", "uv_unwrap", "inspect_uv_layout", "create_image_texture_material", "inspect_material_setup", "repair_material_setup", "bake_maps", "create_shader_material"})
         matched_groups.append("basic_edit")
         matched_groups.append("materials")
 
@@ -4450,7 +4477,7 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
     if _contains_keyword(text, _PROCEDURAL_TEXTURE_KEYWORDS):
         protected.add("create_procedural_texture_material")
     if _contains_keyword(text, _UV_LAYOUT_KEYWORDS):
-        protected.update({"mark_uv_seams", "uv_unwrap", "inspect_uv_layout"})
+        protected.update({"mark_uv_seams", "uv_unwrap", "inspect_uv_layout", "bake_maps"})
     if "basic_edit" in matched_groups:
         protected.update({"select_objects", "set_selected_location_delta", "set_selected_transform", "assign_material_to_selected"})
     if "animation" in matched_groups:
@@ -4537,6 +4564,18 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
             "texture ready",
             "texture-ready",
             "texture coordinate",
+            "bake map",
+            "bake maps",
+            "baked map",
+            "baked maps",
+            "texture bake",
+            "map bake",
+            "bake ao",
+            "bake normal",
+            "bake diffuse",
+            "bake base color",
+            "game ready",
+            "game-ready",
             "uv",
             "unwrap",
             "uv unwrap",
@@ -4566,6 +4605,7 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
                 "create_image_texture_material",
                 "inspect_material_setup",
                 "repair_material_setup",
+                "bake_maps",
                 "uv_unwrap",
             }
         )
@@ -4610,6 +4650,7 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "create_shader_material",
     "create_image_texture_material",
     "repair_material_setup",
+    "bake_maps",
     "create_procedural_texture_material",
     "uv_unwrap",
     "mark_uv_seams",

@@ -191,6 +191,26 @@ PROCEDURAL_TEXTURE_ROUTE_TERMS = {
     "fabric material",
     "cellular texture",
 }
+BAKE_MAP_ROUTE_TERMS = {
+    "bake map",
+    "bake maps",
+    "baked map",
+    "baked maps",
+    "texture bake",
+    "map bake",
+    "bake texture",
+    "bake textures",
+    "bake ao",
+    "bake normal",
+    "bake diffuse",
+    "bake base color",
+    "bake albedo",
+    "ambient occlusion bake",
+    "normal bake",
+    "diffuse bake",
+    "game ready",
+    "game-ready",
+}
 ADVANCED_ROUTE_TERMS = {
     "advanced",
     "advanced 3d",
@@ -275,6 +295,7 @@ ADVANCED_ROUTE_TERMS = {
     *LOOKDEV_REVIEW_ROUTE_TERMS,
     *RENDER_OUTPUT_ROUTE_TERMS,
     *PROCEDURAL_TEXTURE_ROUTE_TERMS,
+    *BAKE_MAP_ROUTE_TERMS,
 }
 ADVANCED_ROUTE_TOOLS = {
     "plan_director_workflow",
@@ -1275,7 +1296,7 @@ def _tool_category(tool):
         return "two_d"
     if name in {"plan_advanced_scene_workflow", "plan_object_design"}:
         return "inspect"
-    if name in {"inspect_material_setup", "repair_material_setup"}:
+    if name in {"inspect_material_setup", "repair_material_setup", "bake_maps"}:
         return "materials"
     if name.startswith("get_") or name.startswith("list_") or name.startswith("inspect_") or name in {
         "inspect_scene",
@@ -1493,6 +1514,8 @@ def _score_tool_match(tool, query):
             score += 1800
         if name == "configure_render_outputs" and _contains_any_phrase(normalized_query, RENDER_OUTPUT_ROUTE_TERMS):
             score += 1900
+        if name == "bake_maps" and _contains_any_phrase(normalized_query, BAKE_MAP_ROUTE_TERMS):
+            score += 1900
         if name == "create_lookdev_turntable_review" and _contains_any_phrase(
             normalized_query, LOOKDEV_REVIEW_ROUTE_TERMS
         ):
@@ -1559,6 +1582,8 @@ def _score_tool_match(tool, query):
                 score += 850
             elif name == "create_procedural_texture_material" and _contains_any_phrase(normalized_query, PROCEDURAL_TEXTURE_ROUTE_TERMS):
                 score += 1050
+            elif name == "bake_maps" and _contains_any_phrase(normalized_query, BAKE_MAP_ROUTE_TERMS):
+                score += 1300
             elif name == "create_image_texture_material" and any(
                 term in normalized_query
                 for term in (

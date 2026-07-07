@@ -1885,6 +1885,22 @@ def repair_material_setup(context, args):
     )
 
 
+def bake_maps(context, args):
+    return advanced_helpers.bake_maps(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", True)),
+        map_types=_name_list(args.get("map_types")) or None,
+        output_dir=str(args.get("output_dir") or ""),
+        resolution=_bounded_int(args.get("resolution"), 512, minimum=16, maximum=4096),
+        margin=_bounded_int(args.get("margin"), 16, minimum=0, maximum=128),
+        samples=_bounded_int(args.get("samples"), 32, minimum=1, maximum=4096),
+        uv_map_name=str(args.get("uv_map_name") or ""),
+        overwrite=bool(args.get("overwrite", False)),
+        label=args.get("label", "Bake maps"),
+    )
+
+
 def create_procedural_texture_material(context, args):
     return advanced_helpers.create_procedural_texture_material(
         context,
@@ -3935,6 +3951,12 @@ def _preview_expected_changes(step, label, kind, target_text):
         return f"{label}: wires {maps} into material {step.get('material') or 'material'} with preview rollback."
     if kind == "repair_material_setup":
         return f"{label}: repairs material texture color spaces and UV map links with preview rollback."
+    if kind == "bake_maps":
+        maps = ", ".join(step.get("map_types") or []) or "maps"
+        return (
+            f"{label}: bakes {maps} for {target_text} to {step.get('output_dir') or 'the bake output folder'} "
+            f"at {step.get('resolution')} px."
+        )
     if kind == "boolean_op":
         cutters = ", ".join(step.get("cutters") or []) or "selected cutters"
         return (
@@ -4013,6 +4035,35 @@ def _attach_preview_change_report(result):
     return enriched
 
 
+def _maybe_auto_revert_failed_preview(context, result, txn_id_before):
+    if not isinstance(result, dict) or result.get("ok", True):
+        return result
+    try:
+        current = live_preview.current_transaction()
+        if (
+            current
+            and current.get("status") == "pending"
+            and current.get("id") != txn_id_before
+        ):
+            revert_result = live_preview.revert(context)
+            result = dict(result)
+            result["auto_reverted_preview"] = bool(revert_result.get("ok"))
+            result["auto_revert_message"] = revert_result.get("message", "")
+            result["auto_revert_manifest"] = revert_result.get("manifest", {})
+            warning_summary = revert_result.get("rollback_warning_summary")
+            if warning_summary:
+                result["auto_revert_warnings"] = warning_summary
+        elif current and current.get("status") == "pending" and current.get("id") == txn_id_before:
+            result = dict(result)
+            result["auto_reverted_preview"] = False
+            result["auto_revert_message"] = "Preserved the preview transaction that existed before this failed tool call"
+    except Exception as rollback_exc:
+        result = dict(result)
+        result["auto_reverted_preview"] = False
+        result["auto_revert_message"] = f"Preview auto-revert failed: {type(rollback_exc).__name__}: {rollback_exc}"
+    return result
+
+
 TOOL_FUNCTIONS = {
     "inspect_scene": inspect_scene,
     "list_scene_objects": list_scene_objects,
@@ -4064,6 +4115,7 @@ TOOL_FUNCTIONS = {
     "create_image_texture_material": create_image_texture_material,
     "inspect_material_setup": inspect_material_setup,
     "repair_material_setup": repair_material_setup,
+    "bake_maps": bake_maps,
     "create_procedural_texture_material": create_procedural_texture_material,
     "uv_unwrap": uv_unwrap,
     "mark_uv_seams": mark_uv_seams,
@@ -4216,31 +4268,12 @@ def execute_tool(context, name, args):
         result = fn(context, args or {})
     except Exception as exc:
         result = {"ok": False, "message": f"{type(exc).__name__}: {exc}"}
-        # Auto-revert a transaction this failed call opened, so the scene is not left
-        # half-mutated with a stale "pending" preview. Only revert a transaction that
-        # did not already exist before the call (never unwind the user's prior work).
-        try:
-            current = live_preview.current_transaction()
-            if (
-                current
-                and current.get("status") == "pending"
-                and current.get("id") != txn_id_before
-            ):
-                revert_result = live_preview.revert(context)
-                result["auto_reverted_preview"] = bool(revert_result.get("ok"))
-                result["auto_revert_message"] = revert_result.get("message", "")
-                result["auto_revert_manifest"] = revert_result.get("manifest", {})
-                warning_summary = revert_result.get("rollback_warning_summary")
-                if warning_summary:
-                    result["auto_revert_warnings"] = warning_summary
-            elif current and current.get("status") == "pending" and current.get("id") == txn_id_before:
-                result["auto_reverted_preview"] = False
-                result["auto_revert_message"] = "Preserved the preview transaction that existed before this failed tool call"
-        except Exception as rollback_exc:
-            result["auto_reverted_preview"] = False
-            result["auto_revert_message"] = f"Preview auto-revert failed: {type(rollback_exc).__name__}: {rollback_exc}"
     if isinstance(result, str):
         return result
+    # Auto-revert a transaction this failed call opened, so the scene is not left
+    # half-mutated with a stale "pending" preview. Only revert a transaction that
+    # did not already exist before the call (never unwind the user's prior work).
+    result = _maybe_auto_revert_failed_preview(context, result, txn_id_before)
     result = _attach_preview_change_report(result)
     return _json_result(result)
 

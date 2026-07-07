@@ -340,6 +340,16 @@ def main():
         assert "inspect_uv_layout" in uv_quality_names, uv_quality_meta
         assert "draft_script" not in uv_quality_names, uv_quality_meta
 
+        bake_tools, bake_meta = agent_tools.select_blender_tool_definitions(
+            "Bake AO, normal, and diffuse maps for a game-ready textured asset.",
+            bundle,
+        )
+        bake_names = _names(bake_tools)
+        assert "bake_maps" in bake_names, bake_meta
+        assert "uv_unwrap" in bake_names, bake_meta
+        assert "inspect_material_setup" in bake_names, bake_meta
+        assert "draft_script" not in bake_names, bake_meta
+
         lookdev_review_tools, lookdev_review_meta = agent_tools.select_blender_tool_definitions(
             "Create a lookdev turntable review with Cycles denoise, inspection stills, and artifact validation.",
             bundle,

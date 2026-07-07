@@ -138,6 +138,7 @@ Common changes should use typed helper tools before arbitrary code:
 - `create_image_texture_material`
 - `inspect_material_setup`
 - `repair_material_setup`
+- `bake_maps`
 - `create_procedural_texture_material`
 - `uv_unwrap`
 - `mark_uv_seams`

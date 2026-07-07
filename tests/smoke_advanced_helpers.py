@@ -46,6 +46,7 @@ ADVANCED_TOOLS = {
     "create_image_texture_material",
     "inspect_material_setup",
     "repair_material_setup",
+    "bake_maps",
     "create_procedural_texture_material",
     "add_geometry_nodes_modifier",
     "create_shape_key",
@@ -523,6 +524,39 @@ def main():
     cube.data.materials.clear()
     cube.data.materials.append(existing_material)
     existing_topology = _material_topology(existing_material)
+    no_uv_mesh = bpy.data.meshes.new("Agent Bridge No UV Bake Fixture Mesh")
+    no_uv_mesh.from_pydata(
+        [(-0.5, -0.5, 0.0), (0.5, -0.5, 0.0), (0.5, 0.5, 0.0), (-0.5, 0.5, 0.0)],
+        [],
+        [(0, 1, 2, 3)],
+    )
+    no_uv_mesh.update()
+    no_uv_fixture = bpy.data.objects.new("Agent Bridge No UV Bake Fixture", no_uv_mesh)
+    no_uv_fixture.data.materials.append(existing_material)
+    context.collection.objects.link(no_uv_fixture)
+    missing_uv_bake = json.loads(
+        tool_dispatcher.execute_tool(
+            context,
+            "bake_maps",
+            {
+                "object_names": [no_uv_fixture.name],
+                "selected_only": False,
+                "map_types": ["ao"],
+                "resolution": 32,
+                "samples": 1,
+            },
+        )
+    )
+    assert missing_uv_bake["ok"] is False, missing_uv_bake
+    assert missing_uv_bake["baked_map_count"] == 0, missing_uv_bake
+    assert "transaction_id" not in missing_uv_bake, missing_uv_bake
+    assert any("Mesh has no UV map" in issue["message"] for issue in missing_uv_bake["issues"]), missing_uv_bake
+    assert not scene.claude_blender.pending_preview, scene.claude_blender.pending_preview_summary
+    current_transaction = live_preview.current_transaction()
+    assert not current_transaction or current_transaction.get("status") != "pending", current_transaction
+    bpy.data.objects.remove(no_uv_fixture, do_unlink=True)
+    bpy.data.meshes.remove(no_uv_mesh)
+
     bridge_mesh = bpy.data.meshes.new("Agent Bridge Bridge Fixture Mesh")
     bridge_mesh.from_pydata(
         [
@@ -1249,6 +1283,34 @@ def main():
         assert cautious_update["maps"] == [], cautious_update
         assert any("target socket is already linked" in warning for warning in cautious_update["warnings"]), cautious_update
         assert [node.name for node in material.node_tree.nodes] == node_names_before_cautious_update, cautious_update
+
+        bake_dir = tempfile.mkdtemp(prefix="agent-bridge-bake-smoke-")
+        baked_maps = _execute(
+            context,
+            "bake_maps",
+            {
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "map_types": ["ao", "normal", "diffuse"],
+                "output_dir": bake_dir,
+                "resolution": 32,
+                "margin": 2,
+                "samples": 4,
+                "uv_map_name": "Agent Bridge Advanced UVs",
+            },
+        )
+        assert baked_maps["baked_map_count"] == 3, baked_maps
+        assert {item["map_type"] for item in baked_maps["baked_maps"]} == {"ambient_occlusion", "normal", "base_color"}, baked_maps
+        for baked_map in baked_maps["baked_maps"]:
+            assert baked_map["available"] is True, baked_map
+            assert baked_map["width"] == 32 and baked_map["height"] == 32, baked_map
+            assert baked_map["size_bytes"] > 0, baked_map
+            assert os.path.isfile(baked_map["path"]), baked_map
+        assert not [node for node in material.node_tree.nodes if node.name.startswith("Agent Bridge Bake Target")]
+        assert "scene_render_settings" in baked_maps["preview_change_report"]["rollback_scopes"], baked_maps
+        invalid_bake = json.loads(tool_dispatcher.execute_tool(context, "bake_maps", {"map_types": ["curvature"]}))
+        assert invalid_bake["ok"] is False, invalid_bake
+        assert "Unsupported bake map type" in invalid_bake["message"], invalid_bake
 
         procedural_material = _execute(
             context,

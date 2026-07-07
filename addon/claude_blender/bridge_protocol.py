@@ -1390,6 +1390,35 @@ TOOL_CONTRACTS = {
             "additionalProperties": False,
         },
     },
+    "bake_maps": {
+        "description": "Bake bounded texture maps such as AO, normal, and base color from mesh materials to PNG files",
+        "mutates_scene": True,
+        "requires_live_preview": True,
+        "requires_user_path": True,
+        "path_policy": "Omit output_dir to write under the project/session capture directory. If output_dir is supplied, it must be an exact local directory from the user, a file picker, or a prior artifact; do not invent paths.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "object_names": {"type": "array", "items": {"type": "string"}},
+                "selected_only": {"type": "boolean"},
+                "map_types": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": ["ambient_occlusion", "ao", "normal", "base_color", "diffuse", "albedo"]},
+                },
+                "output_dir": {
+                    "type": "string",
+                    "description": "Optional exact local output directory. Omit to use the project/session capture directory; do not invent custom paths.",
+                },
+                "resolution": {"type": "integer", "minimum": 16, "maximum": 4096},
+                "margin": {"type": "integer", "minimum": 0, "maximum": 128},
+                "samples": {"type": "integer", "minimum": 1, "maximum": 4096},
+                "uv_map_name": {"type": "string"},
+                "overwrite": {"type": "boolean"},
+                "label": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
+    },
     "create_procedural_texture_material": {
         "description": "Create or update a bounded procedural Principled material from noise, voronoi, wave, or checker texture nodes",
         "mutates_scene": True,
