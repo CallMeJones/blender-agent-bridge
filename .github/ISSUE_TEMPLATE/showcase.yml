@@ -52,4 +52,3 @@ body:
           required: true
         - label: I removed secrets, personal data, proprietary project files, and private paths.
           required: true
-

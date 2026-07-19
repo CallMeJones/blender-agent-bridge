@@ -63,4 +63,3 @@ Inspect `tests/snapshots/tool_registry.json` in the diff. CI validates this file
 ## 6. Document Compatibility
 
 Update the changelog and any affected client or safety documentation. A registry change changes the canonical digest: bundled and PyPI runtimes must ship from the same version and artifact set. Protocol or digest mismatch fails tool calls; a version difference is only a warning when protocol and digest remain compatible.
-

@@ -25,4 +25,3 @@ body:
       description: Include alt text and licenses for external assets.
     validations:
       required: true
-

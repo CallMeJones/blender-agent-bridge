@@ -23,4 +23,3 @@ Blender Agent Bridge works with MCP hosts that can launch a local stdio server. 
 - Bundled mode remains the zero-install default. `uvx / PyPI` requires [`uv`](https://docs.astral.sh/uv/getting-started/installation/) and runs the exact matching version.
 - After changing the extension, launch mode, or config, replace the complete client entry and restart or refresh the MCP host.
 - Safe smoke prompt: `Check Blender bridge status, list scene objects, and make no changes.`
-

@@ -25,4 +25,3 @@ The included images have a restricted documentation-only licensing boundary beca
 - Describe whether changes were previewed, committed, reverted, or approval-gated.
 
 Submission does not guarantee inclusion. Maintainers may request smaller files, clearer provenance, accessibility text, or removal of unsafe instructions before publication.
-

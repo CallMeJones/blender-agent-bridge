@@ -9,4 +9,3 @@ These are small, bounded contributor tasks maintainers can promote into GitHub i
 5. Add a read-only registry report that summarizes tool counts by owner, group, and exposure.
 
 Each issue should name its owner test, explicitly exclude safety-contract changes, and link to [Contributing](../CONTRIBUTING.md) and [Adding a Tool](ADDING_A_TOOL.md) when relevant.
-
