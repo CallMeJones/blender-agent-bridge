@@ -312,6 +312,14 @@ def main():
         assert "SmokeImportedModel" in model["imported_objects"], model
         assert bpy.data.objects.get("SmokeImportedModel") is not None, model
         assert "material_preview" in model["presentation"], model
+        stale_manifest = dict(model["manifest"])
+        stale_manifest["import_status"] = "not_imported"
+        external_assets._write_manifest(stale_manifest["cache_dir"], stale_manifest)
+        live_cache_record = next(
+            item for item in external_assets._cache_asset_records(os.path.abspath(cache_dir))
+            if item["asset_id"] == "model_one"
+        )
+        assert live_cache_record["import_status"] == "imported", live_cache_record
         duplicate_blocked = _execute(
             bpy.context,
             "import_poly_haven_asset",

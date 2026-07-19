@@ -385,6 +385,28 @@ def main():
         assert prune_actual["dry_run"] is False, prune_actual
         assert prune_actual["deleted_count"] >= 1, prune_actual
 
+        unowned_root = os.path.join(cache_dir, "unowned-custom-root")
+        unowned_asset = os.path.join(unowned_root, "poly_haven", "do-not-delete")
+        os.makedirs(unowned_asset, exist_ok=True)
+        external_assets._write_manifest(
+            unowned_asset,
+            {
+                "ok": True,
+                "provider": "poly_haven",
+                "asset_id": "do-not-delete",
+                "import_status": "not_imported",
+            },
+        )
+        unowned_prune = external_assets.prune_external_asset_cache(
+            cache_dir=unowned_root,
+            max_total_bytes=1,
+            dry_run=False,
+            include_imported=True,
+        )
+        assert unowned_prune["ok"] is False, unowned_prune
+        assert unowned_prune["code"] == "unowned_cache_root", unowned_prune
+        assert os.path.isdir(unowned_asset), unowned_prune
+
         external_assets._download_file = original_download_file
         external_assets.bpy = _FakeOfflineBpy()
         offline_download = external_assets._download_file(
@@ -398,7 +420,50 @@ def main():
         assert external_assets._online_access_error("External asset metadata", url="http://localhost:9/files/model") is None
         external_assets.bpy = original_bpy
 
-        original_urlopen = external_assets.urllib.request.urlopen
+        assert "HTTP or HTTPS" in external_assets._external_url_validation_error("file:///etc/passwd")
+        assert "non-public" in external_assets._external_url_validation_error("https://169.254.169.254/latest/meta-data")
+        assert "HTTPS" in external_assets._external_url_validation_error("http://example.com/asset.bin")
+        original_poly_base = external_assets.POLY_HAVEN_BASE_URL
+        original_getaddrinfo = external_assets.socket.getaddrinfo
+        try:
+            external_assets.POLY_HAVEN_BASE_URL = "http://127.0.0.1:43123"
+            assert external_assets._external_url_validation_error("http://127.0.0.1:43123/download/model.gltf") == ""
+            assert "HTTPS" in external_assets._external_url_validation_error("http://127.0.0.1:43124/download/model.gltf")
+            external_assets.POLY_HAVEN_BASE_URL = original_poly_base
+            external_assets.socket.getaddrinfo = lambda *_args, **_kwargs: [
+                (2, 1, 6, "", ("192.168.1.50", 443))
+            ]
+            assert "non-public" in external_assets._external_url_validation_error("https://asset-provider.invalid/file")
+
+            def _fail_getaddrinfo(*_args, **_kwargs):
+                raise OSError("dns failed")
+
+            external_assets.socket.getaddrinfo = _fail_getaddrinfo
+            assert "resolved safely" in external_assets._external_url_validation_error("https://asset-provider.invalid/file")
+        finally:
+            external_assets.POLY_HAVEN_BASE_URL = original_poly_base
+            external_assets.socket.getaddrinfo = original_getaddrinfo
+
+        redirect_handler = external_assets._ExternalAssetRedirectHandler()
+        authenticated_request = external_assets.urllib.request.Request(
+            "https://api.sketchfab.com/v3/models/example/download",
+            headers={"Authorization": "Token smoke-secret"},
+        )
+        try:
+            redirect_handler.redirect_request(
+                authenticated_request,
+                None,
+                302,
+                "Found",
+                {},
+                "https://8.8.8.8/archive.zip",
+            )
+        except ValueError as exc:
+            assert "Authenticated" in str(exc), exc
+        else:
+            raise AssertionError("Authenticated cross-origin redirect was not rejected")
+
+        original_urlopen = external_assets._urlopen_external
         original_backoff = external_assets.DOWNLOAD_RETRY_BACKOFF_SECONDS
         try:
             external_assets.DOWNLOAD_RETRY_BACKOFF_SECONDS = 0
@@ -408,7 +473,7 @@ def main():
                 resume_ranges.append(dict(request.header_items()).get("Range", ""))
                 return _FakeDownloadResponse(b"world", 206)
 
-            external_assets.urllib.request.urlopen = _resume_urlopen
+            external_assets._urlopen_external = _resume_urlopen
             resume_path = os.path.join(cache_dir, "resume.bin")
             with open(f"{resume_path}.part", "wb") as handle:
                 handle.write(b"hello ")
@@ -431,7 +496,7 @@ def main():
                 restart_ranges.append(dict(request.header_items()).get("Range", ""))
                 return _FakeDownloadResponse(b"fresh", 200)
 
-            external_assets.urllib.request.urlopen = _restart_urlopen
+            external_assets._urlopen_external = _restart_urlopen
             restart_path = os.path.join(cache_dir, "restart.bin")
             with open(f"{restart_path}.part", "wb") as handle:
                 handle.write(b"stale")
@@ -455,7 +520,7 @@ def main():
                     raise TimeoutError("temporary smoke timeout")
                 return _FakeDownloadResponse(b"retry", 200)
 
-            external_assets.urllib.request.urlopen = _retry_urlopen
+            external_assets._urlopen_external = _retry_urlopen
             retry_path = os.path.join(cache_dir, "retry.bin")
             retried = external_assets._download_file(
                 "https://download.example.invalid/retry.bin",
@@ -467,7 +532,7 @@ def main():
             assert retried["attempts"] == 2, retried
             assert retry_calls == ["", ""], retry_calls
         finally:
-            external_assets.urllib.request.urlopen = original_urlopen
+            external_assets._urlopen_external = original_urlopen
             external_assets.DOWNLOAD_RETRY_BACKOFF_SECONDS = original_backoff
             external_assets._download_file = _fake_download_file
 
@@ -565,6 +630,8 @@ def main():
             elif name in {"download_poly_haven_asset", "download_sketchfab_model", "start_external_asset_download", "cancel_external_asset_job", "cancel_external_asset_import_job", "delete_external_asset_job", "prune_external_asset_cache"}:
                 assert annotations["mutatesScene"] is False, annotations
                 assert annotations["hasSideEffects"] is True, annotations
+                if name == "prune_external_asset_cache":
+                    assert annotations["destructiveHint"] is True, annotations
             else:
                 assert annotations["mutatesScene"] is False, annotations
                 assert annotations["readOnlyHint"] is True, annotations

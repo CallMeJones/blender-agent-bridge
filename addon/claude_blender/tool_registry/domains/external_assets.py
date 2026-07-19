@@ -655,6 +655,8 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'list_poly_haven_cate
                               'dry-run by default',
                'mutates_scene': False,
                'has_side_effects': True,
+               'destructive': True,
+               'risk_level': 'destructive',
                'permissions': ['files:read', 'files:write'],
                'supports_headless': True,
                'input_schema': {'type': 'object',

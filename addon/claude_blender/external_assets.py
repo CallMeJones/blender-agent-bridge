@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import hashlib
 import calendar
+import ipaddress
 import os
 import re
 import shutil
+import socket
 import time
 import urllib.parse
 import urllib.request
@@ -58,6 +60,7 @@ SKETCHFAB_ALLOWED_TOKEN_ENV_VARS = frozenset(SKETCHFAB_API_TOKEN_ENV_VARS)
 ASSET_KEY_PROPERTY = "blender_agent_bridge_asset_key"
 ASSET_PROVIDER_PROPERTY = "blender_agent_bridge_asset_provider"
 ASSET_SOURCE_URL_PROPERTY = "blender_agent_bridge_asset_source_url"
+CACHE_ROOT_MARKER_FILENAME = ".blender-agent-bridge-asset-cache"
 _SESSION_SKETCHFAB_API_TOKEN = ""
 
 
@@ -176,6 +179,92 @@ def _is_loopback_url(url):
     return host in {"localhost", "::1"} or host.startswith("127.")
 
 
+def _url_origin(url):
+    parsed = urllib.parse.urlparse(str(url or ""))
+    scheme = parsed.scheme.lower()
+    host = (parsed.hostname or "").lower()
+    if not scheme or not host:
+        return ()
+    try:
+        port = parsed.port
+    except ValueError:
+        return ()
+    if port is None:
+        port = 443 if scheme == "https" else 80 if scheme == "http" else 0
+    return scheme, host, int(port)
+
+
+def _configured_loopback_origin_allowed(url):
+    origin = _url_origin(url)
+    if not origin or not _is_loopback_url(url):
+        return False
+    return any(
+        origin == _url_origin(base_url) and _is_loopback_url(base_url)
+        for base_url in (POLY_HAVEN_BASE_URL, SKETCHFAB_BASE_URL)
+    )
+
+
+def _external_url_validation_error(url):
+    """Reject local/private destinations while preserving explicit loopback fixtures."""
+
+    raw_url = str(url or "").strip()
+    try:
+        parsed = urllib.parse.urlparse(raw_url)
+        port = parsed.port
+    except (TypeError, ValueError):
+        return "External asset URL is malformed"
+    scheme = parsed.scheme.lower()
+    host = (parsed.hostname or "").strip().lower()
+    if scheme not in {"http", "https"} or not host:
+        return "External asset URL must use HTTP or HTTPS and include a host"
+    if parsed.username is not None or parsed.password is not None:
+        return "External asset URL must not contain embedded credentials"
+    if _configured_loopback_origin_allowed(raw_url):
+        return ""
+    if scheme != "https":
+        return "External asset downloads require HTTPS outside explicit loopback test fixtures"
+    if host == "localhost" or host.endswith(".localhost"):
+        return "External asset URL resolves to a local destination"
+
+    addresses = []
+    try:
+        addresses.append(ipaddress.ip_address(host))
+    except ValueError:
+        try:
+            resolved = socket.getaddrinfo(host, port or 443, type=socket.SOCK_STREAM)
+        except OSError:
+            return "External asset URL host could not be resolved safely"
+        for item in resolved:
+            try:
+                addresses.append(ipaddress.ip_address(item[4][0]))
+            except (IndexError, TypeError, ValueError):
+                continue
+    if any(not address.is_global for address in addresses):
+        return "External asset URL resolves to a non-public network destination"
+    return ""
+
+
+class _ExternalAssetRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        error = _external_url_validation_error(newurl)
+        if error:
+            raise ValueError(error)
+        sensitive_headers = {"authorization", "x-skfb-model-pwd"}
+        has_sensitive_headers = any(str(key).lower() in sensitive_headers for key in request.headers)
+        if has_sensitive_headers and _url_origin(request.full_url) != _url_origin(newurl):
+            raise ValueError("Authenticated external asset requests cannot redirect to another origin")
+        return super().redirect_request(request, fp, code, msg, headers, newurl)
+
+
+def _urlopen_external(request, *, timeout):
+    url = request.full_url if isinstance(request, urllib.request.Request) else str(request or "")
+    error = _external_url_validation_error(url)
+    if error:
+        raise ValueError(error)
+    opener = urllib.request.build_opener(_ExternalAssetRedirectHandler())
+    return opener.open(request, timeout=timeout)
+
+
 def _online_access_error(provider="external asset", url=""):
     if _is_loopback_url(url):
         return None
@@ -200,7 +289,7 @@ def _fetch_json(url, *, timeout=15):
     if offline_error:
         raise RuntimeError(offline_error["message"])
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
-    with urllib.request.urlopen(request, timeout=max(1, int(timeout or 15))) as response:
+    with _urlopen_external(request, timeout=max(1, int(timeout or 15))) as response:
         data = response.read()
     return json.loads(data.decode("utf-8"))
 
@@ -212,7 +301,7 @@ def _fetch_json_with_headers(url, *, headers=None, timeout=15):
     merged = {"User-Agent": USER_AGENT, "Accept": "application/json"}
     merged.update(headers or {})
     request = urllib.request.Request(url, headers=merged)
-    with urllib.request.urlopen(request, timeout=max(1, int(timeout or 15))) as response:
+    with _urlopen_external(request, timeout=max(1, int(timeout or 15))) as response:
         data = response.read()
     return json.loads(data.decode("utf-8"))
 
@@ -239,14 +328,19 @@ def _sanitize_slug(value, fallback="asset"):
     return text[:120] or fallback
 
 
-def _cache_root(cache_dir=""):
+def _cache_root(cache_dir="", *, mark_owned=False):
     root = os.path.abspath(os.path.expanduser(str(cache_dir or _default_cache_dir())))
     os.makedirs(root, exist_ok=True)
+    if mark_owned:
+        marker_path = os.path.join(root, CACHE_ROOT_MARKER_FILENAME)
+        if not os.path.exists(marker_path):
+            with open(marker_path, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write("Blender Agent Bridge external asset cache\n")
     return root
 
 
 def _asset_cache_dir(provider, asset_id, cache_dir=""):
-    root = _cache_root(cache_dir)
+    root = _cache_root(cache_dir, mark_owned=True)
     directory = os.path.join(root, _sanitize_slug(provider, "provider"), _sanitize_slug(asset_id))
     os.makedirs(directory, exist_ok=True)
     return directory
@@ -379,7 +473,7 @@ def _download_file(url, destination, *, expected_md5="", expected_size=None, hea
             request_headers["Range"] = f"bytes={partial_size}-"
         try:
             request = urllib.request.Request(str(url), headers=request_headers)
-            with urllib.request.urlopen(request, timeout=max(1, int(timeout or 60))) as response:
+            with _urlopen_external(request, timeout=max(1, int(timeout or 60))) as response:
                 http_status = int(getattr(response, "status", 0) or response.getcode() or 0)
                 if partial_size and http_status == 206:
                     mode = "ab"
@@ -2025,15 +2119,25 @@ def _cache_asset_records(root):
             continue
         manifest_path = os.path.join(current_root, "asset_manifest.json")
         manifest = _read_manifest(manifest_path)
+        provider = str(manifest.get("provider") or "").strip().lower()
+        if provider not in {"poly_haven", "sketchfab"}:
+            continue
+        declared_cache_dir = str(manifest.get("cache_dir") or "").strip()
+        if declared_cache_dir and os.path.abspath(declared_cache_dir) != os.path.abspath(current_root):
+            continue
+        current_imports = _current_manifest_imports(manifest)
+        import_status = str(manifest.get("import_status") or "")
+        if current_imports is not None:
+            import_status = "imported" if current_imports["imported"] else "not_imported"
         size = _directory_size(current_root)
         records.append(
             {
-                "provider": str(manifest.get("provider") or "unknown"),
+                "provider": provider,
                 "asset_id": str(manifest.get("asset_id") or manifest.get("uid") or ""),
                 "asset_type": str(manifest.get("asset_type") or ""),
                 "cache_dir": current_root,
                 "manifest_path": manifest_path,
-                "import_status": str(manifest.get("import_status") or ""),
+                "import_status": import_status,
                 "size": size,
                 "updated_epoch": _manifest_epoch(manifest, manifest_path),
             }
@@ -2043,6 +2147,9 @@ def _cache_asset_records(root):
 
 def prune_external_asset_cache(*, cache_dir="", max_age_days=0, max_total_bytes=0, dry_run=True, include_imported=False):
     root = _cache_root(cache_dir)
+    marker_path = os.path.join(root, CACHE_ROOT_MARKER_FILENAME)
+    default_root = os.path.abspath(os.path.expanduser(_default_cache_dir()))
+    owned_root = root == default_root or os.path.isfile(marker_path)
     records = _cache_asset_records(root)
     total_bytes = sum(int(item.get("size") or 0) for item in records)
     now = time.time()
@@ -2072,9 +2179,26 @@ def prune_external_asset_cache(*, cache_dir="", max_age_days=0, max_total_bytes=
     errors = []
     reclaimed = 0
     root_abs = os.path.abspath(root)
+    if not dry_run and not owned_root:
+        return {
+            "ok": False,
+            "message": "Refusing to delete from a custom directory that is not a Blender Agent Bridge asset cache",
+            "code": "unowned_cache_root",
+            "dry_run": False,
+            "cache_dir": root,
+            "cache_marker": marker_path,
+            "asset_count": len(records),
+            "total_bytes": total_bytes,
+            "candidate_count": len(candidates),
+            "candidates": candidates,
+            "deleted_count": 0,
+            "deleted": [],
+            "reclaimed_bytes": 0,
+            "errors": [],
+        }
     for record in candidates:
         path = os.path.abspath(record["cache_dir"])
-        if not (path == root_abs or path.startswith(root_abs + os.sep)):
+        if not path.startswith(root_abs + os.sep):
             errors.append({"path": path, "message": "Refusing to delete path outside asset cache root"})
             continue
         if dry_run:

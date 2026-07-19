@@ -862,7 +862,7 @@ def _remove_timer_load_handler():
 
 
 class _BridgeHandler(BaseHTTPRequestHandler):
-    server_version = "BlenderAgentBridge/0.2"
+    server_version = f"BlenderAgentBridge/{build_info.MCP_SERVER_VERSION}"
     timeout = REQUEST_READ_TIMEOUT_SECONDS
 
     def log_message(self, fmt, *args):

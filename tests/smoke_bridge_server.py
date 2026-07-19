@@ -69,6 +69,17 @@ def _post(url, payload):
         return json.loads(response.read().decode("utf-8"))
 
 
+def _post_with_headers(url, payload, headers):
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers=headers,
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=5) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
 def _expect_http_error(fn, expected_status):
     try:
         fn()
@@ -97,6 +108,7 @@ def _post_declared_too_large(url):
 def main():
     claude_blender.register()
     try:
+        assert bridge_server._BridgeHandler.server_version.endswith(build_info.MCP_SERVER_VERSION)
         result = bridge_server.start_bridge(port=0)
         assert result["ok"], result
         base = result["url"]
@@ -174,6 +186,18 @@ def main():
         assert timeout_payload["resource_tool"] == "get_visual_evidence_resources", timeout_payload
         _expect_http_error(
             lambda: _get_with_headers(base + "/health", {"Origin": "https://example.invalid"}),
+            403,
+        )
+        _expect_http_error(
+            lambda: _get_with_headers(base + "/health", {"Host": "example.invalid"}),
+            403,
+        )
+        _expect_http_error(
+            lambda: _post_with_headers(
+                base + "/tool",
+                {"name": "list_scene_objects", "arguments": {"max_objects": 1}},
+                {"Content-Type": "text/plain", "Origin": "https://example.invalid"},
+            ),
             403,
         )
 

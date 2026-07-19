@@ -8364,6 +8364,7 @@
     },
     "prune_external_asset_cache": {
       "description": "Preview or delete old/excess external asset cache directories by age or total size. Dry-run by default.",
+      "destructive": true,
       "has_side_effects": true,
       "input_schema": {
         "additionalProperties": false,
@@ -8405,6 +8406,7 @@
         "files:read",
         "files:write"
       ],
+      "risk_level": "destructive",
       "supports_headless": true
     },
     "render_scene_thumbnail": {
@@ -18830,7 +18832,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "18610407cfdbc2f05b3fb22c4e1b4ae92a9177a3c8283ade28236b731bd65718",
+  "registry_digest": "f9dd785705aaa070c1f73f9f710de06f3a5aeeebab8d89f23a09df03ee00d842",
   "schema_version": 1,
   "specs": [
     {
@@ -34677,6 +34679,7 @@
     {
       "contract": {
         "description": "Preview or delete old/excess external asset cache directories by age or total size; dry-run by default",
+        "destructive": true,
         "has_side_effects": true,
         "input_schema": {
           "additionalProperties": false,
@@ -34704,6 +34707,7 @@
           "files:read",
           "files:write"
         ],
+        "risk_level": "destructive",
         "supports_headless": true
       },
       "description": "Preview or delete old/excess external asset cache directories by age or total size. Dry-run by default.",
