@@ -8,9 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pages: write
-  id-token: write
+  contents: read
 
 concurrency:
   group: extension-release-${{ github.ref }}
@@ -45,6 +43,8 @@ jobs:
           tests\smoke_extension_repository.py
           tests\smoke_helper_routing.py
           tests\smoke_real_client_routing.py
+          tests\smoke_release_artifact_identity.py
+          tests\smoke_published_release_identity.py
           tests\smoke_release_consistency.py
           tests\smoke_script_analysis.py
           tests\smoke_mcp_server.py
@@ -52,6 +52,9 @@ jobs:
 
       - name: Run audit log smoke test
         run: python tests\smoke_audit_log.py
+
+      - name: Run bridge protocol validation smoke test
+        run: python tests\smoke_bridge_protocol_validation.py
 
       - name: Run script analysis smoke test
         run: python tests\smoke_script_analysis.py
@@ -61,6 +64,12 @@ jobs:
 
       - name: Run helper routing smoke test
         run: python tests\smoke_helper_routing.py
+
+      - name: Run context budget smoke test
+        run: python tests\smoke_context_budget.py
+
+      - name: Run external asset smoke test
+        run: python tests\smoke_external_assets.py
 
       - name: Run real-client routing smoke test
         run: python tests\smoke_real_client_routing.py
@@ -87,41 +96,30 @@ jobs:
           --repo-dir public
           --repository-url https://callmejones.github.io/blender-agent-bridge/index.json
 
-      - name: Upload extension zip artifact
+      - name: Verify release and Pages archive identity
+        run: python tests\smoke_release_artifact_identity.py
+
+      - name: Upload Python-built smoke archive
         uses: actions/upload-artifact@v7
         with:
-          name: blender-agent-bridge-extension
+          name: blender-agent-bridge-python-smoke-archive
           path: |
             dist/*.zip
             dist/*.sha256
 
-      - name: Upload extension repository artifact
+      - name: Upload Python-built repository smoke artifact
         uses: actions/upload-artifact@v7
         with:
-          name: blender-agent-bridge-extension-repository
+          name: blender-agent-bridge-python-smoke-repository
           path: |
             public/index.json
             public/index.html
             public/*.zip
             public/*.sha256
 
-      - name: Publish tagged GitHub release assets
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/*.zip
-            dist/*.sha256
-
-      - name: Upload GitHub Pages artifact
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: public
-
   blender-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 50
     env:
       BLENDER_SERIES: "5.1"
       BLENDER_VERSION: "5.1.2"
@@ -155,21 +153,129 @@ jobs:
       - name: Show Blender version
         run: ./blender/blender --version
 
-      - name: Run Blender headless smoke tests
+      - name: Run Blender smoke suite (complete suite on tags)
         run: |
           set -euo pipefail
-          for t in smoke_advanced_helpers smoke_refinement_helpers smoke_refinement_visual_qa smoke_script_runner smoke_context_docs; do
+          tests=(
+            smoke_advanced_helpers
+            smoke_refinement_helpers
+            smoke_refinement_visual_qa
+            smoke_script_runner
+            smoke_context_docs
+          )
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tests=(
+              smoke_advanced_helpers
+              smoke_agent_tools
+              smoke_animation_controls
+              smoke_animation_helpers
+              smoke_bridge_server
+              smoke_context_docs
+              smoke_context_planner
+              smoke_external_asset_imports
+              smoke_full_tool_inventory
+              smoke_live_helpers
+              smoke_project_files
+              smoke_refinement_helpers
+              smoke_refinement_visual_qa
+              smoke_render_jobs
+              smoke_safe_editing_helpers
+              smoke_script_runner
+              smoke_tool_selection
+              smoke_world_model
+            )
+          fi
+          for t in "${tests[@]}"; do
             echo "::group::$t"
-            out=$(xvfb-run -a ./blender/blender --background --factory-startup --python "tests/$t.py" 2>&1) || { echo "$out"; echo "::endgroup::"; exit 1; }
+            out=$(xvfb-run -a ./blender/blender --background --factory-startup --python-exit-code 1 --python "tests/$t.py" 2>&1) || { echo "$out"; echo "::endgroup::"; exit 1; }
             echo "$out"
             echo "$out" | grep -q "$t: ok" || { echo "MISSING SUCCESS SENTINEL for $t"; echo "::endgroup::"; exit 1; }
             echo "::endgroup::"
           done
 
-  deploy-pages:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: mcp-smoke
+      - name: Run clean installed-extension live smoke for tags
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: >
+          xvfb-run -a python3 scripts/installed_extension_live_smoke.py
+          --blender "$GITHUB_WORKSPACE/blender/blender"
+          --timeout 240
+
+      - name: Validate and build official tagged archive
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          ./blender/blender --command extension validate addon/claude_blender
+          python3 scripts/build_extension_zip.py --blender "$GITHUB_WORKSPACE/blender/blender"
+          version=$(python3 -c "import tomllib; print(tomllib.load(open('addon/claude_blender/blender_manifest.toml','rb'))['version'])")
+          ./blender/blender --command extension validate "dist/claude_blender-${version}.zip"
+
+      - name: Upload official tagged release candidate
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v7
+        with:
+          name: blender-agent-bridge-official-release-candidate
+          path: |
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
+
+  prepare-publication:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [mcp-smoke, blender-smoke]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Download official release candidate
+        uses: actions/download-artifact@v7
+        with:
+          name: blender-agent-bridge-official-release-candidate
+          path: dist
+
+      - name: Build Pages repository from the official archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(python -c "import tomllib; print(tomllib.load(open('addon/claude_blender/blender_manifest.toml','rb'))['version'])")
+          python scripts/build_extension_repository.py \
+            --zip-path "dist/claude_blender-${version}.zip" \
+            --repo-dir public \
+            --repository-url https://callmejones.github.io/blender-agent-bridge/index.json
+          python tests/smoke_release_artifact_identity.py
+
+      - name: Upload tagged extension repository artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: blender-agent-bridge-extension-repository-${{ github.ref_name }}
+          path: |
+            public/index.json
+            public/index.html
+            public/*.zip
+            public/*.sha256
+          if-no-files-found: error
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: public
+
+  deploy-pages:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: prepare-publication
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -177,3 +283,43 @@ jobs:
       - name: Deploy GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+  publish-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [prepare-publication, deploy-pages]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Download official release candidate
+        uses: actions/download-artifact@v7
+        with:
+          name: blender-agent-bridge-official-release-candidate
+          path: dist
+
+      - name: Publish tagged GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.zip
+            dist/*.sha256
+
+  verify-publication:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [deploy-pages, publish-release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Verify public Pages and Release archive identity
+        run: python tests/smoke_published_release_identity.py --attempts 30 --delay 5

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.0 - 2026-07-19
+
 - Kept the Blender sidebar lean around bridge start/stop, MCP config, script trust, pending script approval, preview commit/revert, and checkpoint restore; rich diagnostics remain available through bridge/operator responses instead of always showing in the panel.
 - Relaxed `draft_script` routing so helper-overlap scene, material, and animation scripts can stage or auto-run under trust after static checks, while external asset, project-file, and persistent simulation bake/free paths stay out of the normal script-trust lane.
 - Added `draft_privileged_script` for custom external asset and project-file lifecycle scripts with a declared path/URL/action manifest, elevated static-analysis capabilities, and mandatory one-time approval; these scripts never auto-run under normal external script trust.
@@ -26,6 +28,9 @@
 - Expanded MCP guardrail warnings across destructive project-file operations, user-confirmed paths, approval-gated scripts, live-preview mutations, synchronous long-running tools, and background job polling.
 - Hardened MCP guardrail warnings to fall back to local bridge contracts when live tool annotations are sparse, and corrected render-job polling guidance to point at `get_render_job_status`.
 - Filled sparse MCP tool annotations from local bridge contracts and marked MP4 assembly as a pollable background render job.
+- Raised the documented and declared minimum supported Blender version to `5.1.0`, matching the tested Windows and Linux baseline.
+- Changed release publishing so tagged builds run the complete Blender suite and clean installed-extension smoke before one archive is promoted to both GitHub Releases and the Blender Pages repository.
+- Added contribution, support, issue-reporting, supported-version, and showcase-asset provenance guidance for the public project.
 
 ## 0.1.5
 

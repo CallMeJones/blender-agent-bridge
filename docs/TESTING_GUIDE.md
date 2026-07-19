@@ -2,15 +2,15 @@
 
 This guide is the runbook for asking Codex to test Blender Agent Bridge end to end. It is designed to cover every feature family, every bridge path, and every tool surface, then drive failures into focused fixes and reruns.
 
-Current project snapshot, checked on 2026-06-20:
+Current project snapshot, checked on 2026-07-19:
 
 - Extension: `Blender Agent Bridge`, manifest id `claude_blender`; version comes from `addon/claude_blender/blender_manifest.toml` and is checked against `build_info.py` and `CHANGELOG.md`.
-- Minimum Blender: `5.0.0`.
+- Minimum Blender: `5.1.0`.
 - Local Blender detected on this workstation: `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`.
 - Dispatcher inventory: 179 tool functions in `addon/claude_blender/tool_dispatcher.py`.
 - Normal agent catalog inventory: 178 tool definitions in `addon/claude_blender/agent_tools.py`.
 - Intentional catalog difference: `run_approved_script` is a dispatcher path for external approval/trust execution, but it is not exposed in the normal agent helper catalog.
-- Fast baseline verified on 2026-06-20: `compileall`, pure-Python smoke tests, extension repository smoke, external assets catalog smoke, script analysis, and stdio MCP smoke passed.
+- Release baseline verified on 2026-07-19: `compileall`, the fast pure-Python gate, all documented Blender-background tests, official extension validation, and the installed-extension live smoke passed on Blender 5.1.2 for Windows.
 
 ## How To Ask Codex To Run This
 
@@ -138,7 +138,7 @@ $BlenderTests = @(
 
 foreach ($Test in $BlenderTests) {
   Write-Host "== $Test =="
-  & $Blender --background --factory-startup --python $Test
+  & $Blender --background --factory-startup --python-exit-code 1 --python $Test
   if ($LASTEXITCODE -ne 0) { throw "Failed: $Test" }
 }
 ```
@@ -167,10 +167,11 @@ $Version = python -c "import tomllib; print(tomllib.load(open('addon/claude_blen
 & $Blender --command extension validate addon\claude_blender
 python scripts\build_extension_zip.py --blender $Blender
 & $Blender --command extension validate "dist\claude_blender-$Version.zip"
-python scripts\build_extension_repository.py --build-zip --blender $Blender --repo-dir public
+python scripts\build_extension_repository.py --zip-path "dist\claude_blender-$Version.zip" --repo-dir public
 python tests\smoke_release_consistency.py
 python tests\smoke_build_extension_zip.py
 python tests\smoke_extension_repository.py
+python tests\smoke_release_artifact_identity.py
 ```
 
 Also inspect the ZIP:
@@ -185,6 +186,7 @@ Pass criteria:
 - Blender validates source extension and built ZIP.
 - ZIP contains `LICENSE` and excludes private/generated artifacts.
 - `public/index.json`, `public/index.html`, ZIP, and checksum sidecar are regenerated and valid.
+- The GitHub Release and Pages repository are promoted from the exact same tagged archive after the complete tag gate passes.
 - Optional live Pages smoke sets `BLENDER_AGENT_BRIDGE_LIVE_PAGES_SMOKE=1` before `tests\smoke_release_consistency.py` and verifies the deployed remote repository index advertises the current manifest version and that its hosted ZIP matches the advertised SHA-256 hash.
 
 ## Phase 4: Clean Install Smoke
@@ -200,7 +202,7 @@ $env:BLENDER_USER_SCRIPTS = Join-Path $Profile "scripts"
 $env:BLENDER_USER_CACHE = Join-Path $Profile "cache"
 $env:BLENDER_USER_EXTENSIONS = Join-Path $Profile "extensions"
 New-Item -ItemType Directory -Force -Path $env:BLENDER_USER_CONFIG,$env:BLENDER_USER_SCRIPTS,$env:BLENDER_USER_CACHE,$env:BLENDER_USER_EXTENSIONS
-& $Blender --background --factory-startup --python tests\smoke_agent_tools.py
+& $Blender --background --factory-startup --python-exit-code 1 --python tests\smoke_agent_tools.py
 ```
 
 For the GitHub Pages install path:

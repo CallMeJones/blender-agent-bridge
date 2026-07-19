@@ -1,0 +1,39 @@
+name: Feature request
+description: Propose a bounded helper, workflow, integration, or usability improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the Blender workflow or safety/usability gap.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Explain the user-visible outcome rather than prescribing a large implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety and permissions
+      description: Note scene mutation, preview/rollback, filesystem, network, subprocess, asset, or project-file implications.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope checks
+      options:
+        - label: I searched existing issues and documentation.
+          required: true
+        - label: I understand that arbitrary Python is a fallback, not the default helper path.
+          required: true

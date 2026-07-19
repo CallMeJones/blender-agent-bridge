@@ -9,7 +9,7 @@ Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets
 </p>
 
 <p align="center">
-  <a href="addon/claude_blender/blender_manifest.toml"><img alt="Blender 5.0+" src="https://img.shields.io/badge/Blender-5.0%2B-F5792A"></a>
+  <a href="addon/claude_blender/blender_manifest.toml"><img alt="Blender 5.1+" src="https://img.shields.io/badge/Blender-5.1%2B-F5792A"></a>
   <img alt="MCP bridge" src="https://img.shields.io/badge/MCP-localhost%20bridge-3B82F6">
   <img alt="LLM host" src="https://img.shields.io/badge/LLM%20provider-external-10B981">
   <a href="LICENSE"><img alt="License GPL-3.0-or-later" src="https://img.shields.io/badge/License-GPL--3.0--or--later-111827"></a>
@@ -19,7 +19,7 @@ Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets
 
 ## Quick Start
 
-1. Install Blender `5.0.0` or newer.
+1. Install Blender `5.1.0` or newer.
 2. In Blender, open `Edit > Preferences > Get Extensions`, add this remote repository, then sync and install `Blender Agent Bridge`:
 
    ```text
@@ -87,7 +87,7 @@ These compressed images come from the `egypt.blend` project used while testing t
 | --- | --- | --- |
 | ![Wide dogfight render](docs/assets/egypt-dogfight-wide.jpg) | ![Aircraft inspection close-up](docs/assets/egypt-inspection-closeup.jpg) | ![Crash playblast frame](docs/assets/egypt-crash-playblast.jpg) |
 
-The source `.blend` file and full 1080p videos are not committed here; the repository only includes small showcase exports so the GitHub checkout stays light.
+The source `.blend` file and full 1080p videos are not committed here; the repository only includes small showcase exports so the GitHub checkout stays light. See [docs/assets/PROVENANCE.md](docs/assets/PROVENANCE.md) for their origin, hashes, licensing boundary, and known third-party-source limitations.
 
 ## What Agents Can Do
 
@@ -280,13 +280,13 @@ Set `BLENDER_AGENT_BRIDGE_LIVE_EXTERNAL_ASSET_DOWNLOAD=1` to also download small
 Run Blender-background smoke tests when Blender is available:
 
 ```powershell
-& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python tests\smoke_context_docs.py
-& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python tests\smoke_bridge_server.py
-& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python tests\smoke_animation_helpers.py
-& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python tests\smoke_tool_selection.py
-& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python tests\smoke_project_files.py
-& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python tests\smoke_render_jobs.py
-& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python tests\smoke_external_asset_imports.py
+& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python-exit-code 1 --python tests\smoke_context_docs.py
+& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python-exit-code 1 --python tests\smoke_bridge_server.py
+& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python-exit-code 1 --python tests\smoke_animation_helpers.py
+& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python-exit-code 1 --python tests\smoke_tool_selection.py
+& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python-exit-code 1 --python tests\smoke_project_files.py
+& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python-exit-code 1 --python tests\smoke_render_jobs.py
+& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python-exit-code 1 --python tests\smoke_external_asset_imports.py
 ```
 
 ## Documentation
@@ -299,6 +299,8 @@ Run Blender-background smoke tests when Blender is available:
 - [docs/EXTERNAL_BRIDGE_MCP.md](docs/EXTERNAL_BRIDGE_MCP.md) - localhost bridge and MCP server.
 - [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) - comprehensive automated testing runbook for all feature and tool surfaces.
 - [docs/RELEASE.md](docs/RELEASE.md) - release build and verification checklist.
+- [CONTRIBUTING.md](CONTRIBUTING.md) - contribution workflow, verification, and licensing terms.
+- [SUPPORT.md](SUPPORT.md) - support scope and where to ask for help.
 
 ## Repository Layout
 
@@ -316,4 +318,4 @@ LICENSE                        GPL-3.0-or-later license text
 
 ## License
 
-Blender Agent Bridge is licensed under the GNU General Public License, version 3 or any later version. The Blender extension manifest declares this as `SPDX:GPL-3.0-or-later`; see [LICENSE](LICENSE) for the full license text. Release ZIPs include the license file at the package root.
+Blender Agent Bridge source and release ZIPs are licensed under the GNU General Public License, version 3 or any later version. The Blender extension manifest declares this as `SPDX:GPL-3.0-or-later`; see [LICENSE](LICENSE) for the full license text. Release ZIPs include the license file at the package root. The separately distributed showcase media under `docs/assets/` is governed by [its provenance notice](docs/assets/PROVENANCE.md), not the extension's GPL license.

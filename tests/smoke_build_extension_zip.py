@@ -25,7 +25,6 @@ def _find_blender():
         os.environ.get("BLENDER_EXE", ""),
         shutil.which("blender") or "",
         r"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe",
-        r"C:\Program Files\Blender Foundation\Blender 5.0\blender.exe",
         r"C:\Program Files\Blender Foundation\Blender 4.3\blender.exe",
     ]
     for candidate in candidates:

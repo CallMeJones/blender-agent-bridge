@@ -1,0 +1,82 @@
+name: Bug report
+description: Report a reproducible Blender Agent Bridge defect
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include API keys, bridge tokens, private `.blend` files, or confidential captures. Security vulnerabilities must use the private advisory link.
+  - type: input
+    id: bridge_version
+    attributes:
+      label: Bridge version
+      description: Use the tagged version shown by blender_bridge_status.
+      placeholder: 0.2.0
+    validations:
+      required: true
+  - type: input
+    id: blender_version
+    attributes:
+      label: Blender version
+      placeholder: 5.1.2
+    validations:
+      required: true
+  - type: dropdown
+    id: operating_system
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - Linux
+        - macOS
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: MCP client and version
+      placeholder: Codex, Claude Desktop, Cursor, or another host
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Start from a factory scene or a minimal shareable scene when possible.
+      placeholder: |
+        1. Install...
+        2. Start the bridge...
+        3. Call...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Redacted diagnostics
+      description: Include relevant blender_bridge_status fields, guardrail warnings, and logs after removing paths, tokens, code, and private scene data.
+      render: shell
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Checks
+      options:
+        - label: I reproduced this with the latest tagged release.
+          required: true
+        - label: I removed secrets and private project data.
+          required: true
+        - label: This is not an undisclosed security vulnerability.
+          required: true

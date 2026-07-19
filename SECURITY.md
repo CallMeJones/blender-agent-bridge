@@ -4,11 +4,19 @@ Blender Agent Bridge gives AI agents structured access to a live Blender scene. 
 
 ## Supported Versions
 
-This project is early and currently supports the latest public `main` branch only.
+Security fixes are provided for the latest tagged GitHub release. The `main` branch is the development line for the next release and may change without notice; it is tested in CI but is not a separately supported distribution channel. Older tags are unsupported once a newer release is published.
+
+| Version | Supported |
+| --- | --- |
+| Latest tagged release | Yes |
+| `main` development branch | Best effort until tagged |
+| Older tagged releases | No |
+
+If a report affects an older version, reproduce it against the latest tagged release when safe to do so. Maintainers may ask reporters to verify a fix on `main` before the next release.
 
 ## Reporting
 
-Please report security issues privately when possible through GitHub security advisories for this repository. If advisories are not available, contact the maintainer through the repository before publishing details.
+Please report security issues privately through [GitHub Security Advisories](https://github.com/CallMeJones/blender-agent-bridge/security/advisories/new). If private advisories are unavailable, contact the maintainer through the repository before publishing details. Do not open a public issue for an unpatched vulnerability.
 
 Do not include API keys, bridge tokens, proprietary `.blend` files, or private scene screenshots in a public issue.
 
@@ -27,6 +35,8 @@ Do not include API keys, bridge tokens, proprietary `.blend` files, or private s
 
 - Run the smoke tests and build workflow.
 - Review `blender_manifest.toml` permissions.
+- Run a full Git-history secret scan with a maintained scanner such as Gitleaks.
 - Verify no secrets are present in docs, examples, generated zips, or logs.
+- Verify the tagged GitHub Release archive and Pages repository archive have the same SHA-256 checksum.
 - Confirm generated Python cannot run through external MCP without in-Blender approval.
 - Confirm external script trust presets expire, revoke, and clear on bridge restart or reload.

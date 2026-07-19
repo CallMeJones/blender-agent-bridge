@@ -44,7 +44,7 @@ The add-on should be packaged as a Blender extension:
 
 - `blender_manifest.toml` at the extension root.
 - `type = "add-on"`.
-- `blender_version_min = "4.2.0"` unless testing shows a newer minimum is needed.
+- `blender_version_min = "5.1.0"`, matching the supported and continuously tested Blender baseline.
 - `[permissions] network = "..."`
 - `[permissions] files = "..."` if docs caches, viewport captures, checkpoints, transcripts, audit logs, or exports are written.
 

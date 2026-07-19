@@ -20,6 +20,9 @@ import build_info  # noqa: E402
 
 MANIFEST_PATH = os.path.join(ROOT, "addon", "claude_blender", "blender_manifest.toml")
 CHANGELOG_PATH = os.path.join(ROOT, "CHANGELOG.md")
+README_PATH = os.path.join(ROOT, "README.md")
+INSTALL_PATH = os.path.join(ROOT, "docs", "INSTALL_FROM_GITHUB.md")
+WORKFLOW_PATH = os.path.join(ROOT, ".github", "workflows", "mcp-smoke.yml")
 PAGES_INDEX_URL = "https://callmejones.github.io/blender-agent-bridge/index.json"
 LIVE_PAGES_ENV = "BLENDER_AGENT_BRIDGE_LIVE_PAGES_SMOKE"
 MAX_LIVE_ARCHIVE_BYTES = 100 * 1024 * 1024
@@ -81,10 +84,29 @@ def _assert_local_release_metadata():
     assert version == build_info.ADDON_VERSION, (version, build_info.ADDON_VERSION)
     assert tuple(int(part) for part in version.split(".")) == build_info.ADDON_VERSION_TUPLE, build_info.ADDON_VERSION_TUPLE
     assert build_info.MCP_SERVER_VERSION == build_info.ADDON_VERSION, build_info.MCP_SERVER_VERSION
+    blender_min = str(manifest.get("blender_version_min") or "")
+    assert blender_min == build_info.BLENDER_VERSION_MIN, (blender_min, build_info.BLENDER_VERSION_MIN)
+    assert tuple(int(part) for part in blender_min.split(".")) == build_info.BLENDER_VERSION_MIN_TUPLE
 
     changelog = _read_text(CHANGELOG_PATH)
     assert "## Unreleased" in changelog, "CHANGELOG.md is missing an Unreleased section"
     assert f"## {version}" in changelog, f"CHANGELOG.md is missing ## {version}"
+
+    readme = _read_text(README_PATH)
+    install = _read_text(INSTALL_PATH)
+    assert "Blender 5.1+" in readme, "README badge must match the supported Blender baseline"
+    assert f"Install Blender `{blender_min}` or newer" in readme, "README Quick Start minimum drifted"
+    assert f"Install Blender `{blender_min}` or newer" in install, "Install guide minimum drifted"
+
+    workflow = _read_text(WORKFLOW_PATH)
+    assert "needs: [mcp-smoke, blender-smoke]" in workflow, "Tag artifact preparation must wait for both test jobs"
+    assert "smoke_release_artifact_identity.py" in workflow, "Tag publication must verify archive identity"
+    assert "smoke_published_release_identity.py" in workflow, "Tag publication must verify both public endpoints"
+    assert "if: startsWith(github.ref, 'refs/tags/v')" in workflow, "Pages and release publication must be tag-gated"
+
+    github_ref = str(os.environ.get("GITHUB_REF") or "")
+    if github_ref.startswith("refs/tags/"):
+        assert github_ref == f"refs/tags/v{version}", (github_ref, version)
 
     _assert_no_hardcoded_release_examples(version)
     return version

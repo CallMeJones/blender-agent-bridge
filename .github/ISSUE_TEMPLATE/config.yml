@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/CallMeJones/blender-agent-bridge/security/advisories/new
+    about: Report vulnerabilities privately; do not disclose them in a public issue.
+  - name: Support guide
+    url: https://github.com/CallMeJones/blender-agent-bridge/blob/main/SUPPORT.md
+    about: Check supported versions, troubleshooting, and the information needed for a useful report.

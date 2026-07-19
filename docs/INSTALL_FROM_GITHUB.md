@@ -14,7 +14,7 @@ https://callmejones.github.io/blender-agent-bridge/index.json
 
 In Blender:
 
-1. Install Blender `5.0.0` or newer.
+1. Install Blender `5.1.0` or newer.
 2. Open `Edit > Preferences > Get Extensions`.
 3. Enable online access if Blender asks for it.
 4. Add a remote repository named `Blender Agent Bridge`.
@@ -104,18 +104,19 @@ blender --command extension validate "dist\claude_blender-$Version.zip"
 python tests\smoke_release_consistency.py
 python tests\smoke_build_extension_zip.py
 python tests\smoke_extension_repository.py
-python scripts\build_extension_repository.py --build-zip --blender blender --repo-dir public
+python scripts\build_extension_repository.py --zip-path "dist\claude_blender-$Version.zip" --repo-dir public
+python tests\smoke_release_artifact_identity.py
 ```
 
 Publish a tagged GitHub release:
 
 ```powershell
 $Version = python -c "import tomllib; print(tomllib.load(open('addon/claude_blender/blender_manifest.toml','rb'))['version'])"
-git tag "v$Version"
+git tag -a "v$Version" -m "Blender Agent Bridge $Version"
 git push origin "v$Version"
 ```
 
-The GitHub workflow uploads the packaged ZIP and `.sha256` as release assets. Pushes to `main` build the same static extension repository into `public/` and deploy it to GitHub Pages when Pages is configured to use GitHub Actions.
+The GitHub workflow runs the complete Blender suite and clean installed-extension smoke for `v*` tags. After those gates pass, it publishes one official ZIP and `.sha256` to the GitHub Release and builds the Pages repository from that exact archive, then downloads both public copies to verify byte identity. Ordinary `main` pushes do not change the public Pages package.
 
 Clean CLI install smoke with a temporary Blender profile:
 

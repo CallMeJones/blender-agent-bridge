@@ -1,13 +1,13 @@
 schema_version = "1.0.0"
 
 id = "claude_blender"
-version = "0.1.5"
+version = "0.2.0"
 name = "Blender Agent Bridge"
 tagline = "Safe scene bridge for external AI agents"
 maintainer = "Michael"
 type = "add-on"
 website = "https://github.com/CallMeJones/blender-agent-bridge"
-blender_version_min = "5.0.0"
+blender_version_min = "5.1.0"
 license = [
   "SPDX:GPL-3.0-or-later",
 ]
