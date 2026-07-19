@@ -62,6 +62,12 @@ def main():
         assert "https://callmejones.github.io/blender-agent-bridge/index.json" in html, html
         assert "https://github.com/CallMeJones/blender-agent-bridge/releases/latest" in html, html
         assert "Install from Disk" in html, html
+        assert "uvx --from blender-bridge==" in html, html
+        assert "Safety by design" in html, html
+        assert "Client guides" in html, html
+        assert "Showcase" in html, html
+        assert len(result["showcase_assets"]) == 3, result
+        assert all(os.path.exists(path) for path in result["showcase_assets"]), result
 
         same_file = build_extension_repository.build_repository(
             zip_path=result["zip_path"],

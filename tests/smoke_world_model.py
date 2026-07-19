@@ -13,7 +13,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import agent_tools, context_bundle, tool_dispatcher  # noqa: E402
+from claude_blender import agent_tools, blender_compat, context_bundle, tool_dispatcher  # noqa: E402
 
 
 def _execute(context, name, args=None):
@@ -53,7 +53,6 @@ def _make_text_object(scene):
 def main():
     claude_blender.register()
     created_objects = []
-    created_node_groups = []
     created_actions = []
     try:
         context = bpy.context
@@ -62,7 +61,7 @@ def main():
         _select(context, cube)
 
         material = bpy.data.materials.new("Agent Bridge World Shader")
-        material.use_nodes = True
+        assert blender_compat.ensure_node_tree(material) is not None
         cube.data.materials.clear()
         cube.data.materials.append(material)
 
@@ -72,6 +71,11 @@ def main():
         assert shape_basis.name == "Basis"
 
         gn_group = bpy.data.node_groups.new("Agent Bridge World Geometry Nodes", "GeometryNodeTree")
+        gn_group.interface.new_socket(name="Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
+        gn_group.interface.new_socket(name="Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
+        gn_input = gn_group.nodes.new(type="NodeGroupInput")
+        gn_output = gn_group.nodes.new(type="NodeGroupOutput")
+        gn_group.links.new(gn_input.outputs["Geometry"], gn_output.inputs["Geometry"])
         gn_modifier = cube.modifiers.new("Agent Bridge World GN", "NODES")
         gn_modifier.node_group = gn_group
 
@@ -205,14 +209,9 @@ def main():
         scene.collection.children.link(collection)
         collection.objects.link(cube)
 
-        scene.use_nodes = True
-        if hasattr(scene, "node_tree") and scene.node_tree:
-            scene.node_tree.nodes.new(type="CompositorNodeBlur")
-        elif hasattr(scene, "compositing_node_group"):
-            compositor_group = bpy.data.node_groups.new("Agent Bridge World Compositor", "CompositorNodeTree")
-            created_node_groups.append(compositor_group)
-            compositor_group.nodes.new(type="CompositorNodeBlur")
-            scene.compositing_node_group = compositor_group
+        compositor_group = blender_compat.ensure_node_tree(scene)
+        assert compositor_group is not None
+        compositor_group.nodes.new(type="CompositorNodeBlur")
 
         bundle = context_bundle.build_context_bundle(context)
         assert "world_model_summary" in bundle
@@ -374,9 +373,6 @@ def main():
             material = bpy.data.materials.get(name)
             if material:
                 bpy.data.materials.remove(material)
-        for group in created_node_groups:
-            if group.name in bpy.data.node_groups:
-                bpy.data.node_groups.remove(group)
         for action in created_actions:
             if action.name in bpy.data.actions:
                 bpy.data.actions.remove(action)

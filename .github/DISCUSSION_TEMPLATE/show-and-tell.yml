@@ -1,0 +1,28 @@
+title: "[Show and Tell] "
+labels:
+  - showcase
+body:
+  - type: markdown
+    attributes:
+      value: Share what you built, how the bridge helped, and what you learned. Never post bridge tokens, API keys, private paths, or unlicensed media.
+  - type: textarea
+    id: result
+    attributes:
+      label: What did you make?
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Bridge workflow
+      description: Mention tools, visual evidence, previews, approvals, commits, or reverts.
+    validations:
+      required: true
+  - type: textarea
+    id: media
+    attributes:
+      label: Media and provenance
+      description: Include alt text and licenses for external assets.
+    validations:
+      required: true
+

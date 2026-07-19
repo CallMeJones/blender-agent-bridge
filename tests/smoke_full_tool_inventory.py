@@ -12,7 +12,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import agent_tools, bridge_protocol, bridge_server, tool_dispatcher  # noqa: E402
+from claude_blender import agent_tools, bridge_protocol, bridge_server, tool_dispatcher, tool_registry  # noqa: E402
 
 
 CATALOG_HIDDEN_TOOLS = {"run_approved_script"}
@@ -37,11 +37,22 @@ def main():
         assert CATALOG_HIDDEN_TOOLS.issubset(dispatcher_names), dispatcher_names
         assert not CATALOG_HIDDEN_TOOLS.intersection(catalog_names), catalog_names
 
+        for spec in tool_registry.REGISTRY.specs():
+            handler = tool_dispatcher.TOOL_FUNCTIONS[spec.name]
+            assert handler.__module__.endswith(f"tool_handlers.{spec.owner}"), (spec.name, handler.__module__)
+
         for tool_name in ("create_procedural_object_kit", "create_directed_animation_shot"):
             assert tool_name in catalog_names, tool_name
             assert tool_name in dispatcher_names, tool_name
             assert tool_name in bridge_names, tool_name
             assert bridge_protocol.normalized_tool_contract(tool_name)["requires_live_preview"] is True
+
+        original_handler = tool_dispatcher.TOOL_FUNCTIONS["inspect_scene"]
+        original_digest = tool_registry.TOOL_REGISTRY_DIGEST
+        claude_blender.unregister()
+        claude_blender.register()
+        assert tool_dispatcher.TOOL_FUNCTIONS["inspect_scene"] is not original_handler
+        assert tool_registry.TOOL_REGISTRY_DIGEST == original_digest
 
         print("smoke_full_tool_inventory: ok")
     finally:

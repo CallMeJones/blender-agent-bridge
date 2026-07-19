@@ -28,6 +28,13 @@ Disabling and re-enabling the extension may also work for small edits because `_
 
 With the link active, you do not need to reinstall the zip for normal local testing. Rebuild and reinstall the zip only when testing clean install/load behavior, release packaging, or a user's packaged-extension path. After bridge or MCP server changes, use `Copy MCP Config` again and refresh or restart the MCP client because many clients cache tool lists and server configs.
 
+Tool metadata changes follow [Adding a Tool](ADDING_A_TOOL.md). Run the conventional unit lane and update the registry snapshot only through its explicit script:
+
+```powershell
+python -m unittest discover -s tests\unit -p "test_*.py" -v
+python scripts\update_tool_snapshot.py
+```
+
 To target a different Blender version:
 
 ```powershell

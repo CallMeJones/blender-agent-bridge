@@ -14,7 +14,7 @@ https://callmejones.github.io/blender-agent-bridge/index.json
 
 In Blender:
 
-1. Install Blender `5.1.0` or newer.
+1. Install Blender `4.2.0` or newer.
 2. Open `Edit > Preferences > Get Extensions`.
 3. Enable online access if Blender asks for it.
 4. Add a remote repository named `Blender Agent Bridge`.

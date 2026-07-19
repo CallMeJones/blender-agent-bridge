@@ -45,6 +45,7 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                     "ok": True,
                     "scene": "Fake Scene",
                     "bridge_version": bridge_protocol.BRIDGE_VERSION,
+                    "tool_registry_digest": build_info.TOOL_REGISTRY_DIGEST,
                     "addon_version": build_info.ADDON_VERSION,
                     "addon_source_hash": diagnostics["addon_source_hash"],
                     "addon_loaded_source_hash": diagnostics["addon_loaded_source_hash"],

@@ -7,15 +7,10 @@ barrier in the trust path, so this test pins two things:
 
 * GUARDS  - adversarial variants the analyzer already catches. Locking these in
             prevents the hardening from regressing.
-* GAPS    - sandbox-escape patterns the analyzer currently misses. Each one
-            returns ``ok`` (and ``trust_window_allowed=True``), i.e. it would
-            auto-execute under an active trust window. These encode the security
-            contract we *want* (the script must be blocked) and are reported as
-            known-failing by default. Set ``STRICT_BYPASS=1`` to make them hard
-            failures once the analyzer learns to reject them.
+* BYPASSES - previously reachable sandbox-escape patterns. Each must remain
+             blocked and ineligible for trust-window execution.
 
 Run:  python tests/smoke_script_analysis_bypass.py
-      STRICT_BYPASS=1 python tests/smoke_script_analysis_bypass.py
 """
 
 from __future__ import annotations
@@ -53,7 +48,7 @@ GUARDS = {
 }
 
 
-# --- Confirmed bypasses: analyzer returns ok today but SHOULD block ---
+# --- Former bypasses that must remain blocked ---
 # Keys map to the bypass classes called out in the P0 note: object-graph
 # escape, computed attribute names, container indirection, and the
 # sys.modules registry (sys is not in BLOCKED_MODULES).
@@ -95,7 +90,7 @@ def _check_guards():
         assert not result["trust_window_allowed"], f"GUARD would auto-run: {name}\n{result}"
 
 
-def _check_gaps(strict):
+def _check_gaps():
     still_open = []
     for name, src in GAPS.items():
         result = script_analysis.analyze_script(src)
@@ -106,20 +101,15 @@ def _check_gaps(strict):
         for name, auto_run in still_open:
             flag = " [AUTO-RUNS under trust window]" if auto_run else ""
             print(f"  - {name}{flag}")
-        if strict:
-            raise AssertionError(
-                f"{len(still_open)} denylist bypass(es) still reachable; "
-                "analyzer must block these before STRICT_BYPASS can pass."
-            )
+        raise AssertionError(f"{len(still_open)} denylist bypass(es) are reachable")
     else:
         print("smoke_script_analysis_bypass: all known bypass gaps are now closed.")
 
 
 def main():
-    strict = os.environ.get("STRICT_BYPASS") == "1"
     _check_guards()
     print("smoke_script_analysis_bypass: guards ok")
-    _check_gaps(strict)
+    _check_gaps()
     print("smoke_script_analysis_bypass: ok")
 
 

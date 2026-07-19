@@ -85,6 +85,10 @@ def main():
         assert result["sha256"] in digest_line, digest_line
         config_env = build_info.mcp_config_env()
         assert config_env["CLAUDE_BLENDER_ADDON_SOURCE_HASH"] == build_info.source_tree_hash(), config_env
+        assert config_env["SKETCHFAB_API_TOKEN"] == "", config_env
+        auth_env = build_info.mcp_config_env(sketchfab_api_token="smoke-token-not-a-secret")
+        assert auth_env["SKETCHFAB_API_TOKEN"] == "smoke-token-not-a-secret", auth_env
+        assert "Poly Haven needs no API key" in auth_env["BLENDER_AGENT_BRIDGE_EXTERNAL_AUTH_NOTE"], auth_env
 
         blender = _find_blender()
         if blender:

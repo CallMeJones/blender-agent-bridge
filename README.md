@@ -9,7 +9,9 @@ Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets
 </p>
 
 <p align="center">
-  <a href="addon/claude_blender/blender_manifest.toml"><img alt="Blender 5.1+" src="https://img.shields.io/badge/Blender-5.1%2B-F5792A"></a>
+  <a href="addon/claude_blender/blender_manifest.toml"><img alt="Blender 4.2+" src="https://img.shields.io/badge/Blender-4.2%2B-F5792A"></a>
+  <a href="https://github.com/CallMeJones/blender-agent-bridge/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/CallMeJones/blender-agent-bridge"></a>
+  <a href="https://github.com/CallMeJones/blender-agent-bridge/actions/workflows/mcp-smoke.yml"><img alt="Build, smoke, release" src="https://github.com/CallMeJones/blender-agent-bridge/actions/workflows/mcp-smoke.yml/badge.svg"></a>
   <img alt="MCP bridge" src="https://img.shields.io/badge/MCP-localhost%20bridge-3B82F6">
   <img alt="LLM host" src="https://img.shields.io/badge/LLM%20provider-external-10B981">
   <a href="LICENSE"><img alt="License GPL-3.0-or-later" src="https://img.shields.io/badge/License-GPL--3.0--or--later-111827"></a>
@@ -19,7 +21,7 @@ Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets
 
 ## Quick Start
 
-1. Install Blender `5.1.0` or newer.
+1. Install Blender `4.2.0` or newer. CI continuously checks Blender 4.2 LTS, 4.5 LTS, and 5.1; newer versions are allowed and use capability checks rather than an artificial maximum-version gate.
 2. In Blender, open `Edit > Preferences > Get Extensions`, add this remote repository, then sync and install `Blender Agent Bridge`:
 
    ```text
@@ -27,7 +29,7 @@ Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets
    ```
 
 3. Enable the extension, open the 3D View sidebar, find `Agent Bridge`, and press `Start Bridge`.
-4. Press `Copy MCP`, paste the generated config into Claude Desktop, Claude Code, Codex, Cursor, or another MCP client, then refresh or restart that client.
+4. Keep the default **Bundled** runtime, or select **uvx / PyPI** if you want a path-independent MCP process. Press `Copy MCP`, paste the generated config into your client, then refresh or restart it.
 5. Ask the client:
 
    ```text
@@ -41,6 +43,8 @@ Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets
    ```
 
 Live helper edits stay pending in Blender until you use `Commit`, `Revert`, or Blender undo. For Sketchfab downloads/imports, add `SKETCHFAB_API_TOKEN` to the copied MCP config `env` block before restarting the MCP client. For generated Python, use Blender's `Run`/`Reject` controls or turn on session script trust from the sidebar. Custom asset/project-file scripts use `draft_privileged_script`, require a path/URL/action manifest for user review and audit, and never auto-run under normal script trust. The privileged manifest is not a filesystem or network sandbox.
+
+Bundled mode remains the zero-install default. Optional `uvx / PyPI` mode requires [`uv`](https://docs.astral.sh/uv/getting-started/installation/) and generates an exact version pin such as `uvx --from blender-bridge==0.3.0 blender-bridge`. Both modes expose the same registry and safety contracts; the protocol and registry digest handshake rejects incompatible combinations. See the [client guide matrix](docs/clients/README.md) for client- and OS-specific setup.
 
 ## After Updates
 
@@ -111,7 +115,7 @@ Connected agents do not get blanket access to Blender.
 | Safe helper tools | Apply immediately as live preview transactions with `Commit`, `Revert`, and Blender undo support. |
 | Visual capture tools | Store local project/session-scoped screenshots, playblast frames, inspection renders, thumbnails, and render outputs. |
 | Project files | Save-as, save-copy, open, and new-project tools require a user-confirmed path. Autosave only saves an already-bound active `.blend` file in place. |
-| External assets | Poly Haven uses public catalog/file APIs. Sketchfab downloads/imports require a per-call API token or a token inherited by the MCP server environment. Tokens are redacted and not written to job metadata. |
+| External assets | Poly Haven uses public catalog/file APIs. Sketchfab downloads/imports accept a per-call token, the MCP server environment, or a masked memory-only Blender-session token. Tokens are redacted and never written to preferences, blend files, or job metadata. |
 | Generated Python | Staged into a Text datablock and blocked until approved in Blender, unless runtime-only script trust is active. |
 | Privileged Python | Custom asset/project-file scripts require a manifest and one-time approval; normal script trust cannot auto-run them. |
 | External script trust | Optional sidebar on/off control for iterative sessions. Trust is runtime-only, session-scoped, and can be revoked. Blocked scripts remain refused. |
@@ -149,9 +153,17 @@ See [docs/INSTALL_FROM_GITHUB.md](docs/INSTALL_FROM_GITHUB.md) for checksum veri
 
 ## Optional Sketchfab Auth
 
-Poly Haven discovery and imports do not need a token. Sketchfab public search is tokenless, but Sketchfab model download/import tools need an API token.
+Poly Haven discovery and imports do not need a token. Sketchfab public search is also tokenless, but Sketchfab model downloads/imports need an API token.
 
-Add the token to the MCP server config `env` block that your client actually launches, then refresh or restart that MCP client:
+The easiest setup is in Blender's `Agent Bridge` sidebar:
+
+1. Press `Copy MCP + Sketchfab`.
+2. Paste the Sketchfab API token into the masked one-time dialog.
+3. Confirm to copy a complete MCP config, replace the old client config, then restart or refresh the client.
+
+The token is placed in the copied config only. Blender Agent Bridge does not save it in add-on preferences, `.blend` files, or audit logs. The normal `Copy MCP Config` action includes an empty `SKETCHFAB_API_TOKEN` field for users who prefer to fill it in manually.
+
+Manual fallback:
 
 ```json
 "env": {
@@ -186,6 +198,10 @@ The MCP surface is compact by default, so clients do not need to load the whole 
 Some MCP clients cache tool lists and server configs. After installing a new ZIP, reloading the add-on, or pressing `Copy MCP`, replace the old client config and refresh or restart that MCP client.
 
 See [docs/EXTERNAL_BRIDGE_MCP.md](docs/EXTERNAL_BRIDGE_MCP.md) for setup and troubleshooting.
+
+Client-specific instructions: [Codex](docs/clients/CODEX.md), [Claude](docs/clients/CLAUDE.md), [Cursor](docs/clients/CURSOR.md), [VS Code/Cline/Roo](docs/clients/VSCODE.md), [ChatGPT](docs/clients/CHATGPT.md), [Gemini CLI](docs/clients/GEMINI.md), [OpenCode](docs/clients/OPENCODE.md), and [Ollama hosts](docs/clients/OLLAMA.md).
+
+Community: browse the [curated showcase](docs/SHOWCASE.md), propose a [showcase submission](https://github.com/CallMeJones/blender-agent-bridge/issues/new?template=showcase.yml), join [Discussions](https://github.com/CallMeJones/blender-agent-bridge/discussions), report [issues](https://github.com/CallMeJones/blender-agent-bridge/issues), or read [Contributing](CONTRIBUTING.md) and [Adding a Tool](docs/ADDING_A_TOOL.md).
 
 ## Try These Prompts
 

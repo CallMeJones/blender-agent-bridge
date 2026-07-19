@@ -6,6 +6,7 @@ import os
 import tempfile
 import sys
 import hashlib
+import json
 import urllib.parse
 import zipfile
 
@@ -124,6 +125,7 @@ def _fake_fetch_json_with_headers(url, *, headers=None, timeout=15):
         assert headers and headers.get("Authorization") in {
             "Token test-token",
             "Token bridge-api-token",
+            "Token session-api-token",
         }, headers
         return {"gltf": {"url": "https://download.example.invalid/abc123.zip", "expires": 300}}
     raise AssertionError(f"Unexpected authenticated URL: {url}")
@@ -252,6 +254,18 @@ def main():
         assert model_cache["asset_type"] == "models", model_cache
         assert len(model_cache["downloaded_files"]) == 2, model_cache
         assert any(item.get("dependency") for item in model_cache["downloaded_files"]), model_cache
+        model_dependency = next(item for item in model_cache["downloaded_files"] if item.get("dependency"))
+        assert model_dependency["logical_path"] == "textures/hangar_diff_2k.jpg", model_dependency
+        assert model_dependency["local_logical_path"] == "gltf/2k/textures/hangar_diff_2k.jpg", model_dependency
+        expected_dependency_path = os.path.join(
+            model_cache["cache_dir"],
+            "files",
+            "gltf",
+            "2k",
+            "textures",
+            "hangar_diff_2k.jpg",
+        )
+        assert os.path.normcase(model_dependency["path"]) == os.path.normcase(expected_dependency_path), model_dependency
         assert os.path.exists(model_cache["manifest_path"]), model_cache
 
         hdri_cache = external_assets.download_poly_haven_asset(
@@ -282,6 +296,13 @@ def main():
         assert sketchfab["models"][0]["uid"] == "abc123", sketchfab
         assert sketchfab["models"][0]["is_downloadable"] is True, sketchfab
         assert sketchfab["models"][0]["thumbnail_url"].endswith("/large.jpg"), sketchfab
+        assert sketchfab["models"][0]["provenance"] == {
+            "uid": "abc123",
+            "model_name": "Repair Drone",
+            "author": "Sketch Artist",
+            "license": "CC Attribution",
+            "model_url": "https://sketchfab.com/3d-models/repair-drone-abc123",
+        }, sketchfab
         assert sketchfab["download_import_status"] == "download_or_import_requires_auth", sketchfab
 
         no_token = external_assets.download_sketchfab_model(uid="abc123", cache_dir=cache_dir)
@@ -310,14 +331,30 @@ def main():
         assert sketchfab_env_api_cache["auth_source"] == f"env:{external_assets.SKETCHFAB_BRIDGE_TOKEN_ENV_VAR}", sketchfab_env_api_cache
         os.environ.pop(external_assets.SKETCHFAB_BRIDGE_TOKEN_ENV_VAR, None)
 
+        external_assets.set_session_sketchfab_api_token("session-api-token")
+        session_auth = external_assets.sketchfab_auth_diagnostics()
+        assert session_auth["ready"] is True, session_auth
+        assert session_auth["session_token_configured"] is True, session_auth
+        assert "session-api-token" not in json.dumps(session_auth, sort_keys=True), session_auth
+        sketchfab_session_cache = external_assets.download_sketchfab_model(uid="abc123", cache_dir=cache_dir)
+        assert sketchfab_session_cache["ok"] is True, sketchfab_session_cache
+        assert sketchfab_session_cache["auth_source"] == "blender_session", sketchfab_session_cache
+        external_assets.clear_session_sketchfab_api_token()
+
         sketchfab_cache = external_assets.download_sketchfab_model(
             uid="abc123",
             api_token="test-token",
             cache_dir=cache_dir,
+            provenance=sketchfab["models"][0]["provenance"],
         )
         assert sketchfab_cache["ok"] is True, sketchfab_cache
         assert sketchfab_cache["auth_source"] == "argument", sketchfab_cache
         assert sketchfab_cache["import_file"].endswith("scene.gltf"), sketchfab_cache
+        assert sketchfab_cache["author"] == "Sketch Artist", sketchfab_cache
+        assert sketchfab_cache["license"] == "CC Attribution", sketchfab_cache
+        assert sketchfab_cache["model_url"] == "https://sketchfab.com/3d-models/repair-drone-abc123", sketchfab_cache
+        assert sketchfab_cache["provenance_complete"] is True, sketchfab_cache
+        assert "see_sketchfab_model_page" not in json.dumps(sketchfab_cache), sketchfab_cache
         assert os.path.exists(sketchfab_cache["import_file"]), sketchfab_cache
 
         diagnostics = external_assets.external_asset_cache_diagnostics(cache_dir=cache_dir)
@@ -559,6 +596,7 @@ def main():
         assert failed_sketchfab["count"] == 0, failed_sketchfab
         assert failed_sketchfab["download_import_status"] == "not_attempted", failed_sketchfab
     finally:
+        external_assets.clear_session_sketchfab_api_token()
         external_assets._fetch_json = original_fetch_json
         external_assets._fetch_json_with_headers = original_fetch_json_with_headers
         external_assets._download_file = original_download_file

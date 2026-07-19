@@ -236,7 +236,10 @@ def _busy_scene_status(message=""):
     active = _active_operation_status()
     last = _last_operation_status()
     recovery = active.get("recovery") or _operation_recovery_guidance(active.get("tool", ""))
-    diagnostics = build_info.diagnostics_dict(bridge_url=bridge_url())
+    diagnostics = build_info.diagnostics_dict(
+        bridge_url=bridge_url(),
+        blender_version=".".join(str(part) for part in bpy.app.version),
+    )
     tool = str(active.get("tool") or "")
     return {
         "ok": True,
@@ -251,6 +254,11 @@ def _busy_scene_status(message=""):
         "addon_runtime_source_stale": diagnostics["addon_runtime_source_stale"],
         "addon_runtime_source_status": diagnostics["addon_runtime_source_status"],
         "addon_runtime_source_message": diagnostics["addon_runtime_source_message"],
+        "addon_reload_required": diagnostics["addon_reload_required"],
+        "addon_reload_guidance": diagnostics["addon_reload_guidance"],
+        "blender_version": diagnostics["blender_version"],
+        "blender_version_min": diagnostics["blender_version_min"],
+        "blender_compatibility": diagnostics["blender_compatibility"],
         "expected_addon_source_hash": diagnostics["expected_addon_source_hash"],
         "addon_source_hash_match": diagnostics["addon_source_hash_match"],
         "addon_source_hash_status": diagnostics["addon_source_hash_status"],
@@ -258,6 +266,7 @@ def _busy_scene_status(message=""):
         "mcp_server_version": diagnostics["mcp_server_version"],
         "mcp_server_path": diagnostics["mcp_server_path"],
         "mcp_config_version": diagnostics["mcp_config_version"],
+        "tool_registry_digest": diagnostics["tool_registry_digest"],
         "build_diagnostics": build_info.diagnostics_summary(),
         "bridge_busy": True,
         "recoverable": True,
@@ -304,6 +313,10 @@ def _scene_status():
         "addon_runtime_source_stale": diagnostics["addon_runtime_source_stale"],
         "addon_runtime_source_status": diagnostics["addon_runtime_source_status"],
         "addon_runtime_source_message": diagnostics["addon_runtime_source_message"],
+        "addon_reload_required": diagnostics["addon_reload_required"],
+        "addon_reload_guidance": diagnostics["addon_reload_guidance"],
+        "blender_version_min": diagnostics["blender_version_min"],
+        "blender_compatibility": diagnostics["blender_compatibility"],
         "expected_addon_source_hash": diagnostics["expected_addon_source_hash"],
         "addon_source_hash_match": diagnostics["addon_source_hash_match"],
         "addon_source_hash_status": diagnostics["addon_source_hash_status"],
@@ -311,6 +324,7 @@ def _scene_status():
         "mcp_server_version": diagnostics["mcp_server_version"],
         "mcp_server_path": diagnostics["mcp_server_path"],
         "mcp_config_version": diagnostics["mcp_config_version"],
+        "tool_registry_digest": diagnostics["tool_registry_digest"],
         "build_diagnostics": build_info.diagnostics_summary(),
         "scene": bpy.context.scene.name,
         "bridge_busy": bool(active),
@@ -1044,6 +1058,7 @@ def status():
         "addon_version": build_info.ADDON_VERSION,
         "mcp_server_version": build_info.MCP_SERVER_VERSION,
         "mcp_config_version": build_info.MCP_CONFIG_VERSION,
+        "tool_registry_digest": build_info.TOOL_REGISTRY_DIGEST,
     }
 
 

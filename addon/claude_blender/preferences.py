@@ -97,6 +97,15 @@ class CLAUDEBLENDER_AP_preferences(bpy.types.AddonPreferences):
         subtype="PASSWORD",
         default="",
     )
+    mcp_launch_mode: bpy.props.EnumProperty(
+        name="MCP Runtime",
+        description="Choose the external MCP server launched by copied client configurations",
+        items=(
+            ("BUNDLED", "Bundled", "Use the MCP server included in this Blender extension; works offline"),
+            ("UVX", "uvx / PyPI", "Use the matching blender-bridge package from PyPI through uvx"),
+        ),
+        default="BUNDLED",
+    )
 
     def draw(self, context):
         layout = self.layout
@@ -117,6 +126,7 @@ class CLAUDEBLENDER_AP_preferences(bpy.types.AddonPreferences):
         layout.label(text="External Bridge / MCP")
         layout.prop(self, "bridge_port")
         layout.prop(self, "bridge_auth_token")
+        layout.prop(self, "mcp_launch_mode")
 
 
 def get_preferences(context):

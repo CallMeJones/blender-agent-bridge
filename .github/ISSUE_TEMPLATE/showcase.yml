@@ -1,0 +1,55 @@
+name: Showcase submission
+description: Share a Blender Agent Bridge project for possible inclusion in the curated showcase.
+title: "[Showcase]: "
+labels:
+  - showcase
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sharing your work. Do not include bridge tokens, API keys, private paths, or media you cannot license for publication.
+  - type: input
+    id: summary
+    attributes:
+      label: Project summary
+      description: What did you create and what role did Blender Agent Bridge play?
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow and safety controls
+      description: Name the main tools, evidence loop, previews, approvals, commits, or reverts used.
+    validations:
+      required: true
+  - type: textarea
+    id: media
+    attributes:
+      label: Media links and alt text
+      description: Provide links, concise alt text, file sizes, and any download restrictions.
+    validations:
+      required: true
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Asset provenance and licenses
+      description: List external models, textures, HDRIs, audio, fonts, or other inputs and their licenses.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Blender, Blender Agent Bridge, client, OS, and bundled or uvx runtime.
+    validations:
+      required: true
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: Publication confirmation
+      options:
+        - label: I have the right to share all submitted media and grant permission for the project to link to or reproduce it with attribution.
+          required: true
+        - label: I removed secrets, personal data, proprietary project files, and private paths.
+          required: true
+

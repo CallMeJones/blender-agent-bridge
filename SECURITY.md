@@ -30,6 +30,7 @@ Do not include API keys, bridge tokens, proprietary `.blend` files, or private s
 - MCP capture resources expose local viewport screenshots and sampled playblast frames to connected MCP clients. Keep screenshots and playblast capture off when visual context is not needed, and treat project-local `.claude_blender/captures/` folders as generated artifacts.
 - Audit events are written locally to `~/.claude_blender/audit.jsonl` by default. Script/code-like arguments, tokens, keys, and passwords are redacted before logging.
 - Static script checks are guardrails, not a sandbox. Blender Python can still access local files, network, and process state if the user approves it.
+- Static checks reject dynamic builtin and Blender-operator reflection, dangerous Python object-graph introspection, indirect container calls, module-registry access, and references to blocked callables before trust-window execution.
 
 ## Hardening Checklist Before Release
 

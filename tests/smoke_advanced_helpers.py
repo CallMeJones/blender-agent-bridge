@@ -14,7 +14,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import advanced_helpers, agent_tools, context_bundle, live_preview, tool_dispatcher  # noqa: E402
+from claude_blender import advanced_helpers, agent_tools, blender_compat, context_bundle, live_preview, tool_dispatcher  # noqa: E402
 
 
 ADVANCED_TOOLS = {
@@ -513,8 +513,8 @@ def main():
     cube = bpy.data.objects["Cube"]
     camera = bpy.data.objects["Camera"]
     existing_material = bpy.data.materials.new("Agent Bridge Existing Node Material")
-    node_tree = existing_material.node_tree
-    assert node_tree is not None, "New Blender materials should expose a shader node tree"
+    node_tree = blender_compat.ensure_node_tree(existing_material)
+    assert node_tree is not None, "Node-enabled Blender materials should expose a shader node tree"
     nodes = node_tree.nodes
     for node in list(nodes):
         nodes.remove(node)
@@ -1197,6 +1197,10 @@ def main():
         )
         assert material_inspection["passed"] is True, material_inspection
         assert material_inspection["issue_count"] == 0, material_inspection
+        first_texture_report = material_inspection["materials"][0]["textures"][0]
+        assert first_texture_report["image_datablock_name"], first_texture_report
+        assert first_texture_report["source_filename"], first_texture_report
+        assert first_texture_report["source_filepath"], first_texture_report
         packed_channel_links = []
         for link in list(material.node_tree.links):
             if link.from_node.type == "SEPARATE_COLOR":
@@ -1237,7 +1241,11 @@ def main():
         )
         assert broken_material_inspection["passed"] is False, broken_material_inspection
         assert any("colorspace" in issue for issue in broken_material_inspection["materials"][0]["issues"]), broken_material_inspection
-        assert any("UV Map vector input" in issue for issue in broken_material_inspection["materials"][0]["issues"]), broken_material_inspection
+        assert not any("UV Map vector input" in issue for issue in broken_material_inspection["materials"][0]["issues"]), broken_material_inspection
+        assert all(
+            texture.get("uv_mode") == "implicit_active_uv"
+            for texture in broken_material_inspection["materials"][0]["textures"]
+        ), broken_material_inspection
         material_repair = _execute(
             context,
             "repair_material_setup",

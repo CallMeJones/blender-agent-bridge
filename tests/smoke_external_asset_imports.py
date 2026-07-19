@@ -21,7 +21,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import asset_jobs, external_assets, live_preview, tool_dispatcher  # noqa: E402
+from claude_blender import asset_jobs, blender_compat, external_assets, live_preview, tool_dispatcher  # noqa: E402
 
 observed_timeouts = []
 SUBPROCESS_MODEL_BYTES = b'{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[]}]}'
@@ -244,6 +244,18 @@ def main():
     external_assets._download_file = _fake_download_file
     external_assets._import_model_file = _fake_import_model_file
     try:
+        online_worker_command = asset_jobs._asset_worker_command(
+            "blender",
+            "asset-worker.py",
+        )
+        assert online_worker_command == [
+            "blender",
+            "--background",
+            "--factory-startup",
+            "--online-mode",
+            "--python",
+            "asset-worker.py",
+        ], online_worker_command
         claude_blender.register()
         bpy.ops.mesh.primitive_cube_add()
         cube = bpy.context.object
@@ -260,7 +272,9 @@ def main():
         assert live_preview.revert(bpy.context)["ok"] is True
 
         existing_texture_material = bpy.data.materials.new("Poly Haven oak_floor")
-        existing_texture_nodes = [node.name for node in existing_texture_material.node_tree.nodes]
+        existing_texture_tree = blender_compat.ensure_node_tree(existing_texture_material)
+        assert existing_texture_tree is not None
+        existing_texture_nodes = [node.name for node in existing_texture_tree.nodes]
         texture = _execute(
             bpy.context,
             "import_poly_haven_asset",
@@ -297,6 +311,34 @@ def main():
         assert model["ok"] is True, model
         assert "SmokeImportedModel" in model["imported_objects"], model
         assert bpy.data.objects.get("SmokeImportedModel") is not None, model
+        assert "material_preview" in model["presentation"], model
+        duplicate_blocked = _execute(
+            bpy.context,
+            "import_poly_haven_asset",
+            {"asset_id": "model_one", "asset_type": "models", "resolution": "2k", "file_format": "gltf", "cache_dir": cache_dir},
+        )
+        assert duplicate_blocked["ok"] is False, duplicate_blocked
+        assert duplicate_blocked["code"] == "asset_already_imported", duplicate_blocked
+        assert bpy.data.objects.get("SmokeImportedModel.001") is None, duplicate_blocked
+        duplicate_allowed = _execute(
+            bpy.context,
+            "import_poly_haven_asset",
+            {
+                "asset_id": "model_one",
+                "asset_type": "models",
+                "resolution": "2k",
+                "file_format": "gltf",
+                "cache_dir": cache_dir,
+                "allow_duplicate": True,
+            },
+        )
+        assert duplicate_allowed["ok"] is True, duplicate_allowed
+        assert bpy.data.objects.get("SmokeImportedModel.001") is not None, duplicate_allowed
+        last_step = _execute(bpy.context, "revert_preview", {"scope": "last_step"})
+        assert last_step["ok"] is True, last_step
+        assert last_step["remaining_step_count"] == 1, last_step
+        assert bpy.data.objects.get("SmokeImportedModel.001") is None, last_step
+        assert bpy.data.objects.get("SmokeImportedModel") is not None, last_step
         assert live_preview.revert(bpy.context)["ok"] is True
         assert bpy.data.objects.get("SmokeImportedModel") is None
 
@@ -313,10 +355,24 @@ def main():
         sketchfab = _execute(
             bpy.context,
             "import_sketchfab_model",
-            {"uid": "sketchfab_one", "api_token": "smoke-token", "cache_dir": cache_dir, "timeout": 999},
+            {
+                "uid": "sketchfab_one",
+                "api_token": "smoke-token",
+                "cache_dir": cache_dir,
+                "timeout": 999,
+                "provenance": {
+                    "model_name": "Smoke Hangar",
+                    "author": "Smoke Artist",
+                    "license": "CC BY 4.0",
+                    "model_url": "https://sketchfab.com/3d-models/smoke-hangar-sketchfab-one",
+                },
+            },
         )
         assert sketchfab["ok"] is True, sketchfab
         assert "SmokeImportedModel" in sketchfab["imported_objects"], sketchfab
+        assert sketchfab["manifest"]["author"] == "Smoke Artist", sketchfab
+        assert sketchfab["manifest"]["license"] == "CC BY 4.0", sketchfab
+        assert sketchfab["manifest"]["model_url"].endswith("smoke-hangar-sketchfab-one"), sketchfab
         assert observed_timeouts[-2:] == [("fetch_json_with_headers", 300), ("download_file", 300)], observed_timeouts
         assert live_preview.revert(bpy.context)["ok"] is True
 

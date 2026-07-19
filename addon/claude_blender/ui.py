@@ -17,6 +17,7 @@ from . import (
     context_bundle,
     context_planner,
     docs_index,
+    external_assets,
     lab_parity,
     live_preview,
     preferences,
@@ -397,6 +398,21 @@ class CLAUDEBLENDER_OT_revert_preview(bpy.types.Operator):
         return {"FINISHED"} if result["ok"] else {"CANCELLED"}
 
 
+class CLAUDEBLENDER_OT_revert_last_preview_step(bpy.types.Operator):
+    bl_idname = "claude_blender.revert_last_preview_step"
+    bl_label = "Revert Last Step"
+    bl_description = "Remove only the latest isolated imported-asset step and preserve earlier pending preview work"
+
+    def execute(self, context):
+        result = live_preview.revert_last_created_step(context, allowed_types={"import_external_asset"})
+        context.scene.claude_blender.status = result["message"]
+        if result.get("rollback_warnings"):
+            self.report({"WARNING"}, result["rollback_warning_summary"])
+        elif not result.get("ok"):
+            self.report({"WARNING"}, result["message"])
+        return {"FINISHED"} if result.get("ok") else {"CANCELLED"}
+
+
 class CLAUDEBLENDER_OT_undo_last(bpy.types.Operator):
     bl_idname = "claude_blender.undo_last"
     bl_label = "Undo Last Change"
@@ -428,12 +444,37 @@ def _draw_ask_section(layout, state, prefs):
     bridge_running = bridge_server.is_running()
     ask_box.label(text=f"{build_info.ADDON_NAME} {build_info.ADDON_VERSION}")
     ask_box.label(text=f"Bridge: {'On' if bridge_running else 'Off'} | MCP {build_info.MCP_SERVER_VERSION}")
+    if "Source: stale" in str(state.bridge_source_status or ""):
+        stale_box = ask_box.box()
+        stale_box.alert = True
+        stale_box.label(text="Patched files are not loaded", icon="ERROR")
+        stale_box.label(text="Save the file, then reload scripts or restart Blender")
+        stale_box.operator("claude_blender.reload_scripts", text="Reload Scripts", icon="FILE_REFRESH")
     bridge_row = ask_box.row(align=True)
     if bridge_running:
         bridge_row.operator("claude_blender.stop_bridge", text="Stop Bridge")
     else:
         bridge_row.operator("claude_blender.start_bridge", text="Start Bridge")
     bridge_row.operator("claude_blender.copy_mcp_config", text="Copy MCP Config")
+    ask_box.operator("claude_blender.refresh_control_center", text="Check Runtime / Source", icon="FILE_REFRESH")
+    assets_box = ask_box.box()
+    assets_box.label(text="External Assets")
+    assets_box.label(text="Poly Haven: Ready (no API key)", icon="CHECKMARK")
+    assets_box.label(text="Sketchfab: Token needed for downloads")
+    assets_box.operator(
+        "claude_blender.copy_mcp_config_with_sketchfab",
+        text="Copy MCP + Sketchfab",
+        icon="COPYDOWN",
+    )
+    auth_row = assets_box.row(align=True)
+    auth_status = external_assets.sketchfab_auth_diagnostics()
+    auth_row.operator(
+        "claude_blender.set_session_sketchfab_token",
+        text="Set Session Token",
+        icon="LOCKED" if auth_status.get("session_token_configured") else "UNLOCKED",
+    )
+    if auth_status.get("session_token_configured"):
+        auth_row.operator("claude_blender.clear_session_sketchfab_token", text="Clear", icon="X")
     trust_snapshot = script_runner.external_script_trust_snapshot(bpy.context, state=state)
     trust_active = trust_snapshot["active"]
     trust_status = trust_snapshot["status"]
@@ -566,6 +607,7 @@ def _draw_action_center(layout, state):
             _draw_field(actions, "Warnings", state.pending_preview_warnings, width=44, max_lines=4)
         row = actions.row(align=True)
         row.operator("claude_blender.commit_preview", text="Commit", icon="CHECKMARK")
+        row.operator("claude_blender.revert_last_preview_step", text="Last Step", icon="LOOP_BACK")
         row.operator("claude_blender.revert_preview", text="Revert", icon="LOOP_BACK")
 
     if has_error and not state.pending_script:
@@ -794,6 +836,23 @@ class CLAUDEBLENDER_OT_refresh_control_center(bpy.types.Operator):
         prefs = _prefs(context)
         _refresh_control_center_state(context, state, prefs)
         return {"FINISHED"}
+
+
+class CLAUDEBLENDER_OT_reload_scripts(bpy.types.Operator):
+    bl_idname = "claude_blender.reload_scripts"
+    bl_label = "Reload Scripts"
+    bl_description = "Reload patched add-on modules from disk; save the current file first"
+
+    def execute(self, context):
+        operator = getattr(getattr(bpy.ops, "script", None), "reload", None)
+        if operator is None or not operator.poll():
+            self.report({"WARNING"}, "Reload Scripts is unavailable here; save the file and restart Blender")
+            return {"CANCELLED"}
+        try:
+            return operator()
+        except RuntimeError as exc:
+            self.report({"WARNING"}, f"Reload failed ({exc}); save the file and restart Blender")
+            return {"CANCELLED"}
 
 
 class CLAUDEBLENDER_OT_copy_control_center(bpy.types.Operator):
@@ -1035,6 +1094,25 @@ class CLAUDEBLENDER_OT_stop_bridge(bpy.types.Operator):
         return {"FINISHED"}
 
 
+def _copy_mcp_config_to_clipboard(context, *, sketchfab_api_token=""):
+    prefs = _prefs(context)
+    url = context.scene.claude_blender.bridge_url or f"http://127.0.0.1:{getattr(prefs, 'bridge_port', bridge_server.DEFAULT_PORT)}"
+    token = getattr(prefs, "bridge_auth_token", "")
+    launch_mode = str(getattr(prefs, "mcp_launch_mode", "BUNDLED") or "BUNDLED").strip().lower()
+    if launch_mode == build_info.MCP_RUNTIME_UVX and not build_info.uvx_executable():
+        raise RuntimeError("uvx was not found on PATH; install uv or switch MCP Runtime to Bundled")
+    config = build_info.mcp_config(
+        url,
+        token=token,
+        sketchfab_api_token=sketchfab_api_token,
+        launch_mode=launch_mode,
+    )
+    context.window_manager.clipboard = json.dumps(config, indent=2)
+    state = context.scene.claude_blender
+    _refresh_bridge_diagnostics_state(context, state, prefs)
+    return state
+
+
 class CLAUDEBLENDER_OT_copy_mcp_config(bpy.types.Operator):
     bl_idname = "claude_blender.copy_mcp_config"
     bl_label = "Copy MCP Config"
@@ -1042,16 +1120,119 @@ class CLAUDEBLENDER_OT_copy_mcp_config(bpy.types.Operator):
     bl_options = {"REGISTER"}
 
     def execute(self, context):
-        prefs = _prefs(context)
-        url = context.scene.claude_blender.bridge_url or f"http://127.0.0.1:{getattr(prefs, 'bridge_port', bridge_server.DEFAULT_PORT)}"
-        token = getattr(prefs, "bridge_auth_token", "")
-        config = build_info.mcp_config(url, token=token)
-        context.window_manager.clipboard = json.dumps(config, indent=2)
-        state = context.scene.claude_blender
-        _refresh_bridge_diagnostics_state(context, state, prefs)
+        try:
+            state = _copy_mcp_config_to_clipboard(context)
+        except RuntimeError as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
         state.status = (
-            f"Copied MCP config v{build_info.MCP_CONFIG_VERSION} for add-on {build_info.ADDON_VERSION}"
+            f"Copied MCP config v{build_info.MCP_CONFIG_VERSION}; fill the empty Sketchfab token if needed"
         )
+        return {"FINISHED"}
+
+
+class CLAUDEBLENDER_OT_copy_mcp_config_with_sketchfab(bpy.types.Operator):
+    bl_idname = "claude_blender.copy_mcp_config_with_sketchfab"
+    bl_label = "Copy MCP + Sketchfab"
+    bl_description = "Paste a Sketchfab API token once and copy an MCP config without saving the token in Blender"
+    bl_options = {"INTERNAL"}
+
+    sketchfab_api_token: bpy.props.StringProperty(
+        name="Sketchfab API Token",
+        description="Copied into the MCP config only; never saved in Blender preferences, blend files, or audit logs",
+        subtype="PASSWORD",
+        options={"SKIP_SAVE"},
+        default="",
+    )
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=500)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Poly Haven is ready and does not require an API key.", icon="CHECKMARK")
+        layout.label(text="Sketchfab public search is keyless; downloads require a token.")
+        layout.separator()
+        layout.prop(self, "sketchfab_api_token", text="Sketchfab Token")
+        security_box = layout.box()
+        security_box.label(text="One-time copy", icon="LOCKED")
+        security_box.label(text="The token goes to the clipboard config only.")
+        security_box.label(text="It is not stored in Blender preferences, the blend file, or audit logs.")
+
+    def execute(self, context):
+        sketchfab_api_token = str(self.sketchfab_api_token or "").strip()
+        if not sketchfab_api_token:
+            self.report({"ERROR"}, "Paste a Sketchfab API token or use Copy MCP Config without auth")
+            return {"CANCELLED"}
+        try:
+            state = _copy_mcp_config_to_clipboard(
+                context,
+                sketchfab_api_token=sketchfab_api_token,
+            )
+        except RuntimeError as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
+        self.sketchfab_api_token = ""
+        state.status = (
+            f"Copied MCP config v{build_info.MCP_CONFIG_VERSION} with one-time Sketchfab auth; restart the MCP client"
+        )
+        if not bpy.app.background:
+            def draw_confirmation(menu, _context):
+                menu.layout.label(text="Poly Haven: Ready (no API key)", icon="CHECKMARK")
+                menu.layout.label(text="Sketchfab token included in copied MCP config", icon="CHECKMARK")
+                menu.layout.label(text="Replace the client config, then restart or refresh the MCP client.")
+
+            context.window_manager.popup_menu(
+                draw_confirmation,
+                title="External Assets Ready",
+                icon="CHECKMARK",
+            )
+        return {"FINISHED"}
+
+
+class CLAUDEBLENDER_OT_set_session_sketchfab_token(bpy.types.Operator):
+    bl_idname = "claude_blender.set_session_sketchfab_token"
+    bl_label = "Use Sketchfab Token For This Session"
+    bl_description = "Keep a masked Sketchfab token in memory until Blender closes or you clear it"
+    bl_options = {"INTERNAL"}
+
+    sketchfab_api_token: bpy.props.StringProperty(
+        name="Sketchfab API Token",
+        description="Memory-only token; never saved in preferences, blend files, manifests, or audit logs",
+        subtype="PASSWORD",
+        options={"SKIP_SAVE"},
+        default="",
+    )
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=500)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, "sketchfab_api_token", text="Sketchfab Token")
+        layout.label(text="Stored only in this Blender process; clear it when testing is complete.", icon="LOCKED")
+
+    def execute(self, context):
+        token = str(self.sketchfab_api_token or "").strip()
+        if not token:
+            self.report({"ERROR"}, "Paste a Sketchfab API token")
+            return {"CANCELLED"}
+        external_assets.set_session_sketchfab_api_token(token)
+        self.sketchfab_api_token = ""
+        context.scene.claude_blender.status = "Sketchfab token available for this Blender session only"
+        self.report({"INFO"}, "Sketchfab session token set in memory")
+        return {"FINISHED"}
+
+
+class CLAUDEBLENDER_OT_clear_session_sketchfab_token(bpy.types.Operator):
+    bl_idname = "claude_blender.clear_session_sketchfab_token"
+    bl_label = "Clear Sketchfab Session Token"
+    bl_description = "Forget the memory-only Sketchfab token immediately"
+    bl_options = {"INTERNAL"}
+
+    def execute(self, context):
+        external_assets.clear_session_sketchfab_api_token()
+        context.scene.claude_blender.status = "Sketchfab session token cleared"
         return {"FINISHED"}
 
 
@@ -1074,6 +1255,7 @@ class CLAUDEBLENDER_PT_sidebar(bpy.types.Panel):
 classes = (
     CLAUDEBLENDER_OT_capture_context,
     CLAUDEBLENDER_OT_commit_preview,
+    CLAUDEBLENDER_OT_revert_last_preview_step,
     CLAUDEBLENDER_OT_revert_preview,
     CLAUDEBLENDER_OT_undo_last,
     CLAUDEBLENDER_OT_run_approved_script,
@@ -1085,6 +1267,7 @@ classes = (
     CLAUDEBLENDER_OT_capture_viewport_preview,
     CLAUDEBLENDER_OT_open_last_screenshot,
     CLAUDEBLENDER_OT_refresh_control_center,
+    CLAUDEBLENDER_OT_reload_scripts,
     CLAUDEBLENDER_OT_copy_control_center,
     CLAUDEBLENDER_OT_refresh_preview_manifest,
     CLAUDEBLENDER_OT_copy_preview_manifest,
@@ -1100,6 +1283,9 @@ classes = (
     CLAUDEBLENDER_OT_start_bridge,
     CLAUDEBLENDER_OT_stop_bridge,
     CLAUDEBLENDER_OT_copy_mcp_config,
+    CLAUDEBLENDER_OT_copy_mcp_config_with_sketchfab,
+    CLAUDEBLENDER_OT_set_session_sketchfab_token,
+    CLAUDEBLENDER_OT_clear_session_sketchfab_token,
     CLAUDEBLENDER_PT_sidebar,
 )
 

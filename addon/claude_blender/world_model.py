@@ -8,6 +8,8 @@ from collections import Counter
 import bpy
 import mathutils
 
+from . import blender_compat
+
 
 def _safe_name(data_block):
     return getattr(data_block, "name", None) if data_block else None
@@ -86,11 +88,11 @@ def _node_tree_summary(node_tree, *, max_nodes=24, max_links=48):
 
 
 def _scene_compositor_tree(scene):
-    return getattr(scene, "node_tree", None) or getattr(scene, "compositing_node_group", None)
+    return blender_compat.node_tree(scene)
 
 
 def _scene_uses_compositor(scene):
-    return bool(getattr(scene, "use_nodes", False) or _scene_compositor_tree(scene))
+    return _scene_compositor_tree(scene) is not None
 
 
 def _drivers_summary(data_block, *, max_drivers=24):
@@ -544,10 +546,11 @@ def _material_animation_summaries(obj):
         material = slot.material
         if not material:
             continue
+        material_tree = blender_compat.node_tree(material)
         material_item = {
             "material": material.name,
             "material_animation": _animation_owner_summary(material),
-            "node_tree_animation": _animation_owner_summary(material.node_tree) if material.use_nodes and material.node_tree else None,
+            "node_tree_animation": _animation_owner_summary(material_tree) if material_tree else None,
         }
         if material_item["material_animation"]["has_animation_data"] or (
             material_item["node_tree_animation"] and material_item["node_tree_animation"]["has_animation_data"]
@@ -921,8 +924,9 @@ def world_model_summary(context):
             drivers += len(getattr(obj.data.shape_keys.animation_data, "drivers", []) or []) if obj.data.shape_keys.animation_data else 0
     material_node_count = 0
     for material in bpy.data.materials:
-        if material.use_nodes and material.node_tree:
-            material_node_count += len(material.node_tree.nodes)
+        material_tree = blender_compat.node_tree(material)
+        if material_tree:
+            material_node_count += len(material_tree.nodes)
     compositor_tree = _scene_compositor_tree(scene)
     compositor_nodes = len(compositor_tree.nodes) if compositor_tree else 0
     return {
@@ -989,10 +993,10 @@ def shader_nodes_details(context, *, material_names=None, selected_only=True, ma
         materials.append(
             {
                 "name": material.name,
-                "use_nodes": bool(material.use_nodes),
+                "use_nodes": blender_compat.node_tree_enabled(material),
                 "diffuse_color_rgba": _rgba(material.diffuse_color),
                 "node_tree": _node_tree_summary(material.node_tree, max_nodes=32, max_links=64)
-                if material.use_nodes
+                if blender_compat.node_tree_enabled(material)
                 else None,
                 "drivers": _drivers_summary(material),
             }
@@ -1470,9 +1474,9 @@ def render_camera_compositor_details(context):
         "world": {
             "name": _safe_name(scene.world),
             "color": _rgba(scene.world.color) if scene.world else None,
-            "use_nodes": bool(scene.world.use_nodes) if scene.world else False,
+            "use_nodes": blender_compat.node_tree_enabled(scene.world),
             "node_tree": _node_tree_summary(scene.world.node_tree, max_nodes=20, max_links=40)
-            if scene.world and scene.world.use_nodes
+            if blender_compat.node_tree_enabled(scene.world)
             else None,
         },
         "compositor": {

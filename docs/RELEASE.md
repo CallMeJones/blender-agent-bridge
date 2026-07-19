@@ -20,6 +20,17 @@ dist/claude_blender-<version>.zip
 dist/claude_blender-<version>.zip.sha256
 ```
 
+The same tag also builds the zero-dependency Python distribution:
+
+```powershell
+python -m build
+python -m venv .wheel-smoke
+.\.wheel-smoke\Scripts\python.exe -m pip install --no-index --no-deps (Get-ChildItem dist\blender_bridge-*.whl | Select-Object -First 1).FullName
+.\.wheel-smoke\Scripts\blender-bridge.exe --version
+```
+
+CI installs the wheel into a clean environment and runs the real stdio MCP subprocess test against a temporary fake loopback bridge. The manifest, `pyproject.toml`, generated `uvx` pin, registry snapshot/digest, changelog, and tag must agree.
+
 If Blender is not available on `PATH`, pass the full executable path:
 
 ```powershell
@@ -47,9 +58,11 @@ GitHub Pages must be enabled for this repository and configured to deploy from G
 
 ## GitHub Releases And Pages
 
-The `Build, smoke, release` workflow runs fast protocol/package checks and a focused Blender suite on pushes and pull requests. `v*` tags run the complete documented Blender-background suite, the clean installed-extension live smoke, source/package validation, and an official Blender extension build.
+The `Build, smoke, release` workflow runs fast protocol/package checks and a focused Blender suite on pushes and pull requests. `v*` tags run the complete documented Blender-background suite and the clean installed-extension live smoke on every supported Blender series. The live smoke uses an interactive window under Xvfb to verify clipboard config output, the memory-only Sketchfab token lifecycle, imported-object viewport focus, and Material Preview before source/package validation and the official extension build.
 
-After every tag gate passes, the workflow promotes one official archive and checksum into both distribution channels. The exact same ZIP is attached to the GitHub Release and copied into the static Pages repository. `tests/smoke_release_artifact_identity.py` verifies its byte hash, sidecars, index hash, and archive size before publication; `tests/smoke_published_release_identity.py` then downloads both public copies and proves they are byte-identical.
+After every tag gate passes, the workflow promotes one tested artifact set. The exact same extension ZIP is attached to the GitHub Release and copied into the static Pages repository. The tested wheel and sdist are published to PyPI with Trusted Publishing and attached to the same GitHub Release. `tests/smoke_release_artifact_identity.py` verifies the extension byte hash, sidecars, index hash, and archive size before publication; `tests/smoke_published_release_identity.py` then downloads both public extension copies and proves they are byte-identical.
+
+Immediately before PyPI publishing, `scripts/check_pypi_name.py` verifies that `blender-bridge` is either unregistered or already points to this repository. A conflicting registration or an unavailable PyPI check stops the job for a naming decision; the workflow never silently renames the distribution.
 
 GitHub Pages deploys from successful release tags only. Ordinary `main` pushes never replace the public Blender repository with an untagged archive. Users can add this remote repository URL in Blender:
 
@@ -132,6 +145,8 @@ blender --online-mode --command extension list -s
 ## Release Checklist
 
 - Confirm `blender_manifest.toml` `version` matches `CHANGELOG.md`.
+- Confirm `pyproject.toml`, `blender-bridge --version`, and generated `uvx --from blender-bridge==<version>` configs match the extension version.
+- Confirm PyPI Trusted Publishing is configured for the `pypi` GitHub environment; do not add a long-lived API token.
 - Run `python tests\smoke_release_consistency.py`.
 - After GitHub Pages deploys, optionally run `$env:BLENDER_AGENT_BRIDGE_LIVE_PAGES_SMOKE='1'; python tests\smoke_release_consistency.py` to verify the live repository index advertises the current version and that its hosted ZIP matches the advertised SHA-256 hash.
 - Run `blender --command extension validate addon\claude_blender`.
@@ -142,7 +157,14 @@ blender --online-mode --command extension list -s
 - Confirm the tag workflow's `smoke_published_release_identity.py` gate passes after Pages and the GitHub Release are public.
 - Install the zip into a clean Blender profile.
 - Verify the GitHub Pages extension repository install path from a clean temporary Blender profile.
-- Run `python scripts\installed_extension_live_smoke.py --blender "<path-to-blender>"` to verify the installed extension can start the External Bridge, serve the live helper workflow, expose MCP stdio tools, and capture viewport/playblast evidence.
+- Run `python scripts\installed_extension_live_smoke.py --blender "<path-to-blender>"` to verify the clean installed extension's clipboard config, memory-only Sketchfab token lifecycle, imported-object viewport focus and Material Preview, External Bridge, live helper workflow, MCP stdio tools, and viewport/playblast evidence.
 - Confirm project-local or fallback capture storage behaves as documented.
 - Review `SECURITY.md`, `PRIVACY.md`, and declared manifest permissions.
 - Scan the zip for secrets, generated logs, checkpoints, screenshots, playblast frame sequences, caches, and private `.blend` files.
+
+## Community Launch Checklist
+
+- Enable GitHub Discussions after the release and create **Announcements**, **Help**, **Ideas**, and **Show and Tell** categories. Repository discussion form templates are checked in, but enabling the provider setting remains a maintainer action.
+- Promote still-relevant tasks from [good first issue candidates](GOOD_FIRST_ISSUES.md) into GitHub issues with the `good first issue` label.
+- Review showcase submissions for permissions, provenance, secrets, and useful workflow detail before adding them to [the curated showcase](SHOWCASE.md).
+- Keep support in GitHub Discussions and issues initially. Reconsider Discord only after at least ten distinct support or contributor conversations in one month show recurring demand for synchronous help.

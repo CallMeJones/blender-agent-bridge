@@ -52,6 +52,22 @@ BLENDER_FILE_WINDOW_OPERATORS = PROJECT_FILE_OPERATORS | {"bpy.ops.wm.quit_blend
 
 BUILTINS_MODULES = {"builtins", "__builtins__"}
 
+DANGEROUS_REFLECTION_ATTRIBUTES = {
+    "__base__",
+    "__bases__",
+    "__builtins__",
+    "__class__",
+    "__closure__",
+    "__code__",
+    "__dict__",
+    "__getattribute__",
+    "__globals__",
+    "__mro__",
+    "__reduce__",
+    "__reduce_ex__",
+    "__subclasses__",
+}
+
 WARNING_ATTRS = {
     "delete",
     "remove",
@@ -140,6 +156,22 @@ def _resolved_string(node, constant_names):
         return value
     if isinstance(node, ast.Name):
         return constant_names.get(node.id, "")
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left = _resolved_string(node.left, constant_names)
+        right = _resolved_string(node.right, constant_names)
+        return f"{left}{right}" if left and right else ""
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "join"
+        and len(node.args) == 1
+    ):
+        separator = _resolved_string(node.func.value, constant_names)
+        values = node.args[0]
+        if isinstance(values, (ast.List, ast.Tuple)):
+            parts = [_resolved_string(item, constant_names) for item in values.elts]
+            if all(parts):
+                return separator.join(parts)
     return ""
 
 
@@ -411,10 +443,12 @@ def analyze_script(source, *, privileged_capabilities=None):
     constant_names = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign):
-            assigned_value = _constant_string(node.value)
-            if assigned_value:
-                for name in _assigned_names(node):
+            assigned_value = _resolved_string(node.value, constant_names)
+            for name in _assigned_names(node):
+                if assigned_value:
                     constant_names[name] = assigned_value
+                else:
+                    constant_names.pop(name, None)
         if isinstance(node, ast.Import):
             for alias in node.names:
                 root_name = alias.name.split(".")[0]
@@ -502,6 +536,16 @@ def analyze_script(source, *, privileged_capabilities=None):
                         blocked_name_aliases.add(name)
                         changed = True
     for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr in DANGEROUS_REFLECTION_ATTRIBUTES:
+            reference = _call_name(node)
+            blocks.append(f"Line {_line(node)} blocked Python reflection: {reference}")
+            risk_reasons.append(f"blocked_reflection:{reference}")
+        if isinstance(node, ast.Attribute) and _call_name(node) == "sys.modules":
+            blocks.append(f"Line {_line(node)} blocked module-registry access: sys.modules")
+            risk_reasons.append("blocked_module_registry:sys.modules")
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) and node.id in blocked_name_aliases:
+            blocks.append(f"Line {_line(node)} blocked callable reference: {node.id}")
+            risk_reasons.append(f"blocked_callable_reference:{node.id}")
         if isinstance(node, ast.Call):
             call_name = _call_name(node.func)
             approval_call_name = _approval_call_name(node.func, constant_names, approval_aliases, getattr_aliases)
@@ -509,6 +553,24 @@ def analyze_script(source, *, privileged_capabilities=None):
             attr_name = (approval_call_name or call_name).split(".")[-1]
             reflected_builtin = _builtin_reflection_name(node, builtin_module_aliases, constant_names, blocked_names)
             subscript_builtin = _builtin_subscript_name(node.func, builtin_module_aliases, constant_names, blocked_names)
+            if call_name in getattr_aliases and len(node.args) >= 2:
+                builtin_target = _builtin_container_name(node.args[0], builtin_module_aliases)
+                requested_attr = _resolved_string(node.args[1], constant_names)
+                blender_target = _approval_reference_name(
+                    node.args[0],
+                    constant_names,
+                    approval_aliases,
+                    getattr_aliases,
+                )
+                if builtin_target:
+                    blocks.append(f"Line {_line(node)} blocked dynamic builtin reflection")
+                    risk_reasons.append("blocked_dynamic_builtin_reflection")
+                elif _is_blender_reference(blender_target) and not requested_attr:
+                    blocks.append(f"Line {_line(node)} blocked dynamic Blender API reflection")
+                    risk_reasons.append("blocked_dynamic_blender_reflection")
+            if isinstance(node.func, ast.Subscript):
+                blocks.append(f"Line {_line(node)} blocked indirect container call")
+                risk_reasons.append("blocked_indirect_container_call")
             if root_name in blocked_name_aliases:
                 blocks.append(f"Line {_line(node)} blocked call: {call_name}")
                 risk_reasons.append(f"blocked_call:{call_name}")

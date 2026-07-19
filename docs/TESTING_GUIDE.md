@@ -5,12 +5,12 @@ This guide is the runbook for asking Codex to test Blender Agent Bridge end to e
 Current project snapshot, checked on 2026-07-19:
 
 - Extension: `Blender Agent Bridge`, manifest id `claude_blender`; version comes from `addon/claude_blender/blender_manifest.toml` and is checked against `build_info.py` and `CHANGELOG.md`.
-- Minimum Blender: `5.1.0`.
+- Minimum Blender: `4.2.0`. CI tests 4.2 LTS, 4.5 LTS, and 5.1; newer versions are accepted with capability-based warnings.
 - Local Blender detected on this workstation: `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`.
-- Dispatcher inventory: 179 tool functions in `addon/claude_blender/tool_dispatcher.py`.
-- Normal agent catalog inventory: 178 tool definitions in `addon/claude_blender/agent_tools.py`.
+- Canonical registry inventory: 186 Blender tool contracts across eleven explicit domain modules.
+- Normal agent catalog inventory: 185 tool definitions; 29 are exposed directly in compact mode.
 - Intentional catalog difference: `run_approved_script` is a dispatcher path for external approval/trust execution, but it is not exposed in the normal agent helper catalog.
-- Release baseline verified on 2026-07-19: `compileall`, the fast pure-Python gate, all documented Blender-background tests, official extension validation, and the installed-extension live smoke passed on Blender 5.1.2 for Windows.
+- The 0.3.0 release candidate was verified on 2026-07-20 with `compileall`, the conventional unit and pure-Python gates, and the complete world-model compatibility smoke on Blender 4.2.0, 4.5.0, and 5.1.2 for Windows. The clean installed-extension interactive smoke passed on Blender 5.1.2; tagged CI repeats it under Xvfb on all three supported release lines.
 
 ## How To Ask Codex To Run This
 
@@ -44,7 +44,7 @@ Prepare a release verification pass using docs/TESTING_GUIDE.md and docs/RELEASE
 - Every safety-sensitive path must test both allowed and refused cases.
 - Every long or visual operation must return pollable artifacts or readable resource URIs instead of relying only on console output.
 - Every bug fix gets the smallest owner test first, then the broader gate that would have caught the bug.
-- No test should require provider API keys. Optional Sketchfab download/import tests may use a per-run token from the environment, but tokens must never be stored in Blender preferences, logs, committed files, or guide text.
+- No test should require provider API keys. Optional Sketchfab download/import tests may use a per-run token from the environment. The one-time Sketchfab config dialog may copy a token to the clipboard, but tokens must never be stored in Blender preferences, `.blend` files, logs, committed files, or guide text.
 
 ## Phase 0: Preflight
 
@@ -88,6 +88,8 @@ $PureTests = @(
   "tests\smoke_tool_contract_inventory.py"
 )
 
+python -m unittest discover -s tests\unit -p "test_*.py" -v
+
 foreach ($Test in $PureTests) {
   Write-Host "== $Test =="
   python $Test
@@ -108,6 +110,7 @@ What this covers:
 - Stdio MCP protocol, compact catalog, pagination, prompts, resources, wrappers, and error paths.
 - Static script analysis and risk classification.
 - Catalog-to-contract inventory drift, including intentional external-only tools.
+- Deterministic registry registration, snapshot/digest stability, config generation, client-guide completeness, and real stdio subprocess behavior.
 
 ## Phase 2: Blender-Background Suite
 
@@ -231,7 +234,7 @@ Installed-extension end-to-end smoke from the repository root:
 python scripts\installed_extension_live_smoke.py --blender "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe"
 ```
 
-This builds the extension ZIP, installs it into a temporary Blender profile, starts the bridge from the installed extension, runs the live workflow sweep, captures viewport/playblast evidence, verifies the installed MCP server over stdio, stops Blender, and removes the temporary profile. Add `--keep-profile` only when you want to inspect the captured artifacts after the run.
+This builds the extension ZIP, installs it into a temporary Blender profile, and starts a real interactive Blender window. Before continuing, it proves that Copy MCP Config writes valid JSON to the system clipboard, the memory-only Sketchfab token can be set and cleared immediately, and imported geometry is selected, focused, and shown in Material Preview. It then starts the bridge from the installed extension, runs the live workflow sweep, captures viewport/playblast evidence, verifies the installed MCP server over stdio, stops Blender, and removes the temporary profile. Add `--keep-profile` only when you want to inspect the captured artifacts after the run.
 
 Manual setup:
 
@@ -310,14 +313,10 @@ Every dispatcher tool should have coverage at four levels unless there is a docu
 - Bridge/MCP: discoverable through compact catalog or direct compact tool, schema retrievable, invalid arguments rejected before dispatch, valid call forwarded.
 - Behavior: scene/resource/audit/preview effects match the contract.
 
-Regenerate the inventory before a comprehensive sweep:
+Inspect the canonical inventory before a comprehensive sweep:
 
 ```powershell
-$text = Get-Content -Raw -LiteralPath "addon\claude_blender\tool_dispatcher.py"
-$dict = [regex]::Match($text, "TOOL_FUNCTIONS\s*=\s*\{(?<body>[\s\S]*?)\n\}")
-$names = [regex]::Matches($dict.Groups["body"].Value, '"([a-zA-Z0-9_]+)"\s*:') | ForEach-Object { $_.Groups[1].Value }
-"TOOL_FUNCTIONS count: $($names.Count)"
-$names
+python -c "import sys; sys.path.insert(0, 'addon'); from claude_blender import tool_registry; print(len(tool_registry.REGISTRY.specs())); print([spec.name for spec in tool_registry.REGISTRY.specs()])"
 ```
 
 ### Inspection And Context
@@ -885,7 +884,7 @@ At the end of a comprehensive run, report these gaps explicitly if they were not
 - Interactive viewport/playblast capture in a foreground Blender window.
 - GitHub Pages remote repository install from a clean profile.
 - Optional external network download/import tests for Poly Haven or Sketchfab.
-- Cross-version Blender compatibility beyond 5.1.
+- Blender releases outside the continuously tested 4.2, 4.5, and 5.1 lines (they remain allowed and report a compatibility warning).
 - Long 1080p/4K render-job behavior.
 - Manual visual inspection of kept render/playblast artifacts.
 
@@ -928,8 +927,8 @@ Remaining risk:
 
 Update and test all of these:
 
-- `addon/claude_blender/agent_tools.py`: schema, description, risk/permission hints, routing guidance.
-- `addon/claude_blender/tool_dispatcher.py`: dispatcher implementation and `TOOL_FUNCTIONS`.
+- The owning `addon/claude_blender/tool_registry/domains/*.py` module: schema, description, routing groups, exposure, contract metadata, and stable order.
+- The matching `addon/claude_blender/tool_handlers/*.py` module and Blender implementation: handler registration and behavior.
 - `addon/claude_blender/bridge_protocol.py`: schema validation if contract shape changes.
 - `addon/claude_blender/mcp_server.py`: compact wrapper behavior, catalog/search/schema/invoke behavior, timeout/resource handling if relevant.
 - Owner smoke test under `tests/`.

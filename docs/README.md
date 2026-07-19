@@ -7,6 +7,10 @@ Start with the top-level `README.md`, then use these deeper notes for developmen
 - [INSTALL_FROM_GITHUB.md](INSTALL_FROM_GITHUB.md) - GitHub remote-repository install, manual release ZIP fallback, update steps, troubleshooting, and maintainer release smoke.
 - [RELEASE.md](RELEASE.md) - release build, GitHub Actions, GitHub Pages, and verification checklist.
 - [TESTING_GUIDE.md](TESTING_GUIDE.md) - comprehensive automated testing runbook for feature, tool, bridge, MCP, visual, safety, and release coverage.
+- [clients/README.md](clients/README.md) - verified bundled and `uvx` setup guides for Codex, Claude, Cursor, VS Code/Cline/Roo, ChatGPT, Gemini CLI, OpenCode, and Ollama hosts.
+- [SHOWCASE.md](SHOWCASE.md) - curated community showcase and submission requirements.
+- [ADDING_A_TOOL.md](ADDING_A_TOOL.md) - canonical registry, handler, safety, snapshot, and test workflow for contributors.
+- [GOOD_FIRST_ISSUES.md](GOOD_FIRST_ISSUES.md) - bounded tasks maintainers can promote into labelled contributor issues.
 
 ## Current Implementation Notes
 

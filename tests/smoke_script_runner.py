@@ -78,8 +78,27 @@ def main():
         assert env["CLAUDE_BLENDER_MCP_CONFIG_VERSION"] == build_info.MCP_CONFIG_VERSION, env
         assert "MCP client" in env["CLAUDE_BLENDER_MCP_CONFIG_NOTE"], env
         assert "SKETCHFAB_API_TOKEN" in env["BLENDER_AGENT_BRIDGE_EXTERNAL_AUTH_NOTE"], env
+        assert "Poly Haven needs no API key" in env["BLENDER_AGENT_BRIDGE_EXTERNAL_AUTH_NOTE"], env
+        assert env["SKETCHFAB_API_TOKEN"] == "", env
         assert "BLENDER_BRIDGE_TOKEN" not in env, env
         assert f"MCP config v{build_info.MCP_CONFIG_VERSION}" in state.status, state.status
+
+        copied_with_auth = bpy.ops.claude_blender.copy_mcp_config_with_sketchfab(
+            sketchfab_api_token="smoke-token-not-a-secret"
+        )
+        assert "FINISHED" in copied_with_auth, copied_with_auth
+        auth_clipboard = context.window_manager.clipboard.strip()
+        if auth_clipboard:
+            auth_config = json.loads(auth_clipboard)
+        else:
+            auth_config = build_info.mcp_config(
+                f"http://127.0.0.1:{bridge_server.DEFAULT_PORT}",
+                sketchfab_api_token="smoke-token-not-a-secret",
+            )
+        auth_env = auth_config["mcpServers"]["blender"]["env"]
+        assert auth_env["SKETCHFAB_API_TOKEN"] == "smoke-token-not-a-secret", auth_env
+        assert "one-time Sketchfab auth" in state.status, state.status
+        context.window_manager.clipboard = ""
 
         audit_log.append_event("ui_audit_smoke", tool_name="copy_mcp_config", ok=True)
         refreshed_audit = bpy.ops.claude_blender.refresh_audit_log()

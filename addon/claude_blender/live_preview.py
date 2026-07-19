@@ -10,6 +10,8 @@ import uuid
 import bpy
 from mathutils import Matrix
 
+from . import blender_compat
+
 _current_transaction = None
 
 
@@ -182,11 +184,12 @@ def _socket_by_saved_name(sockets, saved):
 
 
 def _restore_node_tree_links(material, before):
-    if not material.use_nodes or not material.node_tree:
+    node_tree = blender_compat.node_tree(material)
+    if node_tree is None:
         return []
     warnings = []
-    nodes = material.node_tree.nodes
-    links = material.node_tree.links
+    nodes = node_tree.nodes
+    links = node_tree.links
     original_names = set(before.get("node_names") or [])
     for link in list(links):
         links.remove(link)
@@ -842,8 +845,10 @@ def assign_emission_material_to_selected(context, *, name, color, strength, labe
         float(color[2]),
         float(color[3]) if len(color) > 3 else 1.0,
     )
-    material.use_nodes = True
-    nodes = material.node_tree.nodes
+    node_tree = blender_compat.ensure_node_tree(material)
+    if node_tree is None:
+        raise RuntimeError(f"Material {material.name} does not expose a shader node tree")
+    nodes = node_tree.nodes
     for node in list(nodes):
         nodes.remove(node)
     output = nodes.new(type="ShaderNodeOutputMaterial")
@@ -852,7 +857,7 @@ def assign_emission_material_to_selected(context, *, name, color, strength, labe
     emission.location = (0, 0)
     emission.inputs["Color"].default_value = material.diffuse_color
     emission.inputs["Strength"].default_value = max(0.0, float(strength))
-    material.node_tree.links.new(emission.outputs["Emission"], output.inputs["Surface"])
+    node_tree.links.new(emission.outputs["Emission"], output.inputs["Surface"])
 
     for obj in selected:
         _record_object_materials(obj)
@@ -1360,6 +1365,124 @@ def commit(context):
     }
 
 
+def _remove_created_data_item(context, item, warnings):
+    kind = str((item or {}).get("kind") or "")
+    name = str((item or {}).get("name") or "")
+    if not kind or not name:
+        return
+    try:
+        if kind == "object":
+            data_block = bpy.data.objects.get(name)
+            if data_block:
+                bpy.data.objects.remove(data_block, do_unlink=True)
+        elif kind == "mesh":
+            data_block = bpy.data.meshes.get(name)
+            if data_block and data_block.users == 0:
+                bpy.data.meshes.remove(data_block)
+        elif kind == "material":
+            data_block = bpy.data.materials.get(name)
+            if data_block and data_block.users == 0:
+                bpy.data.materials.remove(data_block)
+        elif kind == "image":
+            data_block = bpy.data.images.get(name)
+            if data_block and data_block.users == 0:
+                bpy.data.images.remove(data_block)
+        elif kind == "collection":
+            data_block = bpy.data.collections.get(name)
+            if data_block:
+                bpy.data.collections.remove(data_block)
+        elif kind in {"curve", "armature", "camera", "light", "action", "node_group"}:
+            collection_name = {
+                "curve": "curves",
+                "armature": "armatures",
+                "camera": "cameras",
+                "light": "lights",
+                "action": "actions",
+                "node_group": "node_groups",
+            }[kind]
+            collection = getattr(bpy.data, collection_name)
+            data_block = collection.get(name)
+            if data_block and data_block.users == 0:
+                collection.remove(data_block)
+        else:
+            warnings.append(f"Last-step rollback does not support created {kind} data: {name}")
+    except Exception as exc:
+        warnings.append(f"Could not remove created {kind} {name}: {type(exc).__name__}: {exc}")
+
+
+def revert_last_created_step(context, *, allowed_types=None):
+    """Revert one creation-only step without unwinding earlier preview work."""
+
+    transaction = current_transaction()
+    if not transaction or transaction.get("status") != "pending":
+        return {"ok": False, "message": "No pending preview transaction"}
+    steps = transaction.get("applied_steps") or []
+    if not steps:
+        return {"ok": False, "message": "The pending preview has no applied steps"}
+    step = steps[-1]
+    step_type = str(step.get("type") or "")
+    if allowed_types and step_type not in set(allowed_types):
+        return {
+            "ok": False,
+            "message": f"The latest preview step ({step_type or 'unknown'}) is not safe for isolated rollback; use scope=all",
+            "latest_step_type": step_type,
+        }
+    created_data = list(step.get("created_data") or [])
+    if not created_data:
+        return {
+            "ok": False,
+            "message": "The latest preview step has no isolated creation manifest; use scope=all",
+            "latest_step_type": step_type,
+        }
+
+    warnings = []
+    # Removing an object releases its mesh, and removing the mesh releases its
+    # materials. Keep that dependency order so an isolated rollback can also
+    # remove data blocks whose user counts only reach zero during this pass.
+    priority = {
+        "object": 0,
+        "collection": 1,
+        "mesh": 2,
+        "curve": 2,
+        "armature": 2,
+        "camera": 2,
+        "light": 2,
+        "action": 2,
+        "material": 3,
+        "node_group": 4,
+        "image": 5,
+    }
+    for item in sorted(created_data, key=lambda value: priority.get(str(value.get("kind") or ""), 10)):
+        _remove_created_data_item(context, item, warnings)
+        transaction["before_state"].pop(
+            f"created:{str(item.get('kind') or '')}:{str(item.get('name') or '')}",
+            None,
+        )
+    transaction["applied_steps"].pop()
+
+    remaining_steps = transaction.get("applied_steps") or []
+    if remaining_steps:
+        _mark_pending(context, str(remaining_steps[-1].get("label") or transaction.get("user_request") or "Preview pending"))
+    else:
+        transaction["status"] = "reverted"
+        if hasattr(context.scene, "claude_blender"):
+            state = context.scene.claude_blender
+            _clear_pending_preview_state(state)
+            state.last_preview_summary = f"Reverted latest {step_type or 'preview'} step"
+            state.last_preview_warnings = _rollback_warning_summary(warnings)
+    redraw(context)
+    return {
+        "ok": True,
+        "message": "Latest preview step reverted",
+        "reverted_step": step,
+        "remaining_step_count": len(remaining_steps),
+        "pending_preview": bool(remaining_steps),
+        "rollback_warnings": warnings,
+        "rollback_warning_summary": _rollback_warning_summary(warnings),
+        "manifest": transaction_manifest(transaction),
+    }
+
+
 def revert(context):
     transaction = current_transaction()
     if not transaction or transaction["status"] != "pending":
@@ -1627,14 +1750,15 @@ def revert(context):
         elif before.get("kind") == "shader_material":
             material = bpy.data.materials.get(before["material_name"])
             if material:
-                material.use_nodes = before["use_nodes"]
+                blender_compat.restore_node_tree_enabled(material, before["use_nodes"])
                 material.diffuse_color = before["diffuse_color"]
                 if before["blend_method"] is not None and hasattr(material, "blend_method"):
                     material.blend_method = before["blend_method"]
                 if before["surface_render_method"] is not None and hasattr(material, "surface_render_method"):
                     material.surface_render_method = before["surface_render_method"]
-                if material.use_nodes and material.node_tree:
-                    principled = next((node for node in material.node_tree.nodes if node.type == "BSDF_PRINCIPLED"), None)
+                material_tree = blender_compat.node_tree(material)
+                if material_tree:
+                    principled = next((node for node in material_tree.nodes if node.type == "BSDF_PRINCIPLED"), None)
                     if principled:
                         for socket_name, value in before["principled_socket_values"].items():
                             socket = principled.inputs.get(socket_name)
@@ -1650,7 +1774,7 @@ def revert(context):
                 rollback_warnings.append(f"Missing material for shader restore: {before['material_name']}")
         elif before.get("kind") == "material_node_tree_animation":
             material = bpy.data.materials.get(before["material_name"])
-            node_tree = material.node_tree if material and material.use_nodes else None
+            node_tree = blender_compat.node_tree(material)
             if node_tree:
                 if before["had_animation_data"]:
                     animation_data = node_tree.animation_data_create()

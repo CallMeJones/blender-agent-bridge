@@ -7,24 +7,26 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
 try:
-    from . import agent_tools, audit_log, bridge_protocol, build_info, external_assets
+    from . import agent_tools, audit_log, bridge_protocol, build_info, external_assets, tool_registry
 except ImportError:  # Allows direct execution as addon/claude_blender/mcp_server.py.
     package_parent = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     if package_parent not in sys.path:
         sys.path.insert(0, package_parent)
     try:
-        from claude_blender import agent_tools, audit_log, bridge_protocol, build_info, external_assets
+        from claude_blender import agent_tools, audit_log, bridge_protocol, build_info, external_assets, tool_registry
     except ImportError:
         import agent_tools
         import audit_log
         import build_info
         import bridge_protocol
         import external_assets
+        import tool_registry
 
 
 def _env_float(name, default):
@@ -46,31 +48,8 @@ DEFAULT_BRIDGE_MAIN_THREAD_TIMEOUT_SECONDS = max(10.0, _env_float("BLENDER_AGENT
 BRIDGE_MAIN_THREAD_TIMEOUT_GRACE_SECONDS = 10.0
 MCP_TIMEOUT_GRACE_SECONDS = 15.0
 SKETCHFAB_AUTH_FORWARD_TOOLS = {"download_sketchfab_model", "import_sketchfab_model", "start_external_asset_download"}
-COMPACT_DIRECT_TOOL_NAMES = (
-    "list_scene_objects",
-    "plan_director_workflow",
-    "plan_advanced_scene_workflow",
-    "plan_object_design",
-    "plan_asset_import_workflow",
-    "get_2d_animation_details",
-    "plan_animation_workflow",
-    "run_animation_workflow",
-    "run_animation_task",
-    "get_simulation_details",
-    "inspect_simulation_bake",
-    "stage_persistent_simulation_bake",
-    "start_render_job",
-    "get_render_job_status",
-    "cancel_render_job",
-    "assemble_render_job_video",
-    "validate_render_job_output",
-    "start_external_asset_download",
-    "get_external_asset_job_status",
-    "cancel_external_asset_job",
-    "start_external_asset_import_job",
-    "get_external_asset_import_job_status",
-    "prepare_imported_asset_presentation",
-    "cancel_external_asset_import_job",
+COMPACT_DIRECT_TOOL_NAMES = tuple(
+    spec.name for spec in tool_registry.REGISTRY.specs() if spec.exposure == "compact_direct"
 )
 CATALOG_TOOL_NAME = "blender_tool_catalog"
 WRAPPER_TOOL_NAMES = {
@@ -569,6 +548,10 @@ STATUS_OUTPUT_SCHEMA = {
         "addon_runtime_source_stale": {"type": "boolean"},
         "addon_runtime_source_status": {"type": "string"},
         "addon_runtime_source_message": {"type": "string"},
+        "addon_reload_required": {"type": "boolean"},
+        "addon_reload_guidance": {"type": "string"},
+        "blender_version_min": {"type": "string"},
+        "blender_compatibility": {"type": "object"},
         "expected_addon_source_hash": {"type": "string"},
         "addon_source_hash_match": {"type": ["boolean", "null"]},
         "addon_source_hash_status": {"type": "string"},
@@ -582,6 +565,16 @@ STATUS_OUTPUT_SCHEMA = {
         "mcp_server_version": {"type": "string"},
         "mcp_server_path": {"type": "string"},
         "mcp_config_version": {"type": "string"},
+        "mcp_runtime_mode": {"type": "string"},
+        "tool_registry_digest": {"type": "string"},
+        "mcp_tool_registry_digest": {"type": "string"},
+        "mcp_config_tool_registry_digest": {"type": "string"},
+        "tool_registry_digest_match": {"type": ["boolean", "null"]},
+        "bridge_protocol_match": {"type": ["boolean", "null"]},
+        "addon_mcp_version_match": {"type": ["boolean", "null"]},
+        "compatible": {"type": ["boolean", "null"]},
+        "compatibility_status": {"type": "string"},
+        "compatibility_message": {"type": "string"},
         "build_diagnostics": {"type": "string"},
         "scene": {"type": "string"},
         "bridge_busy": {"type": "boolean"},
@@ -2030,6 +2023,8 @@ class BlenderMCPServer:
         self._full_tool_cache = None
         self._log_level = "info"
         self._full_tool_list = _truthy_env(FULL_TOOL_LIST_ENV)
+        self._compatibility_cache = None
+        self._compatibility_cache_at = 0.0
 
     def initialize(self, params):
         requested = (params or {}).get("protocolVersion") or PROTOCOL_VERSION
@@ -2204,6 +2199,10 @@ class BlenderMCPServer:
             result = self._invoke_blender_tool(arguments)
             _audit_tool_call(name, arguments, result, tool=tool)
             return result
+        compatibility_error = self._compatibility_error()
+        if compatibility_error is not None:
+            _audit_tool_call(name, call_arguments, compatibility_error, tool=tool)
+            return compatibility_error
         try:
             response = self.bridge.post(
                 "/tool",
@@ -2318,6 +2317,9 @@ class BlenderMCPServer:
                 code="invalid_arguments",
                 data={"target": target_name, "errors": validation_errors},
             )
+        compatibility_error = self._compatibility_error()
+        if compatibility_error is not None:
+            return compatibility_error
         try:
             response = self.bridge.post(
                 "/tool",
@@ -2357,6 +2359,12 @@ class BlenderMCPServer:
         mcp_source_hash = build_info.source_tree_hash()
         addon_source_hash = str(status.get("addon_source_hash") or "").strip()
         config_source_hash = build_info.expected_source_hash_from_env()
+        runtime_mode = build_info.mcp_runtime_mode_from_env()
+        mcp_registry_digest = build_info.TOOL_REGISTRY_DIGEST
+        addon_registry_digest = str(status.get("tool_registry_digest") or "").strip()
+        config_registry_digest = build_info.expected_tool_registry_digest_from_env()
+        reported_bridge_version = str(status.get("bridge_version") or "").strip()
+        reported_addon_version = str(status.get("addon_version") or "").strip()
         if "addon_loaded_source_hash" not in status:
             status["addon_loaded_source_hash"] = ""
             status["addon_runtime_source_stale"] = False
@@ -2365,6 +2373,44 @@ class BlenderMCPServer:
                 "Bridge did not report loaded-source diagnostics; reload or update the add-on for runtime staleness checks."
             )
         status["mcp_server_source_hash"] = mcp_source_hash
+        status["mcp_runtime_mode"] = runtime_mode
+        status["mcp_tool_registry_digest"] = mcp_registry_digest
+        status["mcp_config_tool_registry_digest"] = config_registry_digest
+        status["tool_registry_digest_match"] = (
+            None if not addon_registry_digest else addon_registry_digest == mcp_registry_digest
+        )
+        status["bridge_protocol_match"] = (
+            None if not reported_bridge_version else reported_bridge_version == bridge_protocol.BRIDGE_VERSION
+        )
+        status["addon_mcp_version_match"] = (
+            None if not reported_addon_version else reported_addon_version == SERVER_VERSION
+        )
+        compatibility_reasons = []
+        compatibility_known = bool(addon_registry_digest and reported_bridge_version)
+        if addon_registry_digest and addon_registry_digest != mcp_registry_digest:
+            compatibility_reasons.append("Blender add-on and MCP runtime tool registry digests differ")
+        if config_registry_digest and config_registry_digest != mcp_registry_digest:
+            compatibility_reasons.append("MCP config and runtime tool registry digests differ")
+        if reported_bridge_version and reported_bridge_version != bridge_protocol.BRIDGE_VERSION:
+            compatibility_reasons.append("Blender bridge protocol version differs from the MCP runtime")
+        if compatibility_reasons:
+            status["compatible"] = False
+            status["compatibility_status"] = "incompatible"
+            status["compatibility_message"] = "; ".join(compatibility_reasons)
+        elif compatibility_known:
+            status["compatible"] = True
+            status["compatibility_status"] = "compatible"
+            status["compatibility_message"] = (
+                "Bridge protocol and canonical tool registry are compatible."
+                if status["addon_mcp_version_match"] is not False
+                else "Bridge protocol and tool registry are compatible; add-on and MCP versions differ."
+            )
+        else:
+            status["compatible"] = None
+            status["compatibility_status"] = "unknown"
+            status["compatibility_message"] = (
+                "Bridge did not report protocol and tool-registry compatibility metadata."
+            )
         status["mcp_external_asset_auth"] = {
             "sketchfab": external_assets.sketchfab_auth_diagnostics(),
             "note": (
@@ -2379,7 +2425,14 @@ class BlenderMCPServer:
         status["mcp_config_source_hash_match"] = (
             None if not config_source_hash else config_source_hash == mcp_source_hash
         )
-        if addon_source_hash and addon_source_hash != mcp_source_hash:
+        if runtime_mode == build_info.MCP_RUNTIME_UVX:
+            status["addon_mcp_source_hash_match"] = None
+            status["mcp_config_source_hash_match"] = None
+            status["source_hash_status"] = "not_applicable"
+            status["source_hash_message"] = (
+                "The uvx/PyPI runtime uses protocol and tool-registry compatibility; filesystem source hashes may differ."
+            )
+        elif addon_source_hash and addon_source_hash != mcp_source_hash:
             status["source_hash_status"] = "mismatch"
             status["source_hash_message"] = (
                 "Running Blender add-on source hash differs from this MCP server source hash; "
@@ -2398,6 +2451,33 @@ class BlenderMCPServer:
             status["source_hash_status"] = str(status.get("addon_source_hash_status") or "unknown")
             status["source_hash_message"] = str(status.get("addon_source_hash_message") or "")
         return status
+
+    def _compatibility_error(self):
+        now = time.monotonic()
+        if self._compatibility_cache is None or now - self._compatibility_cache_at >= 5.0:
+            self._compatibility_cache = self._bridge_status()
+            self._compatibility_cache_at = now
+        status = self._compatibility_cache
+        if status.get("compatible") is True:
+            return None
+        return _tool_error(
+            str(
+                status.get("compatibility_message")
+                or "Blender bridge did not provide a compatible protocol and tool-registry handshake"
+            ),
+            code="bridge_incompatible",
+            data={
+                "compatibility_status": status.get("compatibility_status"),
+                "bridge_version": status.get("bridge_version"),
+                "expected_bridge_version": bridge_protocol.BRIDGE_VERSION,
+                "tool_registry_digest": status.get("tool_registry_digest"),
+                "mcp_tool_registry_digest": status.get("mcp_tool_registry_digest"),
+                "compatibility_metadata_complete": bool(
+                    status.get("bridge_version") and status.get("tool_registry_digest")
+                ),
+                "recovery_hint": "Install matching add-on and blender-bridge versions, copy a fresh MCP config, and restart the client.",
+            },
+        )
 
     def _bridge_status(self):
         try:
@@ -2580,6 +2660,7 @@ def _handle_one(server, message):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="MCP server for Blender Agent Bridge")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {SERVER_VERSION}")
     parser.add_argument("--bridge-url", default=os.environ.get("BLENDER_BRIDGE_URL", DEFAULT_BRIDGE_URL))
     parser.add_argument("--token", default=os.environ.get("BLENDER_BRIDGE_TOKEN", ""))
     parser.add_argument("--timeout", type=float, default=float(os.environ.get("BLENDER_BRIDGE_TIMEOUT", "30")))

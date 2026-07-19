@@ -1,5 +1,19 @@
 # External Bridge And MCP
 
+## MCP Runtime Choice
+
+The extension defaults to **Bundled**, which launches the pure-Python MCP server shipped inside the installed Blender extension and requires no `uv` installation. **uvx / PyPI** launches the matching zero-dependency `blender-bridge` distribution, avoiding dependence on Blender's extension filesystem path. It does not replace the Blender extension or the localhost bridge.
+
+Select the runtime in Blender preferences before using **Copy MCP Config**. Generated `uvx` configs pin the extension version:
+
+```text
+uvx --from blender-bridge==0.3.0 blender-bridge
+```
+
+Windows configs use `cmd /c uvx ...`; macOS and Linux invoke `uvx` directly. Blender detects a missing executable and shows installation guidance but never installs software automatically. See the [client guide matrix](clients/README.md) for complete formats.
+
+Both launch modes send the bridge protocol and canonical tool-registry digest in their status/config handshake. Protocol or registry mismatch prevents tool calls with a compatibility error. A version difference remains a warning when protocol and digest match. Bundled mode additionally reports source-tree hashes; uvx mode deliberately does not compare filesystem layouts.
+
 ## Goal
 
 Blender Agent Bridge exposes the live Blender scene to external agents through a localhost bridge and a stdio MCP server. This is the Codex/Claude Code style path: Blender keeps direct `bpy` access, while external clients discover tools/resources and call them over a standard protocol.
@@ -56,11 +70,13 @@ If you set a bridge token, the copied config includes:
 }
 ```
 
-The copied config also includes safe metadata in the MCP server `env` block, such as `CLAUDE_BLENDER_ADDON_VERSION`, `CLAUDE_BLENDER_ADDON_SOURCE_HASH`, `CLAUDE_BLENDER_BRIDGE_VERSION`, `CLAUDE_BLENDER_MCP_SERVER_VERSION`, `CLAUDE_BLENDER_MCP_CONFIG_VERSION`, and a short `CLAUDE_BLENDER_MCP_CONFIG_NOTE`. These fields behave like a comment for humans while remaining valid JSON for stricter clients.
+The copied config also includes safe metadata in the MCP server `env` block, such as `CLAUDE_BLENDER_ADDON_VERSION`, `CLAUDE_BLENDER_ADDON_SOURCE_HASH`, `CLAUDE_BLENDER_BRIDGE_VERSION`, `CLAUDE_BLENDER_MCP_SERVER_VERSION`, `CLAUDE_BLENDER_MCP_CONFIG_VERSION`, `CLAUDE_BLENDER_MCP_RUNTIME_MODE`, `CLAUDE_BLENDER_TOOL_REGISTRY_DIGEST`, and a short `CLAUDE_BLENDER_MCP_CONFIG_NOTE`. These fields behave like a comment for humans while remaining valid JSON for stricter clients; runtime mode and registry digest additionally participate in compatibility diagnostics.
 
 ## Client Env Auth
 
-For Sketchfab downloads today, put the Sketchfab API token in the MCP server environment. OAuth is a future improvement; the current supported path is `SKETCHFAB_API_TOKEN`, with `BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN` as a bridge-specific alias.
+Poly Haven needs no API key. For Sketchfab downloads, use `Copy MCP + Sketchfab` in Blender's `Agent Bridge` sidebar, paste the token into the masked one-time dialog, replace the client config with the copied JSON, and restart or refresh the client. The token is copied into the client config only and is not saved in Blender preferences, `.blend` files, or audit logs. The normal `Copy MCP Config` path includes an empty `SKETCHFAB_API_TOKEN` field as a manual fallback.
+
+OAuth is a future improvement; the current supported path is `SKETCHFAB_API_TOKEN`, with `BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN` as a bridge-specific alias.
 
 Claude Desktop-style JSON:
 
@@ -272,7 +288,7 @@ Official Blender Lab parity helpers are exposed as direct tools:
 - `focus_object_in_viewport` frames a named object in the first 3D viewport and optionally selects it; it also fails soft when no interactive 3D view exists.
 - `get_visual_evidence_resources` summarizes latest viewport captures, playblasts, inspection renders, render thumbnails, and render jobs with MCP resource URIs.
 
-External asset helpers are provider-neutral bridge tools. They do not add provider API keys to Blender preferences; Sketchfab download/import takes a per-call `api_token` or reads a Sketchfab-specific token from `SKETCHFAB_API_TOKEN` or `BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN` in the MCP server environment.
+External asset helpers are provider-neutral bridge tools. They do not add provider API keys to Blender preferences. Sketchfab download/import takes a per-call `api_token`, reads a Sketchfab-specific token from `SKETCHFAB_API_TOKEN` or `BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN` in the MCP server environment, or uses the masked **Set Session Token** control in Blender. The session token exists only in process memory, is cleared when Blender exits, and is never written to preferences or the `.blend` file. Pass the `provenance` object returned by `search_sketchfab_models` into the download/import call so the exact author, license, and model URL are preserved. Repeated model imports are blocked unless `allow_duplicate=true`; `revert_preview` with `scope=last_step` removes only the latest isolated model import.
 
 For real MCP clients, the normal route is discovery, `start_external_asset_download`, `get_external_asset_job_status` until completion, `start_external_asset_import_job` for scene import, then `get_external_asset_import_job_status` until completion. Poly Haven texture imports use the same bounded image/PBR material wiring as `create_image_texture_material`, so cached base-color, roughness, metallic, normal, alpha, emission, ambient-occlusion, packed ARM/ORM, and bump maps become preview-safe Principled materials instead of custom node scripts. `bake_maps` covers bounded AO, normal, and base-color/diffuse PNG output from existing mesh materials; omit `output_dir` for project/session capture storage, and only pass a custom `output_dir` when it came from the user, a file picker, or a prior artifact. Displacement/height maps are still validated and reported as warnings until true displacement/high-to-low baking support lands. Direct provider download/import tools remain available as synchronous fallback/debug paths, but clients should not choose them for ordinary asset-import requests.
 

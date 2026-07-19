@@ -8,7 +8,7 @@ from collections import Counter
 
 import bpy
 
-from . import viewport_capture, world_model
+from . import blender_compat, viewport_capture, world_model
 
 
 def _safe_name(data_block):
@@ -92,13 +92,14 @@ def _material_summary(material):
     if material is None:
         return None
     node_names = []
-    if material.use_nodes and material.node_tree:
-        node_names = [node.name for node in list(material.node_tree.nodes)[:20]]
+    material_tree = blender_compat.node_tree(material)
+    if material_tree:
+        node_names = [node.name for node in list(material_tree.nodes)[:20]]
     return {
         "name": material.name,
-        "use_nodes": bool(material.use_nodes),
+        "use_nodes": blender_compat.node_tree_enabled(material),
         "diffuse_color_rgba": _rgba(material.diffuse_color),
-        "node_count": len(material.node_tree.nodes) if material.node_tree else 0,
+        "node_count": len(material_tree.nodes) if material_tree else 0,
         "nodes": node_names,
     }
 

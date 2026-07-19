@@ -161,7 +161,7 @@ def _worker_config_args(provider, args):
 
 def _child_env(args):
     env = render_jobs._child_env()
-    token = str((args or {}).get("api_token") or "").strip()
+    token = str((args or {}).get("api_token") or external_assets.session_sketchfab_api_token() or "").strip()
     password = str((args or {}).get("model_password") or "").strip()
     if token:
         env[ASSET_JOB_SECRET_TOKEN_ENV] = token
@@ -327,6 +327,7 @@ def _run_download_job(job_id, provider, args, metadata_path):
                     cache_dir=str(args.get("cache_dir") or ""),
                     timeout=_bounded_int(args.get("timeout"), 120, minimum=1, maximum=300),
                     progress_callback=progress_callback,
+                    provenance=dict(args.get("provenance") or {}),
                 )
             else:
                 manifest = {"ok": False, "message": f"Unsupported external asset provider: {provider}"}
@@ -360,6 +361,20 @@ def _use_in_process_worker():
     return str(os.environ.get(ASSET_JOB_MODE_ENV) or "").strip().lower() in {"thread", "in-process", "in_process", "inline"}
 
 
+def _asset_worker_command(blender_binary, script_path):
+    # External-asset jobs are explicit network operations and the extension
+    # manifest declares network access. Factory startup otherwise forces the
+    # worker offline, so asset workers must always opt into online mode.
+    return [
+        blender_binary,
+        "--background",
+        "--factory-startup",
+        "--online-mode",
+        "--python",
+        script_path,
+    ]
+
+
 def _start_process_job(job_id, provider, args, metadata):
     job_dir = metadata["job_dir"]
     config_path = metadata["config_path"]
@@ -378,7 +393,7 @@ def _start_process_job(job_id, provider, args, metadata):
         handle.write(_child_script_text(config_path, config["package_parent"]))
 
     blender_binary = getattr(bpy.app, "binary_path", "") or "blender"
-    command = [blender_binary, "--background", "--factory-startup", "--python", script_path]
+    command = _asset_worker_command(blender_binary, script_path)
     log_handle = open(log_path, "w", encoding="utf-8", newline="\n")
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     try:
@@ -495,6 +510,7 @@ def _process_import_queue():
                 manifest_path=item.get("manifest_path", ""),
                 target_object_name=item.get("target_object_name", ""),
                 label=item.get("label", "") or "Import external asset job result",
+                allow_duplicate=bool(item.get("allow_duplicate", False)),
             )
         except Exception as exc:
             result = {"ok": False, "message": f"External asset import failed: {type(exc).__name__}: {exc}"}
@@ -799,6 +815,7 @@ def import_external_asset_job_result(
     target_object_name="",
     label="Import external asset job result",
     capture_dir=None,
+    allow_duplicate=False,
 ):
     metadata = external_asset_job_status(job_id, context=context, preferred_dir=capture_dir)
     if not metadata.get("available"):
@@ -814,6 +831,7 @@ def import_external_asset_job_result(
         manifest_path=metadata.get("manifest_path", ""),
         target_object_name=target_object_name,
         label=label or "Import external asset job result",
+        allow_duplicate=allow_duplicate,
     )
     return {
         "ok": bool(result.get("ok")),
@@ -831,6 +849,7 @@ def start_external_asset_import_job(
     target_object_name="",
     label="Import external asset job result",
     capture_dir=None,
+    allow_duplicate=False,
 ):
     source_job = {}
     manifest_path = str(manifest_path or "").strip()
@@ -876,6 +895,7 @@ def start_external_asset_import_job(
         "metadata_uri": _asset_job_uri(import_job_id),
         "manifest_path": manifest_path,
         "target_object_name": str(target_object_name or ""),
+        "allow_duplicate": bool(allow_duplicate),
         "label": str(label or "Import external asset job result"),
         "phase": "queued",
         "progress": 0.0,
@@ -896,6 +916,7 @@ def start_external_asset_import_job(
                 "manifest_path": manifest_path,
                 "target_object_name": str(target_object_name or ""),
                 "label": str(label or "Import external asset job result"),
+                "allow_duplicate": bool(allow_duplicate),
             }
         )
     _ensure_import_timer()

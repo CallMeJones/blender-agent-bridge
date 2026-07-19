@@ -19,8 +19,13 @@ except ImportError:  # Allows pure-Python smoke tests outside Blender.
     bpy = None
 
 try:
+    from . import blender_compat
+except ImportError:  # Direct-script compatibility inside Blender.
+    import blender_compat
+
+try:
     from . import live_preview
-except ImportError:
+except ImportError:  # Pure-Python registry/runtime imports must never require bpy.
     live_preview = None
 
 try:
@@ -50,6 +55,27 @@ SKETCHFAB_TOKEN_ENV_VAR = "SKETCHFAB_API_TOKEN"
 SKETCHFAB_BRIDGE_TOKEN_ENV_VAR = "BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN"
 SKETCHFAB_API_TOKEN_ENV_VARS = (SKETCHFAB_TOKEN_ENV_VAR, SKETCHFAB_BRIDGE_TOKEN_ENV_VAR)
 SKETCHFAB_ALLOWED_TOKEN_ENV_VARS = frozenset(SKETCHFAB_API_TOKEN_ENV_VARS)
+ASSET_KEY_PROPERTY = "blender_agent_bridge_asset_key"
+ASSET_PROVIDER_PROPERTY = "blender_agent_bridge_asset_provider"
+ASSET_SOURCE_URL_PROPERTY = "blender_agent_bridge_asset_source_url"
+_SESSION_SKETCHFAB_API_TOKEN = ""
+
+
+def set_session_sketchfab_api_token(value):
+    """Keep Sketchfab auth in this Blender process only."""
+
+    global _SESSION_SKETCHFAB_API_TOKEN
+    _SESSION_SKETCHFAB_API_TOKEN = str(value or "").strip()
+    return bool(_SESSION_SKETCHFAB_API_TOKEN)
+
+
+def clear_session_sketchfab_api_token():
+    global _SESSION_SKETCHFAB_API_TOKEN
+    _SESSION_SKETCHFAB_API_TOKEN = ""
+
+
+def session_sketchfab_api_token():
+    return _SESSION_SKETCHFAB_API_TOKEN
 
 
 def _bounded_limit(value, default=20, *, maximum=50):
@@ -97,16 +123,20 @@ def sketchfab_auth_diagnostics(environ=None):
     """Report Sketchfab auth availability without exposing credential values."""
 
     configured = _present_auth_env_names(environ=environ)
-    api_token_configured = any(name in configured for name in SKETCHFAB_API_TOKEN_ENV_VARS)
+    session_configured = bool(session_sketchfab_api_token())
+    api_token_configured = session_configured or any(name in configured for name in SKETCHFAB_API_TOKEN_ENV_VARS)
     return {
         "provider": "sketchfab",
         "auth_method": "api_token",
         "ready": bool(api_token_configured),
         "api_token_configured": bool(api_token_configured),
+        "session_token_configured": session_configured,
         "configured_env_vars": configured,
         "api_token_env_vars": list(SKETCHFAB_API_TOKEN_ENV_VARS),
         "message": (
-            "Sketchfab API token is configured."
+            "Sketchfab API token is configured for this Blender session."
+            if session_configured
+            else "Sketchfab API token is configured."
             if api_token_configured
             else "No Sketchfab API token env var is configured."
         ),
@@ -738,14 +768,20 @@ def _select_poly_haven_texture_maps(entries, *, resolution, file_format, map_typ
 
 def _included_poly_haven_entries(entry):
     include = entry.get("include") if isinstance(entry.get("include"), dict) else {}
+    parent_parts = [str(part) for part in (entry.get("path_parts") or [])[:-1] if str(part)]
     entries = []
     for include_path, file_info in include.items():
         if not isinstance(file_info, dict) or not file_info.get("url"):
             continue
+        include_logical_path = str(include_path).replace("\\", "/").strip("/")
         entries.append(
             {
-                "logical_path": str(include_path).replace("\\", "/"),
-                "path_parts": [part for part in str(include_path).replace("\\", "/").split("/") if part],
+                "logical_path": include_logical_path,
+                # Poly Haven model include paths are relative to the model file.
+                # Keep the provider path for diagnostics, but cache the file beside
+                # the model so Blender's FBX/glTF texture references resolve.
+                "local_logical_path": "/".join([*parent_parts, include_logical_path]),
+                "path_parts": [part for part in include_logical_path.split("/") if part],
                 "url": str(file_info.get("url") or ""),
                 "md5": str(file_info.get("md5") or ""),
                 "size": int(file_info.get("size") or 0),
@@ -757,7 +793,7 @@ def _included_poly_haven_entries(entry):
 
 
 def _local_poly_haven_path(asset_dir, entry):
-    logical = entry.get("logical_path") or _filename_from_url(entry.get("url"), "asset-file")
+    logical = entry.get("local_logical_path") or entry.get("logical_path") or _filename_from_url(entry.get("url"), "asset-file")
     logical = logical.replace("\\", "/").strip("/")
     if "." not in os.path.basename(logical):
         logical = os.path.join(logical, _filename_from_url(entry.get("url"), "asset-file"))
@@ -819,6 +855,7 @@ def download_poly_haven_asset(
             progress_callback=progress_callback,
         )
         result["logical_path"] = entry.get("logical_path", "")
+        result["local_logical_path"] = entry.get("local_logical_path", entry.get("logical_path", ""))
         result["dependency"] = bool(entry.get("dependency", False))
         downloads.append(result)
         if not result.get("ok"):
@@ -898,8 +935,7 @@ def search_sketchfab_models(*, query, downloadable=True, staffpicked=None, anima
             continue
         user = result.get("user") if isinstance(result.get("user"), dict) else {}
         license_info = result.get("license") if isinstance(result.get("license"), dict) else {}
-        models.append(
-            {
+        model = {
                 "uid": str(result.get("uid") or ""),
                 "name": str(result.get("name") or ""),
                 "viewer_url": str(result.get("viewerUrl") or result.get("viewer_url") or ""),
@@ -910,7 +946,14 @@ def search_sketchfab_models(*, query, downloadable=True, staffpicked=None, anima
                 "like_count": int(result.get("likeCount") or 0),
                 "view_count": int(result.get("viewCount") or 0),
             }
-        )
+        model["provenance"] = {
+            "uid": model["uid"],
+            "model_name": model["name"],
+            "author": model["user"],
+            "license": model["license"],
+            "model_url": model["viewer_url"],
+        }
+        models.append(model)
     return {
         "ok": True,
         "message": "Sketchfab models searched",
@@ -1061,9 +1104,11 @@ def _apply_hdri_world(context, manifest, *, label="Import Poly Haven HDRI"):
     world = bpy.data.worlds.new(f"Poly Haven {manifest.get('asset_id', 'HDRI')} World")
     live_preview._record_created_id("world", world.name)
     scene.world = world
-    world.use_nodes = True
-    nodes = world.node_tree.nodes
-    links = world.node_tree.links
+    node_tree = blender_compat.ensure_node_tree(world)
+    if node_tree is None:
+        return {"ok": False, "message": "This Blender version did not provide a world shader node tree", "manifest": manifest}
+    nodes = node_tree.nodes
+    links = node_tree.links
     nodes.clear()
     output = nodes.new("ShaderNodeOutputWorld")
     background = nodes.new("ShaderNodeBackground")
@@ -1171,18 +1216,40 @@ def _apply_texture_material(context, manifest, *, target_object_name="", label="
     }
 
 
+def _operator_available(path):
+    current = bpy.ops
+    for part in str(path or "").split("."):
+        current = getattr(current, part, None)
+        if current is None:
+            return None
+    return current
+
+
+def _call_first_import_operator(candidates, filepath):
+    for path in candidates:
+        operator = _operator_available(path)
+        if operator is None:
+            continue
+        try:
+            operator(filepath=filepath)
+            return {"ok": True, "operator": path}
+        except Exception as exc:
+            last_error = f"{path}: {type(exc).__name__}: {exc}"
+    return {"ok": False, "message": locals().get("last_error", "No compatible Blender import operator is available")}
+
+
 def _import_model_file(filepath):
     format_error = _unsupported_model_import_error(filepath)
     if format_error:
         return format_error
     lower = str(filepath).lower()
     if lower.endswith((".gltf", ".glb")):
-        bpy.ops.import_scene.gltf(filepath=filepath)
+        return _call_first_import_operator(("import_scene.gltf", "wm.gltf_import"), filepath)
     elif lower.endswith(".fbx"):
-        bpy.ops.import_scene.fbx(filepath=filepath)
+        return _call_first_import_operator(("import_scene.fbx", "wm.fbx_import"), filepath)
     elif lower.endswith((".usd", ".usda", ".usdc")):
-        bpy.ops.wm.usd_import(filepath=filepath)
-    return {"ok": True}
+        return _call_first_import_operator(("wm.usd_import",), filepath)
+    return {"ok": True, "operator": ""}
 
 
 def _unsupported_model_import_error(filepath):
@@ -1194,7 +1261,71 @@ def _unsupported_model_import_error(filepath):
     return {"ok": False, "message": f"Unsupported model import format: {os.path.basename(filepath)}"}
 
 
-def _apply_model_import(context, manifest, *, label="Import external model"):
+def _asset_key(manifest):
+    provider = str(manifest.get("provider") or "unknown").strip().lower()
+    asset_id = str(manifest.get("asset_id") or manifest.get("uid") or "").strip()
+    return f"{provider}:{asset_id}" if asset_id else ""
+
+
+def _existing_asset_objects(manifest):
+    key = _asset_key(manifest)
+    result = []
+    for obj in bpy.data.objects:
+        if key and str(obj.get(ASSET_KEY_PROPERTY, "") or "") == key:
+            result.append(obj.name)
+    for name in manifest.get("imported_objects") or []:
+        if bpy.data.objects.get(str(name)) is not None and str(name) not in result:
+            result.append(str(name))
+    return result
+
+
+def _show_imported_geometry(context, imported_objects):
+    objects = [bpy.data.objects.get(name) for name in imported_objects]
+    objects = [obj for obj in objects if obj is not None]
+    if not objects:
+        return {"focused": False, "material_preview": False, "message": "No imported geometry was available to focus"}
+    try:
+        for obj in context.selected_objects:
+            obj.select_set(False)
+        for obj in objects:
+            obj.select_set(True)
+        context.view_layer.objects.active = objects[0]
+    except Exception:
+        pass
+    focused = False
+    material_preview = False
+    screen = getattr(context, "screen", None)
+    for area in list(getattr(screen, "areas", ()) or ()):
+        if getattr(area, "type", "") != "VIEW_3D":
+            continue
+        space = getattr(area.spaces, "active", None)
+        shading = getattr(space, "shading", None)
+        if shading is not None and hasattr(shading, "type"):
+            try:
+                shading.type = "MATERIAL"
+                material_preview = True
+            except Exception:
+                pass
+        if hasattr(context, "temp_override"):
+            try:
+                region = next((item for item in area.regions if item.type == "WINDOW"), None)
+                with context.temp_override(area=area, region=region, space_data=space):
+                    bpy.ops.view3d.view_selected(use_all_regions=False)
+                focused = True
+            except Exception:
+                pass
+    return {
+        "focused": focused,
+        "material_preview": material_preview,
+        "message": (
+            "Imported geometry focused in Material Preview"
+            if material_preview
+            else "Imported geometry selected; switch the viewport to Material Preview to inspect textures"
+        ),
+    }
+
+
+def _apply_model_import(context, manifest, *, label="Import external model", allow_duplicate=False):
     error = _require_blender()
     if error:
         return error
@@ -1205,23 +1336,65 @@ def _apply_model_import(context, manifest, *, label="Import external model"):
     if format_error:
         format_error["manifest"] = manifest
         return format_error
-    transaction = live_preview.begin(label, context)
+    existing_objects = _existing_asset_objects(manifest)
+    if existing_objects and not bool(allow_duplicate):
+        return {
+            "ok": False,
+            "code": "asset_already_imported",
+            "message": "This cached asset is already present in the scene; set allow_duplicate=true to import another copy",
+            "existing_asset_warning": True,
+            "existing_objects": existing_objects,
+            "asset_key": _asset_key(manifest),
+            "manifest": manifest,
+        }
     before_objects = _existing_names(bpy.data.objects)
     before_meshes = _existing_names(bpy.data.meshes)
+    before_curves = _existing_names(bpy.data.curves)
+    before_armatures = _existing_names(bpy.data.armatures)
+    before_cameras = _existing_names(bpy.data.cameras)
+    before_lights = _existing_names(bpy.data.lights)
+    before_collections = _existing_names(bpy.data.collections)
+    before_actions = _existing_names(bpy.data.actions)
+    before_node_groups = _existing_names(bpy.data.node_groups)
     before_materials = _existing_names(bpy.data.materials)
     before_images = _existing_names(bpy.data.images)
     import_result = _import_model_file(path)
     if not import_result.get("ok"):
         return import_result
     context.view_layer.update()
+    transaction = live_preview.begin(label, context)
     imported_objects = _new_names(bpy.data.objects, before_objects)
     imported_meshes = _new_names(bpy.data.meshes, before_meshes)
+    imported_curves = _new_names(bpy.data.curves, before_curves)
+    imported_armatures = _new_names(bpy.data.armatures, before_armatures)
+    imported_cameras = _new_names(bpy.data.cameras, before_cameras)
+    imported_lights = _new_names(bpy.data.lights, before_lights)
+    imported_collections = _new_names(bpy.data.collections, before_collections)
+    imported_actions = _new_names(bpy.data.actions, before_actions)
+    imported_node_groups = _new_names(bpy.data.node_groups, before_node_groups)
     imported_materials = _new_names(bpy.data.materials, before_materials)
     imported_images = _new_names(bpy.data.images, before_images)
+    asset_key = _asset_key(manifest)
     for name in imported_objects:
-        _record_created_data_for_object(bpy.data.objects.get(name))
+        obj = bpy.data.objects.get(name)
+        _record_created_data_for_object(obj)
+        if obj is not None:
+            obj[ASSET_KEY_PROPERTY] = asset_key
+            obj[ASSET_PROVIDER_PROPERTY] = str(manifest.get("provider") or "")
+            obj[ASSET_SOURCE_URL_PROPERTY] = str(manifest.get("source_url") or "")
     for name in imported_meshes:
         live_preview._record_created_id("mesh", name)
+    for kind, names in (
+        ("curve", imported_curves),
+        ("armature", imported_armatures),
+        ("camera", imported_cameras),
+        ("light", imported_lights),
+        ("collection", imported_collections),
+        ("action", imported_actions),
+        ("node_group", imported_node_groups),
+    ):
+        for name in names:
+            live_preview._record_created_id(kind, name)
     for name in imported_materials:
         live_preview._record_created_id("material", name)
     for name in imported_images:
@@ -1234,6 +1407,20 @@ def _apply_model_import(context, manifest, *, label="Import external model"):
             "asset_id": manifest.get("asset_id") or manifest.get("uid"),
             "source_file": path,
             "created_objects": imported_objects,
+            "created_data": [
+                *[{"kind": "object", "name": name} for name in imported_objects],
+                *[{"kind": "collection", "name": name} for name in imported_collections],
+                *[{"kind": "mesh", "name": name} for name in imported_meshes],
+                *[{"kind": "curve", "name": name} for name in imported_curves],
+                *[{"kind": "armature", "name": name} for name in imported_armatures],
+                *[{"kind": "camera", "name": name} for name in imported_cameras],
+                *[{"kind": "light", "name": name} for name in imported_lights],
+                *[{"kind": "action", "name": name} for name in imported_actions],
+                *[{"kind": "node_group", "name": name} for name in imported_node_groups],
+                *[{"kind": "material", "name": name} for name in imported_materials],
+                *[{"kind": "image", "name": name} for name in imported_images],
+            ],
+            "manifest_path": manifest.get("manifest_path", ""),
         }
     )
     live_preview.redraw(context)
@@ -1241,10 +1428,18 @@ def _apply_model_import(context, manifest, *, label="Import external model"):
     manifest["import_status"] = "imported"
     manifest["imported_objects"] = imported_objects
     manifest["imported_meshes"] = imported_meshes
+    manifest["imported_curves"] = imported_curves
+    manifest["imported_armatures"] = imported_armatures
+    manifest["imported_cameras"] = imported_cameras
+    manifest["imported_lights"] = imported_lights
+    manifest["imported_collections"] = imported_collections
+    manifest["imported_actions"] = imported_actions
+    manifest["imported_node_groups"] = imported_node_groups
     manifest["imported_materials"] = imported_materials
     manifest["imported_images"] = imported_images
     manifest["transaction_id"] = transaction["id"]
     _write_manifest(manifest["cache_dir"], manifest)
+    presentation = _show_imported_geometry(context, imported_objects)
     return {
         "ok": True,
         "message": f"Imported model from {os.path.basename(path)}",
@@ -1252,6 +1447,9 @@ def _apply_model_import(context, manifest, *, label="Import external model"):
         "imported_objects": imported_objects,
         "manifest": manifest,
         "transaction_id": transaction["id"],
+        "asset_key": asset_key,
+        "presentation": presentation,
+        "revert_guidance": "Use revert_preview with scope=last_step to remove only this import, or scope=all to revert the full pending preview.",
     }
 
 
@@ -1267,6 +1465,7 @@ def import_poly_haven_asset(
     cache_dir="",
     timeout=60,
     label="Import Poly Haven asset",
+    allow_duplicate=False,
 ):
     manifest = download_poly_haven_asset(
         asset_id=asset_id,
@@ -1286,7 +1485,7 @@ def import_poly_haven_asset(
     if resolved_type == "textures":
         return _apply_texture_material(context, manifest, target_object_name=target_object_name, label=label)
     if resolved_type == "models":
-        return _apply_model_import(context, manifest, label=label)
+        return _apply_model_import(context, manifest, label=label, allow_duplicate=allow_duplicate)
     return {"ok": False, "message": f"Unsupported Poly Haven import type: {resolved_type}", "manifest": manifest}
 
 
@@ -1297,6 +1496,7 @@ def import_cached_asset(
     manifest_path="",
     target_object_name="",
     label="Import external asset",
+    allow_duplicate=False,
 ):
     if manifest is None:
         manifest_path = str(manifest_path or "").strip()
@@ -1317,7 +1517,7 @@ def import_cached_asset(
         if resolved_type == "textures":
             return _apply_texture_material(context, manifest, target_object_name=target_object_name, label=label)
         if resolved_type == "models":
-            return _apply_model_import(context, manifest, label=label)
+            return _apply_model_import(context, manifest, label=label, allow_duplicate=allow_duplicate)
         return {"ok": False, "message": f"Unsupported Poly Haven import type: {resolved_type}", "manifest": manifest}
     if provider == "sketchfab":
         import_file = manifest.get("import_file", "")
@@ -1333,7 +1533,7 @@ def import_cached_asset(
                         "logical_path": os.path.relpath(import_file, manifest.get("cache_dir", os.path.dirname(import_file))),
                     },
                 )
-        return _apply_model_import(context, manifest, label=label)
+        return _apply_model_import(context, manifest, label=label, allow_duplicate=allow_duplicate)
     return {"ok": False, "message": f"Unsupported cached asset provider: {provider}", "manifest": manifest}
 
 
@@ -1363,6 +1563,9 @@ def _auth_header_from_token(
         return "", f"blocked_env:{blocked}"
     if token:
         return _api_token_authorization_header(token), f"env:{env_name}"
+    token = session_sketchfab_api_token()
+    if token:
+        return _api_token_authorization_header(token), "blender_session"
     return "", ""
 
 
@@ -1549,7 +1752,9 @@ def download_sketchfab_model(
     cache_dir="",
     timeout=120,
     progress_callback=None,
+    provenance=None,
 ):
+    provenance = dict(provenance or {})
     info = get_sketchfab_model_download_info(
         uid=uid,
         api_token=api_token,
@@ -1559,6 +1764,10 @@ def download_sketchfab_model(
     )
     if not info.get("ok"):
         return info
+    model_url = str(provenance.get("model_url") or provenance.get("viewer_url") or "").strip()
+    author = str(provenance.get("author") or provenance.get("user") or "").strip()
+    license_name = str(provenance.get("license") or "").strip()
+    model_name = str(provenance.get("model_name") or provenance.get("name") or "").strip()
     asset_dir = _asset_cache_dir("sketchfab", uid, cache_dir)
     archive_path = os.path.join(asset_dir, "download", "gltf.zip")
     download = _download_file(info["download_url"], archive_path, timeout=timeout, progress_callback=progress_callback)
@@ -1569,7 +1778,11 @@ def download_sketchfab_model(
                 "ok": False,
                 "provider": "sketchfab",
                 "uid": uid,
-                "source_url": info.get("source_url", ""),
+                "source_url": model_url or info.get("source_url", ""),
+                "download_api_url": info.get("source_url", ""),
+                "author": author,
+                "license": license_name,
+                "model_name": model_name,
                 "downloaded_files": [download],
                 "message": download.get("message", "Sketchfab archive download failed"),
                 "auth_source": info.get("auth_source", ""),
@@ -1586,7 +1799,11 @@ def download_sketchfab_model(
                 "ok": False,
                 "provider": "sketchfab",
                 "uid": uid,
-                "source_url": info.get("source_url", ""),
+                "source_url": model_url or info.get("source_url", ""),
+                "download_api_url": info.get("source_url", ""),
+                "author": author,
+                "license": license_name,
+                "model_name": model_name,
                 "downloaded_files": [download],
                 "message": extract.get("message", "Sketchfab archive extraction failed"),
                 "auth_source": info.get("auth_source", ""),
@@ -1602,11 +1819,23 @@ def download_sketchfab_model(
             "message": "Sketchfab model cached" if import_file else "Sketchfab archive did not contain an importable model file",
             "provider": "sketchfab",
             "uid": uid,
-            "source_url": info.get("source_url", ""),
+            "source_url": model_url or info.get("source_url", ""),
+            "model_url": model_url,
+            "download_api_url": info.get("source_url", ""),
+            "author": author,
+            "model_name": model_name,
             "downloaded_files": [download],
             "extracted_files": extract.get("extracted_files", []),
             "import_file": import_file,
-            "license": "see_sketchfab_model_page",
+            "license": license_name,
+            "provenance_complete": bool(model_url and author and license_name),
+            "provenance": {
+                "uid": uid,
+                "model_name": model_name,
+                "author": author,
+                "license": license_name,
+                "model_url": model_url,
+            },
             "auth_source": info.get("auth_source", ""),
             "auth_method": info.get("auth_method", ""),
             "import_status": "not_imported",
@@ -1625,6 +1854,8 @@ def import_sketchfab_model(
     cache_dir="",
     timeout=120,
     label="Import Sketchfab model",
+    provenance=None,
+    allow_duplicate=False,
 ):
     manifest = download_sketchfab_model(
         uid=uid,
@@ -1633,6 +1864,7 @@ def import_sketchfab_model(
         model_password=model_password,
         cache_dir=cache_dir,
         timeout=timeout,
+        provenance=provenance,
     )
     if not manifest.get("ok"):
         return manifest
@@ -1647,7 +1879,7 @@ def import_sketchfab_model(
                 "logical_path": os.path.relpath(import_file, manifest.get("cache_dir", os.path.dirname(import_file))),
             },
         )
-    return _apply_model_import(context, manifest, label=label)
+    return _apply_model_import(context, manifest, label=label, allow_duplicate=allow_duplicate)
 
 
 def external_asset_cache_diagnostics(*, cache_dir="", max_assets=50):
@@ -1677,6 +1909,9 @@ def external_asset_cache_diagnostics(*, cache_dir="", max_assets=50):
                 "asset_id": manifest.get("asset_id") or manifest.get("uid") or "",
                 "asset_type": manifest.get("asset_type", ""),
                 "license": manifest.get("license", ""),
+                "author": manifest.get("author", ""),
+                "model_name": manifest.get("model_name", ""),
+                "model_url": manifest.get("model_url", ""),
                 "source_url": manifest.get("source_url", ""),
                 "cache_dir": manifest.get("cache_dir", ""),
                 "manifest_path": manifest.get("manifest_path", ""),
@@ -1685,6 +1920,17 @@ def external_asset_cache_diagnostics(*, cache_dir="", max_assets=50):
                 "import_status": manifest.get("import_status", ""),
                 "imported_objects": manifest.get("imported_objects", []),
                 "imported_materials": manifest.get("imported_materials", []),
+                "imported_image_datablocks": manifest.get("imported_images", []),
+                "source_files": [
+                    {
+                        "source_filename": os.path.basename(str(item.get("path") or item.get("logical_path") or "")),
+                        "cached_filepath": str(item.get("path") or ""),
+                        "logical_path": str(item.get("logical_path") or ""),
+                        "size": int(item.get("size") or 0),
+                    }
+                    for item in files
+                    if isinstance(item, dict)
+                ],
                 "imported_world": manifest.get("imported_world", ""),
                 "updated_at": manifest.get("updated_at", ""),
             }

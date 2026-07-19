@@ -151,6 +151,27 @@ def _wait_for_bridge(status_path: Path, process: subprocess.Popen[str], *, timeo
     raise TimeoutError(f"Timed out waiting for installed bridge startup. Last error: {last_error}")
 
 
+def _wait_for_interactive_ui_smoke(status_path: Path, process: subprocess.Popen[str], *, timeout: float) -> dict:
+    deadline = time.monotonic() + timeout
+    last_error = ""
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError(f"Blender exited before interactive UI smoke completed with code {process.returncode}")
+        if status_path.exists():
+            try:
+                status = json.loads(status_path.read_text(encoding="utf-8"))
+                if not status.get("ok"):
+                    raise RuntimeError(
+                        "Interactive UI smoke failed: "
+                        f"{status.get('error') or status}; traceback={status.get('traceback') or ''}"
+                    )
+                return status
+            except (OSError, json.JSONDecodeError) as exc:
+                last_error = str(exc)
+        time.sleep(0.25)
+    raise TimeoutError(f"Timed out waiting for interactive UI smoke. Last error: {last_error}")
+
+
 def _start_blender(
     blender: str,
     *,
@@ -160,18 +181,21 @@ def _start_blender(
     timeout: float,
 ) -> tuple[subprocess.Popen[str], str, dict]:
     status_path = profile_dir / "installed-bridge-status.json"
+    ui_status_path = profile_dir / "installed-interactive-ui-status.json"
     startup_path = profile_dir / "start_installed_bridge.py"
     startup_path.write_text(
         """
 import importlib
 import json
 import os
+import traceback
 from pathlib import Path
 
 import bpy
 
 module_name = "bl_ext.user_default.claude_blender"
 status_path = Path(os.environ["INSTALLED_LIVE_SMOKE_STATUS"])
+ui_status_path = Path(os.environ["INSTALLED_LIVE_SMOKE_UI_STATUS"])
 port = int(os.environ.get("INSTALLED_LIVE_SMOKE_PORT", "0"))
 
 def dismiss_startup_popups():
@@ -183,11 +207,99 @@ def dismiss_startup_popups():
         pass
     return None
 
+def run_interactive_ui_smoke():
+    test_object = None
+    try:
+        if bpy.app.background:
+            raise AssertionError("Interactive UI smoke unexpectedly started in background mode")
+        view_areas = [area for area in bpy.context.screen.areas if area.type == "VIEW_3D"]
+        if not view_areas:
+            raise AssertionError("No VIEW_3D area is available in the clean installed profile")
+
+        copied = bpy.ops.claude_blender.copy_mcp_config()
+        if "FINISHED" not in copied:
+            raise AssertionError(f"Copy MCP Config returned {copied}")
+        clipboard = bpy.context.window_manager.clipboard.strip()
+        if not clipboard:
+            raise AssertionError("Copy MCP Config did not write to the system clipboard")
+        copied_config = json.loads(clipboard)
+        server_config = copied_config["mcpServers"]["blender"]
+        if server_config.get("command") != "python":
+            raise AssertionError(f"Unexpected bundled MCP command: {server_config}")
+
+        external_assets = importlib.import_module(module_name + ".external_assets")
+        session_result = bpy.ops.claude_blender.set_session_sketchfab_token(
+            sketchfab_api_token="interactive-smoke-token-not-a-secret"
+        )
+        if "FINISHED" not in session_result:
+            raise AssertionError(f"Set session Sketchfab token returned {session_result}")
+        if not external_assets.sketchfab_auth_diagnostics().get("session_token_configured"):
+            raise AssertionError("Session Sketchfab token was not available immediately")
+        clear_result = bpy.ops.claude_blender.clear_session_sketchfab_token()
+        if "FINISHED" not in clear_result:
+            raise AssertionError(f"Clear session Sketchfab token returned {clear_result}")
+        if external_assets.sketchfab_auth_diagnostics().get("session_token_configured"):
+            raise AssertionError("Session Sketchfab token remained configured after Clear")
+
+        mesh = bpy.data.meshes.new("Agent Bridge Interactive UI Smoke Mesh")
+        test_object = bpy.data.objects.new("Agent Bridge Interactive UI Smoke Object", mesh)
+        bpy.context.scene.collection.objects.link(test_object)
+        presentation = external_assets._show_imported_geometry(bpy.context, [test_object.name])
+        if not presentation.get("focused"):
+            raise AssertionError(f"Imported geometry was not focused: {presentation}")
+        if not presentation.get("material_preview"):
+            raise AssertionError(f"Viewport did not enter Material Preview: {presentation}")
+        if bpy.context.view_layer.objects.active != test_object or not test_object.select_get():
+            raise AssertionError("Imported geometry was not left active and selected")
+        shading_modes = [area.spaces.active.shading.type for area in view_areas]
+        if any(mode != "MATERIAL" for mode in shading_modes):
+            raise AssertionError(f"Unexpected viewport shading after import presentation: {shading_modes}")
+
+        ui_status_path.write_text(
+            json.dumps(
+                {
+                    "ok": True,
+                    "clipboard_config": True,
+                    "session_token_lifecycle": True,
+                    "focused": True,
+                    "material_preview": True,
+                    "view_areas": len(view_areas),
+                    "shading_modes": shading_modes,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        ui_status_path.write_text(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "traceback": traceback.format_exc(),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+    finally:
+        external_assets = importlib.import_module(module_name + ".external_assets")
+        external_assets.clear_session_sketchfab_api_token()
+        bpy.context.window_manager.clipboard = ""
+        if test_object is not None and bpy.data.objects.get(test_object.name) is not None:
+            mesh = test_object.data
+            bpy.data.objects.remove(test_object, do_unlink=True)
+            if mesh is not None and mesh.users == 0:
+                bpy.data.meshes.remove(mesh)
+        dismiss_startup_popups()
+    return None
+
 bpy.ops.preferences.addon_enable(module=module_name)
 addon_module = importlib.import_module(module_name)
 bridge_server = importlib.import_module(module_name + ".bridge_server")
 result = bridge_server.start_bridge(port=port, auth_token="")
 bpy.app.timers.register(dismiss_startup_popups, first_interval=0.5)
+bpy.app.timers.register(run_interactive_ui_smoke, first_interval=1.0)
 status_path.write_text(
     json.dumps({"module_file": getattr(addon_module, "__file__", ""), "result": result}, indent=2),
     encoding="utf-8",
@@ -199,6 +311,7 @@ print("INSTALLED_BRIDGE_START", result, flush=True)
     )
     env = dict(env)
     env["INSTALLED_LIVE_SMOKE_STATUS"] = str(status_path)
+    env["INSTALLED_LIVE_SMOKE_UI_STATUS"] = str(ui_status_path)
     env["INSTALLED_LIVE_SMOKE_PORT"] = str(port)
     stdout_path = profile_dir / "blender-live-smoke.stdout.log"
     stderr_path = profile_dir / "blender-live-smoke.stderr.log"
@@ -217,6 +330,15 @@ print("INSTALLED_BRIDGE_START", result, flush=True)
     process._bab_log_handles = (stdout_handle, stderr_handle)  # type: ignore[attr-defined]
     try:
         bridge_url, health = _wait_for_bridge(status_path, process, timeout=timeout)
+        ui_status = _wait_for_interactive_ui_smoke(ui_status_path, process, timeout=timeout)
+        print(
+            "interactive UI smoke ok:",
+            "clipboard config,",
+            "session token lifecycle,",
+            "viewport focus,",
+            f"Material Preview in {ui_status.get('view_areas')} VIEW_3D area(s)",
+            flush=True,
+        )
     except Exception:
         try:
             for handle in (stdout_handle, stderr_handle):

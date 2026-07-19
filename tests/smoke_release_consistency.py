@@ -23,6 +23,9 @@ CHANGELOG_PATH = os.path.join(ROOT, "CHANGELOG.md")
 README_PATH = os.path.join(ROOT, "README.md")
 INSTALL_PATH = os.path.join(ROOT, "docs", "INSTALL_FROM_GITHUB.md")
 WORKFLOW_PATH = os.path.join(ROOT, ".github", "workflows", "mcp-smoke.yml")
+PYPROJECT_PATH = os.path.join(ROOT, "pyproject.toml")
+REGISTRY_SNAPSHOT_PATH = os.path.join(ROOT, "tests", "snapshots", "tool_registry.json")
+CLIENT_GUIDE_DIR = os.path.join(ROOT, "docs", "clients")
 PAGES_INDEX_URL = "https://callmejones.github.io/blender-agent-bridge/index.json"
 LIVE_PAGES_ENV = "BLENDER_AGENT_BRIDGE_LIVE_PAGES_SMOKE"
 MAX_LIVE_ARCHIVE_BYTES = 100 * 1024 * 1024
@@ -35,6 +38,11 @@ def _read_text(path):
 
 def _read_manifest():
     with open(MANIFEST_PATH, "rb") as handle:
+        return tomllib.load(handle)
+
+
+def _read_pyproject():
+    with open(PYPROJECT_PATH, "rb") as handle:
         return tomllib.load(handle)
 
 
@@ -84,6 +92,24 @@ def _assert_local_release_metadata():
     assert version == build_info.ADDON_VERSION, (version, build_info.ADDON_VERSION)
     assert tuple(int(part) for part in version.split(".")) == build_info.ADDON_VERSION_TUPLE, build_info.ADDON_VERSION_TUPLE
     assert build_info.MCP_SERVER_VERSION == build_info.ADDON_VERSION, build_info.MCP_SERVER_VERSION
+    pyproject = _read_pyproject()
+    project = pyproject.get("project") or {}
+    project_scripts = project.get("scripts") or {}
+    assert project.get("name") == build_info.MCP_DISTRIBUTION_NAME, project
+    assert project.get("version") == version, project
+    assert project.get("dependencies") == [], project
+    assert project_scripts.get(build_info.MCP_CONSOLE_COMMAND) == "claude_blender.mcp_runtime.server:main", project_scripts
+    with open(REGISTRY_SNAPSHOT_PATH, "r", encoding="utf-8") as handle:
+        registry_snapshot = json.load(handle)
+    assert registry_snapshot.get("registry_digest") == build_info.TOOL_REGISTRY_DIGEST, registry_snapshot.get("registry_digest")
+    generated_uvx = build_info.mcp_config("http://127.0.0.1:1", launch_mode="uvx", platform_name="posix")
+    generated_server = generated_uvx["mcpServers"]["blender"]
+    assert f"{build_info.MCP_DISTRIBUTION_NAME}=={version}" in generated_server["args"], generated_server
+    assert generated_server["env"]["CLAUDE_BLENDER_TOOL_REGISTRY_DIGEST"] == build_info.TOOL_REGISTRY_DIGEST
+    for filename in os.listdir(CLIENT_GUIDE_DIR):
+        if filename.endswith(".md") and filename != "README.md":
+            guide = _read_text(os.path.join(CLIENT_GUIDE_DIR, filename))
+            assert f"blender-bridge=={version}" in guide, filename
     blender_min = str(manifest.get("blender_version_min") or "")
     assert blender_min == build_info.BLENDER_VERSION_MIN, (blender_min, build_info.BLENDER_VERSION_MIN)
     assert tuple(int(part) for part in blender_min.split(".")) == build_info.BLENDER_VERSION_MIN_TUPLE
@@ -94,7 +120,7 @@ def _assert_local_release_metadata():
 
     readme = _read_text(README_PATH)
     install = _read_text(INSTALL_PATH)
-    assert "Blender 5.1+" in readme, "README badge must match the supported Blender baseline"
+    assert "Blender 4.2+" in readme, "README badge must match the supported Blender baseline"
     assert f"Install Blender `{blender_min}` or newer" in readme, "README Quick Start minimum drifted"
     assert f"Install Blender `{blender_min}` or newer" in install, "Install guide minimum drifted"
 
@@ -103,6 +129,9 @@ def _assert_local_release_metadata():
     assert "smoke_release_artifact_identity.py" in workflow, "Tag publication must verify archive identity"
     assert "smoke_published_release_identity.py" in workflow, "Tag publication must verify both public endpoints"
     assert "if: startsWith(github.ref, 'refs/tags/v')" in workflow, "Pages and release publication must be tag-gated"
+    assert "pypa/gh-action-pypi-publish" in workflow, "Tagged releases must use PyPI Trusted Publishing"
+    assert "python scripts/check_pypi_name.py" in workflow, "PyPI name ownership must be checked immediately before publish"
+    assert "python -m unittest discover" in workflow, "CI must run the conventional unittest lane"
 
     github_ref = str(os.environ.get("GITHUB_REF") or "")
     if github_ref.startswith("refs/tags/"):

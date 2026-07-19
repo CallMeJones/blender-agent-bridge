@@ -5,7 +5,7 @@
 ```mermaid
 flowchart LR
   User["User in Blender"] --> UI["Sidebar Panel + Operators"]
-  AgentHost["External Agent Host\n(Codex, Claude Desktop, Cursor, etc.)"] --> MCP["mcp_server.py"]
+  AgentHost["External Agent Host\n(Codex, Claude Desktop, Cursor, etc.)"] --> MCP["Bundled or blender-bridge uvx MCP"]
   MCP --> Bridge["bridge_server.py localhost JSON"]
   Bridge --> Tools
   UI --> Context["Scene + Viewport Context"]
@@ -14,6 +14,9 @@ flowchart LR
   Context --> Screenshot["viewport_capture.py"]
   UI --> Preview["live_preview.py"]
   Tools["Tool Dispatcher"] --> ToolSelect["agent_tools.py\nTool Catalog + Routing Hints"]
+  Registry["Canonical Tool Registry\n11 ordered domains"] --> ToolSelect
+  Registry --> MCP
+  Registry --> Tools
   Tools --> Docs["docs_index.py"]
   Tools --> Runner["script_runner.py"]
   Tools --> Helpers["script_templates.py"]
@@ -36,7 +39,11 @@ The add-on does not host an LLM provider. External clients own model/provider co
 
 `bridge_server.py` runs inside Blender and exposes a localhost-only JSON bridge on `127.0.0.1`. It queues operations onto Blender's main thread before touching `bpy`, then returns JSON results. `mcp_server.py` is a dependency-free stdio MCP server that external AI clients launch. It implements MCP lifecycle/tools/resources requests and forwards tool/resource calls to the running Blender bridge.
 
+The server can run from the extension's bundled source or from the zero-dependency `blender-bridge` distribution through an exact `uvx` version pin. Bundled mode is the default. The PyPI runtime imports only the pure-Python MCP, protocol, and registry path; neither mode imports `bpy` outside Blender. Protocol and registry-digest compatibility is checked before tool calls, while bundled mode also retains source-tree freshness diagnostics.
+
 This keeps the important boundary clean: MCP clients never import Blender Python and never touch `bpy` directly. Blender remains the authority for scene state, preview rollback, script approval, and UI status.
+
+Tool metadata is owned by the eleven deterministic modules under `tool_registry/domains/`. Blender-only callables register through the matching modules under `tool_handlers/`; `tool_dispatcher.py` is only the stable execution facade. Shared implementation details that still span several domains live in `handler_runtime.py`, keeping `bpy` completely outside the import path used by the packaged stdio runtime.
 
 ## Blender Extension Layer
 
@@ -44,7 +51,7 @@ The add-on should be packaged as a Blender extension:
 
 - `blender_manifest.toml` at the extension root.
 - `type = "add-on"`.
-- `blender_version_min = "5.1.0"`, matching the supported and continuously tested Blender baseline.
+- `blender_version_min = "4.2.0"`, the earliest host supported by Blender's extension format. CI covers 4.2 LTS, 4.5 LTS, and 5.1, while newer releases remain allowed behind capability checks.
 - `[permissions] network = "..."`
 - `[permissions] files = "..."` if docs caches, viewport captures, checkpoints, transcripts, audit logs, or exports are written.
 
@@ -71,7 +78,15 @@ External clients may respond directly or request a tool. For tool calls, the add
 
 Before generating non-trivial code, external agents should either already have enough scene/docs context or explicitly call tools to get it. The bridge should steer clients toward this sequence: inspect, retrieve docs if needed, plan, draft, review, run.
 
-Tool schemas are selected dynamically per request. The full local tool catalog remains available inside Blender, while compact MCP mode exposes the bridge/control/animation/render tools that should be easy for clients to find. Provider-neutral routing hints in `agent_tools.py` keep the request closer to Codex-style local tool use: Blender owns the toolbox, and external clients decide what to show their models.
+Tool schemas are selected dynamically per request. The full local tool catalog remains available inside Blender, while compact MCP mode exposes the bridge/control/animation/render tools that should be easy for clients to find. Provider-neutral routing hints keep the request closer to Codex-style local tool use: Blender owns the toolbox, and external clients decide what to show their models.
+
+## Canonical Tool Registry
+
+`tool_registry/` is importable without Blender and owns every Blender tool's public name, description, input/output schemas, handler key, stable order, routing groups, exposure mode, owning domain, and safety contract metadata. Eleven explicit domain modules implement `register(registry)` and load through one fixed ordered list; package discovery is intentionally not used.
+
+Catalog definitions in `agent_tools.py`, safety contracts in `bridge_protocol.py`, routing groups, the dispatcher map, and the registry digest are generated from that one registry. Handler registration resolves each domain's `handler_key` only after Blender-side implementations are loaded, then enforces exact parity. The five MCP wrapper/control tools remain separate because they act on the MCP/bridge surface rather than representing Blender tool specifications.
+
+`tests/snapshots/tool_registry.json` captures the complete ordered specs, definitions, and contracts. CI only compares it. Maintainers must run `scripts/update_tool_snapshot.py` explicitly and review the resulting compatibility change.
 
 ## Scene Context Strategy
 
@@ -211,7 +226,7 @@ Options:
 
 ## User Decisions
 
-- First supported Blender target: 5.1.
+- First supported Blender target: 4.2 LTS; no maximum Blender version is declared.
 - LLM/provider transport lives outside Blender.
 - Docs lookup: local cache first, official web docs second.
 - Screenshot context: controlled by a toggle.

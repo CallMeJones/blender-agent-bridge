@@ -506,7 +506,7 @@ Status: Orchestration, guidance, and routing reliability are implemented in code
 
 ## User Decisions Captured
 
-- Blender target is 5.1.
+- Blender support starts at 4.2 LTS, with 4.2, 4.5, and 5.1 in the continuous compatibility matrix and no maximum-version gate.
 - Use a Blender extension plus local companion bridge/MCP surface over time.
 - Keep LLM provider clients and API keys out of the production add-on.
 - Apply safe helper changes immediately in the live Blender scene.

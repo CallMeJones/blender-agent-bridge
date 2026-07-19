@@ -20,6 +20,8 @@ Thanks for helping make Blender automation safer and more useful. This is a main
    python scripts\build_extension_zip.py --blender "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe"
    ```
 
+For catalog or handler work, follow [Adding a Tool](docs/ADDING_A_TOOL.md). Tool metadata belongs in one of the eleven explicit registry domains; do not recreate definitions in the catalog, contracts, router, or dispatcher map.
+
 ## Required Evidence
 
 Run the smallest owner test while developing, then the relevant gates from [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md). At minimum, most changes should pass:
@@ -62,3 +64,5 @@ Disclose substantial AI-assisted code generation so reviewers know where extra c
 The project is licensed under `GPL-3.0-or-later`. By submitting a contribution, you represent that you have the right to submit it and agree that it is licensed under the same `GPL-3.0-or-later` terms. No contributor license agreement or copyright assignment is currently required.
 
 Documentation showcase media under `docs/assets/` has a separate provenance notice and must not be replaced or expanded with uncleared media. See [docs/assets/PROVENANCE.md](docs/assets/PROVENANCE.md).
+
+Community projects can be proposed through the [showcase submission form](https://github.com/CallMeJones/blender-agent-bridge/issues/new?template=showcase.yml). Contributors looking for a bounded starting point can review [good first issue candidates](docs/GOOD_FIRST_ISSUES.md) and ask a maintainer to promote an available candidate into a labelled issue.

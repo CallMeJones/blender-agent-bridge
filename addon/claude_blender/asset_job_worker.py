@@ -112,6 +112,7 @@ def _download_sketchfab(config, args):
         cache_dir=str(args.get("cache_dir") or ""),
         timeout=int(args.get("timeout") or 120),
         progress_callback=lambda update: _progress_callback(config, update),
+        provenance=dict(args.get("provenance") or {}),
     )
 
 

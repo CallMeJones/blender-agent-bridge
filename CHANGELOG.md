@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-07-20
+
+- Added the canonical 186-contract modular tool registry, optional `blender-bridge` PyPI/uvx runtime, registry compatibility handshake, conventional unit-test lane, and multi-client/community documentation for the upcoming 0.3.0 release.
+- Added a compact External Assets setup block and masked one-time `Copy MCP + Sketchfab` flow; Poly Haven is shown as keyless, ordinary copied configs include an empty Sketchfab token field, and provider tokens remain out of Blender preferences, `.blend` files, and audit logs.
+- Added Blender 4.2, 4.5, and 5.1 compatibility coverage, capability-based material/world/compositor node-tree handling (including Blender 5.1's node-group compositor API), and warning-only handling for untested future versions above the 4.2 minimum.
+- Fixed external asset workers to opt into online mode explicitly, Poly Haven dependency paths, per-import rollback, duplicate model warnings, Material Preview focus, implicit active-UV inspection, diagnostic source filenames, and Sketchfab discovery provenance across background workers.
+- Closed the known static-analysis escapes through Python object reflection, computed builtin/operator names, callable containers, `sys.modules`, and driver namespace assignment; these cases are now hard CI regressions.
 - Updated the GitHub Release publisher to the current Node 24-compatible action line for future tags.
 
 ## 0.2.0 - 2026-07-19

@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "blender-bridge"
+version = "0.3.0"
+description = "Safe, provider-neutral MCP runtime for Blender Agent Bridge"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [
+  { name = "Michael" },
+]
+keywords = ["blender", "mcp", "model-context-protocol", "3d", "ai"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Multimedia :: Graphics :: 3D Modeling",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/CallMeJones/blender-agent-bridge"
+Documentation = "https://github.com/CallMeJones/blender-agent-bridge/tree/main/docs"
+Repository = "https://github.com/CallMeJones/blender-agent-bridge"
+Issues = "https://github.com/CallMeJones/blender-agent-bridge/issues"
+
+[project.scripts]
+blender-bridge = "claude_blender.mcp_runtime.server:main"
+
+[tool.setuptools]
+package-dir = { "" = "addon" }
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["addon"]
+include = ["claude_blender*"]
+
+[tool.setuptools.package-data]
+claude_blender = ["blender_manifest.toml"]

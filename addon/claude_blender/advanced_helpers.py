@@ -12,7 +12,7 @@ import time
 import bpy
 from mathutils import Vector
 
-from . import inspection_render, live_preview, viewport_capture
+from . import blender_compat, inspection_render, live_preview, viewport_capture
 
 
 KEYFRAME_INTERPOLATIONS = {
@@ -553,8 +553,9 @@ def _record_shader_material(material):
                 sockets[socket_name] = _socket_value(socket.default_value)
     node_names = []
     links = []
-    if material.use_nodes and material.node_tree:
-        node_names = [node.name for node in material.node_tree.nodes]
+    material_tree = blender_compat.node_tree(material)
+    if material_tree:
+        node_names = [node.name for node in material_tree.nodes]
         links = [
             {
                 "from_node": link.from_node.name,
@@ -568,12 +569,12 @@ def _record_shader_material(material):
                     "identifier": getattr(link.to_socket, "identifier", link.to_socket.name),
                 },
             }
-            for link in material.node_tree.links
+            for link in material_tree.links
         ]
     transaction["before_state"][key] = {
         "kind": "shader_material",
         "material_name": material.name,
-        "use_nodes": bool(material.use_nodes),
+        "use_nodes": blender_compat.node_tree_enabled(material),
         "diffuse_color": tuple(float(component) for component in material.diffuse_color),
         "blend_method": getattr(material, "blend_method", None),
         "surface_render_method": getattr(material, "surface_render_method", None),
@@ -758,15 +759,18 @@ def _axis_index(axis):
 
 
 def _find_node(material, node_type):
-    if not material or not material.use_nodes or not material.node_tree:
+    tree = blender_compat.node_tree(material)
+    if tree is None:
         return None
-    return next((node for node in material.node_tree.nodes if node.type == node_type), None)
+    return next((node for node in tree.nodes if node.type == node_type), None)
 
 
 def _ensure_principled_material(material):
-    material.use_nodes = True
-    nodes = material.node_tree.nodes
-    links = material.node_tree.links
+    tree = blender_compat.ensure_node_tree(material)
+    if tree is None:
+        raise RuntimeError(f"Material {material.name} does not expose a shader node tree")
+    nodes = tree.nodes
+    links = tree.links
     principled = _find_node(material, "BSDF_PRINCIPLED")
     if principled is None:
         principled = nodes.new(type="ShaderNodeBsdfPrincipled")
@@ -781,7 +785,7 @@ def _ensure_principled_material(material):
 
 
 def _record_material_node_tree_animation(material):
-    node_tree = material.node_tree if material and material.use_nodes else None
+    node_tree = blender_compat.node_tree(material)
     if node_tree is None:
         return
     transaction = live_preview.begin()
@@ -1819,9 +1823,10 @@ def _infer_material_texture_map_type(node):
 
 
 def _image_texture_nodes(material):
-    if material is None or not material.use_nodes or not material.node_tree:
+    tree = blender_compat.node_tree(material)
+    if tree is None:
         return []
-    return [node for node in material.node_tree.nodes if getattr(node, "type", "") == "TEX_IMAGE"]
+    return [node for node in tree.nodes if getattr(node, "type", "") == "TEX_IMAGE"]
 
 
 def _node_has_outgoing_links(material, node):
@@ -1934,7 +1939,16 @@ def _image_node_uv_map_name(node):
 
 def _image_file_report(image):
     if image is None:
-        return {"image": "", "filepath": "", "packed": False, "missing": True, "message": "image texture node has no image"}
+        return {
+            "image": "",
+            "image_datablock_name": "",
+            "source_filename": "",
+            "filepath": "",
+            "source_filepath": "",
+            "packed": False,
+            "missing": True,
+            "message": "image texture node has no image",
+        }
     raw_path = str(getattr(image, "filepath", "") or "")
     resolved = bpy.path.abspath(raw_path) if raw_path.startswith("//") else os.path.expanduser(raw_path)
     resolved = os.path.abspath(resolved) if resolved else ""
@@ -1942,7 +1956,10 @@ def _image_file_report(image):
     missing = bool(resolved and not packed and not os.path.isfile(resolved))
     return {
         "image": image.name,
+        "image_datablock_name": image.name,
+        "source_filename": os.path.basename(resolved or raw_path),
         "filepath": resolved,
+        "source_filepath": resolved,
         "packed": packed,
         "missing": missing,
         "message": "image file does not exist" if missing else "",
@@ -1958,7 +1975,7 @@ def _material_setup_quality(context, material, *, assigned_objects=None, require
     issues = []
     warnings = []
     image_nodes = _image_texture_nodes(material)
-    principled = _find_node(material, "BSDF_PRINCIPLED") if material and material.use_nodes else None
+    principled = _find_node(material, "BSDF_PRINCIPLED") if blender_compat.node_tree_enabled(material) else None
     require_uv = bool(require_uv_maps or str(expected_uv_map_name or "").strip())
     expected_uv = str(expected_uv_map_name or "").strip()
     assigned_objects = list(assigned_objects or [])
@@ -1966,7 +1983,7 @@ def _material_setup_quality(context, material, *, assigned_objects=None, require
 
     result = {
         "material": material.name if material else "",
-        "use_nodes": bool(material and material.use_nodes),
+        "use_nodes": blender_compat.node_tree_enabled(material),
         "has_principled": bool(principled),
         "image_texture_count": len(image_nodes),
         "assigned_objects": [obj.name for obj in assigned_objects],
@@ -1979,7 +1996,7 @@ def _material_setup_quality(context, material, *, assigned_objects=None, require
         issues.append("material not found")
         result["passed"] = False
         return result
-    if not material.use_nodes or material.node_tree is None:
+    if not blender_compat.node_tree_enabled(material):
         issues.append("material does not use shader nodes")
         result["passed"] = False
         return result
@@ -2005,7 +2022,10 @@ def _material_setup_quality(context, material, *, assigned_objects=None, require
             "node": node.name,
             "map_type": map_type,
             "image": file_report["image"],
+            "image_datablock_name": file_report["image_datablock_name"],
+            "source_filename": file_report["source_filename"],
             "filepath": file_report["filepath"],
+            "source_filepath": file_report["source_filepath"],
             "packed": file_report["packed"],
             "file_missing": file_report["missing"],
             "colorspace": actual_colorspace,
@@ -2025,7 +2045,22 @@ def _material_setup_quality(context, material, *, assigned_objects=None, require
             issues.append(f"{node.name}: image texture node is not linked to the shader graph")
         issues.extend(shader_path_issues)
         if require_uv and not uv_map:
-            issues.append(f"{node.name}: image texture node has no UV Map vector input")
+            active_uv_names = {
+                mesh.uv_layers.active.name
+                for obj in assigned_objects
+                for mesh in [obj.data if getattr(obj, "type", "") == "MESH" else None]
+                if mesh and mesh.uv_layers and mesh.uv_layers.active
+            }
+            if not active_uv_names:
+                issues.append(f"{node.name}: image texture node has no explicit UV Map vector input and assigned meshes have no active UV map")
+            else:
+                texture_report["uv_mode"] = "implicit_active_uv"
+                texture_report["active_uv_maps"] = sorted(active_uv_names)
+                if expected_uv and active_uv_names != {expected_uv}:
+                    issues.append(
+                        f"{node.name}: implicit texture coordinates use active UV map(s) {sorted(active_uv_names)!r}, "
+                        f"expected {expected_uv!r}"
+                    )
         if expected_uv and uv_map and uv_map != expected_uv:
             issues.append(f"{node.name}: uses UV map {uv_map!r}, expected {expected_uv!r}")
         checked_uv = expected_uv or uv_map
@@ -2145,7 +2180,7 @@ def repair_material_setup(
         return transaction
 
     for material in materials:
-        if not material.use_nodes or material.node_tree is None:
+        if not blender_compat.node_tree_enabled(material):
             warnings.append(f"Skipped {material.name}: material does not use shader nodes")
             continue
         image_nodes = _image_texture_nodes(material)
@@ -4182,8 +4217,9 @@ def _object_animation_actions(obj):
         material = slot.material
         if material:
             actions.append(_animation_action_from(material))
-            if material.use_nodes and material.node_tree:
-                actions.append(_animation_action_from(material.node_tree))
+            material_tree = blender_compat.node_tree(material)
+            if material_tree:
+                actions.append(_animation_action_from(material_tree))
     return [action for action in actions if action]
 
 
@@ -4507,7 +4543,8 @@ def clear_animation(
                 material = slot.material
                 if not material:
                     continue
-                if material.animation_data or (material.use_nodes and material.node_tree and material.node_tree.animation_data):
+                material_tree = blender_compat.node_tree(material)
+                if material.animation_data or (material_tree and material_tree.animation_data):
                     has_clearable_animation = True
                     break
         if has_clearable_animation:
@@ -4541,9 +4578,10 @@ def clear_animation(
                     live_preview._record_id_animation(material, "materials")
                     material.animation_data_clear()
                     cleared.append({"object": obj.name, "target": f"material:{material.name}"})
-                if material.use_nodes and material.node_tree and material.node_tree.animation_data:
+                material_tree = blender_compat.node_tree(material)
+                if material_tree and material_tree.animation_data:
                     _record_material_node_tree_animation(material)
-                    material.node_tree.animation_data_clear()
+                    material_tree.animation_data_clear()
                     cleared.append({"object": obj.name, "target": f"material_node_tree:{material.name}"})
     transaction["applied_steps"].append({"type": "clear_animation", "label": label, "cleared": cleared})
     live_preview.redraw(context)
@@ -8065,7 +8103,7 @@ def get_2d_animation_details(context, *, max_items=32):
         if collection is not None:
             gp_collections[attr] = len(collection)
     camera = scene.camera
-    compositor_tree = getattr(scene, "node_tree", None) if getattr(scene, "use_nodes", False) else None
+    compositor_tree = blender_compat.node_tree(scene)
     return {
         "ok": True,
         "message": "Collected 2D/storyboard animation context",
@@ -8090,7 +8128,7 @@ def get_2d_animation_details(context, *, max_items=32):
             "film_transparent": bool(scene.render.film_transparent),
         },
         "compositor": {
-            "use_nodes": bool(getattr(scene, "use_nodes", False)),
+            "use_nodes": compositor_tree is not None,
             "node_count": len(compositor_tree.nodes) if compositor_tree else 0,
         },
         "recommended_tools": [
@@ -11391,7 +11429,6 @@ def add_window_materials(
         float(color[3]) if len(color) > 3 else 0.45,
     )
     material.diffuse_color = rgba
-    material.use_nodes = True
     principled = _ensure_principled_material(material)
     _set_socket_value(principled.inputs.get("Base Color"), rgba)
     _set_socket_value(principled.inputs.get("Alpha"), rgba[3])

@@ -27,6 +27,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install packaging build frontend
+        run: python -m pip install build
+
+      - name: Run conventional unit tests
+        run: python -m unittest discover -s tests\unit -p "test_*.py" -v
+
       - name: Compile MCP bridge modules
         run: >
           python -m py_compile
@@ -89,6 +95,37 @@ jobs:
       - name: Run tool contract inventory smoke test
         run: python tests\smoke_tool_contract_inventory.py
 
+      - name: Build blender-bridge wheel and source distribution
+        run: python -m build
+
+      - name: Smoke installed blender-bridge wheel
+        shell: pwsh
+        run: |
+          python -m venv .wheel-smoke
+          .\.wheel-smoke\Scripts\python.exe -m pip install --no-index --no-deps (Get-ChildItem dist\blender_bridge-*.whl | Select-Object -First 1).FullName
+          $env:BLENDER_BRIDGE_EXECUTABLE = (Resolve-Path .\.wheel-smoke\Scripts\blender-bridge.exe).Path
+          .\.wheel-smoke\Scripts\blender-bridge.exe --version
+          python -m unittest tests.unit.test_mcp_stdio -v
+
+      - name: Upload blender-bridge Python distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: blender-bridge-python-distributions
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+
+      - name: Upload tagged blender-bridge publication candidate
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v7
+        with:
+          name: blender-bridge-official-python-candidate
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+
       - name: Build extension zip and GitHub Pages repository
         run: >
           python scripts\build_extension_repository.py
@@ -116,13 +153,24 @@ jobs:
             public/index.html
             public/*.zip
             public/*.sha256
+            public/assets/**
 
   blender-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 50
-    env:
-      BLENDER_SERIES: "5.1"
-      BLENDER_VERSION: "5.1.2"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - blender_series: "4.2"
+            blender_version: "4.2.0"
+            release_builder: false
+          - blender_series: "4.5"
+            blender_version: "4.5.0"
+            release_builder: false
+          - blender_series: "5.1"
+            blender_version: "5.1.2"
+            release_builder: true
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -132,13 +180,13 @@ jobs:
         uses: actions/cache@v6
         with:
           path: blender
-          key: blender-${{ env.BLENDER_VERSION }}-linux-x64
+          key: blender-${{ matrix.blender_version }}-linux-x64
 
       - name: Download Blender
         if: steps.cache-blender.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          url="https://download.blender.org/release/Blender${BLENDER_SERIES}/blender-${BLENDER_VERSION}-linux-x64.tar.xz"
+          url="https://download.blender.org/release/Blender${{ matrix.blender_series }}/blender-${{ matrix.blender_version }}-linux-x64.tar.xz"
           echo "Downloading $url"
           curl -fsSL "$url" -o blender.tar.xz
           mkdir -p blender
@@ -201,7 +249,7 @@ jobs:
           --timeout 240
 
       - name: Validate and build official tagged archive
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && matrix.release_builder
         run: |
           set -euo pipefail
           ./blender/blender --command extension validate addon/claude_blender
@@ -210,7 +258,7 @@ jobs:
           ./blender/blender --command extension validate "dist/claude_blender-${version}.zip"
 
       - name: Upload official tagged release candidate
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && matrix.release_builder
         uses: actions/upload-artifact@v7
         with:
           name: blender-agent-bridge-official-release-candidate
@@ -219,9 +267,26 @@ jobs:
             dist/*.sha256
           if-no-files-found: error
 
-  prepare-publication:
+  pypi-preflight:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [mcp-smoke, blender-smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Stop before any public deployment if the PyPI name is unavailable
+        run: python scripts/check_pypi_name.py
+
+  prepare-publication:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: pypi-preflight
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -262,6 +327,7 @@ jobs:
             public/index.html
             public/*.zip
             public/*.sha256
+            public/assets/**
           if-no-files-found: error
 
       - name: Upload GitHub Pages artifact
@@ -271,7 +337,7 @@ jobs:
 
   deploy-pages:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: prepare-publication
+    needs: [prepare-publication, publish-pypi]
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -284,9 +350,39 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v5
 
+  publish-pypi:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: prepare-publication
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/project/blender-bridge/
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Download tagged blender-bridge publication candidate
+        uses: actions/download-artifact@v7
+        with:
+          name: blender-bridge-official-python-candidate
+          path: dist
+
+      - name: Verify blender-bridge PyPI name immediately before publishing
+        run: python scripts/check_pypi_name.py
+
+      - name: Publish blender-bridge with PyPI Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@release/v1
+
   publish-release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [prepare-publication, deploy-pages]
+    needs: [prepare-publication, deploy-pages, publish-pypi]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -299,6 +395,12 @@ jobs:
           name: blender-agent-bridge-official-release-candidate
           path: dist
 
+      - name: Download blender-bridge Python distributions
+        uses: actions/download-artifact@v7
+        with:
+          name: blender-bridge-official-python-candidate
+          path: python-dist
+
       - name: Publish tagged GitHub release assets
         uses: softprops/action-gh-release@v3
         with:
@@ -306,10 +408,12 @@ jobs:
           files: |
             dist/*.zip
             dist/*.sha256
+            python-dist/*.whl
+            python-dist/*.tar.gz
 
   verify-publication:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [deploy-pages, publish-release]
+    needs: [deploy-pages, publish-pypi, publish-release]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
