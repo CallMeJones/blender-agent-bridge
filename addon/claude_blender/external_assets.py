@@ -1279,6 +1279,34 @@ def _existing_asset_objects(manifest):
     return result
 
 
+def _current_manifest_imports(manifest):
+    """Reconcile cached import metadata with datablocks that still exist."""
+
+    if bpy is None:
+        return None
+    imported_objects = _existing_asset_objects(manifest)
+    imported_materials = [
+        str(name)
+        for name in manifest.get("imported_materials") or []
+        if bpy.data.materials.get(str(name)) is not None
+    ]
+    imported_images = [
+        str(name)
+        for name in manifest.get("imported_images") or []
+        if bpy.data.images.get(str(name)) is not None
+    ]
+    imported_world = str(manifest.get("imported_world") or "")
+    if imported_world and bpy.data.worlds.get(imported_world) is None:
+        imported_world = ""
+    return {
+        "imported_objects": imported_objects,
+        "imported_materials": imported_materials,
+        "imported_images": imported_images,
+        "imported_world": imported_world,
+        "imported": bool(imported_objects or imported_materials or imported_images or imported_world),
+    }
+
+
 def _show_imported_geometry(context, imported_objects):
     objects = [bpy.data.objects.get(name) for name in imported_objects]
     objects = [obj for obj in objects if obj is not None]
@@ -1901,7 +1929,21 @@ def external_asset_cache_diagnostics(*, cache_dir="", max_assets=50):
         files = manifest.get("downloaded_files") or []
         size = sum(int(item.get("size") or 0) for item in files if isinstance(item, dict))
         total_bytes += size
-        if manifest.get("import_status") == "imported":
+        manifest_import_status = str(manifest.get("import_status") or "")
+        current_imports = _current_manifest_imports(manifest)
+        import_status = manifest_import_status
+        if current_imports is None:
+            imported_objects = manifest.get("imported_objects", [])
+            imported_materials = manifest.get("imported_materials", [])
+            imported_images = manifest.get("imported_images", [])
+            imported_world = manifest.get("imported_world", "")
+        else:
+            import_status = "imported" if current_imports["imported"] else "not_imported"
+            imported_objects = current_imports["imported_objects"]
+            imported_materials = current_imports["imported_materials"]
+            imported_images = current_imports["imported_images"]
+            imported_world = current_imports["imported_world"]
+        if import_status == "imported":
             imported_count += 1
         assets.append(
             {
@@ -1917,10 +1959,11 @@ def external_asset_cache_diagnostics(*, cache_dir="", max_assets=50):
                 "manifest_path": manifest.get("manifest_path", ""),
                 "file_count": len(files),
                 "total_bytes": size,
-                "import_status": manifest.get("import_status", ""),
-                "imported_objects": manifest.get("imported_objects", []),
-                "imported_materials": manifest.get("imported_materials", []),
-                "imported_image_datablocks": manifest.get("imported_images", []),
+                "import_status": import_status,
+                "manifest_import_status": manifest_import_status,
+                "imported_objects": imported_objects,
+                "imported_materials": imported_materials,
+                "imported_image_datablocks": imported_images,
                 "source_files": [
                     {
                         "source_filename": os.path.basename(str(item.get("path") or item.get("logical_path") or "")),
@@ -1931,7 +1974,7 @@ def external_asset_cache_diagnostics(*, cache_dir="", max_assets=50):
                     for item in files
                     if isinstance(item, dict)
                 ],
-                "imported_world": manifest.get("imported_world", ""),
+                "imported_world": imported_world,
                 "updated_at": manifest.get("updated_at", ""),
             }
         )

@@ -339,8 +339,16 @@ def main():
         assert last_step["remaining_step_count"] == 1, last_step
         assert bpy.data.objects.get("SmokeImportedModel.001") is None, last_step
         assert bpy.data.objects.get("SmokeImportedModel") is not None, last_step
+        diagnostics = external_assets.external_asset_cache_diagnostics(cache_dir=cache_dir)
+        model_diagnostics = next(item for item in diagnostics["assets"] if item["asset_id"] == "model_one")
+        assert model_diagnostics["import_status"] == "imported", model_diagnostics
+        assert model_diagnostics["imported_objects"] == ["SmokeImportedModel"], model_diagnostics
         assert live_preview.revert(bpy.context)["ok"] is True
         assert bpy.data.objects.get("SmokeImportedModel") is None
+        diagnostics = external_assets.external_asset_cache_diagnostics(cache_dir=cache_dir)
+        model_diagnostics = next(item for item in diagnostics["assets"] if item["asset_id"] == "model_one")
+        assert model_diagnostics["import_status"] == "not_imported", model_diagnostics
+        assert model_diagnostics["imported_objects"] == [], model_diagnostics
 
         previous_transaction_id = live_preview.current_transaction()["id"]
         unsupported_model = _execute(
