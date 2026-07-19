@@ -196,7 +196,7 @@ jobs:
       - name: Install headless GL dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 xvfb
+          sudo apt-get install -y libegl1 libgl1 libxi6 libxxf86vm1 libxfixes3 libxrender1 xvfb
 
       - name: Show Blender version
         run: ./blender/blender --version
