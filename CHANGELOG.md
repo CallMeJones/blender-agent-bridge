@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Updated the GitHub Release publisher to the current Node 24-compatible action line for future tags.
+
 ## 0.2.0 - 2026-07-19
 
 - Kept the Blender sidebar lean around bridge start/stop, MCP config, script trust, pending script approval, preview commit/revert, and checkpoint restore; rich diagnostics remain available through bridge/operator responses instead of always showing in the panel.
