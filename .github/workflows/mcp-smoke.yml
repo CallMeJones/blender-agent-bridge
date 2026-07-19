@@ -129,7 +129,7 @@ jobs:
 
       - name: Cache Blender
         id: cache-blender
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: blender
           key: blender-${{ env.BLENDER_VERSION }}-linux-x64
