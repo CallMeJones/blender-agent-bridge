@@ -60,6 +60,15 @@ python scripts/update_tool_snapshot.py
 
 Inspect `tests/snapshots/tool_registry.json` in the diff. CI validates this file but never rewrites it. Accidental renames, reordering, exposure changes, contract changes, and digest drift should therefore fail review visibly.
 
+For a smaller read-only summary suitable for review or CI diagnostics, run:
+
+```powershell
+$env:PYTHONPATH = "addon"
+python -m claude_blender.tool_registry.report
+```
+
+The JSON report gives the canonical digest and deterministic tool counts by owning domain, routing group, and exposure mode. It imports registry metadata only and does not require Blender or `bpy`.
+
 ## 6. Document Compatibility
 
 Update the changelog and any affected client or safety documentation. A registry change changes the canonical digest: bundled and PyPI runtimes must ship from the same version and artifact set. Protocol or digest mismatch fails tool calls; a version difference is only a warning when protocol and digest remain compatible.
