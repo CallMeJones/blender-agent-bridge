@@ -146,6 +146,33 @@ class MCPStdioTests(unittest.TestCase):
         finally:
             FakeBridgeHandler.include_compatibility_metadata = True
 
+    def test_malformed_bridge_url_reports_warning_without_crashing_runtime(self):
+        env = os.environ.copy()
+        env["PYTHONPATH"] = os.path.join(ROOT, "addon")
+        request = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}})
+
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "claude_blender.mcp_runtime.server",
+                "--bridge-url",
+                "http://[",
+            ],
+            input=request + "\n",
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=5,
+            check=False,
+        )
+
+        self.assertEqual(0, completed.returncode)
+        response = json.loads(completed.stdout)
+        self.assertEqual(1, response["id"])
+        self.assertIn("blender_bridge_status", {tool["name"] for tool in response["result"]["tools"]})
+        self.assertIn("tools/list bridge warning: Invalid IPv6 URL", completed.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
