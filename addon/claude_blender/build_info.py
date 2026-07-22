@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+import sys
 
 try:
     from . import blender_compat, tool_registry
@@ -15,12 +16,12 @@ except ImportError:  # Allows direct imports from addon/claude_blender.
 
 ADDON_ID = "claude_blender"
 ADDON_NAME = "Blender Agent Bridge"
-ADDON_VERSION_TUPLE = (0, 3, 0)
-ADDON_VERSION = "0.3.0"
+ADDON_VERSION_TUPLE = (0, 3, 1)
+ADDON_VERSION = "0.3.1"
 BLENDER_VERSION_MIN_TUPLE = blender_compat.MINIMUM_VERSION
 BLENDER_VERSION_MIN = blender_compat.MINIMUM_VERSION_TEXT
 BRIDGE_VERSION = "0.3"
-MCP_SERVER_VERSION = "0.3.0"
+MCP_SERVER_VERSION = "0.3.1"
 MCP_CONFIG_VERSION = "3"
 MCP_RUNTIME_BUNDLED = "bundled"
 MCP_RUNTIME_UVX = "uvx"
@@ -96,6 +97,43 @@ def normalize_mcp_runtime_mode(value):
 
 def uvx_executable():
     return str(shutil.which("uvx") or "")
+
+
+def _is_python_executable_name(path):
+    name = os.path.basename(str(path or "")).lower()
+    if name.endswith(".exe"):
+        name = name[:-4]
+    if name == "python":
+        return True
+    if not name.startswith("python3"):
+        return False
+    version_suffix = name[len("python3") :]
+    return not version_suffix or all(character.isdigit() or character == "." for character in version_suffix)
+
+
+def bundled_python_executable(*, executable=None, prefix=None):
+    """Return Blender's bundled Python command, with a PATH fallback for older builds."""
+
+    candidates = [str(executable if executable is not None else sys.executable or "")]
+    python_prefix = os.path.abspath(str(prefix if prefix is not None else sys.prefix or ""))
+    bin_dir = os.path.join(python_prefix, "bin")
+    try:
+        candidates.extend(os.path.join(bin_dir, name) for name in sorted(os.listdir(bin_dir), reverse=True))
+    except OSError:
+        pass
+    candidates.append(os.path.join(python_prefix, "python.exe"))
+
+    seen = set()
+    for candidate in candidates:
+        candidate = os.path.abspath(candidate) if candidate else ""
+        normalized = os.path.normcase(candidate)
+        if not candidate or normalized in seen:
+            continue
+        seen.add(normalized)
+        executable_file = os.path.isfile(candidate) and (os.name == "nt" or os.access(candidate, os.X_OK))
+        if _is_python_executable_name(candidate) and executable_file:
+            return candidate
+    return "python"
 
 
 def source_hash_status(actual_hash=None, expected_hash=None):
@@ -224,9 +262,10 @@ def diagnostics_dict(*, bridge_url="", blender_version=""):
     }
 
 
-def diagnostics_summary():
-    source_hash = source_tree_hash()[:12]
-    runtime_note = " | Runtime stale" if LOADED_SOURCE_HASH and LOADED_SOURCE_HASH != source_tree_hash() else ""
+def diagnostics_summary(diagnostics=None):
+    diagnostics = diagnostics if diagnostics is not None else diagnostics_dict()
+    source_hash = str(diagnostics["addon_source_hash"])[:12]
+    runtime_note = " | Runtime stale" if diagnostics["addon_runtime_source_stale"] else ""
     return (
         f"{ADDON_NAME} {ADDON_VERSION} | "
         f"Bridge {BRIDGE_VERSION} | MCP {MCP_SERVER_VERSION} | Config {MCP_CONFIG_VERSION} | "

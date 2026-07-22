@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 import tempfile
 
@@ -14,7 +15,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import advanced_helpers, agent_tools, blender_compat, context_bundle, live_preview, tool_dispatcher  # noqa: E402
+from claude_blender import advanced_helpers, agent_tools, blender_compat, context_bundle, live_preview, preferences, tool_dispatcher  # noqa: E402
 
 
 ADVANCED_TOOLS = {
@@ -509,6 +510,17 @@ def _run_coffee_machine_kit_exit_test(context):
 def main():
     claude_blender.register()
     context = bpy.context
+    capture_dir = tempfile.mkdtemp(prefix="agent-bridge-advanced-captures-")
+    original_get_preferences = preferences.get_preferences
+    smoke_preferences = type(
+        "_SmokePreferences",
+        (),
+        {
+            "capture_cache_dir": capture_dir,
+            "max_screenshot_bytes": 5 * 1024 * 1024,
+        },
+    )()
+    preferences.get_preferences = lambda _context: smoke_preferences
     scene = context.scene
     cube = bpy.data.objects["Cube"]
     camera = bpy.data.objects["Camera"]
@@ -2006,7 +2018,9 @@ def main():
         }
         print("smoke_advanced_helpers: ok")
     finally:
+        preferences.get_preferences = original_get_preferences
         claude_blender.unregister()
+        shutil.rmtree(capture_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":

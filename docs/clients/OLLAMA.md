@@ -26,7 +26,7 @@ Launch or configure the chosen host for Ollama, then add Blender Agent Bridge to
 Pinned `uvx` mode on macOS/Linux changes `command` to:
 
 ```json
-["uvx", "--from", "blender-bridge==0.3.0", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
+["uvx", "--from", "blender-bridge==0.3.1", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
 ```
 
 On Windows start the array with `"cmd", "/c", "uvx"`. Use Blender's copied values for the port, token, digest, and optional Sketchfab token. Other Ollama-compatible MCP hosts need the equivalent local stdio fields.

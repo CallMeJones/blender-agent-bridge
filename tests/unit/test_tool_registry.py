@@ -10,7 +10,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 from claude_blender import agent_tools, bridge_protocol, mcp_server, tool_registry  # noqa: E402
-from claude_blender.tool_registry.registry import ToolRegistry  # noqa: E402
+from claude_blender.tool_registry.registry import ToolRegistry, ToolSpec  # noqa: E402
 
 
 SNAPSHOT_PATH = os.path.join(ROOT, "tests", "snapshots", "tool_registry.json")
@@ -48,9 +48,37 @@ class ToolRegistryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Duplicate"):
             registry.register(spec)
 
+    def test_explicit_empty_output_schema_is_preserved(self):
+        spec = ToolSpec(
+            name="empty_output",
+            description="Test",
+            input_schema={},
+            contract={},
+            handler_key="empty_output",
+            order=1,
+            output_schema={},
+        )
+        self.assertEqual({}, spec.output_schema)
+
     def test_registry_outputs_are_json_serializable(self):
         json.dumps(tool_registry.definitions(), sort_keys=True)
         json.dumps(tool_registry.contracts(), sort_keys=True)
+
+    def test_registry_state_isolated_from_nested_metadata_mutation(self):
+        original_digest = tool_registry.REGISTRY.digest()
+        original_definitions = tool_registry.definitions()
+        returned_spec = tool_registry.REGISTRY.get("inspect_scene")
+
+        returned_spec.input_schema["properties"]["include_visual"]["type"] = "mutated"
+        inspect_definition = next(item for item in original_definitions if item["name"] == "inspect_scene")
+        inspect_definition["input_schema"]["properties"]["include_visual"]["type"] = "mutated"
+
+        self.assertEqual(original_digest, tool_registry.REGISTRY.digest())
+        self.assertEqual(tool_registry.TOOL_REGISTRY_DIGEST, tool_registry.REGISTRY.digest())
+        self.assertEqual(
+            "boolean",
+            tool_registry.REGISTRY.get("inspect_scene").input_schema["properties"]["include_visual"]["type"],
+        )
 
     def test_contracts_take_canonical_description_and_schemas_from_tool_specs(self):
         for spec in tool_registry.REGISTRY.specs():

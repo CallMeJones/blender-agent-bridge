@@ -23,8 +23,18 @@ DEFAULT_OUTPUT_SCHEMA = MappingProxyType(
 VALID_EXPOSURES = frozenset({"catalog", "compact_direct", "internal"})
 
 
+def _copy_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {key: _copy_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_copy_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_copy_value(item) for item in value)
+    return value
+
+
 def _copy_mapping(value: Mapping[str, Any] | None) -> dict[str, Any]:
-    return dict(value or {})
+    return {key: _copy_value(item) for key, item in (value or {}).items()}
 
 
 @dataclass(frozen=True)
@@ -45,12 +55,14 @@ class ToolSpec:
             raise ValueError("Tool name and handler_key are required")
         if self.exposure not in VALID_EXPOSURES:
             raise ValueError(f"Unsupported exposure {self.exposure!r} for {self.name}")
-        if self.output_schema is None:
-            object.__setattr__(
-                self,
-                "output_schema",
-                _copy_mapping(self.contract.get("output_schema") or DEFAULT_OUTPUT_SCHEMA),
-            )
+        output_schema = (
+            self.output_schema
+            if self.output_schema is not None
+            else self.contract.get("output_schema") or DEFAULT_OUTPUT_SCHEMA
+        )
+        object.__setattr__(self, "input_schema", _copy_mapping(self.input_schema))
+        object.__setattr__(self, "contract", _copy_mapping(self.contract))
+        object.__setattr__(self, "output_schema", _copy_mapping(output_schema))
 
     def definition(self) -> dict[str, Any]:
         return {
@@ -74,9 +86,9 @@ class ToolSpec:
         return {
             "name": self.name,
             "description": self.description,
-            "input_schema": self.input_schema,
-            "contract": self.contract,
-            "output_schema": self.output_schema,
+            "input_schema": _copy_mapping(self.input_schema),
+            "contract": _copy_mapping(self.contract),
+            "output_schema": _copy_mapping(self.output_schema),
             "handler_key": self.handler_key,
             "order": self.order,
             "groups": self.groups,
@@ -92,7 +104,7 @@ class ToolRegistry:
     def register(self, spec: ToolSpec) -> None:
         if spec.name in self._specs:
             raise ValueError(f"Duplicate Blender tool registration: {spec.name}")
-        self._specs[spec.name] = spec
+        self._specs[spec.name] = self._copy_spec(spec)
 
     def register_many(self, specs: Iterable[ToolSpec]) -> None:
         for spec in specs:
@@ -101,14 +113,29 @@ class ToolRegistry:
     def specs(self, *, include_internal: bool = True) -> tuple[ToolSpec, ...]:
         values = sorted(self._specs.values(), key=lambda spec: (spec.order, spec.name))
         if include_internal:
-            return tuple(values)
-        return tuple(spec for spec in values if spec.exposure != "internal")
+            return tuple(self._copy_spec(spec) for spec in values)
+        return tuple(self._copy_spec(spec) for spec in values if spec.exposure != "internal")
 
     def get(self, name: str) -> ToolSpec:
         try:
-            return self._specs[name]
+            return self._copy_spec(self._specs[name])
         except KeyError as exc:
             raise KeyError(f"Unknown Blender tool: {name}") from exc
+
+    @staticmethod
+    def _copy_spec(spec: ToolSpec) -> ToolSpec:
+        return ToolSpec(
+            name=spec.name,
+            description=spec.description,
+            input_schema=spec.input_schema,
+            contract=spec.contract,
+            handler_key=spec.handler_key,
+            order=spec.order,
+            groups=tuple(spec.groups),
+            exposure=spec.exposure,
+            owner=spec.owner,
+            output_schema=spec.output_schema,
+        )
 
     def definitions(self) -> list[dict[str, Any]]:
         return [spec.definition() for spec in self.specs(include_internal=False)]

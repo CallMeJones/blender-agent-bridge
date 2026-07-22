@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import re
@@ -983,6 +984,48 @@ def _normalize_tool_definition(tool):
     result.setdefault("outputSchema", GENERIC_OUTPUT_SCHEMA)
     result.setdefault("annotations", {})
     result["annotations"] = _tool_annotations(result)
+    return result
+
+
+def _client_input_schema(schema):
+    """Return a host-compatible schema while retaining canonical validation internally."""
+
+    result = copy.deepcopy(schema if isinstance(schema, dict) else {"type": "object"})
+    requirement_hints = []
+    for combiner in ("anyOf", "oneOf", "allOf"):
+        branches = result.pop(combiner, None)
+        if branches is None:
+            continue
+        if not isinstance(branches, list) or not branches:
+            raise ValueError(f"Unsupported top-level {combiner} in MCP input schema")
+        required_sets = []
+        for branch in branches:
+            if not isinstance(branch, dict) or set(branch) != {"required"}:
+                raise ValueError(f"Cannot safely flatten top-level {combiner} in MCP input schema")
+            required = branch.get("required")
+            if not isinstance(required, list) or not required or not all(isinstance(item, str) for item in required):
+                raise ValueError(f"Invalid required-property branch in top-level {combiner}")
+            required_sets.append(required)
+        if combiner == "allOf":
+            merged_required = list(result.get("required") or [])
+            for required in required_sets:
+                for name in required:
+                    if name not in merged_required:
+                        merged_required.append(name)
+            result["required"] = merged_required
+            continue
+        alternatives = [" + ".join(required) for required in required_sets]
+        qualifier = "At least one" if combiner == "anyOf" else "Exactly one"
+        requirement_hints.append(f"{qualifier} of these property sets is required: {'; '.join(alternatives)}.")
+    if requirement_hints:
+        description = str(result.get("description") or "").strip()
+        result["description"] = " ".join(part for part in (description, *requirement_hints) if part)
+    return result
+
+
+def _client_tool_definition(tool):
+    result = dict(tool if isinstance(tool, dict) else {})
+    result["inputSchema"] = _client_input_schema(result.get("inputSchema"))
     return result
 
 
@@ -2143,7 +2186,9 @@ class BlenderMCPServer:
         return arguments
 
     def tools_list(self, params=None):
-        return _page_items(self._load_tools(), params, "tools")
+        page = _page_items(self._load_tools(), params, "tools")
+        page["tools"] = [_client_tool_definition(tool) for tool in page["tools"]]
+        return page
 
     def tools_call(self, params):
         params = params or {}

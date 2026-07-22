@@ -7,7 +7,7 @@ The extension defaults to **Bundled**, which launches the pure-Python MCP server
 Select the runtime in Blender preferences before using **Copy MCP Config**. Generated `uvx` configs pin the extension version:
 
 ```text
-uvx --from blender-bridge==0.3.0 blender-bridge
+uvx --from blender-bridge==0.3.1 blender-bridge
 ```
 
 Windows configs use `cmd /c uvx ...`; macOS and Linux invoke `uvx` directly. Blender detects a missing executable and shows installation guidance but never installs software automatically. See the [client guide matrix](clients/README.md) for complete formats.
@@ -74,7 +74,9 @@ The copied config also includes safe metadata in the MCP server `env` block, suc
 
 ## Client Env Auth
 
-Poly Haven needs no API key. For Sketchfab downloads, use `Copy MCP + Sketchfab` in Blender's `Agent Bridge` sidebar, paste the token into the masked one-time dialog, replace the client config with the copied JSON, and restart or refresh the client. The token is copied into the client config only and is not saved in Blender preferences, `.blend` files, or audit logs. The normal `Copy MCP Config` path includes an empty `SKETCHFAB_API_TOKEN` field as a manual fallback.
+Poly Haven needs no API key. For Sketchfab downloads, expand **Advanced** in Blender's `Agent Bridge` sidebar, use `Copy Config with Sketchfab`, paste the token into the masked one-time dialog, replace the client config with the copied JSON, and restart or refresh the client. The token is copied into the client config only and is not saved in Blender preferences, `.blend` files, or audit logs. The normal `Copy MCP Config` path includes an empty `SKETCHFAB_API_TOKEN` field as a manual fallback.
+
+External asset downloads connect directly instead of using system HTTP proxies. This keeps DNS validation and the connected destination under the same security check, but networks that require an outbound proxy must allow direct access to the provider/CDN or downloads will fail with a connection error.
 
 OAuth is a future improvement; the current supported path is `SKETCHFAB_API_TOKEN`, with `BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN` as a bridge-specific alias.
 
@@ -122,7 +124,7 @@ Some clients cache MCP tool lists, server paths, or environment values. After in
 After updating, use this quick checklist:
 
 1. Restart Blender or disable/enable the add-on.
-2. Press `Start Bridge`.
+2. Press `Start`.
 3. Press `Copy MCP Config`.
 4. Replace the old MCP client config.
 5. Refresh or restart the MCP client.
@@ -316,7 +318,7 @@ MCP tools are model-controlled, so the external client must make tool use visibl
 - Live helper tools mutate the scene through preview rollback.
 - Generated arbitrary Python is normally staged with `draft_script` or `draft_privileged_script` and requires approval inside Blender.
 - External `run_approved_script` calls normally include a one-time token minted by the Blender sidebar's `Approve External Run` action. Tokens are short-lived, bound to the current pending script text, and consumed after one call.
-- For iterative sessions, the Blender sidebar can turn session script trust on or off. While active, `draft_script` automatically runs non-privileged scripts after staging if static checks pass; if a static-check-passing non-privileged script is already pending when trust is enabled, Blender runs it immediately. External clients may still call `run_approved_script` without `approval_token`, or with an empty token string, for already staged non-privileged scripts. Blender reruns static checks, refuses blocked scripts, checkpoints when enabled, and records the call in the audit log. Privileged asset/project-file scripts and persistent simulation/cache bake/free operators are excluded from this broad trust path and require manual Run or a fresh one-time approval. Use `Trust Off` to revoke it. Trust is runtime-only and is cleared on add-on reload, file load, and bridge start.
+- For iterative sessions, the Blender sidebar can grant or revoke session script trust. While active, `draft_script` automatically runs non-privileged scripts after staging if static checks pass; if a static-check-passing non-privileged script is already pending when trust is enabled, Blender runs it immediately. External clients may still call `run_approved_script` without `approval_token`, or with an empty token string, for already staged non-privileged scripts. Blender reruns static checks, refuses blocked scripts, checkpoints when enabled, and records the call in the audit log. Privileged asset/project-file scripts and persistent simulation/cache bake/free operators are excluded from this broad trust path and require manual Run or a fresh one-time approval. Use **Revoke Session Trust** to turn it off. Trust is runtime-only and is cleared on add-on reload, file load, and bridge start.
 - The bridge is off until started and binds to localhost only.
 - Optional bearer token auth is available through add-on preferences.
 - MCP and bridge tool calls are recorded in a local JSONL audit log in Blender's extension user-data directory by default, with `~/.claude_blender/audit.jsonl` kept as a non-extension runtime fallback. Code/token-like arguments are redacted, and the Blender sidebar can refresh/copy/open the log or clear it after confirmation.

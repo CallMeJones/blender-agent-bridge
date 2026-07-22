@@ -25,7 +25,7 @@ Put the server in the Cursor MCP settings UI or `.cursor/mcp.json`. Prefer the c
 Pinned `uvx` mode on macOS/Linux uses `"command": "uvx"` with:
 
 ```json
-"args": ["--from", "blender-bridge==0.3.0", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
+"args": ["--from", "blender-bridge==0.3.1", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
 ```
 
 On Windows, use `"command": "cmd"` and prefix args with `"/c", "uvx"`. Keep all environment fields copied by Blender, including the optional Sketchfab token.

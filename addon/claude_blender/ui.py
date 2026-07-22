@@ -439,58 +439,79 @@ class CLAUDEBLENDER_OT_undo_last(bpy.types.Operator):
         return {"FINISHED"} if "FINISHED" in result else {"CANCELLED"}
 
 
-def _draw_ask_section(layout, state, prefs):
-    ask_box = _draw_section(layout, "Bridge Control")
+def _draw_bridge_summary(layout, state):
     bridge_running = bridge_server.is_running()
-    ask_box.label(text=f"{build_info.ADDON_NAME} {build_info.ADDON_VERSION}")
-    ask_box.label(text=f"Bridge: {'On' if bridge_running else 'Off'} | MCP {build_info.MCP_SERVER_VERSION}")
+    row = layout.row(align=True)
+    row.label(
+        text="Bridge is ready" if bridge_running else "Bridge is offline",
+        icon="CHECKMARK" if bridge_running else "CANCEL",
+    )
+    if bridge_running:
+        row.operator("claude_blender.stop_bridge", text="Stop")
+    else:
+        row.operator("claude_blender.start_bridge", text="Start", icon="PLAY")
+    layout.operator("claude_blender.copy_mcp_config", text="Copy MCP Config", icon="COPYDOWN")
+
     if "Source: stale" in str(state.bridge_source_status or ""):
-        stale_box = ask_box.box()
+        stale_box = layout.box()
         stale_box.alert = True
         stale_box.label(text="Patched files are not loaded", icon="ERROR")
-        stale_box.label(text="Save the file, then reload scripts or restart Blender")
+        _draw_wrapped(stale_box, "Save the file, then reload scripts or restart Blender", width=32, max_lines=2)
         stale_box.operator("claude_blender.reload_scripts", text="Reload Scripts", icon="FILE_REFRESH")
-    bridge_row = ask_box.row(align=True)
-    if bridge_running:
-        bridge_row.operator("claude_blender.stop_bridge", text="Stop Bridge")
-    else:
-        bridge_row.operator("claude_blender.start_bridge", text="Start Bridge")
-    bridge_row.operator("claude_blender.copy_mcp_config", text="Copy MCP Config")
-    ask_box.operator("claude_blender.refresh_control_center", text="Check Runtime / Source", icon="FILE_REFRESH")
-    assets_box = ask_box.box()
-    assets_box.label(text="External Assets")
-    assets_box.label(text="Poly Haven: Ready (no API key)", icon="CHECKMARK")
-    assets_box.label(text="Sketchfab: Token needed for downloads")
-    assets_box.operator(
+
+
+def _draw_advanced_controls(layout, context, state):
+    layout.label(text="Client Setup")
+    layout.operator(
         "claude_blender.copy_mcp_config_with_sketchfab",
-        text="Copy MCP + Sketchfab",
+        text="Copy Config with Sketchfab",
         icon="COPYDOWN",
     )
-    auth_row = assets_box.row(align=True)
+
+    layout.separator()
+    layout.label(text="External Assets")
+    layout.label(text="Poly Haven ready without a key", icon="CHECKMARK")
     auth_status = external_assets.sketchfab_auth_diagnostics()
+    layout.label(
+        text="Sketchfab session token set" if auth_status.get("session_token_configured") else "Sketchfab downloads need a token",
+        icon="CHECKMARK" if auth_status.get("session_token_configured") else "INFO",
+    )
+    auth_row = layout.row(align=True)
     auth_row.operator(
         "claude_blender.set_session_sketchfab_token",
-        text="Set Session Token",
+        text="Set Session Token" if not auth_status.get("session_token_configured") else "Replace Session Token",
         icon="LOCKED" if auth_status.get("session_token_configured") else "UNLOCKED",
     )
     if auth_status.get("session_token_configured"):
         auth_row.operator("claude_blender.clear_session_sketchfab_token", text="Clear", icon="X")
-    trust_snapshot = script_runner.external_script_trust_snapshot(bpy.context, state=state)
+
+    layout.separator()
+    layout.label(text="Script Security")
+    trust_snapshot = script_runner.external_script_trust_snapshot(context, state=state)
     trust_active = trust_snapshot["active"]
     trust_status = trust_snapshot["status"]
     trust_expired = trust_snapshot["expired"]
-    ask_box.label(text=f"Script Trust: {'On' if trust_active else 'Off'}")
-    trust_row = ask_box.row(align=True)
+    layout.label(
+        text="Session trusted" if trust_active else "Approval required",
+        icon="CHECKMARK" if trust_active else "LOCKED",
+    )
     if trust_active:
-        trust_row.operator("claude_blender.revoke_external_script_trust", text="Trust Off", icon="CANCEL")
+        layout.operator("claude_blender.revoke_external_script_trust", text="Revoke Session Trust", icon="CANCEL")
     else:
-        trust = trust_row.operator("claude_blender.approve_external_script_trust", text="Trust On", icon="CHECKMARK")
+        trust = layout.operator("claude_blender.approve_external_script_trust", text="Trust This Session", icon="CHECKMARK")
         trust.session_trust = True
         trust.ttl_seconds = script_runner.EXTERNAL_TRUST_TTL_SECONDS
         if trust_expired:
-            trust_row.operator("claude_blender.revoke_external_script_trust", text="Clear Expired", icon="TRASH")
+            layout.operator("claude_blender.revoke_external_script_trust", text="Clear Expired Trust", icon="TRASH")
     if trust_status != script_runner.NO_EXTERNAL_TRUST_STATUS:
-        _draw_field(ask_box, "Script Trust", trust_status, width=44, max_lines=2)
+        _draw_wrapped(layout, trust_status, width=44, max_lines=2)
+
+    layout.separator()
+    layout.label(text="Diagnostics")
+    layout.label(text=f"Add-on {build_info.ADDON_VERSION}  |  MCP {build_info.MCP_SERVER_VERSION}")
+    layout.operator("claude_blender.refresh_control_center", text="Check Runtime / Source", icon="FILE_REFRESH")
+    if state.bridge_source_status:
+        _draw_wrapped(layout, state.bridge_source_status, width=44, max_lines=2)
 
 
 def _draw_preview_manifest_section(layout, state):
@@ -1105,6 +1126,7 @@ def _copy_mcp_config_to_clipboard(context, *, sketchfab_api_token=""):
         url,
         token=token,
         sketchfab_api_token=sketchfab_api_token,
+        command=build_info.bundled_python_executable(),
         launch_mode=launch_mode,
     )
     context.window_manager.clipboard = json.dumps(config, indent=2)
@@ -1246,10 +1268,24 @@ class CLAUDEBLENDER_PT_sidebar(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         state = context.scene.claude_blender
-        prefs = _prefs(context)
 
-        _draw_ask_section(layout, state, prefs)
+        # Keep the default surface limited to connection and pending decisions.
+        # Setup, credentials, trust, and diagnostics belong in the closed child panel.
+        _draw_bridge_summary(layout, state)
         _draw_action_center(layout, state)
+
+
+class CLAUDEBLENDER_PT_advanced(bpy.types.Panel):
+    bl_idname = "CLAUDEBLENDER_PT_advanced"
+    bl_label = "Advanced"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Agent Bridge"
+    bl_parent_id = "CLAUDEBLENDER_PT_sidebar"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        _draw_advanced_controls(self.layout, context, context.scene.claude_blender)
 
 
 classes = (
@@ -1287,6 +1323,7 @@ classes = (
     CLAUDEBLENDER_OT_set_session_sketchfab_token,
     CLAUDEBLENDER_OT_clear_session_sketchfab_token,
     CLAUDEBLENDER_PT_sidebar,
+    CLAUDEBLENDER_PT_advanced,
 )
 
 

@@ -175,10 +175,11 @@ class _FakeOfflineBpy:
 
 
 class _FakeDownloadResponse:
-    def __init__(self, body, status):
+    def __init__(self, body, status, headers=None):
         self._body = bytes(body)
         self._offset = 0
         self.status = int(status)
+        self.headers = dict(headers or {})
 
     def __enter__(self):
         return self
@@ -465,6 +466,7 @@ def main():
 
         original_urlopen = external_assets._urlopen_external
         original_backoff = external_assets.DOWNLOAD_RETRY_BACKOFF_SECONDS
+        original_max_download_bytes = external_assets.MAX_DOWNLOAD_BYTES
         try:
             external_assets.DOWNLOAD_RETRY_BACKOFF_SECONDS = 0
             resume_ranges = []
@@ -531,9 +533,43 @@ def main():
             assert retried["ok"] is True, retried
             assert retried["attempts"] == 2, retried
             assert retry_calls == ["", ""], retry_calls
+
+            external_assets.MAX_DOWNLOAD_BYTES = 4
+
+            def _oversized_urlopen(_request, *, timeout=60):
+                return _FakeDownloadResponse(b"12345", 200, {"Content-Length": "5"})
+
+            external_assets._urlopen_external = _oversized_urlopen
+            oversized_path = os.path.join(cache_dir, "oversized.bin")
+            oversized = external_assets._download_file(
+                "https://download.example.invalid/oversized.bin",
+                oversized_path,
+            )
+            assert oversized["ok"] is False, oversized
+            assert oversized["error_type"] == "download_size_limit_exceeded", oversized
+            assert not os.path.exists(oversized_path), oversized
+            assert not os.path.exists(f"{oversized_path}.part"), oversized
+
+            external_assets.MAX_DOWNLOAD_BYTES = 10
+
+            def _expected_size_urlopen(_request, *, timeout=60):
+                return _FakeDownloadResponse(b"123456", 200)
+
+            external_assets._urlopen_external = _expected_size_urlopen
+            expected_size_path = os.path.join(cache_dir, "expected-size.bin")
+            expected_size_failure = external_assets._download_file(
+                "https://download.example.invalid/expected-size.bin",
+                expected_size_path,
+                expected_size=5,
+            )
+            assert expected_size_failure["ok"] is False, expected_size_failure
+            assert expected_size_failure["error_type"] == "download_size_limit_exceeded", expected_size_failure
+            assert not os.path.exists(expected_size_path), expected_size_failure
+            assert not os.path.exists(f"{expected_size_path}.part"), expected_size_failure
         finally:
             external_assets._urlopen_external = original_urlopen
             external_assets.DOWNLOAD_RETRY_BACKOFF_SECONDS = original_backoff
+            external_assets.MAX_DOWNLOAD_BYTES = original_max_download_bytes
             external_assets._download_file = _fake_download_file
 
         unsafe_zip = os.path.join(cache_dir, "unsafe.zip")

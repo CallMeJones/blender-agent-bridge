@@ -12034,6 +12034,7 @@ def create_lookdev_turntable_review(
     resolution_x=320,
     resolution_y=240,
     distance_factor=2.6,
+    capture_dir=None,
     label="Create look-dev turntable review",
 ):
     """Create a bounded look-dev/turntable setup and render review evidence."""
@@ -12100,6 +12101,7 @@ def create_lookdev_turntable_review(
             distance_factor=distance_factor,
             camera_name=f"{setup_name} Inspection Camera",
             note=f"Look-dev turntable review for {target.name}",
+            capture_dir=capture_dir,
         )
         validation = _validate_inspection_artifacts(inspection_result.get("inspection_render") or {})
 

@@ -2,6 +2,8 @@
 
 For user-facing install instructions, start with [INSTALL_FROM_GITHUB.md](INSTALL_FROM_GITHUB.md). This file is the maintainer checklist behind that install story.
 
+The canonical go/no-go status for the next public launch is [LAUNCH_CHECKLIST.md](LAUNCH_CHECKLIST.md). Keep launch status there; use this document for the detailed build and verification commands.
+
 ## Build
 
 From the repository root:
@@ -142,29 +144,6 @@ blender --online-mode --command extension install -s -e claude_blender
 blender --online-mode --command extension list -s
 ```
 
-## Release Checklist
+## Go/No-Go Checklist
 
-- Confirm `blender_manifest.toml` `version` matches `CHANGELOG.md`.
-- Confirm `pyproject.toml`, `blender-bridge --version`, and generated `uvx --from blender-bridge==<version>` configs match the extension version.
-- Confirm PyPI Trusted Publishing is configured for the `pypi` GitHub environment; do not add a long-lived API token.
-- Run `python tests\smoke_release_consistency.py`.
-- After GitHub Pages deploys, optionally run `$env:BLENDER_AGENT_BRIDGE_LIVE_PAGES_SMOKE='1'; python tests\smoke_release_consistency.py` to verify the live repository index advertises the current version and that its hosted ZIP matches the advertised SHA-256 hash.
-- Run `blender --command extension validate addon\claude_blender`.
-- Build the zip and SHA-256 sidecar with Blender's official extension builder.
-- Run `blender --command extension validate dist\claude_blender-<version>.zip`.
-- Confirm the generated zip includes `LICENSE` at the package root.
-- Confirm `python tests\smoke_release_artifact_identity.py` passes after generating `dist/` and `public/` from the same archive.
-- Confirm the tag workflow's `smoke_published_release_identity.py` gate passes after Pages and the GitHub Release are public.
-- Install the zip into a clean Blender profile.
-- Verify the GitHub Pages extension repository install path from a clean temporary Blender profile.
-- Run `python scripts\installed_extension_live_smoke.py --blender "<path-to-blender>"` to verify the clean installed extension's clipboard config, memory-only Sketchfab token lifecycle, imported-object viewport focus and Material Preview, External Bridge, live helper workflow, MCP stdio tools, and viewport/playblast evidence.
-- Confirm project-local or fallback capture storage behaves as documented.
-- Review `SECURITY.md`, `PRIVACY.md`, and declared manifest permissions.
-- Scan the zip for secrets, generated logs, checkpoints, screenshots, playblast frame sequences, caches, and private `.blend` files.
-
-## Community Launch Checklist
-
-- Enable GitHub Discussions after the release and create **Announcements**, **Help**, **Ideas**, and **Show and Tell** categories. Repository discussion form templates are checked in, but enabling the provider setting remains a maintainer action.
-- Promote still-relevant tasks from [good first issue candidates](GOOD_FIRST_ISSUES.md) into GitHub issues with the `good first issue` label.
-- Review showcase submissions for permissions, provenance, secrets, and useful workflow detail before adding them to [the curated showcase](SHOWCASE.md).
-- Keep support in GitHub Discussions and issues initially. Reconsider Discord only after at least ten distinct support or contributor conversations in one month show recurring demand for synchronous help.
+Use [LAUNCH_CHECKLIST.md](LAUNCH_CHECKLIST.md) for the canonical release, security, GitHub, community, announcement, and post-launch checklist. Do not maintain a second status list here.

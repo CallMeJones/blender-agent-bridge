@@ -26,7 +26,7 @@ Pinned `uvx` mode on macOS or Linux:
 ```toml
 [mcp_servers.blender_agent_bridge]
 command = "uvx"
-args = ["--from", "blender-bridge==0.3.0", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
+args = ["--from", "blender-bridge==0.3.1", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
 
 [mcp_servers.blender_agent_bridge.env]
 BLENDER_BRIDGE_TOKEN = "<bridge-token>"

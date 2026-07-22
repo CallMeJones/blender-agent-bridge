@@ -10,7 +10,7 @@ Current project snapshot, checked on 2026-07-19:
 - Canonical registry inventory: 186 Blender tool contracts across eleven explicit domain modules.
 - Normal agent catalog inventory: 185 tool definitions; 29 are exposed directly in compact mode.
 - Intentional catalog difference: `run_approved_script` is a dispatcher path for external approval/trust execution, but it is not exposed in the normal agent helper catalog.
-- The 0.3.0 release candidate was verified on 2026-07-20 with `compileall`, the conventional unit and pure-Python gates, and the complete world-model compatibility smoke on Blender 4.2.0, 4.5.0, and 5.1.2 for Windows. The clean installed-extension interactive smoke passed on Blender 5.1.2; tagged CI repeats it under Xvfb on all three supported release lines.
+- The 0.3.1 release candidate was verified on 2026-07-22 with `compileall`, 51 unit tests, 13 pure-Python gates, the complete 19-test background suite, and the clean installed-extension interactive smoke on official Windows builds of Blender 4.2.0, 4.5.0, and 5.1.2. Tagged CI repeats the same Blender matrix under Xvfb on Linux.
 
 ## How To Ask Codex To Run This
 
@@ -136,6 +136,7 @@ $BlenderTests = @(
   "tests\smoke_safe_editing_helpers.py",
   "tests\smoke_script_runner.py",
   "tests\smoke_tool_selection.py",
+  "tests\smoke_ui_layout.py",
   "tests\smoke_world_model.py"
 )
 
@@ -241,7 +242,7 @@ Manual setup:
 1. Open Blender with the tested extension installed or linked.
 2. Start from factory startup or a generated test scene.
 3. In the 3D View sidebar, open `Agent Bridge`.
-4. Press `Start Bridge`.
+4. Press `Start`.
 5. Press `Copy MCP Config`.
 6. Restart or refresh the MCP client after replacing its config.
 
@@ -874,7 +875,7 @@ Required negative cases:
 - `open_blend_file`, `create_new_blender_project`, and save-as/copy refuse unconfirmed paths.
 - Sketchfab token arguments are redacted from logs and not written to preferences.
 - Render child processes do not inherit `BLENDER_BRIDGE_TOKEN` or `BLENDER_BRIDGE_URL`.
-- Trust Off/reload/file-load/bridge-start revokes trust and tokenless `run_approved_script` fails afterward.
+- Revoke Session Trust/reload/file-load/bridge-start revokes trust and tokenless `run_approved_script` fails afterward.
 
 ## Phase 9: Coverage Gap Audit
 

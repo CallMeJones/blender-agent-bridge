@@ -25,7 +25,7 @@ The safest path is **Copy MCP Config** in Blender and replacing the complete `bl
 Pinned `uvx` mode on macOS/Linux changes the command to `uvx` and args to:
 
 ```json
-["--from", "blender-bridge==0.3.0", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
+["--from", "blender-bridge==0.3.1", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
 ```
 
 On Windows use `"command": "cmd"` and prefix the args with `"/c", "uvx"`. Claude Code can also register the copied JSON with `claude mcp add-json blender_agent_bridge '<json>'`. Preserve the generated environment values and optional Sketchfab token.

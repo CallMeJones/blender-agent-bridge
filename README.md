@@ -28,8 +28,8 @@ Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets
    https://callmejones.github.io/blender-agent-bridge/index.json
    ```
 
-3. Enable the extension, open the 3D View sidebar, find `Agent Bridge`, and press `Start Bridge`.
-4. Keep the default **Bundled** runtime, or select **uvx / PyPI** if you want a path-independent MCP process. Press `Copy MCP`, paste the generated config into your client, then refresh or restart it.
+3. Enable the extension, open the 3D View sidebar, find `Agent Bridge`, and press `Start`.
+4. Keep the default **Bundled** runtime, or select **uvx / PyPI** if you want a path-independent MCP process. Press `Copy MCP Config`, paste the generated config into your client, then refresh or restart it.
 5. Ask the client:
 
    ```text
@@ -44,14 +44,14 @@ Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets
 
 Live helper edits stay pending in Blender until you use `Commit`, `Revert`, or Blender undo. For Sketchfab downloads/imports, add `SKETCHFAB_API_TOKEN` to the copied MCP config `env` block before restarting the MCP client. For generated Python, use Blender's `Run`/`Reject` controls or turn on session script trust from the sidebar. Custom asset/project-file scripts use `draft_privileged_script`, require a path/URL/action manifest for user review and audit, and never auto-run under normal script trust. The privileged manifest is not a filesystem or network sandbox.
 
-Bundled mode remains the zero-install default. Optional `uvx / PyPI` mode requires [`uv`](https://docs.astral.sh/uv/getting-started/installation/) and generates an exact version pin such as `uvx --from blender-bridge==0.3.0 blender-bridge`. Both modes expose the same registry and safety contracts; the protocol and registry digest handshake rejects incompatible combinations. See the [client guide matrix](docs/clients/README.md) for client- and OS-specific setup.
+Bundled mode remains the zero-install default. Optional `uvx / PyPI` mode requires [`uv`](https://docs.astral.sh/uv/getting-started/installation/) and generates an exact version pin such as `uvx --from blender-bridge==0.3.1 blender-bridge`. Both modes expose the same registry and safety contracts; the protocol and registry digest handshake rejects incompatible combinations. See the [client guide matrix](docs/clients/README.md) for client- and OS-specific setup.
 
 ## After Updates
 
 Some MCP clients cache server paths, source hashes, and tool lists. After updating the extension:
 
 1. Restart Blender or disable/enable `Blender Agent Bridge`.
-2. Open the `Agent Bridge` sidebar panel and press `Start Bridge`.
+2. Open the `Agent Bridge` sidebar panel and press `Start`.
 3. Press `Copy MCP Config`.
 4. Replace the client config with the copied config.
 5. Refresh or restart the MCP client.
@@ -72,7 +72,7 @@ AI agents are getting good at using tools, but Blender needs guardrails. This br
 - Blender stays the execution layer: scene state, viewport evidence, preview changes, approvals, checkpoints, and local resources.
 - The external client stays the agent host: model connection, conversation memory, provider account, planning, and user chat.
 - Generated Python is not the default path. Agents get structured helpers first, and arbitrary scripts stay approval-gated unless the user grants runtime session trust.
-- The Blender sidebar includes a Bridge Control Center for source-hash freshness, stale MCP-client hints, active/last operation state, audit events, live-preview rollback manifests, and latest visual evidence resources.
+- The default Blender sidebar stays focused on bridge status/start-stop, copying MCP config, and pending script or preview decisions. Optional client setup, external assets, temporary script trust, and source diagnostics live in the collapsed **Advanced** panel.
 - Advanced helper paths include bounded procedural object kits and directed animation shot templates before custom Python fallback.
 
 ## Showcase: Egypt Dogfight
@@ -138,14 +138,14 @@ Best update-friendly path: add the GitHub Pages extension repository in Blender.
 
 3. Sync/update the repository, search for `Blender Agent Bridge`, and install it.
 4. Enable `Blender Agent Bridge`.
-5. Open the 3D View sidebar, find `Agent Bridge`, then use `Start Bridge` and `Copy MCP`.
+5. Open the 3D View sidebar, find `Agent Bridge`, then use `Start` and `Copy MCP Config`.
 
 Manual fallback: download the packaged ZIP from the latest GitHub Release.
 
 1. Open the [latest GitHub release](https://github.com/CallMeJones/blender-agent-bridge/releases/latest).
 2. Download `claude_blender-<version>.zip` from the release assets.
 3. In Blender, open `Edit > Preferences > Get Extensions`, use `Install from Disk`, and choose the downloaded ZIP.
-4. Enable `Blender Agent Bridge`, then use `Start Bridge` and `Copy MCP`.
+4. Enable `Blender Agent Bridge`, then use `Start` and `Copy MCP Config`.
 
 Do not install GitHub's generated "Source code" ZIP as the Blender extension. Use the release asset or the remote extension repository.
 
@@ -157,7 +157,7 @@ Poly Haven discovery and imports do not need a token. Sketchfab public search is
 
 The easiest setup is in Blender's `Agent Bridge` sidebar:
 
-1. Press `Copy MCP + Sketchfab`.
+1. Expand **Advanced** and press `Copy Config with Sketchfab`.
 2. Paste the Sketchfab API token into the masked one-time dialog.
 3. Confirm to copy a complete MCP config, replace the old client config, then restart or refresh the client.
 
@@ -190,12 +190,12 @@ flowchart LR
   bridge --> scripts["Approval-gated Python"]
   helpers --> preview["Live preview transaction"]
   preview --> commit["Commit / Revert / Undo"]
-  scripts --> approve["Run / Reject / Trust On/Off"]
+  scripts --> approve["Run / Reject / Trust / Revoke"]
 ```
 
 The MCP surface is compact by default, so clients do not need to load the whole helper catalog into prompt context. They get a small direct surface for status, scene listing, `.blend` diagnostics, external asset discovery/jobs, animation workflows, and async render jobs, plus `blender_tool_catalog` / `search_blender_tools` to search compact summaries. Fetch one schema only when needed with `get_blender_tool_schema`, then call it through `invoke_blender_tool`. When a result includes `guardrail_warnings`, treat them as routing and recovery hints before retrying direct fallback tools.
 
-Some MCP clients cache tool lists and server configs. After installing a new ZIP, reloading the add-on, or pressing `Copy MCP`, replace the old client config and refresh or restart that MCP client.
+Some MCP clients cache tool lists and server configs. After installing a new ZIP, reloading the add-on, or pressing `Copy MCP Config`, replace the old client config and refresh or restart that MCP client.
 
 See [docs/EXTERNAL_BRIDGE_MCP.md](docs/EXTERNAL_BRIDGE_MCP.md) for setup and troubleshooting.
 
@@ -314,7 +314,8 @@ Run Blender-background smoke tests when Blender is available:
 - [docs/SAFETY_MODEL.md](docs/SAFETY_MODEL.md) - approval, preview, script, and bridge safety rules.
 - [docs/EXTERNAL_BRIDGE_MCP.md](docs/EXTERNAL_BRIDGE_MCP.md) - localhost bridge and MCP server.
 - [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) - comprehensive automated testing runbook for all feature and tool surfaces.
-- [docs/RELEASE.md](docs/RELEASE.md) - release build and verification checklist.
+- [docs/LAUNCH_CHECKLIST.md](docs/LAUNCH_CHECKLIST.md) - canonical public-beta launch status and remaining gates.
+- [docs/RELEASE.md](docs/RELEASE.md) - release build and verification commands.
 - [CONTRIBUTING.md](CONTRIBUTING.md) - contribution workflow, verification, and licensing terms.
 - [SUPPORT.md](SUPPORT.md) - support scope and where to ask for help.
 

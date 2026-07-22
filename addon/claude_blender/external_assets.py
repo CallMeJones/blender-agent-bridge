@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import hashlib
 import calendar
+import http.client
 import ipaddress
 import os
 import re
@@ -46,6 +47,7 @@ SKETCHFAB_BASE_URL = _env_url("BLENDER_AGENT_BRIDGE_SKETCHFAB_BASE_URL", "https:
 USER_AGENT = "BlenderAgentBridge/0.1 (+https://github.com/CallMeJones/blender-agent-bridge)"
 DOWNLOAD_RETRY_COUNT = 2
 DOWNLOAD_RETRY_BACKOFF_SECONDS = 0.5
+MAX_DOWNLOAD_BYTES = 4 * 1024 * 1024 * 1024
 MAX_ZIP_MEMBER_COUNT = 20_000
 MAX_ZIP_EXTRACTED_BYTES = 4 * 1024 * 1024 * 1024
 MAX_ZIP_MEMBER_BYTES = 2 * 1024 * 1024 * 1024
@@ -226,22 +228,81 @@ def _external_url_validation_error(url):
     if host == "localhost" or host.endswith(".localhost"):
         return "External asset URL resolves to a local destination"
 
-    addresses = []
     try:
-        addresses.append(ipaddress.ip_address(host))
+        address = ipaddress.ip_address(host)
     except ValueError:
         try:
-            resolved = socket.getaddrinfo(host, port or 443, type=socket.SOCK_STREAM)
+            _validated_address_infos(host, port or 443)
+        except ValueError as exc:
+            return str(exc)
         except OSError:
             return "External asset URL host could not be resolved safely"
-        for item in resolved:
-            try:
-                addresses.append(ipaddress.ip_address(item[4][0]))
-            except (IndexError, TypeError, ValueError):
-                continue
-    if any(not address.is_global for address in addresses):
+        return ""
+    if not address.is_global:
         return "External asset URL resolves to a non-public network destination"
     return ""
+
+
+def _validated_address_infos(host, port):
+    resolved = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    validated = []
+    for family, socktype, proto, canonname, sockaddr in resolved:
+        try:
+            address = ipaddress.ip_address(sockaddr[0])
+        except (IndexError, TypeError, ValueError):
+            continue
+        if not address.is_global:
+            raise ValueError("External asset URL resolves to a non-public network destination")
+        validated.append((family, socktype, proto, canonname, sockaddr))
+    if not validated:
+        raise ValueError("External asset URL host could not be resolved safely")
+    return validated
+
+
+def _connect_validated_socket(host, port, *, timeout, source_address=None):
+    """Resolve once, validate every answer, then connect to a selected numeric address."""
+
+    addresses = _validated_address_infos(host, port)
+    last_error = None
+    for family, socktype, proto, _canonname, sockaddr in addresses:
+        candidate = None
+        try:
+            candidate = socket.socket(family, socktype, proto)
+            if timeout is not socket._GLOBAL_DEFAULT_TIMEOUT:
+                candidate.settimeout(timeout)
+            if source_address:
+                candidate.bind(source_address)
+            candidate.connect(sockaddr)
+            return candidate
+        except OSError as exc:
+            last_error = exc
+            if candidate is not None:
+                candidate.close()
+    if last_error is not None:
+        raise last_error
+    raise OSError("External asset URL has no connectable public address")
+
+
+class _ValidatedHTTPSConnection(http.client.HTTPSConnection):
+    def connect(self):
+        if self._tunnel_host:
+            raise OSError("External asset HTTPS proxy tunnels are not supported")
+        raw_socket = _connect_validated_socket(
+            self.host,
+            self.port,
+            timeout=self.timeout,
+            source_address=self.source_address,
+        )
+        try:
+            self.sock = self._context.wrap_socket(raw_socket, server_hostname=self.host)
+        except Exception:
+            raw_socket.close()
+            raise
+
+
+class _ValidatedHTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, request):
+        return self.do_open(_ValidatedHTTPSConnection, request, context=self._context)
 
 
 class _ExternalAssetRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -261,7 +322,11 @@ def _urlopen_external(request, *, timeout):
     error = _external_url_validation_error(url)
     if error:
         raise ValueError(error)
-    opener = urllib.request.build_opener(_ExternalAssetRedirectHandler())
+    opener = urllib.request.build_opener(
+        urllib.request.ProxyHandler({}),
+        _ValidatedHTTPSHandler(),
+        _ExternalAssetRedirectHandler(),
+    )
     return opener.open(request, timeout=timeout)
 
 
@@ -423,10 +488,66 @@ def _emit_download_progress(progress_callback, payload):
         pass
 
 
+class _DownloadSizeLimitError(ValueError):
+    pass
+
+
+def _remove_download_file(path):
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+    except OSError:
+        pass
+
+
+def _response_download_size(response, *, partial_size, resumed):
+    headers = getattr(response, "headers", None)
+    if headers is None:
+        return 0
+    content_range = str(headers.get("Content-Range", "") or "")
+    match = re.search(r"/(\d+)$", content_range)
+    if match:
+        return int(match.group(1))
+    try:
+        content_length = int(headers.get("Content-Length", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+    return partial_size + content_length if resumed else content_length
+
+
+def _download_size_failure(url, destination, partial_path, *, message, expected_size=0, attempts=0, resumed=False, http_status=0):
+    _remove_download_file(partial_path)
+    _remove_download_file(destination)
+    return {
+        "ok": False,
+        "message": message,
+        "url": str(url),
+        "path": destination,
+        "partial_path": partial_path,
+        "expected_size": int(expected_size or 0),
+        "max_download_bytes": MAX_DOWNLOAD_BYTES,
+        "attempts": attempts,
+        "resumed": resumed,
+        "http_status": http_status,
+        "error_type": "download_size_limit_exceeded",
+    }
+
+
 def _download_file(url, destination, *, expected_md5="", expected_size=None, headers=None, timeout=60, progress_callback=None):
     os.makedirs(os.path.dirname(destination), exist_ok=True)
     expected_size_value = _expected_size_int(expected_size)
     partial_path = f"{destination}.part"
+    if expected_size_value > MAX_DOWNLOAD_BYTES:
+        return _download_size_failure(
+            url,
+            destination,
+            partial_path,
+            message=f"Expected download size exceeds the {MAX_DOWNLOAD_BYTES}-byte safety limit",
+            expected_size=expected_size_value,
+        )
+    download_limit = min(MAX_DOWNLOAD_BYTES, expected_size_value) if expected_size_value else MAX_DOWNLOAD_BYTES
+    if os.path.exists(destination) and os.path.getsize(destination) > download_limit:
+        _remove_download_file(destination)
     cached = _cached_file_valid(destination, expected_md5=expected_md5, expected_size=expected_size_value or None)
     if cached:
         size = os.path.getsize(destination)
@@ -449,11 +570,8 @@ def _download_file(url, destination, *, expected_md5="", expected_size=None, hea
             os.remove(destination)
         except OSError:
             pass
-    if os.path.exists(partial_path) and expected_size_value and os.path.getsize(partial_path) > expected_size_value:
-        try:
-            os.remove(partial_path)
-        except OSError:
-            pass
+    if os.path.exists(partial_path) and os.path.getsize(partial_path) > download_limit:
+        _remove_download_file(partial_path)
 
     resumed = False
     attempts = 0
@@ -482,6 +600,15 @@ def _download_file(url, destination, *, expected_md5="", expected_size=None, hea
                     mode = "wb"
                     if partial_size and http_status == 200:
                         resumed = False
+                advertised_size = _response_download_size(
+                    response,
+                    partial_size=partial_size if mode == "ab" else 0,
+                    resumed=mode == "ab",
+                )
+                if advertised_size > download_limit:
+                    raise _DownloadSizeLimitError(
+                        f"Server advertised {advertised_size} bytes, above the {download_limit}-byte download limit"
+                    )
                 with open(partial_path, mode) as handle:
                     bytes_downloaded = partial_size if mode == "ab" else 0
                     _emit_download_progress(
@@ -501,6 +628,10 @@ def _download_file(url, destination, *, expected_md5="", expected_size=None, hea
                         chunk = response.read(1024 * 1024)
                         if not chunk:
                             break
+                        if bytes_downloaded + len(chunk) > download_limit:
+                            raise _DownloadSizeLimitError(
+                                f"Download exceeded the {download_limit}-byte limit while streaming"
+                            )
                         handle.write(chunk)
                         bytes_downloaded += len(chunk)
                         _emit_download_progress(
@@ -518,6 +649,17 @@ def _download_file(url, destination, *, expected_md5="", expected_size=None, hea
                         )
             os.replace(partial_path, destination)
             break
+        except _DownloadSizeLimitError as exc:
+            return _download_size_failure(
+                url,
+                destination,
+                partial_path,
+                message=f"Download rejected for {destination}: {exc}",
+                expected_size=expected_size_value,
+                attempts=attempts,
+                resumed=resumed,
+                http_status=http_status,
+            )
         except Exception as exc:
             if attempt >= max_attempts:
                 return {
@@ -537,6 +679,7 @@ def _download_file(url, destination, *, expected_md5="", expected_size=None, hea
     size = os.path.getsize(destination)
     md5 = _md5_file(destination) if os.path.exists(destination) else ""
     if expected_size_value and size != expected_size_value:
+        _remove_download_file(destination)
         return {
             "ok": False,
             "message": f"Downloaded size mismatch for {destination}",
@@ -547,8 +690,10 @@ def _download_file(url, destination, *, expected_md5="", expected_size=None, hea
             "attempts": attempts,
             "resumed": resumed,
             "http_status": http_status,
+            "error_type": "download_size_mismatch",
         }
     if expected_md5 and md5.lower() != str(expected_md5).lower():
+        _remove_download_file(destination)
         return {
             "ok": False,
             "message": f"Downloaded MD5 mismatch for {destination}",

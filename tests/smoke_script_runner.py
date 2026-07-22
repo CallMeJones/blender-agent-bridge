@@ -49,14 +49,16 @@ def main():
     os.environ["CLAUDE_BLENDER_AUDIT_LOG"] = audit_path
     claude_blender.register()
     registered = True
+    smoke_preferences = type(
+        "_SmokePreferences",
+        (),
+        {"checkpoint_dir": checkpoint_dir, "checkpoints_enabled": True},
+    )()
+    session_get_preferences = preferences.get_preferences
+    preferences.get_preferences = lambda _context: smoke_preferences
     try:
         context = bpy.context
         state = context.scene.claude_blender
-        smoke_preferences = type(
-            "_SmokePreferences",
-            (),
-            {"checkpoint_dir": checkpoint_dir, "checkpoints_enabled": True},
-        )()
         _cleanup()
 
         copied = bpy.ops.claude_blender.copy_mcp_config()
@@ -65,9 +67,12 @@ def main():
         if clipboard:
             copied_config = json.loads(clipboard)
         else:
-            copied_config = build_info.mcp_config(f"http://127.0.0.1:{bridge_server.DEFAULT_PORT}")
+            copied_config = build_info.mcp_config(
+                f"http://127.0.0.1:{bridge_server.DEFAULT_PORT}",
+                command=build_info.bundled_python_executable(),
+            )
         server_config = copied_config["mcpServers"]["blender"]
-        assert server_config["command"] == "python", server_config
+        assert server_config["command"] == build_info.bundled_python_executable(), server_config
         assert server_config["args"][0].endswith("mcp_server.py"), server_config
         assert "--bridge-url" in server_config["args"], server_config
         env = server_config["env"]
@@ -794,6 +799,7 @@ print("created", obj.name)
         _cleanup()
         print("smoke_script_runner: ok")
     finally:
+        preferences.get_preferences = session_get_preferences
         if registered:
             claude_blender.unregister()
         if old_audit_path is None:

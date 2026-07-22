@@ -4,8 +4,9 @@ Start with the top-level `README.md`, then use these deeper notes for developmen
 
 ## User And Release Guides
 
+- [LAUNCH_CHECKLIST.md](LAUNCH_CHECKLIST.md) - canonical public-beta launch status across UI, testing, compatibility, security, packaging, GitHub, and community work.
 - [INSTALL_FROM_GITHUB.md](INSTALL_FROM_GITHUB.md) - GitHub remote-repository install, manual release ZIP fallback, update steps, troubleshooting, and maintainer release smoke.
-- [RELEASE.md](RELEASE.md) - release build, GitHub Actions, GitHub Pages, and verification checklist.
+- [RELEASE.md](RELEASE.md) - release build, GitHub Actions, GitHub Pages, and detailed verification commands.
 - [TESTING_GUIDE.md](TESTING_GUIDE.md) - comprehensive automated testing runbook for feature, tool, bridge, MCP, visual, safety, and release coverage.
 - [clients/README.md](clients/README.md) - verified bundled and `uvx` setup guides for Codex, Claude, Cursor, VS Code/Cline/Roo, ChatGPT, Gemini CLI, OpenCode, and Ollama hosts.
 - [SHOWCASE.md](SHOWCASE.md) - curated community showcase and submission requirements.
