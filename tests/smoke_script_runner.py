@@ -555,7 +555,8 @@ print("created", obj.name)
         assert privileged_under_trust["requires_explicit_one_time_approval"] is False, privileged_under_trust
         assert privileged_under_trust["trust_window_auto_run_allowed"] is False, privileged_under_trust
         assert privileged_under_trust["auto_run_attempted"] is False, privileged_under_trust
-        assert "start_external_asset_job" in privileged_under_trust["recommended_tools"], privileged_under_trust
+        assert "start_external_asset_download" in privileged_under_trust["recommended_tools"], privileged_under_trust
+        assert "start_external_asset_import_job" in privileged_under_trust["recommended_tools"], privileged_under_trust
         assert not state.pending_script
         assert not os.path.exists(privileged_output_path), privileged_under_trust
         assert script_runner.external_script_trust_active(context, state=state)
