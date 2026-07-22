@@ -1410,8 +1410,8 @@ def _remove_created_data_item(context, item, warnings):
         warnings.append(f"Could not remove created {kind} {name}: {type(exc).__name__}: {exc}")
 
 
-def revert_last_created_step(context, *, allowed_types=None):
-    """Revert one creation-only step without unwinding earlier preview work."""
+def last_created_step_revertibility(*, allowed_types=None):
+    """Return whether the latest preview step can be rolled back in isolation."""
 
     transaction = current_transaction()
     if not transaction or transaction.get("status") != "pending":
@@ -1434,6 +1434,23 @@ def revert_last_created_step(context, *, allowed_types=None):
             "message": "The latest preview step has no isolated creation manifest; use scope=all",
             "latest_step_type": step_type,
         }
+    return {
+        "ok": True,
+        "message": "Latest preview step supports isolated rollback",
+        "latest_step_type": step_type,
+    }
+
+
+def revert_last_created_step(context, *, allowed_types=None):
+    """Revert one creation-only step without unwinding earlier preview work."""
+
+    revertibility = last_created_step_revertibility(allowed_types=allowed_types)
+    if not revertibility.get("ok"):
+        return revertibility
+    transaction = current_transaction()
+    step = transaction["applied_steps"][-1]
+    step_type = str(step.get("type") or "")
+    created_data = list(step.get("created_data") or [])
 
     warnings = []
     # Removing an object releases its mesh, and removing the mesh releases its

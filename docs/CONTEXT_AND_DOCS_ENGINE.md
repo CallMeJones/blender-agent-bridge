@@ -137,7 +137,7 @@ The search tool returns only top matching snippets and URLs. It never exposes th
 
 ## Context Budgeting
 
-`context_planner.py` first builds a prompt-aware request bundle. It includes the current scene, selection, active object, visual metadata, and relevant material/animation summaries when the prompt needs them. It adds a `context_plan` field that tells external clients what was included or omitted, plus a rough `ceil(chars / 4)` token estimate shown in the sidebar.
+`context_planner.py` first builds a prompt-aware request bundle. It includes the current scene, selection, active object, visual metadata, and relevant material/animation summaries when the prompt needs them. It adds a `context_plan` field that tells external clients what was included or omitted, plus a rough `ceil(chars / 4)` token estimate returned to the client.
 
 `context_budget.py` then applies hard text-size guards before context is exposed to clients:
 

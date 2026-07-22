@@ -123,7 +123,7 @@ If Blender is on `PATH`, the same commands can use `blender` instead of the full
 
 After building a release zip, install `dist/claude_blender-<version>.zip` in a clean Blender profile and verify:
 
-- The sidebar shows add-on, bridge, MCP, and config versions.
+- `blender_bridge_status` shows matching add-on, bridge, MCP, config, and source versions.
 - `Start` enables the bridge without console errors.
 - `Copy MCP Config` includes the current config metadata.
 - The MCP client sees `blender_bridge_status`, `list_scene_objects`, `run_animation_task`, `draft_script`, and `run_approved_script`, or can reach them through the compact catalog surface.

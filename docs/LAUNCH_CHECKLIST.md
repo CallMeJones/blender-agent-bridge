@@ -6,11 +6,13 @@ Target: **v0.3.1 public beta**. Version 0.3.0 proved the distribution pipeline. 
 
 Status keys: **Done** has current evidence, **Done locally** still needs remote/tag evidence, **Required** blocks launch, **Manual** needs a maintainer or provider action, and **Optional** may follow the launch.
 
+Any source, workflow, packaging, or user-facing documentation change after candidate evidence is collected invalidates the affected evidence. Rebuild from the final reviewed commit and record that commit SHA plus artifact SHA-256 before tagging.
+
 ## Launch Dashboard
 
 | Gate | Status | Exit condition |
 | --- | --- | --- |
-| Scope and user experience | Required | Compact sidebar is visually reviewed and advanced controls remain discoverable. |
+| Scope and user experience | Required | The single compact sidebar and contextual approval/revert states are visually reviewed. |
 | Code and regression tests | Done locally | Unit, pure-Python, Blender 5.1 background, and installed-extension gates pass for the candidate. |
 | Blender compatibility | Required | Blender 4.2 LTS, 4.5 LTS, and 5.1 pass in CI; newer versions remain capability-gated without an artificial maximum. |
 | Security and privacy | Required | Approval boundaries, external downloads, secrets, permissions, and packaged artifacts are reviewed. |
@@ -25,10 +27,10 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 
 - [x] **Done** — Bundled MCP remains the default; `uvx / PyPI` remains optional.
 - [x] **Done** — Public tool names, safety contracts, compact exposure, and provider-neutral architecture remain backward compatible.
-- [x] **Done** — The main sidebar is reduced to bridge status/start-stop, MCP config, and pending decisions; optional setup, assets, script trust, and diagnostics are in a collapsed **Advanced** child panel.
-- [x] **Done** — `tests/smoke_ui_layout.py` verifies the compact/offline and ready/running states plus discoverability of Advanced controls on local Blender 5.1.2 (2026-07-22).
-- [x] **Done** — Visually inspect the collapsed and expanded sidebar at normal and narrow widths in Blender 5.1.2; no clipped labels, misleading status, or hidden safety action remains.
-- [x] **Done** — Repeat the same real sidebar inspection in Blender 4.2.0 and 4.5.0; the compact controls, Advanced disclosure, session trust action, diagnostics, and labels remain readable at 1200×800 and 800×800.
+- [x] **Done** — The secondary setup/control-center panel and its dormant renderers are removed; the one remaining sidebar renders only bridge/MCP setup, active trust revocation, pending approvals, and preview commit/revert.
+- [x] **Done** — `tests/smoke_ui_layout.py` locks the exact idle, active-trust, compact script-approval, conditional rollback, one-panel, and six-setting Preferences contracts.
+- [ ] **Required** — Inspect the single sidebar and contextual script-review dialogs at normal and narrow widths in Blender 5.1.2.
+- [ ] **Required** — Repeat the same real sidebar inspection in Blender 4.2.0 and 4.5.0.
 - [ ] **Required** — Confirm a first-time user can install, start the bridge, copy a config, connect one MCP host, run the smoke prompt, and find preview commit/revert without maintainer help.
 
 ## 2. Code and Regression Gates
@@ -39,7 +41,8 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 - [x] **Done** — The copied Bundled config resolves Blender's own Python interpreter and the clean installed-extension smoke launches the packaged MCP server with that exact command.
 - [x] **Done** — Claude Code 2.1.85 started as a new isolated, non-persistent process with only the exact config copied by a clean installed extension, connected to Blender, invoked `blender_bridge_status` once, and returned the correct Blender/add-on/source status. Only that MCP server targeted the bridge.
 - [x] **Done** — All observed local test failures were resolved and the affected owner tests were rerun.
-- [x] **Done** — The final release candidate stages exactly 49 intended v0.3.1 source, workflow, policy, documentation, and test files; generated artifacts, local capture helpers, credentials, and unrelated files are excluded.
+- [ ] **Required** — Freeze the final reviewed commit, audit its exact staged scope, and record its commit SHA; generated artifacts, local capture helpers, credentials, and unrelated files must be excluded.
+- [ ] **Required** — Rebuild the official ZIP, wheel, sdist, and Pages repository from that commit, then rerun installed-extension and packaged-MCP smoke against those exact artifacts.
 
 ## 3. Compatibility
 
@@ -61,7 +64,7 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 - [x] **Done** — Negative bridge, MCP, script-analysis, project-path, external-asset, token-redaction, and trust tests pass through the unit, pure-Python, and Blender suites.
 - [x] **Done** — `blender_manifest.toml` permissions, [PRIVACY.md](../PRIVACY.md), and [SAFETY_MODEL.md](SAFETY_MODEL.md) were reviewed against the v0.3.1 behavior.
 - [x] **Done** — The official extension ZIP contains `LICENSE` and excludes repository metadata, bytecode, logs, caches, captures, checkpoints, tokens, and private `.blend` artifacts.
-- [x] **Done** — Gitleaks 8.30.1 scanned all 131 commits, the working diff, and every untracked candidate file with no leaks found. The downloaded scanner archive matched its published SHA-256 before execution.
+- [ ] **Required** — Run the secret scan against the final reviewed commit and every candidate artifact input; record the scanner version and result.
 - [x] **Done** — The clean installed-extension smoke confirms one-time external approval, token rejection and consumption, trust expiry, revoke, reload cleanup, and bridge-restart cleanup through the packaged extension.
 - [ ] **Required** — Confirm GitHub Release and Pages extension ZIPs have the same SHA-256 digest.
 
@@ -69,11 +72,11 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 
 - [x] **Done** — v0.3.0 proved Trusted Publishing, GitHub Release, Pages, repository install, and public artifact-identity verification from one tested artifact set.
 - [x] **Done** — Version 0.3.1 is consistent in the extension manifest, Python package metadata, runtime output, generated `uvx` config, client guides, and changelog. The tag is intentionally deferred until review is complete.
-- [x] **Done** — `smoke_release_consistency.py`, official Blender source/ZIP validation, wheel/sdist build, clean wheel install, MCP subprocess test, and local release/Pages artifact-identity checks pass.
+- [ ] **Required** — `smoke_release_consistency.py`, official Blender source/ZIP validation, wheel/sdist build, clean wheel install, MCP subprocess test, and local release/Pages artifact-identity checks pass for the final reviewed commit.
 - [ ] **Required** — Verify `blender-bridge` still belongs to this project on PyPI immediately before publishing.
 - [ ] **Required** — Tag only the reviewed release commit and let the release workflow publish the already-tested artifacts.
 - [ ] **Required** — Verify the public GitHub Release, PyPI package, Pages index, hosted ZIP, checksums, and installation instructions after publication.
-- [x] **Done** — The changelog and announcement draft identify the compact UI, external-download hardening, deterministic registry behavior, and resumable PyPI publication.
+- [x] **Done** — The changelog and announcement draft identify the one-panel compact UI, external-download hardening, deterministic registry behavior, and resumable PyPI publication using the final control labels.
 
 ## 6. GitHub and Community
 
@@ -92,7 +95,7 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 
 ## 7. Announcement and Launch Day
 
-- [x] **Done** — [PUBLIC_BETA_ANNOUNCEMENT.md](PUBLIC_BETA_ANNOUNCEMENT.md) is updated to the v0.3.1 facts, links, screenshots, and UI wording; public links must still be checked after the tag exists.
+- [x] **Done** — [PUBLIC_BETA_ANNOUNCEMENT.md](PUBLIC_BETA_ANNOUNCEMENT.md) is updated to the v0.3.1 facts, links, screenshots, and one-panel UI wording; public links must still be checked after the tag exists.
 - [ ] **Required** — Test every announcement link in a signed-out browser and confirm the install repository is publicly reachable.
 - [ ] **Manual** — Publish the release and wait for every required GitHub Actions job and public artifact check to pass.
 - [ ] **Manual** — Publish the announcement in GitHub Discussions **Announcements** and link it from the repository and project site.
@@ -115,16 +118,18 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 | 2026-07-22 | Complete 19-test Blender 5.1.2 background suite | Passed |
 | 2026-07-22 | Official source/ZIP validation, wheel/sdist build, clean wheel MCP subprocess, and local release/Pages artifact identity | Passed; final extension SHA-256 `0afc6f63ee145a1cecac5f08dc8a590b889764503888864de15b04874c6b68bf` |
 | 2026-07-22 | Clean installed-extension interactive smoke: clipboard config, session token, Material Preview, bridge, workflows, evidence resources, and 29-tool MCP catalog | Passed |
-| 2026-07-22 | Blender 5.1.2 sidebar review at 1200×800 and 800×800, with Advanced collapsed and expanded | Passed; final trust controls remained fully readable |
+| 2026-07-22 | Blender 5.1.2 sidebar review at 1200×800 and 800×800, with Advanced collapsed and expanded | Historical evidence for the removed two-panel layout; current one-panel UI still needs visual review |
 | 2026-07-22 | Clean installed-extension approval/trust lifecycle: wrong-token rejection, one-time consumption, expiry, revoke, reload, and bridge restart | Passed |
 | 2026-07-22 | Copied Bundled config launched the installed MCP server with Blender 5.1.2's own Python interpreter | Passed; 29-tool MCP catalog and bridge status returned successfully |
 | 2026-07-22 | Official Blender 4.2.0 and 4.5.0 portable archives checked against Blender's published SHA-256 manifests | Passed |
 | 2026-07-22 | Complete 19-test background suite on Blender 4.2.0 and 4.5.0 | Passed on both versions |
 | 2026-07-22 | Clean installed-extension smoke on Blender 4.2.0, 4.5.0, and 5.1.2: official ZIP, trust lifecycle, workflows, visual evidence, and each version's bundled Python MCP command | Passed on all three versions; each built ZIP matched `0afc6f63ee145a1cecac5f08dc8a590b889764503888864de15b04874c6b68bf` |
-| 2026-07-22 | Blender 4.2.0 and 4.5.0 sidebar review at 1200×800 and 800×800, with Advanced collapsed and expanded | Passed on both versions; controls and safety actions remained readable |
+| 2026-07-22 | Blender 4.2.0 and 4.5.0 sidebar review at 1200×800 and 800×800, with Advanced collapsed and expanded | Historical evidence for the removed two-panel layout; current one-panel UI still needs visual review |
 | 2026-07-22 | Real Claude Code 2.1.85 MCP host with strict config copied by the clean Blender 5.1.2 extension | Passed; connected, registered the tool surface, called `blender_bridge_status` exactly once, and returned Blender 5.1.2/add-on 0.3.1/source current |
 | 2026-07-22 | Final isolated-artifact PyPI preflight | `blender-bridge` still matches this project; v0.3.1 remains unpublished (must be repeated immediately before publish) |
 | 2026-07-22 | Gitleaks 8.30.1: 131-commit history, working diff, and untracked candidate files | Passed; no leaks found |
+| 2026-07-22 | Updated `smoke_ui_layout.py` after active-trust, recovery, and conditional rollback fixes on Blender 4.2.0, 4.5.0, and 5.1.2 | Passed on all three versions |
 | 2026-07-22 | Final staged release-candidate scope audit | Passed; 49 intended files, no generated artifacts or unrelated changes |
+| 2026-07-22 | Post-evidence one-panel UI and documentation changes | Previous candidate scope, package, installed-extension, secret-scan, and artifact evidence invalidated; final-commit evidence required before tag |
 
 Add evidence here only after it has run against the candidate being evaluated. A previous release proves the pipeline, not the current release contents.

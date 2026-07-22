@@ -30,12 +30,12 @@ Current implementation:
 - Normal scene-building scripts can be larger procedural payloads up to 500k characters, but oversized scripts are still blocked before execution.
 - `draft_script` treats helper overlap as advisory for normal scene-building, animation, material, transform, and setup scripts. It still refuses external asset downloads/imports, project file lifecycle operations, and persistent simulation/cache bakes.
 - `draft_privileged_script` is the elevated custom path for external asset and project-file lifecycle scripts. It requires a manifest with declared capabilities, paths, URLs, and destructive actions; it can allow filesystem/network/project-file APIs after static checks, but it never auto-runs under normal external script trust. The manifest is review/audit context for the user, not a runtime filesystem or network sandbox.
-- The default sidebar stays lean: bridge status/start-stop, MCP config, pending script approval, pending preview commit/revert, and checkpoint restore remain immediately visible. Optional asset credentials, runtime script trust, and source diagnostics are grouped in the collapsed **Advanced** panel.
+- The single sidebar panel stays lean: bridge status/start-stop, MCP config, active script-trust warning/revocation, pending script approval, and pending preview commit/revert are the only rendered sections. Full script details move into the contextual approval dialog; diagnostics and historical state remain available through bridge/tool responses.
 - Static analysis reports both declared script risk and detected risk (`low`, `medium`, `high`, or `blocked`) with risk reasons and checkpoint recommendation.
 - Execution pushes a Blender undo step when possible, saves a timestamped `.blend` checkpoint when enabled, and records stdout/errors in `Agent Bridge Script Log`.
 - Failed scripts keep their pending code, traceback, and logs available locally so the external client can inspect and stage a corrected draft.
 - External clients can normally call `run_approved_script` with a short-lived one-time token issued by the Blender UI for the current pending script.
-- Users can also grant or revoke Blender-side external script trust from the sidebar. During that runtime-only session trust, external clients may call `draft_script` and have non-privileged scripts auto-run after static checks pass, or run an already staged non-privileged script without a per-script token. Blocked scripts remain refused. Session trust lasts until **Revoke Session Trust**, add-on reload, file load, or bridge start.
+- A pending non-privileged script can grant Blender-side session trust; active trust always exposes `Revoke` in the sidebar. During that runtime-only trust, external clients may call `draft_script` and have non-privileged scripts auto-run after static checks pass, or run an already staged non-privileged script without a per-script token. Blocked scripts remain refused. Session trust lasts until `Revoke`, add-on reload, file load, or bridge start.
 
 ### Limited Autonomous
 
@@ -68,7 +68,7 @@ Defaults and boundaries:
 - External script trust does not auto-run privileged external asset/project-file scripts or persistent simulation/cache bake/free operators; those require manual Run or a fresh one-time approval token.
 - Viewport screenshots, sampled animation playblast frames, inspection renders, render thumbnails, and async render-job outputs exposed through MCP resources are local artifacts. Saved `.blend` files use a project-local `.claude_blender/captures/` folder by default, while unsaved or unwritable projects use Blender's extension user-data directory. Async render jobs launch a background Blender process from a temporary `.blend` copy and can be cancelled with `cancel_render_job` while the bridge session is tracking the process.
 - MCP search summaries, schema lookups, and tool-call results may include `guardrail_warnings` for client routing and recovery. These warnings are advisory; Blender-side path checks, approval gates, preview rollback, and static script analysis remain the enforcement layer.
-- The Blender sidebar surfaces pending safety decisions on the main panel and keeps source freshness and runtime diagnostics in the collapsed **Advanced** panel. Detailed audit, rollback, active-operation, and visual-evidence state remains available through bridge/tool responses.
+- The Blender sidebar surfaces only connection state, active trust, and pending safety decisions. Source freshness, recovery, audit, rollback, active-operation, and visual-evidence details remain available through bridge/tool responses rather than a secondary Blender panel.
 - External clients should surface tool calls clearly because MCP tools are model-controlled.
 
 ## Risk Checks

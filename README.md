@@ -42,7 +42,7 @@ Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets
    Move the selected cube up 1 Blender unit and make it red. Leave the change as a preview.
    ```
 
-Live helper edits stay pending in Blender until you use `Commit`, `Revert`, or Blender undo. For Sketchfab downloads/imports, add `SKETCHFAB_API_TOKEN` to the copied MCP config `env` block before restarting the MCP client. For generated Python, use Blender's `Run`/`Reject` controls or turn on session script trust from the sidebar. Custom asset/project-file scripts use `draft_privileged_script`, require a path/URL/action manifest for user review and audit, and never auto-run under normal script trust. The privileged manifest is not a filesystem or network sandbox.
+Live helper edits stay pending in Blender until you use `Commit`, `Revert`, or Blender undo. For Sketchfab downloads/imports, add `SKETCHFAB_API_TOKEN` to the copied MCP config `env` block before restarting the MCP client. For generated Python, use the contextual `Run Now`/`Reject` controls; a pending non-privileged script also offers `Trust Session`. Custom asset/project-file scripts use `draft_privileged_script`, require a path/URL/action manifest for user review and audit, and never auto-run under normal script trust. The privileged manifest is not a filesystem or network sandbox.
 
 Bundled mode remains the zero-install default. Optional `uvx / PyPI` mode requires [`uv`](https://docs.astral.sh/uv/getting-started/installation/) and generates an exact version pin such as `uvx --from blender-bridge==0.3.1 blender-bridge`. Both modes expose the same registry and safety contracts; the protocol and registry digest handshake rejects incompatible combinations. See the [client guide matrix](docs/clients/README.md) for client- and OS-specific setup.
 
@@ -72,7 +72,7 @@ AI agents are getting good at using tools, but Blender needs guardrails. This br
 - Blender stays the execution layer: scene state, viewport evidence, preview changes, approvals, checkpoints, and local resources.
 - The external client stays the agent host: model connection, conversation memory, provider account, planning, and user chat.
 - Generated Python is not the default path. Agents get structured helpers first, and arbitrary scripts stay approval-gated unless the user grants runtime session trust.
-- The default Blender sidebar stays focused on bridge status/start-stop, copying MCP config, and pending script or preview decisions. Optional client setup, external assets, temporary script trust, and source diagnostics live in the collapsed **Advanced** panel.
+- Blender has one deliberately small sidebar panel: bridge status/start-stop, `Copy MCP Config`, active script-trust revocation, and decisions that currently need attention. Diagnostics, manifests, audit state, captures, and asset configuration stay in bridge/tool responses instead of returning as sidebar sections.
 - Advanced helper paths include bounded procedural object kits and directed animation shot templates before custom Python fallback.
 
 ## Showcase: Egypt Dogfight
@@ -118,7 +118,7 @@ Connected agents do not get blanket access to Blender.
 | External assets | Poly Haven uses public catalog/file APIs. Sketchfab downloads/imports accept a per-call token, the MCP server environment, or a masked memory-only Blender-session token. Tokens are redacted and never written to preferences, blend files, or job metadata. |
 | Generated Python | Staged into a Text datablock and blocked until approved in Blender, unless runtime-only script trust is active. |
 | Privileged Python | Custom asset/project-file scripts require a manifest and one-time approval; normal script trust cannot auto-run them. |
-| External script trust | Optional sidebar on/off control for iterative sessions. Trust is runtime-only, session-scoped, and can be revoked. Blocked scripts remain refused. |
+| External script trust | A pending non-privileged script can offer session trust for iterative work. Trust is runtime-only, session-scoped, visibly revocable, and never bypasses blocked-script checks. |
 | Audit and status | Local redacted JSONL audit events and bridge/MCP diagnostics are available through MCP resources and status calls. |
 | MCP guardrail warnings | Advisory hints in catalog, schema, and tool results steer clients toward async jobs, queued imports, user-confirmed paths, approval gates, dry-run cleanup, preview commit/revert, and background-job polling. |
 | Model provider keys | Not stored in Blender Agent Bridge. External clients bring their own model/provider connection. |
@@ -155,13 +155,7 @@ See [docs/INSTALL_FROM_GITHUB.md](docs/INSTALL_FROM_GITHUB.md) for checksum veri
 
 Poly Haven discovery and imports do not need a token. Sketchfab public search is also tokenless, but Sketchfab model downloads/imports need an API token.
 
-The easiest setup is in Blender's `Agent Bridge` sidebar:
-
-1. Expand **Advanced** and press `Copy Config with Sketchfab`.
-2. Paste the Sketchfab API token into the masked one-time dialog.
-3. Confirm to copy a complete MCP config, replace the old client config, then restart or refresh the client.
-
-The token is placed in the copied config only. Blender Agent Bridge does not save it in add-on preferences, `.blend` files, or audit logs. The normal `Copy MCP Config` action includes an empty `SKETCHFAB_API_TOKEN` field for users who prefer to fill it in manually.
+Press `Copy MCP Config`, paste the result into your MCP client configuration, and fill its empty `SKETCHFAB_API_TOKEN` environment field before restarting or refreshing the client. Blender Agent Bridge does not save the token in add-on preferences, `.blend` files, or audit logs.
 
 Manual fallback:
 
@@ -239,7 +233,7 @@ Check whether Sketchfab auth is available in this MCP config, then search for a 
 Check the current blend-file diagnostics and autosave only if the scene is already saved to a real .blend path.
 ```
 
-Live helper changes, including external asset imports, remain pending until you use `Commit`, `Revert`, or Blender undo. Generated Python remains pending until you use `Run`, `Approve External`, `Reject`, or active session trust allows it. Privileged generated Python for custom asset/project-file work remains pending until manual Run or a fresh one-time external approval token.
+Live helper changes, including external asset imports, remain pending until you use `Commit`, `Revert`, or Blender undo. Generated Python remains pending until you use `Run Now`, `Allow Agent Once`, `Reject`, or active session trust allows it. Privileged generated Python for custom asset/project-file work remains pending until `Run Now` or a fresh one-time external approval token.
 
 ## Install From Source
 

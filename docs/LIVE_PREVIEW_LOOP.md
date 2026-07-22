@@ -12,7 +12,7 @@ Live preview should feel like this:
 2. An external agent inspects scene context and chooses safe helper calls where possible.
 3. The add-on applies each low-risk helper call immediately.
 4. Blender's viewport, timeline, and relevant UI redraw.
-5. The sidebar logs what changed and keeps `Commit`, `Revert`, and `Undo` available.
+5. The sidebar shows a compact pending summary with `Commit` and `Revert`; Blender's normal undo remains available through Blender itself.
 
 This is different from risky generated Python. Arbitrary scripts should still go through code preview and explicit approval unless the user intentionally changes the execution mode.
 
@@ -92,7 +92,7 @@ Expected implementation responsibilities:
 - Apply helper changes on the main thread.
 - Record rollback state before mutation.
 - Push undo/checkpoint state at transaction boundaries.
-- Include rollback coverage in tool results so external clients and the sidebar can show what was protected.
+- Include rollback coverage in tool results so external clients can report what was protected and the sidebar can show a compact summary.
 - Update scene/view layer state after mutation.
 - Request redraw for 3D View, Timeline, Graph Editor, Dope Sheet, and Properties areas when relevant.
 - Report success/failure back through tool results.
@@ -102,23 +102,14 @@ Expected implementation responsibilities:
 For animation edits:
 
 - Insert or update keyframes immediately.
-- Show changed frame numbers in the sidebar.
+- Return changed frame numbers in the tool result for the external client to report.
 - Optionally jump to the first changed frame.
 - Optionally play a short preview range after commit.
 - Keep revert available before the transaction is committed.
 
 ## UX Controls
 
-The sidebar should expose:
-
-- Live preview toggle.
-- Execution mode: suggest-only, approval-required, live helpers, advanced.
-- Current preview transaction status.
-- Changed objects/actions/materials list.
-- Running status/log text for live helper steps.
-- Commit button.
-- Revert button.
-- Undo last step button.
+The sidebar exposes only the current preview summary, `Commit`, full `Revert`, and—when the latest isolated asset import supports it—`Last Step`. Execution mode and safety defaults belong in Add-on Preferences; detailed manifests and logs belong in bridge/tool responses.
 
 ## Safety Boundary
 

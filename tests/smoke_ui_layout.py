@@ -12,7 +12,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import bridge_server, ui  # noqa: E402
+from claude_blender import bridge_server, live_preview, preferences, script_runner, ui  # noqa: E402
 
 
 class _FakeOperator:
@@ -20,24 +20,37 @@ class _FakeOperator:
 
 
 class _FakeLayout:
-    def __init__(self):
+    def __init__(self, *, shared=None, enabled=True):
         self.alert = False
-        self.enabled = True
-        self.labels = []
-        self.operators = []
+        self.enabled = enabled
+        shared = shared or {
+            "labels": [],
+            "operators": [],
+            "operator_enabled": [],
+            "properties": [],
+        }
+        self._shared = shared
+        self.labels = shared["labels"]
+        self.operators = shared["operators"]
+        self.operator_enabled = shared["operator_enabled"]
+        self.properties = shared["properties"]
 
     def row(self, **_kwargs):
-        return self
+        return _FakeLayout(shared=self._shared, enabled=self.enabled)
 
     def box(self):
-        return self
+        return _FakeLayout(shared=self._shared, enabled=self.enabled)
 
     def label(self, *, text="", **_kwargs):
         self.labels.append(text)
 
     def operator(self, operator_id, **_kwargs):
         self.operators.append(operator_id)
+        self.operator_enabled.append((operator_id, self.enabled))
         return _FakeOperator()
+
+    def prop(self, _owner, property_name, **_kwargs):
+        self.properties.append(property_name)
 
     def separator(self):
         return None
@@ -55,22 +68,126 @@ def main():
         state.last_script_error_summary = ""
         state.last_checkpoint_path = ""
         state.last_checkpoint_status = "No script checkpoint yet"
+        script_runner.revoke_external_script_trust_window(context)
 
-        assert ui.CLAUDEBLENDER_PT_advanced.bl_parent_id == ui.CLAUDEBLENDER_PT_sidebar.bl_idname
-        assert "DEFAULT_CLOSED" in ui.CLAUDEBLENDER_PT_advanced.bl_options
+        panels = [cls for cls in ui.classes if issubclass(cls, bpy.types.Panel)]
+        assert panels == [ui.CLAUDEBLENDER_PT_sidebar], panels
+        assert not hasattr(ui, "CLAUDEBLENDER_PT_advanced")
+        globally_discoverable = {
+            ui.CLAUDEBLENDER_OT_commit_preview,
+            ui.CLAUDEBLENDER_OT_revert_preview,
+            ui.CLAUDEBLENDER_OT_revert_last_preview_step,
+            ui.CLAUDEBLENDER_OT_revoke_external_script_trust,
+            ui.CLAUDEBLENDER_OT_start_bridge,
+            ui.CLAUDEBLENDER_OT_stop_bridge,
+            ui.CLAUDEBLENDER_OT_copy_mcp_config,
+        }
+        for cls in (candidate for candidate in ui.classes if issubclass(candidate, bpy.types.Operator)):
+            options = getattr(cls, "bl_options", set())
+            if cls in globally_discoverable:
+                assert "INTERNAL" not in options, cls
+            else:
+                assert "INTERNAL" in options, cls
+        for removed_renderer in (
+            "_draw_advanced_controls",
+            "_draw_preview_manifest_section",
+            "_draw_audit_section",
+            "_draw_visual_evidence_section",
+            "_draw_status_section",
+        ):
+            assert not hasattr(ui, removed_renderer), removed_renderer
 
         # The exact operator sets are a product boundary: adding setup or
         # diagnostics to the default panel must require an intentional test change.
         for running, expected_status, expected_operators in (
-            (False, "Bridge is offline", {"claude_blender.start_bridge", "claude_blender.copy_mcp_config"}),
-            (True, "Bridge is ready", {"claude_blender.stop_bridge", "claude_blender.copy_mcp_config"}),
+            (False, "Bridge is offline", ["claude_blender.start_bridge", "claude_blender.copy_mcp_config"]),
+            (True, "Bridge is ready", ["claude_blender.stop_bridge", "claude_blender.copy_mcp_config"]),
         ):
             bridge_server.is_running = lambda running=running: running
             layout = _FakeLayout()
             panel = type("_Sidebar", (), {"layout": layout})()
             ui.CLAUDEBLENDER_PT_sidebar.draw(panel, context)
             assert layout.labels == [expected_status], layout.labels
-            assert set(layout.operators) == expected_operators, layout.operators
+            assert layout.operators == expected_operators, layout.operators
+
+        trusted = script_runner.approve_external_script_trust_window(context, session=True)
+        assert trusted["ok"] and trusted["session"], trusted
+        bridge_server.is_running = lambda: False
+        trusted_layout = _FakeLayout()
+        trusted_panel = type("_Sidebar", (), {"layout": trusted_layout})()
+        ui.CLAUDEBLENDER_PT_sidebar.draw(trusted_panel, context)
+        assert trusted_layout.labels == ["Bridge is offline", "Script trust active"], trusted_layout.labels
+        assert trusted_layout.operators == [
+            "claude_blender.start_bridge",
+            "claude_blender.copy_mcp_config",
+            "claude_blender.revoke_external_script_trust",
+        ], trusted_layout.operators
+        assert script_runner.revoke_external_script_trust_window(context)["ok"]
+
+        state.last_script_error_summary = "Old script failure"
+        state.last_checkpoint_status = "Checkpoint disabled"
+        history_layout = _FakeLayout()
+        history_panel = type("_Sidebar", (), {"layout": history_layout})()
+        ui.CLAUDEBLENDER_PT_sidebar.draw(history_panel, context)
+        assert history_layout.labels == ["Bridge is offline"], history_layout.labels
+        assert history_layout.operators == [
+            "claude_blender.start_bridge",
+            "claude_blender.copy_mcp_config",
+        ], history_layout.operators
+
+        state.last_script_error_summary = ""
+        state.last_checkpoint_status = "No script checkpoint yet"
+
+        staged = script_runner.stage_script(
+            context,
+            code="value = 1",
+            intent="Create a test value",
+            expected_changes="No scene changes",
+            risk_level="low",
+        )
+        assert staged["ok"], staged
+        script_layout = _FakeLayout()
+        script_panel = type("_Sidebar", (), {"layout": script_layout})()
+        ui.CLAUDEBLENDER_PT_sidebar.draw(script_panel, context)
+        assert script_layout.labels == [
+            "Bridge is offline",
+            "Pending",
+            "Create a test value",
+            "Risk: low / detected low",
+        ], script_layout.labels
+        assert script_layout.operators == [
+            "claude_blender.start_bridge",
+            "claude_blender.copy_mcp_config",
+            "claude_blender.run_approved_script",
+            "claude_blender.reject_script",
+            "claude_blender.approve_external_script_run",
+            "claude_blender.approve_external_script_trust",
+        ], script_layout.operators
+        review_layout = _FakeLayout()
+        review_dialog = type("_RunReview", (), {"layout": review_layout})()
+        ui.CLAUDEBLENDER_OT_run_approved_script.draw(review_dialog, context)
+        assert "Review before running" in review_layout.labels, review_layout.labels
+        assert f"Script text: {state.pending_script_text_name}" in review_layout.labels, review_layout.labels
+        assert "Expected:" in review_layout.labels, review_layout.labels
+        assert "No scene changes" in review_layout.labels, review_layout.labels
+        assert script_runner.reject_pending_script(context)["ok"]
+
+        blocked = script_runner.stage_script(
+            context,
+            code="import subprocess",
+            intent="Blocked test script",
+            risk_level="high",
+        )
+        assert blocked["ok"] and blocked["analysis"]["blocked"], blocked
+        blocked_layout = _FakeLayout()
+        blocked_panel = type("_Sidebar", (), {"layout": blocked_layout})()
+        ui.CLAUDEBLENDER_PT_sidebar.draw(blocked_panel, context)
+        enabled = dict(blocked_layout.operator_enabled)
+        assert not enabled["claude_blender.run_approved_script"], enabled
+        assert enabled["claude_blender.reject_script"], enabled
+        assert "claude_blender.approve_external_script_run" not in enabled, enabled
+        assert "claude_blender.approve_external_script_trust" not in enabled, enabled
+        assert script_runner.reject_pending_script(context)["ok"]
 
         bridge_server.is_running = lambda: False
         state.pending_preview = True
@@ -86,23 +203,50 @@ def main():
             "Live Preview:",
             "Preview changes",
         ], preview_layout.labels
-        assert set(preview_layout.operators) == {
+        assert preview_layout.operators == [
             "claude_blender.start_bridge",
             "claude_blender.copy_mcp_config",
             "claude_blender.commit_preview",
-            "claude_blender.revert_last_preview_step",
             "claude_blender.revert_preview",
-        }, preview_layout.operators
+        ], preview_layout.operators
         state.pending_preview = False
 
-        advanced = _FakeLayout()
-        ui._draw_advanced_controls(advanced, context, state)
-        assert "Client Setup" in advanced.labels, advanced.labels
-        assert "External Assets" in advanced.labels, advanced.labels
-        assert "Script Security" in advanced.labels, advanced.labels
-        assert "Diagnostics" in advanced.labels, advanced.labels
-        assert "claude_blender.copy_mcp_config_with_sketchfab" in advanced.operators, advanced.operators
-        assert "claude_blender.refresh_control_center" in advanced.operators, advanced.operators
+        transaction = live_preview.begin("Imported asset", context)
+        transaction["applied_steps"].append(
+            {
+                "type": "import_external_asset",
+                "created_data": [{"kind": "object", "name": "Synthetic Imported Object"}],
+            }
+        )
+        state.pending_preview = True
+        state.pending_preview_label = "Imported asset"
+        imported_layout = _FakeLayout()
+        imported_panel = type("_Sidebar", (), {"layout": imported_layout})()
+        ui.CLAUDEBLENDER_PT_sidebar.draw(imported_panel, context)
+        assert "claude_blender.revert_last_preview_step" in imported_layout.operators, imported_layout.operators
+        transaction["status"] = "reverted"
+        state.pending_preview = False
+
+        cube = bpy.data.objects["Cube"]
+        start_location = tuple(cube.location)
+        moved = live_preview.apply_location_delta(context, (1, 0, 0), label="UI revert smoke")
+        assert moved["ok"] and state.pending_preview, moved
+        assert "FINISHED" in bpy.ops.claude_blender.revert_preview()
+        assert tuple(cube.location) == start_location
+        assert not state.pending_preview
+
+        prefs_layout = _FakeLayout()
+        prefs_panel = type("_Preferences", (), {"layout": prefs_layout})()
+        preferences.CLAUDEBLENDER_AP_preferences.draw(prefs_panel, context)
+        assert prefs_layout.labels == ["Safety", "Connection"], prefs_layout.labels
+        assert prefs_layout.properties == [
+            "execution_mode",
+            "checkpoints_enabled",
+            "autosave_enabled",
+            "bridge_port",
+            "bridge_auth_token",
+            "mcp_launch_mode",
+        ], prefs_layout.properties
 
         print("smoke_ui_layout: ok")
     finally:
