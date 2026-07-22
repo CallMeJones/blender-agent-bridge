@@ -130,6 +130,9 @@ def _assert_local_release_metadata():
     assert "smoke_published_release_identity.py" in workflow, "Tag publication must verify both public endpoints"
     assert "if: startsWith(github.ref, 'refs/tags/v')" in workflow, "Pages and release publication must be tag-gated"
     assert "pypa/gh-action-pypi-publish" in workflow, "Tagged releases must use PyPI Trusted Publishing"
+    assert re.search(r"pypa/gh-action-pypi-publish@[0-9a-f]{40}", workflow), "PyPI publishing action must be SHA-pinned"
+    assert "skip-existing: true" in workflow, "PyPI partial publication recovery must skip only preflight-verified files"
+    assert "--require-complete" in workflow, "PyPI publication must verify the complete artifact set"
     assert "python scripts/check_pypi_name.py" in workflow, "PyPI name ownership must be checked immediately before publish"
     assert "python -m unittest discover" in workflow, "CI must run the conventional unittest lane"
 

@@ -123,6 +123,7 @@ def create_product_turntable_setup(context, args):
 
 
 def create_lookdev_turntable_review(context, args):
+    prefs = preferences.get_preferences(context)
     return advanced_helpers.create_lookdev_turntable_review(
         context,
         target_name=str(args.get("target_name") or ""),
@@ -145,6 +146,7 @@ def create_lookdev_turntable_review(context, args):
         resolution_x=_bounded_int(args.get("resolution_x"), 320, minimum=64, maximum=4096),
         resolution_y=_bounded_int(args.get("resolution_y"), 240, minimum=64, maximum=4096),
         distance_factor=float(args.get("distance_factor", 2.6)),
+        capture_dir=getattr(prefs, "capture_cache_dir", None),
         label=args.get("label", "Create look-dev turntable review"),
     )
 

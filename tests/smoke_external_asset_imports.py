@@ -21,7 +21,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import asset_jobs, blender_compat, external_assets, live_preview, tool_dispatcher  # noqa: E402
+from claude_blender import asset_jobs, blender_compat, external_assets, live_preview, preferences, tool_dispatcher  # noqa: E402
 
 observed_timeouts = []
 SUBPROCESS_MODEL_BYTES = b'{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[]}]}'
@@ -236,6 +236,7 @@ def main():
     original_fetch_json_with_headers = external_assets._fetch_json_with_headers
     original_download_file = external_assets._download_file
     original_import_model_file = external_assets._import_model_file
+    original_get_preferences = None
     fixture_server = None
     fixture_thread = None
     os.environ[asset_jobs.ASSET_JOB_MODE_ENV] = "thread"
@@ -257,6 +258,9 @@ def main():
             "asset-worker.py",
         ], online_worker_command
         claude_blender.register()
+        original_get_preferences = preferences.get_preferences
+        smoke_preferences = type("_SmokePreferences", (), {"capture_cache_dir": cache_dir})()
+        preferences.get_preferences = lambda _context: smoke_preferences
         bpy.ops.mesh.primitive_cube_add()
         cube = bpy.context.object
         cube.name = "TextureTarget"
@@ -575,6 +579,8 @@ def main():
         assert diagnostics["asset_count"] >= 4, diagnostics
         print("smoke_external_asset_imports: ok")
     finally:
+        if original_get_preferences is not None:
+            preferences.get_preferences = original_get_preferences
         try:
             claude_blender.unregister()
         except Exception:

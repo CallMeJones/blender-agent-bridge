@@ -31,8 +31,11 @@ class _FakeOfflineBpy:
 
 def main():
     cache_dir = tempfile.mkdtemp(prefix="claude-blender-docs-")
+    original_default_capture_dir = None
     try:
         claude_blender.register()
+        original_default_capture_dir = viewport_capture.default_capture_dir
+        viewport_capture.default_capture_dir = lambda: os.path.join(cache_dir, "user-data", "captures")
 
         if ui._docs_timer_is_registered():
             bpy.app.timers.unregister(ui._process_docs_results)
@@ -694,6 +697,8 @@ def main():
         claude_blender.unregister()
         print("smoke_context_docs: ok")
     finally:
+        if original_default_capture_dir is not None:
+            viewport_capture.default_capture_dir = original_default_capture_dir
         shutil.rmtree(cache_dir, ignore_errors=True)
 
 

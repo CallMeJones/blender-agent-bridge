@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.3.1 - 2026-07-22
+
+- Reduced Blender Agent Bridge to one compact sidebar for bridge status, start/stop, MCP config, active-trust revocation, pending approvals, and preview commit/revert; optional setup and diagnostics remain available through Preferences, operators, and contextual dialogs instead of a second panel.
+- Hardened external-asset downloads with DNS-pinned public-address connections, redirect revalidation, credential isolation, and a 4 GiB streaming limit.
+- Made PyPI publication safely resumable by comparing tested artifact hashes before upload, skipping only verified existing files, and checking the complete public artifact set afterward.
+- Made copied Bundled MCP configs use Blender's own Python interpreter and verified that exact command from a clean installed extension.
+- Made `tools/list` flatten simple top-level JSON Schema combinators for Claude-compatible MCP registration while retaining the canonical schema for bridge validation and explicit schema lookup.
+- Isolated registry metadata from caller mutation, strengthened cross-process determinism tests, and avoided redundant source-tree hashing in bridge status diagnostics.
+- Fixed look-dev review evidence to honor the configured capture cache and isolated Blender smoke artifacts from developer home directories.
+
 ## 0.3.0 - 2026-07-20
 
 - Added the canonical 186-contract modular tool registry, optional `blender-bridge` PyPI/uvx runtime, registry compatibility handshake, conventional unit-test lane, and multi-client/community documentation for the upcoming 0.3.0 release.

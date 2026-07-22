@@ -20,7 +20,7 @@ Audit entries record tool names, success/failure status, risk labels, and redact
 
 The add-on does not send your scene, prompts, screenshots, or any other data to a model provider. User-triggered outbound requests can fetch official Blender documentation, search or download CC0 assets from Poly Haven, and search or download models from Sketchfab. Sketchfab downloads require an API token supplied per call or through the external MCP client's server environment.
 
-`Copy MCP + Sketchfab` accepts the token in a masked one-time dialog and places it in the clipboard config. The token is not saved in Blender preferences, `.blend` files, or audit logs. The clipboard and the external MCP client configuration then contain the token, so protect them according to the operating system and client's credential-handling guidance.
+`Copy Config with Sketchfab` accepts the token in a masked one-time dialog and places it in the clipboard config. The token is not saved in Blender preferences, `.blend` files, or audit logs. The clipboard and the external MCP client configuration then contain the token, so protect them according to the operating system and client's credential-handling guidance.
 
 When you start the localhost MCP bridge, it binds to `127.0.0.1` only and exposes scene context, tool contracts, and resources to a connected MCP client on the same machine. **The connected external client — not this add-on — decides what, if anything, to forward to its own model provider.** What that client sends (the user prompt, scene context, docs snippets, viewport screenshots when the Viewport toggle is enabled, sampled playblast frames when capture is requested, etc.) is governed by that client's own privacy policy.
 

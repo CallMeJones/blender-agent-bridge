@@ -12,10 +12,7 @@ ADDON = os.path.join(ROOT, "addon")
 sys.path.insert(0, ADDON)
 
 from claude_blender import tool_registry  # noqa: E402
-from claude_blender.tool_registry.report import (  # noqa: E402
-    build_registry_report,
-    render_registry_report,
-)
+from claude_blender.tool_registry.report import build_registry_report  # noqa: E402
 
 
 class ToolRegistryReportTests(unittest.TestCase):
@@ -38,10 +35,30 @@ class ToolRegistryReportTests(unittest.TestCase):
         for section in ("owners", "groups", "exposures"):
             names = [row["name"] for row in report[section]]
             self.assertEqual(sorted(names), names)
-        self.assertEqual(
-            render_registry_report(tool_registry.REGISTRY),
-            render_registry_report(tool_registry.REGISTRY),
-        )
+
+    def test_render_is_stable_across_process_hash_seeds(self):
+        outputs = {}
+        for hash_seed in ("1", "2", "random"):
+            environment = dict(os.environ)
+            environment["PYTHONPATH"] = ADDON
+            environment["PYTHONHASHSEED"] = hash_seed
+            completed = subprocess.run(
+                [sys.executable, "-m", "claude_blender.tool_registry.report"],
+                cwd=ROOT,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=10,
+            )
+
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            outputs[hash_seed] = completed.stdout
+
+        expected = outputs["1"]
+        for hash_seed, output in outputs.items():
+            self.assertEqual(expected, output, f"output changed for PYTHONHASHSEED={hash_seed}")
+        self.assertEqual(build_registry_report(tool_registry.REGISTRY), json.loads(expected))
 
     def test_module_cli_emits_json_without_importing_bpy(self):
         environment = dict(os.environ)
@@ -59,6 +76,7 @@ class ToolRegistryReportTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=10,
         )
 
         self.assertEqual(0, completed.returncode, completed.stderr)

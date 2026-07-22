@@ -14,6 +14,21 @@ from . import external_assets
 
 ASSET_JOB_SECRET_TOKEN_ENV = "BLENDER_AGENT_BRIDGE_ASSET_JOB_API_TOKEN"
 ASSET_JOB_SECRET_PASSWORD_ENV = "BLENDER_AGENT_BRIDGE_ASSET_JOB_MODEL_PASSWORD"
+STATUS_REPLACE_ATTEMPTS = 6
+STATUS_REPLACE_INITIAL_DELAY_SECONDS = 0.01
+
+
+def _replace_status_file(temp_path, path):
+    delay = STATUS_REPLACE_INITIAL_DELAY_SECONDS
+    for attempt in range(STATUS_REPLACE_ATTEMPTS):
+        try:
+            os.replace(temp_path, path)
+            return
+        except PermissionError:
+            if attempt + 1 >= STATUS_REPLACE_ATTEMPTS:
+                raise
+            time.sleep(delay)
+            delay *= 2
 
 
 def _write_json(path, payload):
@@ -21,7 +36,7 @@ def _write_json(path, payload):
     try:
         with open(temp_path, "w", encoding="utf-8", newline="\n") as handle:
             json.dump(payload, handle, indent=2, sort_keys=True, default=str)
-        os.replace(temp_path, path)
+        _replace_status_file(temp_path, path)
     finally:
         if os.path.exists(temp_path):
             try:

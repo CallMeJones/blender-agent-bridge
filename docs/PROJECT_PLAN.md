@@ -21,8 +21,8 @@ Make Blender Agent Bridge the safe, production-shaped bridge between Blender and
 
 The first milestone should be useful but controlled:
 
-- 3D View sidebar panel for bridge status, MCP config, context capture, script approvals, trust controls, preview commit/revert, docs status, and diagnostics.
-- Add-on preferences for bridge settings, local paths, privacy defaults, and execution mode.
+- One compact 3D View sidebar panel for bridge status, MCP config, contextual script approvals, active-trust revocation, and preview commit/revert.
+- Minimal Add-on Preferences for connection and safety defaults; operational detail remains in bridge/tool responses.
 - No in-add-on LLM provider transport; external MCP clients host Anthropic/OpenAI/Gemini/etc. connections.
 - Scene summary generation for selected objects and overall scene state.
 - Layered context bundles that describe Blender version, mode, scene graph, selection, render settings, and animation state before external agents choose helpers or scripts.
@@ -214,9 +214,9 @@ Acceptance:
 - Large scenes are summarized without sending full geometry by default.
 - External agents can ask for deeper object/material/animation details through tools instead of guessing.
 
-Status: Initial scene context, token-aware context planning, sidebar char/token estimates, and read-only detail retrieval tools are implemented.
+Status: Initial scene context, token-aware context planning, client-visible char/token estimates, and read-only detail retrieval tools are implemented.
 Deep world-model inspection is now available for geometry nodes, shader nodes, rigging/constraints/drivers, shape keys, curves/text, simulations, collection/view-layer organization, render/camera settings, and compositor nodes.
-The sidebar no longer hosts provider chat. It now focuses on bridge status, MCP config, script/action approvals, context capture, docs, diagnostics, and preview state.
+The sidebar no longer hosts provider chat or a control center. It now focuses only on bridge status, MCP config, active safety state, and decisions requiring attention.
 
 ### Milestone 2: Screenshot/Vision Context
 
@@ -250,7 +250,7 @@ Tool-loop calls now have a larger output budget for complete `draft_script.code`
 
 - Add a preview transaction manager around helper-based changes.
 - Force viewport/timeline redraw after each applied preview step.
-- Add commit, revert, and undo controls in the sidebar.
+- Add commit and revert controls in the sidebar while retaining Blender's normal undo path.
 - Apply animation keyframes immediately and optionally jump/scrub to changed frames.
 
 Acceptance:

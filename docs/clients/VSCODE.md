@@ -26,7 +26,7 @@ Native VS Code uses `.vscode/mcp.json` with a top-level `servers` object. Transl
 For pinned `uvx` mode on macOS/Linux, set `command` to `uvx` and args to:
 
 ```json
-["--from", "blender-bridge==0.3.0", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
+["--from", "blender-bridge==0.3.1", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
 ```
 
 On Windows set `command` to `cmd` and prefix args with `"/c", "uvx"`. Cline and Roo Code expose MCP management in their extension UI and commonly accept the `mcpServers` JSON shape copied by Blender; use that UI rather than changing native VS Code's `servers` schema. Preserve all generated environment fields.

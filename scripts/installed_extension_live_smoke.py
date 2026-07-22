@@ -179,7 +179,7 @@ def _start_blender(
     profile_dir: Path,
     port: int,
     timeout: float,
-) -> tuple[subprocess.Popen[str], str, dict]:
+) -> tuple[subprocess.Popen[str], str, dict, dict]:
     status_path = profile_dir / "installed-bridge-status.json"
     ui_status_path = profile_dir / "installed-interactive-ui-status.json"
     startup_path = profile_dir / "start_installed_bridge.py"
@@ -188,6 +188,7 @@ def _start_blender(
 import importlib
 import json
 import os
+import time
 import traceback
 from pathlib import Path
 
@@ -224,8 +225,9 @@ def run_interactive_ui_smoke():
             raise AssertionError("Copy MCP Config did not write to the system clipboard")
         copied_config = json.loads(clipboard)
         server_config = copied_config["mcpServers"]["blender"]
-        if server_config.get("command") != "python":
-            raise AssertionError(f"Unexpected bundled MCP command: {server_config}")
+        bundled_python = Path(str(server_config.get("command") or ""))
+        if not bundled_python.is_file() or not bundled_python.name.lower().startswith("python"):
+            raise AssertionError(f"Copied config does not use Blender's bundled Python: {server_config}")
 
         external_assets = importlib.import_module(module_name + ".external_assets")
         session_result = bpy.ops.claude_blender.set_session_sketchfab_token(
@@ -240,6 +242,76 @@ def run_interactive_ui_smoke():
             raise AssertionError(f"Clear session Sketchfab token returned {clear_result}")
         if external_assets.sketchfab_auth_diagnostics().get("session_token_configured"):
             raise AssertionError("Session Sketchfab token remained configured after Clear")
+
+        script_runner = importlib.import_module(module_name + ".script_runner")
+        bridge_server = importlib.import_module(module_name + ".bridge_server")
+        state = bpy.context.scene.claude_blender
+
+        staged = script_runner.stage_script(
+            bpy.context,
+            intent="Verify installed one-time external approval",
+            expected_changes="Sets one temporary scene property",
+            risk_level="low",
+            target_objects=[],
+            code="scene['installed_approval_smoke'] = 'ok'",
+        )
+        if not staged.get("ok") or not state.pending_script:
+            raise AssertionError(f"Installed script did not stage for approval: {staged}")
+        approval = script_runner.approve_pending_script_for_external_run(bpy.context, ttl_seconds=60)
+        if not approval.get("ok") or not approval.get("approval_token"):
+            raise AssertionError(f"Installed one-time approval was not issued: {approval}")
+        wrong_token = script_runner.run_externally_approved_script(
+            bpy.context,
+            "wrong-token",
+            checkpoint_enabled=False,
+        )
+        if wrong_token.get("ok") or not state.pending_script:
+            raise AssertionError(f"Installed one-time approval accepted the wrong token: {wrong_token}")
+        approved_run = script_runner.run_externally_approved_script(
+            bpy.context,
+            approval["approval_token"],
+            checkpoint_enabled=False,
+        )
+        if not approved_run.get("ok") or bpy.context.scene.get("installed_approval_smoke") != "ok":
+            raise AssertionError(f"Installed one-time approval did not run exactly once: {approved_run}")
+        if state.pending_script or state.pending_script_external_approval_hash:
+            raise AssertionError("Installed one-time approval was not consumed")
+        del bpy.context.scene["installed_approval_smoke"]
+
+        expiring = script_runner.approve_external_script_trust_window(bpy.context, ttl_seconds=1)
+        if not expiring.get("ok") or not script_runner.external_script_trust_active(bpy.context, state=state):
+            raise AssertionError(f"Installed expiring trust did not activate: {expiring}")
+        time.sleep(1.1)
+        if not script_runner.expire_external_script_trust_if_needed(bpy.context, state=state):
+            raise AssertionError("Installed trust did not expire after its TTL")
+        expired_snapshot = script_runner.external_script_trust_snapshot(bpy.context, state=state)
+        if expired_snapshot.get("active") or not expired_snapshot.get("expired"):
+            raise AssertionError(f"Installed expired trust remained active: {expired_snapshot}")
+
+        session_trust = script_runner.approve_external_script_trust_window(bpy.context, session=True)
+        if not session_trust.get("ok"):
+            raise AssertionError(f"Installed session trust did not activate: {session_trust}")
+        revoked = script_runner.revoke_external_script_trust_window(bpy.context)
+        if not revoked.get("ok") or script_runner.external_script_trust_active(bpy.context, state=state):
+            raise AssertionError(f"Installed session trust did not revoke: {revoked}")
+
+        script_runner.approve_external_script_trust_window(bpy.context, session=True)
+        script_runner.unregister()
+        try:
+            if script_runner.external_script_trust_active(bpy.context, state=state):
+                raise AssertionError("Installed script trust survived add-on reload cleanup")
+        finally:
+            script_runner.register()
+
+        original_bridge_url = bridge_server.bridge_url()
+        original_bridge_port = int(original_bridge_url.rsplit(":", 1)[1])
+        script_runner.approve_external_script_trust_window(bpy.context, session=True)
+        bridge_server.stop_bridge()
+        restarted = bridge_server.start_bridge(port=original_bridge_port, auth_token="")
+        if not restarted.get("ok") or restarted.get("url") != original_bridge_url:
+            raise AssertionError(f"Installed bridge did not restart on the smoke URL: {restarted}")
+        if script_runner.external_script_trust_active(bpy.context, state=state):
+            raise AssertionError("Installed script trust survived a bridge restart")
 
         mesh = bpy.data.meshes.new("Agent Bridge Interactive UI Smoke Mesh")
         test_object = bpy.data.objects.new("Agent Bridge Interactive UI Smoke Object", mesh)
@@ -260,7 +332,10 @@ def run_interactive_ui_smoke():
                 {
                     "ok": True,
                     "clipboard_config": True,
+                    "bundled_python": str(bundled_python),
+                    "server_config": server_config,
                     "session_token_lifecycle": True,
+                    "script_trust_lifecycle": True,
                     "focused": True,
                     "material_preview": True,
                     "view_areas": len(view_areas),
@@ -335,6 +410,7 @@ print("INSTALLED_BRIDGE_START", result, flush=True)
             "interactive UI smoke ok:",
             "clipboard config,",
             "session token lifecycle,",
+            "script trust lifecycle,",
             "viewport focus,",
             f"Material Preview in {ui_status.get('view_areas')} VIEW_3D area(s)",
             flush=True,
@@ -349,7 +425,7 @@ print("INSTALLED_BRIDGE_START", result, flush=True)
         finally:
             _stop_blender(process)
         raise
-    return process, bridge_url, health
+    return process, bridge_url, health, ui_status
 
 
 def _stop_blender(process: subprocess.Popen[str]) -> None:
@@ -378,7 +454,14 @@ def _verify_installed_health(health: dict, profile_dir: Path) -> None:
         raise RuntimeError("Installed source hash and loaded source hash do not match")
 
 
-def _mcp_stdio_smoke(mcp_path: Path, *, env: dict[str, str], bridge_url: str, timeout: float) -> None:
+def _mcp_stdio_smoke(
+    python_command: str,
+    mcp_path: Path,
+    *,
+    env: dict[str, str],
+    bridge_url: str,
+    timeout: float,
+) -> None:
     request = [
         {
             "jsonrpc": "2.0",
@@ -399,7 +482,7 @@ def _mcp_stdio_smoke(mcp_path: Path, *, env: dict[str, str], bridge_url: str, ti
         },
     ]
     result = _run(
-        [sys.executable, str(mcp_path), "--bridge-url", bridge_url, "--timeout", str(int(timeout))],
+        [python_command, str(mcp_path), "--bridge-url", bridge_url, "--timeout", str(int(timeout))],
         env=env,
         input_text=json.dumps(request),
         timeout=max(timeout, 60),
@@ -472,7 +555,7 @@ def main(argv: list[str] | None = None) -> int:
             raise RuntimeError("Installed extension was not listed by Blender")
 
         _disable_startup_splash(blender, env=env, timeout=args.timeout)
-        process, bridge_url, health = _start_blender(
+        process, bridge_url, health, ui_status = _start_blender(
             blender,
             env=env,
             profile_dir=profile_dir,
@@ -499,7 +582,13 @@ def main(argv: list[str] | None = None) -> int:
         _run(bridge_smoke, env=env, timeout=max(args.timeout, 120))
 
         mcp_path = profile_dir / "extensions" / "user_default" / "claude_blender" / "mcp_server.py"
-        _mcp_stdio_smoke(mcp_path, env=env, bridge_url=bridge_url, timeout=args.timeout)
+        _mcp_stdio_smoke(
+            str(ui_status["bundled_python"]),
+            mcp_path,
+            env=env,
+            bridge_url=bridge_url,
+            timeout=args.timeout,
+        )
         print("installed extension live smoke passed")
         if args.keep_profile:
             print(f"kept profile: {profile_dir}")

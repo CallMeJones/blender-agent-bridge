@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import bpy
 
-from . import build_info, user_paths
+from . import user_paths
 
 
 def _default_cache_dir():
@@ -109,24 +109,17 @@ class CLAUDEBLENDER_AP_preferences(bpy.types.AddonPreferences):
 
     def draw(self, context):
         layout = self.layout
-        layout.label(text=build_info.diagnostics_summary())
-        layout.label(text=f"Add-on path: {build_info.addon_root()}")
-        layout.separator()
-        layout.prop(self, "execution_mode")
-        layout.prop(self, "screenshot_default")
-        layout.prop(self, "local_docs_first")
-        layout.prop(self, "docs_cache_dir")
-        layout.prop(self, "capture_cache_dir")
-        layout.prop(self, "checkpoint_dir")
-        layout.prop(self, "max_screenshot_bytes")
-        layout.prop(self, "checkpoints_enabled")
-        layout.prop(self, "autosave_enabled")
-        layout.prop(self, "autosave_interval_seconds")
-        layout.separator()
-        layout.label(text="External Bridge / MCP")
-        layout.prop(self, "bridge_port")
-        layout.prop(self, "bridge_auth_token")
-        layout.prop(self, "mcp_launch_mode")
+        safety = layout.box()
+        safety.label(text="Safety")
+        safety.prop(self, "execution_mode")
+        safety.prop(self, "checkpoints_enabled")
+        safety.prop(self, "autosave_enabled")
+
+        connection = layout.box()
+        connection.label(text="Connection")
+        connection.prop(self, "bridge_port")
+        connection.prop(self, "bridge_auth_token")
+        connection.prop(self, "mcp_launch_mode")
 
 
 def get_preferences(context):

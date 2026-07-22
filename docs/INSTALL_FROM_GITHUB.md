@@ -22,8 +22,8 @@ In Blender:
 6. Sync the repository.
 7. Search for `Blender Agent Bridge`.
 8. Install and enable the extension.
-9. Open the 3D View sidebar, find `Agent Bridge`, then press `Start Bridge`.
-10. Press `Copy MCP` and paste the generated config into your external MCP client.
+9. Open the 3D View sidebar, find `Agent Bridge`, then press `Start`.
+10. Press `Copy MCP Config` and paste the generated config into your external MCP client.
 
 To update later, sync the same repository and use Blender's extension update flow.
 
@@ -57,8 +57,8 @@ After enabling the extension:
 1. Open the 3D View sidebar.
 2. Find the `Agent Bridge` panel.
 3. Confirm the panel shows the add-on, bridge, MCP, and config versions.
-4. Press `Start Bridge`.
-5. Press `Copy MCP`.
+4. Press `Start`.
+5. Press `Copy MCP Config`.
 6. Paste the generated config into your external MCP client.
 7. Restart or refresh the MCP client so stale tool caches are cleared.
 

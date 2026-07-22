@@ -34,10 +34,4 @@ Do not include API keys, bridge tokens, proprietary `.blend` files, or private s
 
 ## Hardening Checklist Before Release
 
-- Run the smoke tests and build workflow.
-- Review `blender_manifest.toml` permissions.
-- Run a full Git-history secret scan with a maintained scanner such as Gitleaks.
-- Verify no secrets are present in docs, examples, generated zips, or logs.
-- Verify the tagged GitHub Release archive and Pages repository archive have the same SHA-256 checksum.
-- Confirm generated Python cannot run through external MCP without in-Blender approval.
-- Confirm external script trust presets expire, revoke, and clear on bridge restart or reload.
+The security and privacy go/no-go items are maintained in [docs/LAUNCH_CHECKLIST.md](docs/LAUNCH_CHECKLIST.md). Detailed test commands are in [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md). Do not maintain a duplicate release-status checklist here.

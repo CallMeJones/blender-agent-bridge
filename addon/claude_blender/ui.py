@@ -356,6 +356,7 @@ class CLAUDEBLENDER_OT_capture_context(bpy.types.Operator):
     bl_idname = "claude_blender.capture_context"
     bl_label = "Capture Context"
     bl_description = "Capture the current Blender context bundle"
+    bl_options = {"INTERNAL"}
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -417,6 +418,7 @@ class CLAUDEBLENDER_OT_undo_last(bpy.types.Operator):
     bl_idname = "claude_blender.undo_last"
     bl_label = "Undo Last Change"
     bl_description = "Undo the latest Blender change, reverting pending live previews first"
+    bl_options = {"INTERNAL"}
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -439,165 +441,112 @@ class CLAUDEBLENDER_OT_undo_last(bpy.types.Operator):
         return {"FINISHED"} if "FINISHED" in result else {"CANCELLED"}
 
 
-def _draw_ask_section(layout, state, prefs):
-    ask_box = _draw_section(layout, "Bridge Control")
+def _draw_bridge_summary(layout, state):
     bridge_running = bridge_server.is_running()
-    ask_box.label(text=f"{build_info.ADDON_NAME} {build_info.ADDON_VERSION}")
-    ask_box.label(text=f"Bridge: {'On' if bridge_running else 'Off'} | MCP {build_info.MCP_SERVER_VERSION}")
+    row = layout.row(align=True)
+    row.label(
+        text="Bridge is ready" if bridge_running else "Bridge is offline",
+        icon="CHECKMARK" if bridge_running else "CANCEL",
+    )
+    if bridge_running:
+        row.operator("claude_blender.stop_bridge", text="Stop")
+    else:
+        row.operator("claude_blender.start_bridge", text="Start", icon="PLAY")
+    layout.operator("claude_blender.copy_mcp_config", text="Copy MCP Config", icon="COPYDOWN")
+
     if "Source: stale" in str(state.bridge_source_status or ""):
-        stale_box = ask_box.box()
+        stale_box = layout.box()
         stale_box.alert = True
         stale_box.label(text="Patched files are not loaded", icon="ERROR")
-        stale_box.label(text="Save the file, then reload scripts or restart Blender")
+        _draw_wrapped(stale_box, "Save the file, then reload scripts or restart Blender", width=32, max_lines=2)
         stale_box.operator("claude_blender.reload_scripts", text="Reload Scripts", icon="FILE_REFRESH")
-    bridge_row = ask_box.row(align=True)
-    if bridge_running:
-        bridge_row.operator("claude_blender.stop_bridge", text="Stop Bridge")
-    else:
-        bridge_row.operator("claude_blender.start_bridge", text="Start Bridge")
-    bridge_row.operator("claude_blender.copy_mcp_config", text="Copy MCP Config")
-    ask_box.operator("claude_blender.refresh_control_center", text="Check Runtime / Source", icon="FILE_REFRESH")
-    assets_box = ask_box.box()
-    assets_box.label(text="External Assets")
-    assets_box.label(text="Poly Haven: Ready (no API key)", icon="CHECKMARK")
-    assets_box.label(text="Sketchfab: Token needed for downloads")
-    assets_box.operator(
-        "claude_blender.copy_mcp_config_with_sketchfab",
-        text="Copy MCP + Sketchfab",
-        icon="COPYDOWN",
+
+
+def _draw_active_trust_alert(layout, context, state):
+    trust_snapshot = script_runner.external_script_trust_snapshot(context, state=state)
+    if not trust_snapshot["active"]:
+        return
+    row = layout.row(align=True)
+    row.label(text="Script trust active", icon="UNLOCKED")
+    row.operator("claude_blender.revoke_external_script_trust", text="Revoke", icon="CANCEL")
+
+
+def _draw_pending_script_review(layout, state, *, compact=False):
+    """Draw a terse panel summary or the complete contextual approval review."""
+    _draw_wrapped(
+        layout,
+        state.pending_script_intent or state.pending_script_status or "Generated script",
+        width=44,
+        max_lines=2 if compact else 4,
     )
-    auth_row = assets_box.row(align=True)
-    auth_status = external_assets.sketchfab_auth_diagnostics()
-    auth_row.operator(
-        "claude_blender.set_session_sketchfab_token",
-        text="Set Session Token",
-        icon="LOCKED" if auth_status.get("session_token_configured") else "UNLOCKED",
-    )
-    if auth_status.get("session_token_configured"):
-        auth_row.operator("claude_blender.clear_session_sketchfab_token", text="Clear", icon="X")
-    trust_snapshot = script_runner.external_script_trust_snapshot(bpy.context, state=state)
-    trust_active = trust_snapshot["active"]
-    trust_status = trust_snapshot["status"]
-    trust_expired = trust_snapshot["expired"]
-    ask_box.label(text=f"Script Trust: {'On' if trust_active else 'Off'}")
-    trust_row = ask_box.row(align=True)
-    if trust_active:
-        trust_row.operator("claude_blender.revoke_external_script_trust", text="Trust Off", icon="CANCEL")
-    else:
-        trust = trust_row.operator("claude_blender.approve_external_script_trust", text="Trust On", icon="CHECKMARK")
-        trust.session_trust = True
-        trust.ttl_seconds = script_runner.EXTERNAL_TRUST_TTL_SECONDS
-        if trust_expired:
-            trust_row.operator("claude_blender.revoke_external_script_trust", text="Clear Expired", icon="TRASH")
-    if trust_status != script_runner.NO_EXTERNAL_TRUST_STATUS:
-        _draw_field(ask_box, "Script Trust", trust_status, width=44, max_lines=2)
+    if state.pending_script_risk:
+        layout.label(text=f"Risk: {state.pending_script_risk}")
+    if getattr(state, "pending_script_privileged", False):
+        layout.label(text="Privileged access requested", icon="LOCKED")
 
+    if compact:
+        if state.pending_script_blocked and state.pending_script_issues:
+            _draw_field(layout, "Blocked", state.pending_script_issues, width=44, max_lines=2)
+        return
 
-def _draw_preview_manifest_section(layout, state):
-    preview_box = _draw_section(layout, "Preview Manifest")
-    _draw_wrapped(preview_box, state.preview_manifest_status or "No preview transaction", max_lines=2)
-    row = preview_box.row(align=True)
-    row.operator("claude_blender.refresh_preview_manifest", text="Refresh", icon="FILE_REFRESH")
-    row.operator("claude_blender.copy_preview_manifest", text="Copy")
-    if state.preview_manifest_text_name:
-        preview_box.label(text=f"Text: {state.preview_manifest_text_name}")
-
-
-def _draw_audit_section(layout, state):
-    audit_box = _draw_section(layout, "Audit Log")
-    _draw_wrapped(audit_box, state.audit_log_status or audit_log.status_summary(), max_lines=2)
-    audit_exists = os.path.exists(audit_log.audit_path())
-    row = audit_box.row(align=True)
-    row.operator("claude_blender.refresh_audit_log", text="Refresh", icon="FILE_REFRESH")
-    row.operator("claude_blender.copy_audit_log", text="Copy")
-    open_row = audit_box.row(align=True)
-    open_row.enabled = audit_exists
-    open_row.operator("claude_blender.open_audit_log", text="Open File", icon="FILE_FOLDER")
-    clear_row = audit_box.row(align=True)
-    clear_row.enabled = audit_exists
-    clear_row.operator("claude_blender.clear_audit_log", text="Clear", icon="TRASH")
-    if state.audit_log_text_name:
-        audit_box.label(text=f"Text: {state.audit_log_text_name}")
-
-
-def _draw_visual_evidence_section(layout, state):
-    visual_box = _draw_section(layout, "Visual Evidence")
-    _draw_wrapped(visual_box, state.visual_evidence_status or "Visual evidence not checked", max_lines=3)
-    row = visual_box.row(align=True)
-    row.operator("claude_blender.refresh_visual_evidence", text="Refresh", icon="FILE_REFRESH")
-    row.operator("claude_blender.copy_visual_evidence", text="Copy")
-    open_row = visual_box.row(align=True)
-    open_row.enabled = bool(state.visual_evidence_latest_path)
-    open_row.operator("claude_blender.open_latest_visual_evidence", text="Open Latest", icon="FILE_FOLDER")
-    if state.visual_evidence_text_name:
-        visual_box.label(text=f"Text: {state.visual_evidence_text_name}")
-
-
-def _draw_status_section(layout, state):
-    status_box = _draw_section(layout, "Context")
-    _draw_field(status_box, "Status", state.status, max_lines=3, empty="Ready")
-    if state.last_context_summary:
-        _draw_field(status_box, "Context", state.last_context_summary, max_lines=4)
-    else:
-        status_box.label(text="Context: not captured yet")
-    _draw_field(status_box, "Plan", state.context_plan_status, max_lines=3, empty="Context not planned yet")
-    if state.context_plan_items:
-        _draw_field(status_box, "Items", state.context_plan_items, max_lines=4)
+    if state.pending_script_text_name:
+        layout.label(text=f"Script text: {state.pending_script_text_name}")
+    if state.pending_script_expected_changes:
+        _draw_field(layout, "Expected", state.pending_script_expected_changes, width=52, max_lines=4)
+    if state.pending_script_privileged_capabilities:
+        _draw_field(layout, "Capabilities", state.pending_script_privileged_capabilities, width=52, max_lines=3)
+    if state.pending_script_approval_summary:
+        _draw_field(layout, "Approval", state.pending_script_approval_summary, width=52, max_lines=4)
+    if state.pending_script_declared_paths:
+        _draw_field(layout, "Paths", state.pending_script_declared_paths, width=52, max_lines=4)
+    if state.pending_script_declared_urls:
+        _draw_field(layout, "URLs", state.pending_script_declared_urls, width=52, max_lines=4)
+    if state.pending_script_destructive_actions:
+        _draw_field(layout, "Destructive", state.pending_script_destructive_actions, width=52, max_lines=4)
+    if state.pending_script_issues:
+        _draw_field(layout, "Issues", state.pending_script_issues, width=52, max_lines=4)
+    if state.pending_script_warnings:
+        _draw_field(layout, "Warnings", state.pending_script_warnings, width=52, max_lines=4)
+    if state.last_script_error_summary:
+        _draw_field(layout, "Last Error", state.last_script_error_summary, width=52, max_lines=4)
+        if state.last_checkpoint_path:
+            layout.operator(
+                "claude_blender.restore_last_checkpoint",
+                text="Restore Checkpoint",
+                icon="FILE_REFRESH",
+            )
 
 
 def _draw_action_center(layout, state):
     has_script = bool(state.pending_script)
     has_preview = bool(state.pending_preview)
-    has_error = bool(state.last_script_error_summary)
-    checkpoint = state.last_checkpoint_path or state.last_checkpoint_status
-    has_checkpoint = bool(checkpoint and checkpoint != "No script checkpoint yet")
-    if not (has_script or has_preview or has_error or has_checkpoint):
+    if not (has_script or has_preview):
         return
 
     actions = _draw_section(layout, "Pending")
 
     if state.pending_script:
-        actions.label(text=f"Script: {state.pending_script_status}")
-        if state.pending_script_risk:
-            actions.label(text=f"Risk: {state.pending_script_risk}")
-        if state.pending_script_text_name:
-            actions.label(text=f"Text: {state.pending_script_text_name}")
-        if getattr(state, "pending_script_privileged", False):
-            kind = getattr(state, "pending_script_privileged_kind", "") or "privileged"
-            actions.label(text=f"Privileged: {kind}")
-            if state.pending_script_privileged_capabilities:
-                _draw_field(actions, "Capabilities", state.pending_script_privileged_capabilities, width=44, max_lines=2)
-            if state.pending_script_approval_summary:
-                _draw_field(actions, "Approval", state.pending_script_approval_summary, width=44, max_lines=3)
-            if state.pending_script_declared_paths:
-                _draw_field(actions, "Paths", state.pending_script_declared_paths, width=44, max_lines=3)
-            if state.pending_script_declared_urls:
-                _draw_field(actions, "URLs", state.pending_script_declared_urls, width=44, max_lines=3)
-            if state.pending_script_destructive_actions:
-                _draw_field(actions, "Destructive", state.pending_script_destructive_actions, width=44, max_lines=3)
-        if state.pending_script_intent:
-            _draw_field(actions, "Intent", state.pending_script_intent, width=44, max_lines=2)
-        if state.pending_script_expected_changes:
-            _draw_field(actions, "Expected", state.pending_script_expected_changes, width=44, max_lines=3)
-        if state.pending_script_issues:
-            _draw_field(actions, "Issues", state.pending_script_issues, width=44, max_lines=3)
-        if state.pending_script_warnings:
-            _draw_field(actions, "Warnings", state.pending_script_warnings, width=44, max_lines=3)
+        _draw_pending_script_review(actions, state, compact=True)
         row = actions.row(align=True)
-        row.enabled = not state.pending_script_blocked
-        row.operator("claude_blender.run_approved_script", text="Run", icon="PLAY")
-        external_row = actions.row(align=True)
-        external_row.enabled = not state.pending_script_blocked
-        external_row.operator("claude_blender.approve_external_script_run", text="Approve External", icon="KEYINGSET")
-        actions.operator("claude_blender.reject_script", text="Reject", icon="LOOP_BACK")
-        if state.pending_script_external_approval_status != "No external script approval":
-            _draw_field(actions, "External Approval", state.pending_script_external_approval_status, width=44, max_lines=2)
-        trust_snapshot = script_runner.external_script_trust_snapshot(bpy.context, state=state)
-        if trust_snapshot["active"] or trust_snapshot["expired"]:
-            _draw_field(actions, "Script Trust", trust_snapshot["status"], width=44, max_lines=2)
-        if state.pending_script_status == "Script failed" or state.last_script_error_summary:
-            if state.last_script_error_summary:
-                _draw_field(actions, "Last Error", state.last_script_error_summary, width=44, max_lines=3)
+        run_slot = row.row(align=True)
+        run_slot.enabled = not state.pending_script_blocked
+        run_slot.operator("claude_blender.run_approved_script", text="Run Now", icon="PLAY")
+        row.operator("claude_blender.reject_script", text="Reject", icon="X")
+        if not state.pending_script_blocked:
+            approval_row = actions.row(align=True)
+            approval_row.operator(
+                "claude_blender.approve_external_script_run",
+                text="Allow Agent Once",
+                icon="KEYINGSET",
+            )
+            if not getattr(state, "pending_script_privileged", False):
+                trust = approval_row.operator(
+                    "claude_blender.approve_external_script_trust",
+                    text="Trust Session",
+                    icon="UNLOCKED",
+                )
+                trust.session_trust = True
+                trust.ttl_seconds = script_runner.EXTERNAL_TRUST_TTL_SECONDS
 
     if state.pending_preview:
         _draw_field(actions, "Live Preview", state.pending_preview_label or "Pending live changes", max_lines=2)
@@ -607,24 +556,25 @@ def _draw_action_center(layout, state):
             _draw_field(actions, "Warnings", state.pending_preview_warnings, width=44, max_lines=4)
         row = actions.row(align=True)
         row.operator("claude_blender.commit_preview", text="Commit", icon="CHECKMARK")
-        row.operator("claude_blender.revert_last_preview_step", text="Last Step", icon="LOOP_BACK")
+        if live_preview.last_created_step_revertibility(
+            allowed_types={"import_external_asset"}
+        ).get("ok"):
+            row.operator("claude_blender.revert_last_preview_step", text="Last Step", icon="LOOP_BACK")
         row.operator("claude_blender.revert_preview", text="Revert", icon="LOOP_BACK")
-
-    if has_error and not state.pending_script:
-        _draw_field(actions, "Last Error", state.last_script_error_summary, width=44, max_lines=3)
-
-    if has_checkpoint:
-        _draw_field(actions, "Checkpoint", checkpoint, width=44, max_lines=2)
-        restore_row = actions.row(align=True)
-        restore_row.enabled = bool(state.last_checkpoint_path)
-        restore_row.operator("claude_blender.restore_last_checkpoint", text="Restore Checkpoint", icon="FILE_REFRESH")
 
 
 class CLAUDEBLENDER_OT_run_approved_script(bpy.types.Operator):
     bl_idname = "claude_blender.run_approved_script"
     bl_label = "Run Approved Script"
     bl_description = "Run the pending agent-generated Blender Python script"
-    bl_options = {"REGISTER", "UNDO"}
+    bl_options = {"REGISTER", "UNDO", "INTERNAL"}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=540)
+
+    def draw(self, context):
+        self.layout.label(text="Review before running", icon="INFO")
+        _draw_pending_script_review(self.layout, context.scene.claude_blender)
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -654,7 +604,14 @@ class CLAUDEBLENDER_OT_approve_external_script_run(bpy.types.Operator):
     bl_idname = "claude_blender.approve_external_script_run"
     bl_label = "Approve External Run"
     bl_description = "Issue a one-time token for an external client to run the pending script"
-    bl_options = {"REGISTER"}
+    bl_options = {"REGISTER", "INTERNAL"}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=540)
+
+    def draw(self, context):
+        self.layout.label(text="Allow the connected agent to run this script once", icon="INFO")
+        _draw_pending_script_review(self.layout, context.scene.claude_blender)
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -678,7 +635,7 @@ class CLAUDEBLENDER_OT_approve_external_script_trust(bpy.types.Operator):
     bl_idname = "claude_blender.approve_external_script_trust"
     bl_label = "Trust External Scripts"
     bl_description = "Turn on runtime session trust for staged, static-check-passing external scripts"
-    bl_options = {"REGISTER"}
+    bl_options = {"REGISTER", "INTERNAL"}
 
     ttl_seconds: bpy.props.IntProperty(
         name="Seconds",
@@ -689,6 +646,15 @@ class CLAUDEBLENDER_OT_approve_external_script_trust(bpy.types.Operator):
         name="Session Trust",
         default=False,
     )
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=540)
+
+    def draw(self, context):
+        self.layout.label(text="Trust safe generated scripts for this Blender session", icon="UNLOCKED")
+        self.layout.label(text="You can revoke trust from the sidebar at any time.")
+        if getattr(context.scene.claude_blender, "pending_script", False):
+            _draw_pending_script_review(self.layout, context.scene.claude_blender)
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -764,6 +730,7 @@ class CLAUDEBLENDER_OT_reject_script(bpy.types.Operator):
     bl_idname = "claude_blender.reject_script"
     bl_label = "Reject Script"
     bl_description = "Clear the pending agent-generated script without running it"
+    bl_options = {"INTERNAL"}
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -777,7 +744,7 @@ class CLAUDEBLENDER_OT_restore_last_checkpoint(bpy.types.Operator):
     bl_idname = "claude_blender.restore_last_checkpoint"
     bl_label = "Restore Checkpoint"
     bl_description = "Open the last saved script checkpoint blend file"
-    bl_options = {"REGISTER"}
+    bl_options = {"REGISTER", "INTERNAL"}
 
     def execute(self, context):
         result = script_runner.restore_checkpoint(context)
@@ -793,6 +760,7 @@ class CLAUDEBLENDER_OT_capture_viewport_preview(bpy.types.Operator):
     bl_idname = "claude_blender.capture_viewport_preview"
     bl_label = "Capture Preview"
     bl_description = "Capture the viewport screenshot used when the Viewport toggle is on"
+    bl_options = {"INTERNAL"}
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -815,6 +783,7 @@ class CLAUDEBLENDER_OT_open_last_screenshot(bpy.types.Operator):
     bl_idname = "claude_blender.open_last_screenshot"
     bl_label = "Open Screenshot"
     bl_description = "Open the last captured viewport screenshot"
+    bl_options = {"INTERNAL"}
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -830,6 +799,7 @@ class CLAUDEBLENDER_OT_refresh_control_center(bpy.types.Operator):
     bl_idname = "claude_blender.refresh_control_center"
     bl_label = "Refresh Control Center"
     bl_description = "Refresh bridge diagnostics, preview manifest, audit status, and visual evidence"
+    bl_options = {"INTERNAL"}
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -842,6 +812,7 @@ class CLAUDEBLENDER_OT_reload_scripts(bpy.types.Operator):
     bl_idname = "claude_blender.reload_scripts"
     bl_label = "Reload Scripts"
     bl_description = "Reload patched add-on modules from disk; save the current file first"
+    bl_options = {"INTERNAL"}
 
     def execute(self, context):
         operator = getattr(getattr(bpy.ops, "script", None), "reload", None)
@@ -859,6 +830,7 @@ class CLAUDEBLENDER_OT_copy_control_center(bpy.types.Operator):
     bl_idname = "claude_blender.copy_control_center"
     bl_label = "Copy Control Center"
     bl_description = "Copy bridge diagnostics, preview manifest, audit status, and visual evidence"
+    bl_options = {"INTERNAL"}
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -873,6 +845,7 @@ class CLAUDEBLENDER_OT_refresh_preview_manifest(bpy.types.Operator):
     bl_idname = "claude_blender.refresh_preview_manifest"
     bl_label = "Refresh Preview Manifest"
     bl_description = "Refresh rollback manifest details for the current live preview transaction"
+    bl_options = {"INTERNAL"}
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -885,6 +858,7 @@ class CLAUDEBLENDER_OT_copy_preview_manifest(bpy.types.Operator):
     bl_idname = "claude_blender.copy_preview_manifest"
     bl_label = "Copy Preview Manifest"
     bl_description = "Copy rollback manifest details for the current live preview transaction"
+    bl_options = {"INTERNAL"}
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -898,6 +872,7 @@ class CLAUDEBLENDER_OT_refresh_audit_log(bpy.types.Operator):
     bl_idname = "claude_blender.refresh_audit_log"
     bl_label = "Refresh Audit Log"
     bl_description = "Refresh the local MCP/bridge audit log preview"
+    bl_options = {"INTERNAL"}
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -910,6 +885,7 @@ class CLAUDEBLENDER_OT_copy_audit_log(bpy.types.Operator):
     bl_idname = "claude_blender.copy_audit_log"
     bl_label = "Copy Audit Log"
     bl_description = "Copy recent local MCP/bridge audit events"
+    bl_options = {"INTERNAL"}
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -923,6 +899,7 @@ class CLAUDEBLENDER_OT_open_audit_log(bpy.types.Operator):
     bl_idname = "claude_blender.open_audit_log"
     bl_label = "Open Audit Log"
     bl_description = "Open the local MCP/bridge audit log file"
+    bl_options = {"INTERNAL"}
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -941,7 +918,7 @@ class CLAUDEBLENDER_OT_clear_audit_log(bpy.types.Operator):
     bl_idname = "claude_blender.clear_audit_log"
     bl_label = "Clear Audit Log"
     bl_description = "Delete the local MCP/bridge audit log file"
-    bl_options = {"REGISTER"}
+    bl_options = {"REGISTER", "INTERNAL"}
 
     def invoke(self, context, event):
         return context.window_manager.invoke_confirm(self, event)
@@ -959,6 +936,7 @@ class CLAUDEBLENDER_OT_refresh_visual_evidence(bpy.types.Operator):
     bl_idname = "claude_blender.refresh_visual_evidence"
     bl_label = "Refresh Visual Evidence"
     bl_description = "Refresh latest viewport, playblast, inspection render, thumbnail, and render-job evidence"
+    bl_options = {"INTERNAL"}
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -972,6 +950,7 @@ class CLAUDEBLENDER_OT_copy_visual_evidence(bpy.types.Operator):
     bl_idname = "claude_blender.copy_visual_evidence"
     bl_label = "Copy Visual Evidence"
     bl_description = "Copy latest visual evidence resource inventory"
+    bl_options = {"INTERNAL"}
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -986,6 +965,7 @@ class CLAUDEBLENDER_OT_open_latest_visual_evidence(bpy.types.Operator):
     bl_idname = "claude_blender.open_latest_visual_evidence"
     bl_label = "Open Latest Visual Evidence"
     bl_description = "Open the latest available visual evidence file"
+    bl_options = {"INTERNAL"}
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -1006,6 +986,7 @@ class CLAUDEBLENDER_OT_check_docs_cache(bpy.types.Operator):
     bl_idname = "claude_blender.check_docs_cache"
     bl_label = "Check"
     bl_description = "Check local Blender Python docs cache status"
+    bl_options = {"INTERNAL"}
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -1020,6 +1001,7 @@ class CLAUDEBLENDER_OT_build_docs_cache(bpy.types.Operator):
     bl_idname = "claude_blender.build_docs_cache"
     bl_label = "Build Full Docs Cache"
     bl_description = "Download and index the official Blender Python API and Manual docs for this Blender version"
+    bl_options = {"INTERNAL"}
 
     force: bpy.props.BoolProperty(
         name="Force Rebuild",
@@ -1105,6 +1087,7 @@ def _copy_mcp_config_to_clipboard(context, *, sketchfab_api_token=""):
         url,
         token=token,
         sketchfab_api_token=sketchfab_api_token,
+        command=build_info.bundled_python_executable(),
         launch_mode=launch_mode,
     )
     context.window_manager.clipboard = json.dumps(config, indent=2)
@@ -1246,11 +1229,12 @@ class CLAUDEBLENDER_PT_sidebar(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         state = context.scene.claude_blender
-        prefs = _prefs(context)
 
-        _draw_ask_section(layout, state, prefs)
+        # This is the entire sidebar contract: connection, active safety state,
+        # and decisions that need the user's attention.
+        _draw_bridge_summary(layout, state)
+        _draw_active_trust_alert(layout, context, state)
         _draw_action_center(layout, state)
-
 
 classes = (
     CLAUDEBLENDER_OT_capture_context,

@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
-from claude_blender import build_info  # noqa: E402
+from claude_blender import build_info, mcp_server  # noqa: E402
 
 
 class FakeBridgeHandler(BaseHTTPRequestHandler):
@@ -117,14 +117,31 @@ class MCPStdioTests(unittest.TestCase):
 
     def test_initialize_list_and_read_only_call(self):
         initialized = self.rpc(1, "initialize", {"protocolVersion": "2025-06-18"})
-        self.assertEqual("0.3.0", initialized["result"]["serverInfo"]["version"])
+        self.assertEqual("0.3.1", initialized["result"]["serverInfo"]["version"])
         listed = self.rpc(2, "tools/list", {})
         names = {tool["name"] for tool in listed["result"]["tools"]}
         self.assertIn("list_scene_objects", names)
+        unsupported_top_level = {"oneOf", "anyOf", "allOf"}
+        for tool in listed["result"]["tools"]:
+            self.assertFalse(
+                unsupported_top_level.intersection(tool["inputSchema"]),
+                f"{tool['name']} exposes an incompatible top-level schema combiner",
+            )
+        asset_import = next(
+            tool for tool in listed["result"]["tools"] if tool["name"] == "start_external_asset_import_job"
+        )
+        self.assertIn("At least one of these property sets is required", asset_import["inputSchema"]["description"])
         called = self.rpc(3, "tools/call", {"name": "list_scene_objects", "arguments": {}})
         structured = called["result"]["structuredContent"]
         self.assertTrue(structured["ok"])
         self.assertEqual("list_scene_objects", structured["echo"]["name"])
+
+        canonical = self.rpc(
+            4,
+            "tools/call",
+            {"name": "get_blender_tool_schema", "arguments": {"name": "start_external_asset_import_job"}},
+        )
+        self.assertIn("anyOf", canonical["result"]["structuredContent"]["tool"]["inputSchema"])
 
     def test_registry_mismatch_fails_closed(self):
         FakeBridgeHandler.registry_digest = "0" * 64
@@ -146,6 +163,39 @@ class MCPStdioTests(unittest.TestCase):
         finally:
             FakeBridgeHandler.include_compatibility_metadata = True
 
+
+class MCPClientSchemaTests(unittest.TestCase):
+    def test_simple_any_of_is_flattened_without_mutating_canonical_schema(self):
+        canonical = {
+            "type": "object",
+            "properties": {"left": {"type": "string"}, "right": {"type": "string"}},
+            "anyOf": [{"required": ["left"]}, {"required": ["right"]}],
+        }
+
+        exposed = mcp_server._client_input_schema(canonical)
+
+        self.assertIn("anyOf", canonical)
+        self.assertNotIn("anyOf", exposed)
+        self.assertIn("At least one of these property sets is required: left; right.", exposed["description"])
+
+    def test_simple_all_of_merges_required_properties(self):
+        exposed = mcp_server._client_input_schema(
+            {
+                "type": "object",
+                "required": ["base"],
+                "allOf": [{"required": ["left"]}, {"required": ["right", "base"]}],
+            }
+        )
+
+        self.assertEqual(["base", "left", "right"], exposed["required"])
+        self.assertNotIn("allOf", exposed)
+
+    def test_complex_top_level_combiner_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "Cannot safely flatten"):
+            mcp_server._client_input_schema({"type": "object", "anyOf": [{"properties": {"x": {}}}]})
+
+
+class MCPRuntimeStandaloneTests(unittest.TestCase):
     def test_malformed_bridge_url_reports_warning_without_crashing_runtime(self):
         env = os.environ.copy()
         env["PYTHONPATH"] = os.path.join(ROOT, "addon")

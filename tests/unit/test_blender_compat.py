@@ -59,6 +59,26 @@ class BlenderCompatibilityTests(unittest.TestCase):
         self.assertIn("Reload Scripts", diagnostics["addon_reload_guidance"])
         self.assertEqual("tested", diagnostics["blender_compatibility"]["status"])
 
+    def test_diagnostics_summary_hashes_source_once(self):
+        with mock.patch.object(build_info, "source_tree_hash", return_value="current") as source_hash:
+            with mock.patch.object(build_info, "LOADED_SOURCE_HASH", "loaded"):
+                summary = build_info.diagnostics_summary()
+
+        self.assertEqual(1, source_hash.call_count)
+        self.assertIn("Source current", summary)
+        self.assertIn("Runtime stale", summary)
+
+    def test_diagnostics_summary_reuses_existing_diagnostics(self):
+        diagnostics = {
+            "addon_source_hash": "existing",
+            "addon_runtime_source_stale": False,
+        }
+        with mock.patch.object(build_info, "source_tree_hash") as source_hash:
+            summary = build_info.diagnostics_summary(diagnostics)
+
+        source_hash.assert_not_called()
+        self.assertIn("Source existing", summary)
+
 
 if __name__ == "__main__":
     unittest.main()
