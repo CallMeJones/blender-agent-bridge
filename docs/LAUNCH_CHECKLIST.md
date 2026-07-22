@@ -131,7 +131,7 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 | 2026-07-22 | Updated `smoke_ui_layout.py` after active-trust, recovery, and conditional rollback fixes on Blender 4.2.0, 4.5.0, and 5.1.2 | Passed on all three versions |
 | 2026-07-22 | Final staged release-candidate scope audit | Passed; 49 intended files, no generated artifacts or unrelated changes |
 | 2026-07-22 | Post-evidence one-panel UI and documentation changes | Previous candidate scope, package, installed-extension, secret-scan, and artifact evidence invalidated; final-commit evidence required before tag |
-| 2026-07-22 | Binary trust candidate: 53 unit tests, complete pure-Python gate, complete 19-test Blender 5.1.2 suite, UI smoke on Blender 4.2/4.5/5.1, official source/ZIP/repository validation, and clean installed-extension live smoke on all three versions | Passed; candidate extension SHA-256 `43b558475e50630acac4b2282d27d67fcc57e6ab3c7147a2f5a21526191ca1d9` |
+| 2026-07-22 | Binary trust plus project-directory filesystem candidate: 53 unit tests, complete pure-Python gate and adversarial analyzer smoke, complete 19-test Blender 5.1.2 suite, project-file containment smoke on Blender 4.2/4.5/5.1, official source/ZIP/repository validation, artifact identity, and clean installed-extension live smoke on all three versions | Passed; candidate extension SHA-256 `e9d239b7d25a7024187946f0dffcb924f3cdce09259d7fba41be48ccf421b0a7` |
 | 2026-07-22 | Gitleaks 8.30.1 on 133-commit history and final binary-trust working diff | Passed; no leaks found |
 
 Add evidence here only after it has run against the candidate being evaluated. A previous release proves the pipeline, not the current release contents.

@@ -17,7 +17,7 @@ def draft_privileged_script(context, args):
         "code": "privileged_scripts_disabled",
         "message": (
             "Privileged generated Python is disabled. Use the bounded external-asset, project-file, "
-            "render, capture, save, or project-output tools instead."
+            "project-directory filesystem, render, capture, save, or project-output tools instead."
         ),
         "requires_user_approval": False,
         "requires_explicit_one_time_approval": False,
@@ -30,6 +30,9 @@ def draft_privileged_script(context, args):
             "start_external_asset_download",
             "get_external_asset_job_status",
             "start_external_asset_import_job",
+            "list_project_files",
+            "read_project_file",
+            "write_project_file",
             "save_blend_file",
             "start_render_job",
         ],

@@ -2,15 +2,15 @@
 
 This guide is the runbook for asking Codex to test Blender Agent Bridge end to end. It is designed to cover every feature family, every bridge path, and every tool surface, then drive failures into focused fixes and reruns.
 
-Current project snapshot, checked on 2026-07-19:
+Current project snapshot, checked on 2026-07-22:
 
 - Extension: `Blender Agent Bridge`, manifest id `claude_blender`; version comes from `addon/claude_blender/blender_manifest.toml` and is checked against `build_info.py` and `CHANGELOG.md`.
 - Minimum Blender: `4.2.0`. CI tests 4.2 LTS, 4.5 LTS, and 5.1; newer versions are accepted with capability-based warnings.
 - Local Blender detected on this workstation: `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`.
-- Canonical registry inventory: 186 Blender tool contracts across eleven explicit domain modules.
-- Normal agent catalog inventory: 185 tool definitions; 29 are exposed directly in compact mode.
+- Canonical registry inventory: 189 Blender tool contracts across eleven explicit domain modules.
+- Normal agent catalog inventory: 188 tool definitions; 29 are exposed directly in compact mode.
 - Intentional catalog difference: `run_approved_script` is a dispatcher path for external approval/trust execution, but it is not exposed in the normal agent helper catalog.
-- The 0.3.1 release candidate was verified on 2026-07-22 with `compileall`, 51 unit tests, 13 pure-Python gates, the complete 19-test background suite, and the clean installed-extension interactive smoke on official Windows builds of Blender 4.2.0, 4.5.0, and 5.1.2. Tagged CI repeats the same Blender matrix under Xvfb on Linux.
+- The 0.3.1 release candidate was verified on 2026-07-22 with `compileall`, 53 unit tests, the complete Phase 1 pure-Python gate plus the adversarial script-analyzer smoke, the complete 19-test background suite, project-directory containment probes on Blender 4.2.0/4.5.0/5.1.2, and the clean installed-extension interactive smoke on all three versions. Tagged CI repeats the same Blender matrix under Xvfb on Linux.
 
 ## How To Ask Codex To Run This
 

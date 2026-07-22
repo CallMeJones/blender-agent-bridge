@@ -70,6 +70,32 @@ def autosave_current_blend_file(context, args):
     )
 
 
+def list_project_files(context, args):
+    return project_files.list_project_files(
+        relative_path=str(args.get("relative_path") or ""),
+        recursive=bool(args.get("recursive", False)),
+        max_entries=_bounded_int(args.get("max_entries"), 200, minimum=1, maximum=1000),
+    )
+
+
+def read_project_file(context, args):
+    return project_files.read_project_file(
+        relative_path=str(args.get("relative_path") or ""),
+        encoding=str(args.get("encoding") or "utf-8"),
+        max_bytes=_bounded_int(args.get("max_bytes"), 1_048_576, minimum=1, maximum=project_files.MAX_PROJECT_FILE_BYTES),
+    )
+
+
+def write_project_file(context, args):
+    return project_files.write_project_file(
+        relative_path=str(args.get("relative_path") or ""),
+        content=args.get("content") or "",
+        encoding=str(args.get("encoding") or "utf-8"),
+        overwrite=bool(args.get("overwrite", False)),
+        create_dirs=bool(args.get("create_dirs", True)),
+    )
+
+
 def get_workspace_layout(context, args):
     return lab_parity.get_workspace_layout(
         context,

@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
+import hashlib
+import itertools
 import os
 import re
+import tempfile
 import time
 
 import bpy
@@ -12,11 +17,444 @@ from . import lab_parity, script_runner
 
 
 DEFAULT_PROJECT_DIRS = ("assets", "refs", "renders", "exports")
+MAX_PROJECT_FILE_BYTES = 4 * 1024 * 1024
+MAX_PROJECT_FILE_BASE64_CHARS = ((MAX_PROJECT_FILE_BYTES + 2) // 3) * 4
 PROJECT_NAME_RE = re.compile(r"[^A-Za-z0-9._ -]+")
+WINDOWS_RESERVED_FILE_NAMES = {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}
+BLOCKED_PROJECT_WRITE_SUFFIXES = {
+    ".bat",
+    ".blend",
+    ".cmd",
+    ".com",
+    ".dll",
+    ".dylib",
+    ".exe",
+    ".hta",
+    ".jar",
+    ".js",
+    ".jse",
+    ".lnk",
+    ".msi",
+    ".ps1",
+    ".py",
+    ".pyd",
+    ".pyw",
+    ".scr",
+    ".sh",
+    ".so",
+    ".url",
+    ".vbe",
+    ".vbs",
+    ".wsf",
+    ".wsh",
+}
 USER_PATH_REQUIRED_MESSAGE = (
     "This operation needs a human-confirmed path. Ask the user for the .blend path or project folder, "
     "then retry with user_confirmed_path=true."
 )
+
+
+def _project_filesystem_unavailable(message):
+    return {
+        "ok": False,
+        "blocked": True,
+        "code": "project_filesystem_unavailable",
+        "message": str(message),
+        "project_root": "",
+    }
+
+
+def _project_root():
+    filepath = getattr(bpy.data, "filepath", "") or ""
+    if not filepath:
+        return _project_filesystem_unavailable(
+            "Project filesystem access requires a saved .blend file. Save the project to a user-confirmed path first."
+        )
+    absolute_file = os.path.abspath(filepath)
+    root = os.path.realpath(os.path.dirname(absolute_file))
+    if not os.path.isdir(root):
+        return _project_filesystem_unavailable("The saved .blend project directory does not exist.")
+    return {
+        "ok": True,
+        "project_root": root,
+        "blend_path": absolute_file,
+    }
+
+
+def _normalized_project_relative_path(value, *, allow_root=False):
+    raw = str(value or "").strip().replace("\\", "/")
+    if not raw:
+        return "" if allow_root else None
+    if len(raw) > 1024:
+        return None
+    drive, _tail = os.path.splitdrive(raw)
+    if drive or raw.startswith("/"):
+        return None
+    parts = [part for part in raw.split("/") if part not in {"", "."}]
+    if not parts or any(part == ".." for part in parts):
+        return None
+    if any(part.startswith(".") for part in parts):
+        return None
+    for part in parts:
+        trimmed = part.rstrip(" .")
+        device_stem = trimmed.split(".", 1)[0].upper()
+        if (
+            not trimmed
+            or trimmed != part
+            or ":" in part
+            or any(ord(character) < 32 for character in part)
+            or device_stem in WINDOWS_RESERVED_FILE_NAMES
+            or re.fullmatch(r"(?:COM|LPT)[1-9]", device_stem)
+        ):
+            return None
+    return os.path.join(*parts)
+
+
+def _is_reparse_path(path):
+    if os.path.islink(path):
+        return True
+    try:
+        stat_result = os.lstat(path)
+    except OSError:
+        return False
+    file_attributes = getattr(stat_result, "st_file_attributes", 0)
+    reparse_flag = getattr(stat_result, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    return bool(file_attributes & reparse_flag)
+
+
+def _path_is_within(root, path):
+    try:
+        return os.path.normcase(os.path.commonpath([root, path])) == os.path.normcase(root)
+    except ValueError:
+        return False
+
+
+def _existing_path_components_are_safe(root, path):
+    relative = os.path.relpath(path, root)
+    if relative == ".":
+        return True, ""
+    current = root
+    for part in relative.split(os.sep):
+        current = os.path.join(current, part)
+        if not os.path.lexists(current):
+            continue
+        if _is_reparse_path(current):
+            return False, current
+    return True, ""
+
+
+def _resolve_project_path(relative_path, *, allow_root=False, for_write=False):
+    scope = _project_root()
+    if not scope.get("ok"):
+        return scope
+    normalized = _normalized_project_relative_path(relative_path, allow_root=allow_root)
+    if normalized is None:
+        return {
+            "ok": False,
+            "blocked": True,
+            "code": "project_path_outside_scope",
+            "message": "Use a relative path inside the current saved .blend project directory; absolute, parent, and hidden paths are blocked.",
+            "project_root": scope["project_root"],
+            "relative_path": str(relative_path or ""),
+        }
+    candidate = os.path.abspath(os.path.join(scope["project_root"], normalized))
+    resolved_candidate = os.path.realpath(candidate)
+    if not _path_is_within(scope["project_root"], resolved_candidate):
+        return {
+            "ok": False,
+            "blocked": True,
+            "code": "project_path_outside_scope",
+            "message": "The resolved path escapes the current project directory.",
+            "project_root": scope["project_root"],
+            "relative_path": str(relative_path or ""),
+        }
+    safe_components, unsafe_component = _existing_path_components_are_safe(scope["project_root"], candidate)
+    if not safe_components:
+        return {
+            "ok": False,
+            "blocked": True,
+            "code": "project_path_link_blocked",
+            "message": "Symbolic links and filesystem reparse points are not followed by project-file tools.",
+            "project_root": scope["project_root"],
+            "relative_path": normalized,
+            "blocked_component": unsafe_component,
+        }
+    if for_write and os.path.splitext(candidate)[1].lower() in BLOCKED_PROJECT_WRITE_SUFFIXES:
+        return {
+            "ok": False,
+            "blocked": True,
+            "code": "project_file_type_blocked",
+            "message": "Executable, script, library, and .blend files cannot be written through the generic project-file tool.",
+            "project_root": scope["project_root"],
+            "relative_path": normalized,
+        }
+    return {
+        "ok": True,
+        "project_root": scope["project_root"],
+        "blend_path": scope["blend_path"],
+        "relative_path": normalized,
+        "path": candidate,
+    }
+
+
+def _ensure_project_parent(root, path):
+    parent = os.path.dirname(path)
+    if not _path_is_within(root, parent):
+        return False, "Target parent escapes the current project directory"
+    relative = os.path.relpath(parent, root)
+    current = root
+    if relative == ".":
+        return True, ""
+    for part in relative.split(os.sep):
+        current = os.path.join(current, part)
+        if os.path.lexists(current):
+            if _is_reparse_path(current):
+                return False, f"Project path component is a link or reparse point: {current}"
+            if not os.path.isdir(current):
+                return False, f"Project path component is not a directory: {current}"
+        else:
+            try:
+                os.mkdir(current)
+            except OSError as exc:
+                return False, f"Could not create project directory: {type(exc).__name__}: {exc}"
+    return True, ""
+
+
+def list_project_files(*, relative_path="", recursive=False, max_entries=200):
+    resolved = _resolve_project_path(relative_path, allow_root=True)
+    if not resolved.get("ok"):
+        return resolved
+    directory = resolved["path"]
+    if not os.path.isdir(directory):
+        return {**resolved, "ok": False, "message": "Project directory not found"}
+    limit = max(1, min(int(max_entries or 200), 1000))
+    entries = []
+    truncated = False
+
+    def visit(current):
+        nonlocal truncated
+        remaining = limit - len(entries)
+        if remaining <= 0:
+            truncated = True
+            return
+        try:
+            with os.scandir(current) as iterator:
+                children = list(itertools.islice(iterator, remaining + 1))
+        except OSError as exc:
+            raise RuntimeError(f"Could not list project directory: {type(exc).__name__}: {exc}") from exc
+        if len(children) > remaining:
+            truncated = True
+            children = children[:remaining]
+        children.sort(key=lambda item: item.name.lower())
+        for entry in children:
+            if entry.name.startswith("."):
+                continue
+            if len(entries) >= limit:
+                return
+            relative = os.path.relpath(entry.path, resolved["project_root"])
+            is_link = _is_reparse_path(entry.path)
+            is_dir = entry.is_dir(follow_symlinks=False)
+            item = {
+                "relative_path": relative,
+                "name": entry.name,
+                "type": "link" if is_link else ("directory" if is_dir else "file"),
+            }
+            if not is_dir and not is_link:
+                try:
+                    item["size_bytes"] = entry.stat(follow_symlinks=False).st_size
+                except OSError:
+                    item["size_bytes"] = None
+            entries.append(item)
+            if recursive and is_dir and not is_link:
+                visit(entry.path)
+                if len(entries) >= limit:
+                    return
+
+    try:
+        visit(directory)
+    except RuntimeError as exc:
+        return {**resolved, "ok": False, "message": str(exc)}
+    return {
+        **resolved,
+        "message": "Project files listed",
+        "entries": entries,
+        "entry_count": len(entries),
+        "truncated": truncated,
+        "recursive": bool(recursive),
+    }
+
+
+def read_project_file(*, relative_path, encoding="utf-8", max_bytes=1_048_576):
+    resolved = _resolve_project_path(relative_path)
+    if not resolved.get("ok"):
+        return resolved
+    path = resolved["path"]
+    if not os.path.isfile(path):
+        return {**resolved, "ok": False, "message": "Project file not found"}
+    try:
+        link_count = os.stat(path, follow_symlinks=False).st_nlink
+    except OSError as exc:
+        return {**resolved, "ok": False, "message": f"Could not inspect project file: {type(exc).__name__}: {exc}"}
+    if link_count > 1:
+        return {
+            **resolved,
+            "ok": False,
+            "blocked": True,
+            "code": "project_path_link_blocked",
+            "message": "Files with multiple hard links are not read by project-file tools.",
+            "link_count": link_count,
+        }
+    limit = max(1, min(int(max_bytes or 1_048_576), MAX_PROJECT_FILE_BYTES))
+    size = os.path.getsize(path)
+    if size > limit:
+        return {
+            **resolved,
+            "ok": False,
+            "code": "project_file_too_large",
+            "message": f"Project file is {size} bytes; the requested read limit is {limit} bytes.",
+            "size_bytes": size,
+            "max_bytes": limit,
+        }
+    with open(path, "rb") as handle:
+        payload = handle.read(limit + 1)
+    if len(payload) > limit:
+        return {**resolved, "ok": False, "code": "project_file_too_large", "message": "Project file exceeded the read limit."}
+    normalized_encoding = str(encoding or "utf-8").strip().lower()
+    if normalized_encoding == "base64":
+        content = base64.b64encode(payload).decode("ascii")
+    elif normalized_encoding == "utf-8":
+        try:
+            content = payload.decode("utf-8")
+        except UnicodeDecodeError:
+            return {
+                **resolved,
+                "ok": False,
+                "code": "project_file_not_utf8",
+                "message": "Project file is not valid UTF-8; retry with encoding=base64.",
+                "size_bytes": len(payload),
+            }
+    else:
+        return {**resolved, "ok": False, "message": "encoding must be utf-8 or base64"}
+    return {
+        **resolved,
+        "message": "Project file read",
+        "encoding": normalized_encoding,
+        "content": content,
+        "size_bytes": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def write_project_file(*, relative_path, content, encoding="utf-8", overwrite=False, create_dirs=True):
+    resolved = _resolve_project_path(relative_path, for_write=True)
+    if not resolved.get("ok"):
+        return resolved
+    normalized_encoding = str(encoding or "utf-8").strip().lower()
+    content_text = str(content or "")
+    try:
+        if normalized_encoding == "base64":
+            if len(content_text) > MAX_PROJECT_FILE_BASE64_CHARS:
+                return {
+                    **resolved,
+                    "ok": False,
+                    "code": "project_file_too_large",
+                    "message": f"Base64 project-file writes are limited to {MAX_PROJECT_FILE_BASE64_CHARS} encoded characters.",
+                }
+            payload = base64.b64decode(content_text, validate=True)
+        elif normalized_encoding == "utf-8":
+            if len(content_text) > MAX_PROJECT_FILE_BYTES:
+                return {
+                    **resolved,
+                    "ok": False,
+                    "code": "project_file_too_large",
+                    "message": f"Project-file writes are limited to {MAX_PROJECT_FILE_BYTES} bytes.",
+                }
+            payload = content_text.encode("utf-8")
+        else:
+            return {**resolved, "ok": False, "message": "encoding must be utf-8 or base64"}
+    except (binascii.Error, ValueError) as exc:
+        return {**resolved, "ok": False, "message": f"Invalid base64 content: {exc}"}
+    if len(payload) > MAX_PROJECT_FILE_BYTES:
+        return {
+            **resolved,
+            "ok": False,
+            "code": "project_file_too_large",
+            "message": f"Project-file writes are limited to {MAX_PROJECT_FILE_BYTES} bytes.",
+            "size_bytes": len(payload),
+            "max_bytes": MAX_PROJECT_FILE_BYTES,
+        }
+    path = resolved["path"]
+    if os.path.isdir(path):
+        return {**resolved, "ok": False, "message": "Target path is a directory"}
+    if os.path.exists(path) and not bool(overwrite):
+        return {
+            **resolved,
+            "ok": False,
+            "code": "project_file_exists",
+            "message": "Project file already exists; pass overwrite=true to replace it.",
+            "exists": True,
+        }
+    parent = os.path.dirname(path)
+    if not os.path.isdir(parent):
+        if not bool(create_dirs):
+            return {**resolved, "ok": False, "message": "Target project directory does not exist"}
+        created, error = _ensure_project_parent(resolved["project_root"], path)
+        if not created:
+            return {**resolved, "ok": False, "message": error}
+    safe_components, unsafe_component = _existing_path_components_are_safe(resolved["project_root"], path)
+    if not safe_components:
+        return {
+            **resolved,
+            "ok": False,
+            "blocked": True,
+            "code": "project_path_link_blocked",
+            "message": "A project path component became a link or reparse point before the write.",
+            "blocked_component": unsafe_component,
+        }
+    temp_path = ""
+    try:
+        descriptor, temp_path = tempfile.mkstemp(prefix=".agent-bridge-write-", dir=parent)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if bool(overwrite):
+            os.replace(temp_path, path)
+            temp_path = ""
+        else:
+            try:
+                os.link(temp_path, path)
+            except FileExistsError:
+                return {
+                    **resolved,
+                    "ok": False,
+                    "code": "project_file_exists",
+                    "message": "Project file already exists; pass overwrite=true to replace it.",
+                    "exists": True,
+                }
+            except OSError:
+                with open(path, "xb") as handle:
+                    handle.write(payload)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+            os.unlink(temp_path)
+            temp_path = ""
+    except Exception as exc:
+        return {**resolved, "ok": False, "message": f"Project-file write failed: {type(exc).__name__}: {exc}"}
+    finally:
+        if temp_path:
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+    return {
+        **resolved,
+        "message": "Project file written",
+        "encoding": normalized_encoding,
+        "size_bytes": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "overwrote": bool(overwrite),
+    }
 
 
 def _abspath(path):

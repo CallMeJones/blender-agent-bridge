@@ -98,6 +98,7 @@ The source `.blend` file and full 1080p videos are not committed here; the repos
 - Inspect scenes, selections, materials, animation data, rigs, cameras, render settings, compositor nodes, geometry nodes, collections, shape keys, particles, curves, text, and blend-file health.
 - Read bounded viewport screenshots, sampled animation playblast frames, object inspection renders, render thumbnails, and long-render job resources through MCP.
 - Check `.blend` diagnostics, save or autosave already-bound projects, and open or create project files only from user-confirmed paths.
+- List, read, and create bounded files beneath the current saved `.blend` directory. Project-file tools reject unsaved projects, absolute/parent/hidden paths, filesystem links, executable code, libraries, and generic `.blend` writes.
 - Search Poly Haven and Sketchfab catalogs, cache/import HDRIs, textures, and models, and report source, license, cache, and imported data-block diagnostics.
 - Start external asset download/cache jobs for Poly Haven or Sketchfab, poll or cancel them, then import completed job results from cached manifests.
 - Use animation workflow tools such as `run_animation_task`, `plan_animation_workflow`, `run_animation_workflow`, `review_playblast_against_brief`, and `run_animation_repair_loop`.

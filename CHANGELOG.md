@@ -5,6 +5,7 @@
 ## 0.3.1 - 2026-07-22
 
 - Reduced Blender Agent Bridge to one compact sidebar for bridge status, start/stop, MCP config, binary session script trust/revocation, and preview commit/revert. Removed the per-script Run/Reject/Allow-Once UI and disabled privileged generated scripts; filesystem/network/project outcomes now use bounded structured tools.
+- Added bounded project-directory list/read/write tools rooted at the current saved `.blend`, with traversal/link protection, hidden-path exclusion, 4 MiB limits, opt-in overwrite, and blocked executable/script/library/`.blend` targets.
 - Hardened external-asset downloads with DNS-pinned public-address connections, redirect revalidation, credential isolation, and a 4 GiB streaming limit.
 - Made PyPI publication safely resumable by comparing tested artifact hashes before upload, skipping only verified existing files, and checking the complete public artifact set afterward.
 - Made copied Bundled MCP configs use Blender's own Python interpreter and verified that exact command from a clean installed extension.

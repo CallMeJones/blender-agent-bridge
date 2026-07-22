@@ -1,5 +1,5 @@
 {
-  "catalog_tool_count": 185,
+  "catalog_tool_count": 188,
   "contracts": {
     "add_action_cycles": {
       "description": "Add cycles modifiers to action f-curves so an animation loops. Applies immediately with preview revert support.",
@@ -7526,6 +7526,50 @@
       "supports_headless": true,
       "timeout_seconds": 30
     },
+    "list_project_files": {
+      "description": "List files and folders beneath the directory containing the current saved .blend. Hidden paths and links are not traversed; unsaved projects are refused.",
+      "has_side_effects": false,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "max_entries": {
+            "description": "Maximum entries to return, from 1 to 1000.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "recursive": {
+            "description": "Recursively list ordinary subdirectories. Defaults to false.",
+            "type": "boolean"
+          },
+          "relative_path": {
+            "description": "Optional relative project subdirectory. Absolute, parent, and hidden paths are rejected.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "path_policy": "Only relative paths contained by the directory of the current saved .blend are accepted. Absolute paths, parent traversal, hidden components, symbolic links, and reparse points are blocked.",
+      "permissions": [
+        "files:read"
+      ]
+    },
     "list_scene_objects": {
       "description": "List objects in the current scene with names, types, selection state, visibility, collections, and locations.",
       "input_schema": {
@@ -8393,6 +8437,56 @@
       ],
       "risk_level": "destructive",
       "supports_headless": true
+    },
+    "read_project_file": {
+      "description": "Read a bounded UTF-8 or base64 file beneath the directory containing the current saved .blend. Reads are capped at 4 MiB and cannot follow hidden paths or links.",
+      "has_side_effects": false,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "encoding": {
+            "enum": [
+              "utf-8",
+              "base64"
+            ],
+            "type": "string"
+          },
+          "max_bytes": {
+            "description": "Maximum bytes to read, capped at 4194304.",
+            "maximum": 4194304,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "relative_path": {
+            "description": "Relative path beneath the saved .blend directory.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "required": [
+          "relative_path"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "path_policy": "Only relative paths contained by the directory of the current saved .blend are accepted. Absolute paths, parent traversal, hidden components, symbolic links, and reparse points are blocked.",
+      "permissions": [
+        "files:read"
+      ]
     },
     "render_scene_thumbnail": {
       "description": "Render a small PNG from the scene camera or a named camera, then return metadata plus exact MCP image resource URIs. Use for render evidence, thumbnails, and client-readable still output. Large synchronous renders are guarded; use start_render_job for timeout-safe high-resolution output.",
@@ -11004,6 +11098,65 @@
         "files:read"
       ],
       "supports_headless": true
+    },
+    "write_project_file": {
+      "description": "Create or replace a bounded UTF-8 or base64 file beneath the directory containing the current saved .blend. Parent folders may be created; executable/script/library and .blend targets are blocked.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "description": "UTF-8 text or base64 content. Decoded content is capped at 4 MiB.",
+            "maxLength": 5592408,
+            "type": "string"
+          },
+          "create_dirs": {
+            "description": "Create ordinary parent directories. Defaults to true.",
+            "type": "boolean"
+          },
+          "encoding": {
+            "enum": [
+              "utf-8",
+              "base64"
+            ],
+            "type": "string"
+          },
+          "overwrite": {
+            "description": "Replace an existing file. Defaults to false.",
+            "type": "boolean"
+          },
+          "relative_path": {
+            "description": "Relative output path beneath the saved .blend directory.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "required": [
+          "relative_path",
+          "content"
+        ],
+        "type": "object"
+      },
+      "max_output_bytes": 4194304,
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "path_policy": "Only relative paths contained by the directory of the current saved .blend are accepted. Absolute paths, parent traversal, hidden components, symbolic links, reparse points, executable or script targets, libraries, and .blend files are blocked.",
+      "permissions": [
+        "files:write"
+      ]
     }
   },
   "definitions": [
@@ -11336,6 +11489,101 @@
         "type": "object"
       },
       "name": "autosave_current_blend_file"
+    },
+    {
+      "description": "List files and folders beneath the directory containing the current saved .blend. Hidden paths and links are not traversed; unsaved projects are refused.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "max_entries": {
+            "description": "Maximum entries to return, from 1 to 1000.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "recursive": {
+            "description": "Recursively list ordinary subdirectories. Defaults to false.",
+            "type": "boolean"
+          },
+          "relative_path": {
+            "description": "Optional relative project subdirectory. Absolute, parent, and hidden paths are rejected.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_project_files"
+    },
+    {
+      "description": "Read a bounded UTF-8 or base64 file beneath the directory containing the current saved .blend. Reads are capped at 4 MiB and cannot follow hidden paths or links.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "encoding": {
+            "enum": [
+              "utf-8",
+              "base64"
+            ],
+            "type": "string"
+          },
+          "max_bytes": {
+            "description": "Maximum bytes to read, capped at 4194304.",
+            "maximum": 4194304,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "relative_path": {
+            "description": "Relative path beneath the saved .blend directory.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "required": [
+          "relative_path"
+        ],
+        "type": "object"
+      },
+      "name": "read_project_file"
+    },
+    {
+      "description": "Create or replace a bounded UTF-8 or base64 file beneath the directory containing the current saved .blend. Parent folders may be created; executable/script/library and .blend targets are blocked.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "description": "UTF-8 text or base64 content. Decoded content is capped at 4 MiB.",
+            "maxLength": 5592408,
+            "type": "string"
+          },
+          "create_dirs": {
+            "description": "Create ordinary parent directories. Defaults to true.",
+            "type": "boolean"
+          },
+          "encoding": {
+            "enum": [
+              "utf-8",
+              "base64"
+            ],
+            "type": "string"
+          },
+          "overwrite": {
+            "description": "Replace an existing file. Defaults to false.",
+            "type": "boolean"
+          },
+          "relative_path": {
+            "description": "Relative output path beneath the saved .blend directory.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "required": [
+          "relative_path",
+          "content"
+        ],
+        "type": "object"
+      },
+      "name": "write_project_file"
     },
     {
       "description": "Return JSON for Blender workspaces, windows, screens, and UI areas. Use before workspace/view navigation or UI diagnostics.",
@@ -18736,6 +18984,9 @@
       "open_blend_file",
       "create_new_blender_project",
       "autosave_current_blend_file",
+      "list_project_files",
+      "read_project_file",
+      "write_project_file",
       "get_workspace_layout",
       "jump_to_workspace",
       "set_viewport_view",
@@ -18805,7 +19056,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "c9c094faf3cdc29888a72fc7ed7e611c84b4604524d08bea584380fb87a1ea7d",
+  "registry_digest": "165dfe8bf1712adced0f20996a89fd0fe2dea6aa6226b04b27ea79042b1aee04",
   "schema_version": 1,
   "specs": [
     {
@@ -19809,6 +20060,189 @@
       },
       "name": "autosave_current_blend_file",
       "order": 80,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "project_workspace"
+    },
+    {
+      "contract": {
+        "has_side_effects": false,
+        "mutates_scene": false,
+        "path_policy": "Only relative paths contained by the directory of the current saved .blend are accepted. Absolute paths, parent traversal, hidden components, symbolic links, and reparse points are blocked.",
+        "permissions": [
+          "files:read"
+        ]
+      },
+      "description": "List files and folders beneath the directory containing the current saved .blend. Hidden paths and links are not traversed; unsaved projects are refused.",
+      "exposure": "catalog",
+      "groups": [
+        "project_files"
+      ],
+      "handler_key": "list_project_files",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "max_entries": {
+            "description": "Maximum entries to return, from 1 to 1000.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "recursive": {
+            "description": "Recursively list ordinary subdirectories. Defaults to false.",
+            "type": "boolean"
+          },
+          "relative_path": {
+            "description": "Optional relative project subdirectory. Absolute, parent, and hidden paths are rejected.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_project_files",
+      "order": 82,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "project_workspace"
+    },
+    {
+      "contract": {
+        "has_side_effects": false,
+        "mutates_scene": false,
+        "path_policy": "Only relative paths contained by the directory of the current saved .blend are accepted. Absolute paths, parent traversal, hidden components, symbolic links, and reparse points are blocked.",
+        "permissions": [
+          "files:read"
+        ]
+      },
+      "description": "Read a bounded UTF-8 or base64 file beneath the directory containing the current saved .blend. Reads are capped at 4 MiB and cannot follow hidden paths or links.",
+      "exposure": "catalog",
+      "groups": [
+        "project_files"
+      ],
+      "handler_key": "read_project_file",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "encoding": {
+            "enum": [
+              "utf-8",
+              "base64"
+            ],
+            "type": "string"
+          },
+          "max_bytes": {
+            "description": "Maximum bytes to read, capped at 4194304.",
+            "maximum": 4194304,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "relative_path": {
+            "description": "Relative path beneath the saved .blend directory.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "required": [
+          "relative_path"
+        ],
+        "type": "object"
+      },
+      "name": "read_project_file",
+      "order": 84,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "project_workspace"
+    },
+    {
+      "contract": {
+        "has_side_effects": true,
+        "max_output_bytes": 4194304,
+        "mutates_scene": false,
+        "path_policy": "Only relative paths contained by the directory of the current saved .blend are accepted. Absolute paths, parent traversal, hidden components, symbolic links, reparse points, executable or script targets, libraries, and .blend files are blocked.",
+        "permissions": [
+          "files:write"
+        ]
+      },
+      "description": "Create or replace a bounded UTF-8 or base64 file beneath the directory containing the current saved .blend. Parent folders may be created; executable/script/library and .blend targets are blocked.",
+      "exposure": "catalog",
+      "groups": [
+        "project_files"
+      ],
+      "handler_key": "write_project_file",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "description": "UTF-8 text or base64 content. Decoded content is capped at 4 MiB.",
+            "maxLength": 5592408,
+            "type": "string"
+          },
+          "create_dirs": {
+            "description": "Create ordinary parent directories. Defaults to true.",
+            "type": "boolean"
+          },
+          "encoding": {
+            "enum": [
+              "utf-8",
+              "base64"
+            ],
+            "type": "string"
+          },
+          "overwrite": {
+            "description": "Replace an existing file. Defaults to false.",
+            "type": "boolean"
+          },
+          "relative_path": {
+            "description": "Relative output path beneath the saved .blend directory.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "required": [
+          "relative_path",
+          "content"
+        ],
+        "type": "object"
+      },
+      "name": "write_project_file",
+      "order": 86,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -35233,5 +35667,5 @@
       "owner": "scripts_transactions"
     }
   ],
-  "tool_count": 186
+  "tool_count": 189
 }
