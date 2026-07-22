@@ -51,14 +51,14 @@ I do not want “AI for Blender” to mean giving an agent silent, unrestricted 
 Blender Agent Bridge uses several layers of friction where they matter:
 
 - Safe helper edits become visible preview transactions with **Commit**, **Revert**, and Blender undo support.
-- Generated Python is staged in Blender and waits for **Run Now** or **Reject** unless you explicitly allow one agent run or enable temporary, runtime-only session trust.
+- Generated Python uses a binary runtime switch: trust off refuses it; **Trust Agent Scripts** runs ordinary static-check-passing scripts for the current Blender session. Privileged generated scripts remain disabled.
 - Scripts involving custom external assets or project-file operations require a declared capability manifest and fresh approval.
 - Save-as, open, and new-project operations require a path confirmed by the user.
 - Tool calls produce local, redacted audit events.
 - External asset downloads use bounded background jobs and hardened URL, redirect, archive, and cache handling.
 - A compatibility handshake prevents mismatched add-on and MCP runtimes from silently working against different tool registries.
 
-These controls reduce risk, but they do not turn generated Python into a security sandbox. During the beta, use copies or version control for important projects, review pending scripts, and keep backups of valuable `.blend` files.
+These controls reduce risk, but they do not turn generated Python into a security sandbox. During the beta, use copies or version control for important projects, enable script trust only for agents you trust, and keep backups of valuable `.blend` files.
 
 ## Provider-Neutral and Client-Friendly
 

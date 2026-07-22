@@ -789,12 +789,12 @@ Owner tests:
 Required scenarios:
 
 - Missing code, alternate code field names, compile errors, static warnings, blocked imports/calls, and harmless scripts.
-- Approval token is short-lived, bound to the pending script text, one-time use, and rejected when stale or wrong.
+- Trust off refuses `draft_script` without creating pending script state; trust on immediately runs ordinary static-check-passing scripts.
 - Runtime external script trust allows tokenless runs only while active and only after static checks pass.
-- Trust is cleared on add-on reload, file load, and bridge start.
+- Trust is cleared on add-on reload and file load, but persists across bridge stop/start within the same Blender session.
 - Animation-like and helper-overlap script drafts can stage or auto-run under trust after static checks pass, with helper advice returned as metadata.
-- External asset download/import and project file lifecycle scripts use `draft_privileged_script` when custom Python is required; they require a review/audit manifest and one-time approval and do not auto-run under normal trust. The manifest is not a runtime filesystem or network sandbox. Persistent simulation/cache bake and static-dangerous Python remain blocked or explicitly approval-gated.
-- Checkpoints, undo, stdout/stderr logs, error tracebacks, and pending script state are visible.
+- `draft_privileged_script`, `run_approved_script`, and persistent simulation bake-script requests are refused. Filesystem/network/project outcomes must use bounded structured tools.
+- Checkpoints, undo, stdout/stderr logs, and error tracebacks remain visible; no pending-script approval UI is registered.
 - Audit logs redact code/token-like fields and record bridge/MCP tool calls.
 - Commit/revert preview status and rollback warnings are returned and shown.
 

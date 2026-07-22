@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import contextlib
 import datetime as _dt
-import hashlib
 import io
 import os
 import re
-import secrets
 import textwrap
 import time
 import traceback
@@ -124,14 +122,6 @@ def _scene_state(context=None):
     return getattr(scene, "claude_blender", None) if scene else None
 
 
-def _source_hash(source):
-    return hashlib.sha256(str(source or "").encode("utf-8")).hexdigest()
-
-
-def _token_hash(token):
-    return hashlib.sha256(str(token or "").encode("utf-8")).hexdigest()
-
-
 def clear_external_script_approval(context=None, *, state=None, status="No external script approval"):
     state = state or _scene_state(context)
     if not state:
@@ -142,13 +132,6 @@ def clear_external_script_approval(context=None, *, state=None, status="No exter
     state.pending_script_external_approval_source_hash = ""
     state.pending_script_external_approval_expires_at = ""
     return True
-
-
-def _external_approval_expires_at(state):
-    try:
-        return float(getattr(state, "pending_script_external_approval_expires_at", "") or 0.0)
-    except (TypeError, ValueError):
-        return 0.0
 
 
 def _external_trust_expires_at(state):
@@ -326,8 +309,8 @@ def approve_external_script_trust_window(context, *, ttl_seconds=EXTERNAL_TRUST_
     )
     transcript.record_system_message(
         "User approved external script trust. "
-        "External clients may run staged scripts without a per-script token until it expires; "
-        "blocked scripts and failing static checks remain refused."
+        "Static-check-passing ordinary scripts may run until trust is revoked or cleared; "
+        "blocked and privileged scripts remain refused."
     )
     return {
         "ok": True,
@@ -350,49 +333,11 @@ def revoke_external_script_trust_window(context):
 
 
 def approve_pending_script_for_external_run(context, *, ttl_seconds=EXTERNAL_APPROVAL_TTL_SECONDS):
-    state = _scene_state(context)
-    if not state or not state.pending_script:
-        return {"ok": False, "message": "No pending script to approve for external execution"}
-    if state.pending_script_blocked:
-        clear_external_script_approval(state=state, status="External approval blocked by static checks")
-        return {"ok": False, "message": "Pending script is blocked by static checks"}
-    text_name = state.pending_script_text_name or PENDING_SCRIPT_NAME
-    source = _read_text_block(text_name)
-    if not source:
-        clear_external_script_approval(state=state, status="External approval failed: missing script text")
-        return {"ok": False, "message": "No pending script text found"}
-    analysis = _analyze_pending_source(source, state)
-    if not analysis["ok"]:
-        state.pending_script_blocked = True
-        state.pending_script_status = "Blocked by static checks"
-        state.pending_script_issues = _join_lines(analysis.get("issues"))
-        state.pending_script_warnings = _join_lines(analysis.get("warnings"))
-        state.status = state.pending_script_status
-        clear_external_script_approval(state=state, status="External approval blocked by static checks")
-        return {"ok": False, "message": "Script blocked by static checks", "analysis": analysis}
-
-    ttl = _coerce_ttl_seconds(ttl_seconds, EXTERNAL_APPROVAL_TTL_SECONDS)
-    token = secrets.token_urlsafe(32)
-    expires_at = time.time() + ttl
-    state.pending_script_external_approval_hash = _token_hash(token)
-    state.pending_script_external_approval_text_name = text_name
-    state.pending_script_external_approval_source_hash = _source_hash(source)
-    state.pending_script_external_approval_expires_at = f"{expires_at:.6f}"
-    approval_label = "External privileged run" if getattr(state, "pending_script_privileged", False) else "External run"
-    state.pending_script_external_approval_status = f"{approval_label} approved for {ttl} second(s)"
-    state.pending_script_status = state.pending_script_external_approval_status
-    state.status = state.pending_script_external_approval_status
-    transcript.record_system_message(
-        "User approved pending script for external execution. "
-        "A one-time approval token was issued in Blender UI and is not stored in transcripts."
-    )
     return {
-        "ok": True,
-        "message": "External run approval token issued",
-        "approval_token": token,
-        "expires_at": expires_at,
-        "ttl_seconds": ttl,
-        "text_datablock": text_name,
+        "ok": False,
+        "blocked": True,
+        "code": "per_script_approval_removed",
+        "message": "Per-script approval was removed. Use the binary Trust Agent Scripts session control.",
     }
 
 
@@ -429,70 +374,29 @@ def validate_external_script_approval(context, approval_token):
     if not state or not state.pending_script:
         return _external_approval_error(state, "No pending script to run")
     token = str(approval_token or "").strip()
-    if not token:
-        expire_external_script_trust_if_needed(state=state)
-        if external_script_trust_active(state=state):
-            accepted = _validate_current_pending_script_for_external_run(context, state)
-            if not accepted.get("ok"):
-                return accepted
-            analysis = accepted.get("analysis") or {}
-            if getattr(state, "pending_script_privileged", False):
-                return _external_approval_error(
-                    state,
-                    (
-                        "Pending privileged script requires explicit one-time user approval; "
-                        "external script trust cannot auto-run custom asset or project-file scripts"
-                    ),
-                )
-            if analysis.get("explicit_approval_required"):
-                return _external_approval_error(
-                    state,
-                    (
-                        "Pending script requires explicit one-time user approval; "
-                        "external script trust cannot auto-run persistent simulation/cache bake or free operators"
-                    ),
-                )
-            return {
-                "ok": True,
-                "message": "External trusted window accepted",
-                "approval_mode": "trusted_window",
-            }
-        return _external_approval_error(state, "Missing external approval token and no active external script trust")
+    if token:
+        return _external_approval_error(state, "Per-script approval tokens are no longer supported")
+    expire_external_script_trust_if_needed(state=state)
+    if not external_script_trust_active(state=state):
+        return _external_approval_error(state, "Agent script trust is off")
     accepted = _validate_current_pending_script_for_external_run(context, state)
     if not accepted.get("ok"):
         return accepted
-    expected_hash = state.pending_script_external_approval_hash
-    if not expected_hash:
-        return _external_approval_error(state, "No Blender-side external approval is active")
-    if time.time() > _external_approval_expires_at(state):
-        return _external_approval_error(state, "External script approval expired", clear=True)
-    if not secrets.compare_digest(_token_hash(token), expected_hash):
-        return _external_approval_error(state, "External approval token did not match")
-
-    text_name = accepted["text_name"]
-    if text_name != state.pending_script_external_approval_text_name:
-        return _external_approval_error(state, "External approval is stale for this script", clear=True)
-    source = accepted["source"]
-    if _source_hash(source) != state.pending_script_external_approval_source_hash:
-        return _external_approval_error(state, "External approval is stale because the script changed", clear=True)
-    return {"ok": True, "message": "External approval accepted", "approval_mode": "one_time_token"}
+    analysis = accepted.get("analysis") or {}
+    if getattr(state, "pending_script_privileged", False) or analysis.get("explicit_approval_required"):
+        return _external_approval_error(state, "Privileged generated scripts are disabled")
+    return {"ok": True, "message": "Session script trust accepted", "approval_mode": "session_trust"}
 
 
 def run_externally_approved_script(context, approval_token, *, checkpoint_enabled=True, checkpoint_dir=None):
     approval = validate_external_script_approval(context, approval_token)
     if not approval.get("ok"):
         return approval
-    state = _scene_state(context)
-    if approval.get("approval_mode") == "one_time_token":
-        clear_external_script_approval(state=state, status="External approval consumed")
-    result = run_pending_script(
+    return run_pending_script(
         context,
         checkpoint_enabled=checkpoint_enabled,
         checkpoint_dir=checkpoint_dir,
     )
-    if state and result.get("ok") and approval.get("approval_mode") == "one_time_token":
-        state.pending_script_external_approval_status = "External approval consumed"
-    return result
 
 
 def analyze_script(source, *, privileged_capabilities=None):
@@ -777,6 +681,17 @@ def reject_pending_script(context):
         state.status = "Pending script rejected"
     transcript.record_system_message("Pending script rejected by user.")
     return {"ok": True, "message": "Pending script rejected"}
+
+
+def discard_pending_script(context, *, status="No pending script"):
+    """Clear transient staging state without representing it as a user decision."""
+    state = getattr(context.scene, "claude_blender", None)
+    if state:
+        clear_external_script_approval(state=state)
+        _clear_pending_script_metadata(state)
+        state.pending_script_status = str(status or "No pending script")
+        state.status = state.pending_script_status
+    return {"ok": True, "message": str(status or "No pending script")}
 
 
 def pending_script_source(context):

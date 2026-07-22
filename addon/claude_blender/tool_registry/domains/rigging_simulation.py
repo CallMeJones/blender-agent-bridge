@@ -76,8 +76,8 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'get_rigging_details'
   'exposure': 'compact_direct',
   'owner': 'rigging_simulation'},
  {'name': 'stage_persistent_simulation_bake',
-  'description': 'Stage a fixed-template scene-wide persistent simulation point-cache bake script for explicit user '
-                 'approval. Persistent bake/free operators do not auto-run under session-wide external script trust.',
+  'description': 'Compatibility tool that refuses persistent simulation bake scripts. Inspect the simulation, then '
+                 'perform the persistent bake manually in Blender.',
   'input_schema': {'type': 'object',
                    'properties': {'object_names': {'type': 'array', 'items': {'type': 'string'}},
                                   'frame_start': {'type': 'integer'},
@@ -91,16 +91,13 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'get_rigging_details'
                                                                          'trust is active.'},
                                   'max_objects': {'type': 'integer'}},
                    'additionalProperties': False},
-  'contract': {'description': 'Stage a fixed-template scene-wide persistent simulation point-cache bake script for '
-                              'explicit approval; persistent bake/free operators do not auto-run under session-wide '
-                              'script trust',
-               'mutates_scene': True,
-               'has_side_effects': True,
-               'requires_approval': True,
-               'explicit_approval_required': True,
+  'contract': {'description': 'Refuse persistent simulation bake scripts and direct the user to manual Blender baking',
+               'mutates_scene': False,
+               'has_side_effects': False,
+               'requires_approval': False,
+               'explicit_approval_required': False,
                'trust_window_auto_run_allowed': False,
-               'approval_policy': 'Requires a fresh one-time user approval; session-wide external script trust cannot '
-                                  'auto-run persistent simulation/cache bake or free operators.',
+               'approval_policy': 'Persistent simulation/cache bake and free scripts are disabled.',
                'recovery_hint': 'If Blender becomes unreachable after an approved bake, wait, call '
                                 'blender_bridge_status, then use get_blend_file_diagnostics before reporting any '
                                 'checkpoint path.',

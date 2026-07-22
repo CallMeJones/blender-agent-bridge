@@ -726,11 +726,11 @@ def _assert_compact_tools_visible(proc):
     assert "import_poly_haven_asset" not in names, listed
     assert "import_sketchfab_model" not in names, listed
     bake_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "stage_persistent_simulation_bake")
-    assert bake_tool["annotations"]["requiresApproval"] is True, bake_tool
-    assert bake_tool["annotations"]["requiresExplicitOneTimeApproval"] is True, bake_tool
+    assert bake_tool["annotations"]["requiresApproval"] is False, bake_tool
+    assert bake_tool["annotations"]["requiresExplicitOneTimeApproval"] is False, bake_tool
     assert bake_tool["annotations"]["trustWindowAutoRunAllowed"] is False, bake_tool
-    assert "one-time" in bake_tool["annotations"]["approvalPolicy"], bake_tool
-    assert "get_blend_file_diagnostics" in bake_tool["annotations"]["recoveryHint"], bake_tool
+    assert "disabled" in bake_tool["annotations"]["approvalPolicy"], bake_tool
+    assert bake_tool["annotations"]["readOnlyHint"] is True, bake_tool
     assert "requires_explicit_one_time_approval" in bake_tool["outputSchema"]["properties"], bake_tool
     assemble_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "assemble_render_job_video")
     assert assemble_tool["inputSchema"]["required"] == ["job_id"], assemble_tool
@@ -762,16 +762,18 @@ def _assert_full_tools_visible(proc):
     draft_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "draft_script")
     assert draft_tool["annotations"]["mutatesScene"] is True, draft_tool
     assert draft_tool["annotations"]["hasSideEffects"] is True, draft_tool
+    assert draft_tool["annotations"]["requiresApproval"] is False, draft_tool
     assert draft_tool["annotations"]["readOnlyHint"] is False, draft_tool
     privileged_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "draft_privileged_script")
-    assert privileged_tool["annotations"]["requiresApproval"] is True, privileged_tool
-    assert privileged_tool["annotations"]["requiresExplicitOneTimeApproval"] is True, privileged_tool
+    assert privileged_tool["annotations"]["requiresApproval"] is False, privileged_tool
+    assert privileged_tool["annotations"]["requiresExplicitOneTimeApproval"] is False, privileged_tool
     assert privileged_tool["annotations"]["trustWindowAutoRunAllowed"] is False, privileged_tool
-    assert {"files:read", "files:write", "network"}.issubset(set(privileged_tool["annotations"]["permissions"])), privileged_tool
+    assert privileged_tool["annotations"]["permissions"] == ["scene:read"], privileged_tool
+    assert privileged_tool["annotations"]["readOnlyHint"] is True, privileged_tool
     run_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "run_approved_script")
-    assert run_tool["annotations"]["requiresApproval"] is True, run_tool
-    assert run_tool["annotations"]["hasSideEffects"] is True, run_tool
-    assert run_tool["annotations"]["readOnlyHint"] is False, run_tool
+    assert run_tool["annotations"]["requiresApproval"] is False, run_tool
+    assert run_tool["annotations"]["hasSideEffects"] is False, run_tool
+    assert run_tool["annotations"]["readOnlyHint"] is True, run_tool
     open_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "open_blend_file")
     assert open_tool["annotations"]["destructiveHint"] is True, open_tool
     assert open_tool["annotations"]["humanInLoopRequired"] is True, open_tool
@@ -1432,9 +1434,9 @@ def main():
             assert full_empty_approval["result"]["structuredContent"]["tool"] == "run_approved_script", full_empty_approval
             full_approval_warning_codes = {
                 warning["code"]
-                for warning in full_empty_approval["result"]["structuredContent"]["guardrail_warnings"]
+                for warning in full_empty_approval["result"]["structuredContent"].get("guardrail_warnings", [])
             }
-            assert "approval_required" in full_approval_warning_codes, full_empty_approval
+            assert "approval_required" not in full_approval_warning_codes, full_empty_approval
         finally:
             full_proc.kill()
             full_proc.wait(timeout=5)
@@ -1456,7 +1458,7 @@ def main():
         assert {"draft_script", "run_approved_script"}.issubset(searched_names), searched
         searched_tools = searched["result"]["structuredContent"]["tools"]
         run_script_summary = next(tool for tool in searched_tools if tool["name"] == "run_approved_script")
-        assert run_script_summary["guardrail_warnings"][0]["code"] == "approval_required", searched
+        assert not run_script_summary.get("guardrail_warnings", []), searched
         assert searched["result"]["structuredContent"]["include_schemas"] is False, searched
         assert searched["result"]["structuredContent"]["schema_lookup_tool"] == "get_blender_tool_schema", searched
         assert "input_schema" not in searched_tools[0], searched
@@ -1729,13 +1731,13 @@ def main():
             },
         )
         bake_catalog_tool = bake_catalog_schema["result"]["structuredContent"]["tool"]
-        assert bake_catalog_tool["annotations"]["requiresExplicitOneTimeApproval"] is True, bake_catalog_schema
+        assert bake_catalog_tool["annotations"]["requiresExplicitOneTimeApproval"] is False, bake_catalog_schema
         assert bake_catalog_tool["annotations"]["trustWindowAutoRunAllowed"] is False, bake_catalog_schema
         assert "requires_explicit_one_time_approval" in bake_catalog_tool["outputSchema"]["properties"], bake_catalog_schema
         bake_warning_codes = {
-            warning["code"] for warning in bake_catalog_tool["guardrail_warnings"]
+            warning["code"] for warning in bake_catalog_tool.get("guardrail_warnings", [])
         }
-        assert "explicit_one_time_approval_required" in bake_warning_codes, bake_catalog_schema
+        assert "explicit_one_time_approval_required" not in bake_warning_codes, bake_catalog_schema
 
         simulation_catalog_search = _send(
             proc,
@@ -1751,7 +1753,7 @@ def main():
         )
         simulation_catalog_tools = simulation_catalog_search["result"]["structuredContent"]["tools"]
         bake_summary = next(tool for tool in simulation_catalog_tools if tool["name"] == "stage_persistent_simulation_bake")
-        assert bake_summary["requires_explicit_one_time_approval"] is True, simulation_catalog_search
+        assert bake_summary["requires_explicit_one_time_approval"] is False, simulation_catalog_search
         assert bake_summary["trust_window_auto_run_allowed"] is False, simulation_catalog_search
 
         schema = _send(
@@ -1947,9 +1949,9 @@ def main():
         assert empty_approval_invoke["result"]["structuredContent"]["invoked_tool"] == "run_approved_script", empty_approval_invoke
         approval_warning_codes = {
             warning["code"]
-            for warning in empty_approval_invoke["result"]["structuredContent"]["guardrail_warnings"]
+            for warning in empty_approval_invoke["result"]["structuredContent"].get("guardrail_warnings", [])
         }
-        assert "approval_required" in approval_warning_codes, empty_approval_invoke
+        assert "approval_required" not in approval_warning_codes, empty_approval_invoke
 
         destructive_invoke = _send(
             proc,

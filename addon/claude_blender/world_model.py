@@ -780,7 +780,7 @@ def _animation_hardening_summary(context, objects, subject_routing, contact_surf
         "repair_loop_limits": [
             "Automatic repair is for bounded helper operations from repair_animation_from_findings.",
             "Center-of-mass/contact/support findings may need manual re-pose planning before the loop can safely mutate.",
-            "Persistent simulation/cache bake remains explicit one-time approval work.",
+            "Persistent simulation/cache bake scripts are disabled; bake manually in Blender after inspection.",
         ],
         "subject_count": len(subject_routing),
     }

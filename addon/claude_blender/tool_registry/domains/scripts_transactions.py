@@ -6,10 +6,9 @@ from ..registry import ToolSpec
 
 
 SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'draft_script',
-  'description': 'Stage Blender Python in a Text datablock for explicit user approval, or auto-run after static checks '
-                 'when external script trust is active. Use only when safe helper tools cannot express the requested '
-                 'scene, animation, material, or rig change. Blocked scripts are refused even while external script '
-                 'trust is active.',
+  'description': 'Run Blender Python immediately after static checks when Blender-side session script trust is active. '
+                 'When trust is off the request is refused without staging a pending script. Use only when bounded '
+                 'helper tools cannot express the requested scene, animation, material, or rig change.',
   'input_schema': {'type': 'object',
                    'properties': {'intent': {'type': 'string', 'description': 'Plain-language reason for the script'},
                                   'expected_changes': {'type': 'string',
@@ -28,21 +27,19 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'draft_script',
                                            'description': 'Complete Blender Python script to stage for approval'}},
                    'required': ['intent', 'expected_changes', 'risk_level', 'code'],
                    'additionalProperties': False},
-  'contract': {'description': 'Stage generated Blender Python, or auto-run it after static checks when Blender-side '
-                              'external script trust is active',
+  'contract': {'description': 'Run generated Blender Python after static checks only while Blender-side session script '
+                              'trust is active',
                'mutates_scene': True,
                'has_side_effects': True,
-               'requires_approval': True},
+               'requires_approval': False},
   'handler_key': 'draft_script',
   'order': 1810,
   'groups': (),
   'exposure': 'catalog',
   'owner': 'scripts_transactions'},
  {'name': 'draft_privileged_script',
-  'description': 'Stage custom Blender Python for external asset or project-file workflows that need declared '
-                 'filesystem, network, asset-import, or project-file capabilities. Requires an explicit approval '
-                 'manifest with paths/URLs/actions. Never auto-runs under normal external script trust; the user must '
-                 'run it in Blender or issue a one-time external approval token.',
+  'description': 'Compatibility endpoint that refuses privileged generated Python. Use bounded external-asset, '
+                 'project-file, render, capture, save, or project-output tools instead.',
   'input_schema': {'type': 'object',
                    'properties': {'script_kind': {'type': 'string',
                                                   'enum': ['external_asset', 'project_file', 'asset_project_file'],
@@ -91,28 +88,16 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'draft_script',
                                            'maxLength': 500000,
                                            'description': 'Complete privileged Blender Python script to stage for '
                                                           'approval'}},
-                   'required': ['script_kind',
-                                'intent',
-                                'expected_changes',
-                                'approval_summary',
-                                'declared_paths',
-                                'declared_urls',
-                                'destructive_actions',
-                                'code'],
                    'additionalProperties': False},
-  'contract': {'description': 'Stage custom asset/project-file Blender Python with declared filesystem, network, '
-                              'asset-import, or project-file capabilities for explicit one-time approval',
-               'mutates_scene': True,
-               'has_side_effects': True,
-               'requires_approval': True,
-               'explicit_approval_required': True,
+  'contract': {'description': 'Refuse privileged generated Python and direct clients to bounded structured tools',
+               'mutates_scene': False,
+               'has_side_effects': False,
+               'requires_approval': False,
+               'explicit_approval_required': False,
                'trust_window_auto_run_allowed': False,
-               'approval_policy': 'Requires an approval manifest and fresh one-time user approval; session-wide '
-                                  'external script trust cannot auto-run privileged asset or project-file scripts.',
-               'recovery_hint': 'Review declared paths, URLs, destructive actions, and checkpoint status before '
-                                'approval. If an approved project-file script opens another .blend, trust is cleared '
-                                'on file load.',
-               'permissions': ['scene:read', 'scene:mutate', 'script:stage', 'files:read', 'files:write', 'network'],
+               'approval_policy': 'Privileged generated scripts are disabled.',
+               'recovery_hint': 'Use the corresponding bounded structured tool.',
+               'permissions': ['scene:read'],
                'output_schema': {'type': 'object',
                                  'properties': {'ok': {'type': 'boolean'},
                                                 'message': {'type': 'string'},
@@ -168,7 +153,7 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'draft_script',
   'exposure': 'catalog',
   'owner': 'scripts_transactions'},
  {'name': 'run_approved_script',
-  'description': 'Run a pending script with a one-time approval token or active Blender-side script trust',
+  'description': 'Compatibility endpoint that refuses removed per-script approval flows.',
   'input_schema': {'type': 'object',
                    'properties': {'approval_token': {'type': 'string',
                                                      'description': 'Optional one-time token copied from Blender after '
@@ -177,14 +162,14 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'draft_script',
                                                                     'Blender-side external script trust grant is '
                                                                     'active.'}},
                    'additionalProperties': False},
-  'contract': {'description': 'Run a pending script with a one-time approval token or active Blender-side script trust',
-               'mutates_scene': True,
-               'has_side_effects': True,
-               'requires_approval': True,
+  'contract': {'description': 'Refuse removed per-script approval flows',
+               'mutates_scene': False,
+               'has_side_effects': False,
+               'requires_approval': False,
                'external_only': True,
                'supports_headless': False,
                'timeout_seconds': 120,
-               'permissions': ['scene:read', 'scene:mutate', 'script:run'],
+               'permissions': ['scene:read'],
                'input_schema': {'type': 'object',
                                 'properties': {'approval_token': {'type': 'string',
                                                                   'description': 'Optional one-time token copied from '

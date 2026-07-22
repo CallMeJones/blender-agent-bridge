@@ -129,7 +129,7 @@ After building a release zip, install `dist/claude_blender-<version>.zip` in a c
 - The MCP client sees `blender_bridge_status`, `list_scene_objects`, `run_animation_task`, `draft_script`, and `run_approved_script`, or can reach them through the compact catalog surface.
 - `blender_bridge_status` reports matching add-on/bridge/MCP versions.
 - `resources/list` includes capture, playblast, inspection-render, render-thumbnail, and async render-job resources, and `resources/read` can read `blender://captures/latest/metadata` after a capture, `blender://playblasts/latest/metadata` after a playblast capture, `blender://inspection-renders/latest/metadata` after diagnostic object renders, `blender://render-thumbnails/latest/metadata` after thumbnail renders, plus `blender://render-jobs/latest/metadata` after background render jobs.
-- External script trust can be turned on/off, and trust clears after bridge restart or add-on reload.
+- External script trust can be turned on/off, persists across bridge stop/start, and clears on add-on reload or file load.
 - The GitHub Pages extension repository can be added, synced, installed, enabled, and listed from a temporary Blender profile:
 
 ```powershell

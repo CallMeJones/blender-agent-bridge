@@ -7112,7 +7112,7 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "inspect_simulation_bake",
             "stage_persistent_simulation_bake",
         ],
-        "script_boundary": "Persistent bake/free operators remain explicit one-time approval only; inspect first, then stage the fixed bake helper.",
+        "script_boundary": "Persistent bake/free scripts are disabled; inspect first, then ask the user to bake manually in Blender.",
     },
     "asset_import": {
         "keywords": {"external asset", "asset import", "import asset", "import model", "download asset", "poly haven", "polyhaven", "sketchfab", "hdri", "texture library"},
@@ -7128,7 +7128,7 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "create_studio_product_stage",
             "capture_viewport",
         ],
-        "script_boundary": "Use the async asset job workflow first; custom provider/project lifecycle scripts require draft_privileged_script with declared paths, URLs, and actions.",
+        "script_boundary": "Use the bounded async asset job and project-file tools; privileged generated scripts are disabled.",
     },
     "compositor_render": {
         "keywords": {"compositor", "compositing", "post", "post process", "transparent", "alpha", "render preset", "render pass", "render passes", "aov", "aovs", "cryptomatte", "normal pass", "depth pass", "mp4", "preview"},
@@ -7914,7 +7914,7 @@ def plan_asset_import_workflow(
                 "prepare_imported_asset_presentation",
             ],
             "synchronous_fallbacks_debug_only": ["download_poly_haven_asset", "import_poly_haven_asset", "download_sketchfab_model", "import_sketchfab_model", "import_external_asset_job_result"],
-            "custom_asset_scripts": "Use draft_privileged_script with declared paths/URLs/actions when provider helpers cannot express the workflow.",
+            "custom_asset_scripts": "Privileged generated scripts are disabled; report the helper gap instead of requesting arbitrary filesystem or network Python.",
         },
     }
 
@@ -8057,9 +8057,9 @@ def plan_director_workflow(
         },
         "script_fallback_policy": {
             "helper_first": True,
-            "draft_script_allowed_after_helper_gap": True,
-            "draft_privileged_script_for_asset_or_project_file_custom_work": True,
-            "persistent_bake_requires_one_time_approval": True,
+            "draft_script_allowed_after_helper_gap_when_session_trusted": True,
+            "privileged_generated_scripts_disabled": True,
+            "persistent_bake_scripts_disabled": True,
         },
     }
 

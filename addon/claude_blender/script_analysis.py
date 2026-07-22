@@ -600,7 +600,7 @@ def analyze_script(source, *, privileged_capabilities=None):
             if _requires_explicit_approval(approval_call_name):
                 reason = (
                     f"Line {_line(node)} persistent simulation/cache operator requires explicit "
-                    f"one-time user approval and cannot auto-run under external script trust: {approval_call_name}"
+                    f"a privileged operation that generated scripts may not run: {approval_call_name}"
                 )
                 warnings.append(reason)
                 explicit_approval_reasons.append(reason)

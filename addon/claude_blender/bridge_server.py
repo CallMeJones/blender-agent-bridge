@@ -1025,10 +1025,6 @@ def start_bridge(*, host=DEFAULT_HOST, port=DEFAULT_PORT, auth_token=""):
         _server = server
         _thread = thread
     url = bridge_url()
-    script_runner.clear_external_script_trust_for_all_scenes(
-        status=script_runner.NO_EXTERNAL_TRUST_STATUS,
-        audit_action="clear_on_bridge_start",
-    )
     _set_scene_bridge_state(running=True, url=url, status=f"Bridge running at {url}")
     return {"ok": True, "message": f"Bridge running at {url}", "url": url}
 

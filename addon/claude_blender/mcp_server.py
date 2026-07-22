@@ -766,7 +766,8 @@ PROMPTS = {
             "bounded creation helpers, animation workflow/review/repair, viewport/playblast/render evidence, "
             "and explicit commit/revert decisions. Keep helper changes in live preview until the user asks to "
             "commit. Use plan_asset_import_workflow for external assets, run_animation_workflow for animation, "
-            "and draft_script or draft_privileged_script only after the helper plan identifies a concrete gap."
+            "and draft_script only after the helper plan identifies a concrete gap and the user has enabled script trust. "
+            "Use bounded structured tools for external assets and project files."
         ),
     },
     "advanced_animation_workflow": {
@@ -814,8 +815,9 @@ PROMPTS = {
             "add_cloth_simulation_to_selected, then get_simulation_details or inspect_simulation_bake before any "
             "persistent bake. For render-pass, cryptomatte, or shader AOV setup, prefer configure_render_outputs before custom compositor/render Python. "
             "For look-dev review, prefer create_lookdev_turntable_review to set up bounded staging/turntable, render controls, inspection stills, and artifact validation. "
-            "Use draft_script for custom advanced scene scripts when static checks pass; keep "
-            "external asset, project-file, and persistent bake/free work on their dedicated approval paths."
+            "Use draft_script for custom advanced scene scripts only when session script trust is active and static "
+            "checks pass. Use bounded structured tools for external assets and project files; persistent bake/free "
+            "scripts are disabled."
         ),
     },
     "external_asset_workflow": {
@@ -2098,8 +2100,8 @@ class BlenderMCPServer:
                 "fallbacks for explicit direct/debug use. "
                 "If a bridge_timeout occurs, treat it as recoverable: wait the returned poll_after_seconds, call "
                 "blender_bridge_status, then inspect visual evidence resources or audit logs before rerunning work. "
-                "Session-wide external script trust cannot auto-run persistent simulation/cache bake or free operators; "
-                "stage those scripts for explicit one-time user approval."
+                "Generated Python is refused unless the user enables session script trust in Blender. Privileged and "
+                "persistent simulation/cache bake or free scripts remain disabled."
             ),
         }
 

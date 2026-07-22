@@ -245,38 +245,47 @@ def run_interactive_ui_smoke():
 
         script_runner = importlib.import_module(module_name + ".script_runner")
         bridge_server = importlib.import_module(module_name + ".bridge_server")
+        tool_dispatcher = importlib.import_module(module_name + ".tool_dispatcher")
         state = bpy.context.scene.claude_blender
 
-        staged = script_runner.stage_script(
-            bpy.context,
-            intent="Verify installed one-time external approval",
-            expected_changes="Sets one temporary scene property",
-            risk_level="low",
-            target_objects=[],
-            code="scene['installed_approval_smoke'] = 'ok'",
+        script_runner.revoke_external_script_trust_window(bpy.context)
+        trust_off = json.loads(
+            tool_dispatcher.execute_tool(
+                bpy.context,
+                "draft_script",
+                {
+                    "intent": "Verify installed binary script trust",
+                    "expected_changes": "Nothing runs while trust is off",
+                    "risk_level": "low",
+                    "code": "scene['installed_trust_smoke'] = 'unexpected'",
+                },
+            )
         )
-        if not staged.get("ok") or not state.pending_script:
-            raise AssertionError(f"Installed script did not stage for approval: {staged}")
+        if trust_off.get("ok") or trust_off.get("code") != "script_trust_required" or state.pending_script:
+            raise AssertionError(f"Installed trust-off request created executable or pending work: {trust_off}")
         approval = script_runner.approve_pending_script_for_external_run(bpy.context, ttl_seconds=60)
-        if not approval.get("ok") or not approval.get("approval_token"):
-            raise AssertionError(f"Installed one-time approval was not issued: {approval}")
-        wrong_token = script_runner.run_externally_approved_script(
-            bpy.context,
-            "wrong-token",
-            checkpoint_enabled=False,
+        if approval.get("ok") or approval.get("code") != "per_script_approval_removed":
+            raise AssertionError(f"Installed per-script approval compatibility path was not disabled: {approval}")
+        session_trust = script_runner.approve_external_script_trust_window(bpy.context, session=True)
+        if not session_trust.get("ok"):
+            raise AssertionError(f"Installed session trust did not activate: {session_trust}")
+        trusted_run = json.loads(
+            tool_dispatcher.execute_tool(
+                bpy.context,
+                "draft_script",
+                {
+                    "intent": "Verify installed trusted execution",
+                    "expected_changes": "Sets one temporary scene property",
+                    "risk_level": "low",
+                    "code": "scene['installed_trust_smoke'] = 'ok'",
+                },
+            )
         )
-        if wrong_token.get("ok") or not state.pending_script:
-            raise AssertionError(f"Installed one-time approval accepted the wrong token: {wrong_token}")
-        approved_run = script_runner.run_externally_approved_script(
-            bpy.context,
-            approval["approval_token"],
-            checkpoint_enabled=False,
-        )
-        if not approved_run.get("ok") or bpy.context.scene.get("installed_approval_smoke") != "ok":
-            raise AssertionError(f"Installed one-time approval did not run exactly once: {approved_run}")
-        if state.pending_script or state.pending_script_external_approval_hash:
-            raise AssertionError("Installed one-time approval was not consumed")
-        del bpy.context.scene["installed_approval_smoke"]
+        if not trusted_run.get("ok") or not trusted_run.get("auto_ran") or bpy.context.scene.get("installed_trust_smoke") != "ok":
+            raise AssertionError(f"Installed trusted script did not run immediately: {trusted_run}")
+        if state.pending_script:
+            raise AssertionError("Installed trusted execution left pending script state")
+        del bpy.context.scene["installed_trust_smoke"]
 
         expiring = script_runner.approve_external_script_trust_window(bpy.context, ttl_seconds=1)
         if not expiring.get("ok") or not script_runner.external_script_trust_active(bpy.context, state=state):
@@ -310,8 +319,9 @@ def run_interactive_ui_smoke():
         restarted = bridge_server.start_bridge(port=original_bridge_port, auth_token="")
         if not restarted.get("ok") or restarted.get("url") != original_bridge_url:
             raise AssertionError(f"Installed bridge did not restart on the smoke URL: {restarted}")
-        if script_runner.external_script_trust_active(bpy.context, state=state):
-            raise AssertionError("Installed script trust survived a bridge restart")
+        if not script_runner.external_script_trust_active(bpy.context, state=state):
+            raise AssertionError("Installed script trust did not persist across bridge restart")
+        script_runner.revoke_external_script_trust_window(bpy.context)
 
         mesh = bpy.data.meshes.new("Agent Bridge Interactive UI Smoke Mesh")
         test_object = bpy.data.objects.new("Agent Bridge Interactive UI Smoke Object", mesh)

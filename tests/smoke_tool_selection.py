@@ -87,7 +87,7 @@ def main():
         assert "start_external_asset_import_job" in asset_script_names, asset_script_meta
         assert "prepare_imported_asset_presentation" in asset_script_names, asset_script_meta
         assert "draft_script" not in asset_script_names, asset_script_meta
-        assert "draft_privileged_script" in asset_script_names, asset_script_meta
+        assert "draft_privileged_script" not in asset_script_names, asset_script_meta
 
         custom_asset_script_tools, custom_asset_script_meta = agent_tools.select_blender_tool_definitions(
             "Write a custom Python script to download and import a Poly Haven sunset HDRI.",
@@ -98,7 +98,7 @@ def main():
         assert "start_external_asset_download" in custom_asset_script_names, custom_asset_script_meta
         assert "prepare_imported_asset_presentation" in custom_asset_script_names, custom_asset_script_meta
         assert "draft_script" not in custom_asset_script_names, custom_asset_script_meta
-        assert "draft_privileged_script" in custom_asset_script_names, custom_asset_script_meta
+        assert "draft_privileged_script" not in custom_asset_script_names, custom_asset_script_meta
 
         project_file_script_tools, project_file_script_meta = agent_tools.select_blender_tool_definitions(
             "Write a custom Python script to save this project as a new .blend file.",
@@ -107,7 +107,7 @@ def main():
         project_file_script_names = _names(project_file_script_tools)
         assert "save_blend_file" in project_file_script_names, project_file_script_meta
         assert "draft_script" not in project_file_script_names, project_file_script_meta
-        assert "draft_privileged_script" in project_file_script_names, project_file_script_meta
+        assert "draft_privileged_script" not in project_file_script_names, project_file_script_meta
 
         product_tools, product_meta = agent_tools.select_blender_tool_definitions(
             "Polish this product into a premium catalog studio shot with dimensions and a turntable.",

@@ -12,7 +12,7 @@ Any source, workflow, packaging, or user-facing documentation change after candi
 
 | Gate | Status | Exit condition |
 | --- | --- | --- |
-| Scope and user experience | Required | The single compact sidebar and contextual approval/revert states are visually reviewed. |
+| Scope and user experience | Required | The single compact sidebar, binary trust switch, and preview Commit/Revert states are visually reviewed. |
 | Code and regression tests | Done locally | Unit, pure-Python, Blender 5.1 background, and installed-extension gates pass for the candidate. |
 | Blender compatibility | Required | Blender 4.2 LTS, 4.5 LTS, and 5.1 pass in CI; newer versions remain capability-gated without an artificial maximum. |
 | Security and privacy | Required | Approval boundaries, external downloads, secrets, permissions, and packaged artifacts are reviewed. |
@@ -27,9 +27,9 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 
 - [x] **Done** — Bundled MCP remains the default; `uvx / PyPI` remains optional.
 - [x] **Done** — Public tool names, safety contracts, compact exposure, and provider-neutral architecture remain backward compatible.
-- [x] **Done** — The secondary setup/control-center panel and its dormant renderers are removed; the one remaining sidebar renders only bridge/MCP setup, active trust revocation, pending approvals, and preview commit/revert.
-- [x] **Done** — `tests/smoke_ui_layout.py` locks the exact idle, active-trust, compact script-approval, conditional rollback, one-panel, and six-setting Preferences contracts.
-- [ ] **Required** — Inspect the single sidebar and contextual script-review dialogs at normal and narrow widths in Blender 5.1.2.
+- [x] **Done** — The secondary panel and per-script Run/Reject/Allow-Once operators are removed; the one remaining sidebar renders only bridge/MCP setup, binary runtime script trust/revocation, and preview Commit/Revert.
+- [x] **Done** — `tests/smoke_ui_layout.py` locks the exact offline, ready-to-trust, active-trust, removed-approval, conditional rollback, one-panel, and six-setting Preferences contracts.
+- [ ] **Required** — Inspect the single sidebar and trust confirmation at normal and narrow widths in Blender 5.1.2.
 - [ ] **Required** — Repeat the same real sidebar inspection in Blender 4.2.0 and 4.5.0.
 - [ ] **Required** — Confirm a first-time user can install, start the bridge, copy a config, connect one MCP host, run the smoke prompt, and find preview commit/revert without maintainer help.
 
@@ -56,7 +56,7 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 
 ## 4. Security and Privacy
 
-- [x] **Done** — Generated Python remains preview/approval-gated; static analysis is a guardrail, not a sandbox.
+- [x] **Done** — Generated Python uses binary session trust: trust off refuses without pending state, trust on immediately runs ordinary static-check-passing scripts, and privileged generated scripts are disabled. Static analysis remains a guardrail, not a sandbox.
 - [x] **Done** — The bridge binds to loopback and supports bearer-token authentication.
 - [x] **Done** — External-asset workers opt into online mode only for explicit asset jobs.
 - [x] **Done** — External downloads reject private/local destinations, pin a validated public address, constrain redirects and credential forwarding, and enforce a 4 GiB limit.
@@ -65,7 +65,7 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 - [x] **Done** — `blender_manifest.toml` permissions, [PRIVACY.md](../PRIVACY.md), and [SAFETY_MODEL.md](SAFETY_MODEL.md) were reviewed against the v0.3.1 behavior.
 - [x] **Done** — The official extension ZIP contains `LICENSE` and excludes repository metadata, bytecode, logs, caches, captures, checkpoints, tokens, and private `.blend` artifacts.
 - [ ] **Required** — Run the secret scan against the final reviewed commit and every candidate artifact input; record the scanner version and result.
-- [x] **Done** — The clean installed-extension smoke confirms one-time external approval, token rejection and consumption, trust expiry, revoke, reload cleanup, and bridge-restart cleanup through the packaged extension.
+- [x] **Done locally** — Clean installed-extension smoke confirms trust-off refusal without pending state, trust-on immediate execution, disabled per-script/privileged paths, revoke, reload cleanup, and bridge-restart persistence on Blender 4.2.0, 4.5.0, and 5.1.2.
 - [ ] **Required** — Confirm GitHub Release and Pages extension ZIPs have the same SHA-256 digest.
 
 ## 5. Packaging and Release
@@ -85,11 +85,11 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 - [x] **Done** — Client guides, showcase guidance, contribution guidance, issue templates, support policy, and security reporting are present.
 - [x] **Done locally** — `LICENSE` starts with the canonical GPL text so GitHub can detect it; the extension and Python package still declare `GPL-3.0-or-later` explicitly.
 - [x] **Done** — Use GitHub Discussions **Q&A** as the permanent Help surface; do not add a duplicate Help category.
-- [ ] **Manual** — Update the repository description to `Safe, scene-aware MCP bridge for Blender with reversible editing and visual evidence.`
-- [ ] **Manual** — Set the homepage to `https://callmejones.github.io/blender-agent-bridge/` and topics to `blender`, `blender-addon`, `mcp`, `model-context-protocol`, `ai-agents`, `3d`, and `python`; after pushing, confirm GitHub detects the GPL license rather than `Other`.
+- [x] **Done** — Repository description is `Safe, scene-aware MCP bridge for Blender with reversible editing and visual evidence.`
+- [x] **Done** — Homepage and requested repository topics are set; GitHub license detection still needs rechecking after the follow-up change is merged.
 - [x] **Done** — `main` remains direct-push-capable while there is one maintainer, but release candidates use a reviewable PR and must pass the release workflow before tagging; enable branch protection when a second regular contributor begins merging.
 - [x] **Done locally** — Add a monthly GitHub Actions Dependabot check capped at two open PRs; do not add dependency automation for the zero-runtime-dependency Python package.
-- [ ] **Manual** — Enable GitHub vulnerability alerts. Leave automated security-fix PRs off initially and reconsider them only if alerts identify actionable dependencies.
+- [x] **Done** — GitHub vulnerability alerts are enabled. Automated security-fix PRs remain off initially.
 - [x] **Done** — Reviewed starter Issues [#2](https://github.com/CallMeJones/blender-agent-bridge/issues/2), [#3](https://github.com/CallMeJones/blender-agent-bridge/issues/3), and [#4](https://github.com/CallMeJones/blender-agent-bridge/issues/4); each is bounded and already has concrete acceptance criteria.
 - [ ] **Optional** — Do not launch Discord yet. Reconsider after ten distinct monthly support/contributor conversations show demand for synchronous help.
 
@@ -131,5 +131,7 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 | 2026-07-22 | Updated `smoke_ui_layout.py` after active-trust, recovery, and conditional rollback fixes on Blender 4.2.0, 4.5.0, and 5.1.2 | Passed on all three versions |
 | 2026-07-22 | Final staged release-candidate scope audit | Passed; 49 intended files, no generated artifacts or unrelated changes |
 | 2026-07-22 | Post-evidence one-panel UI and documentation changes | Previous candidate scope, package, installed-extension, secret-scan, and artifact evidence invalidated; final-commit evidence required before tag |
+| 2026-07-22 | Binary trust candidate: 53 unit tests, complete pure-Python gate, complete 19-test Blender 5.1.2 suite, UI smoke on Blender 4.2/4.5/5.1, official source/ZIP/repository validation, and clean installed-extension live smoke on all three versions | Passed; candidate extension SHA-256 `43b558475e50630acac4b2282d27d67fcc57e6ab3c7147a2f5a21526191ca1d9` |
+| 2026-07-22 | Gitleaks 8.30.1 on 133-commit history and final binary-trust working diff | Passed; no leaks found |
 
 Add evidence here only after it has run against the candidate being evaluated. A previous release proves the pipeline, not the current release contents.

@@ -16,26 +16,18 @@ Use this when:
 - The script touches file paths, deletes data, imports modules, or edits many objects.
 - The model is using unfamiliar APIs.
 
-### Approval Required
+### Binary Script Trust
 
-An external agent drafts a script, the add-on shows it, and the user explicitly approves execution.
+Generated Python has one session-wide switch; there is no per-script approval queue.
 
-This should be the default.
-
-Current implementation:
-
-- External agents can stage code with `draft_script`.
-- The add-on writes the code to the `Agent Bridge Pending Script` Text datablock.
-- Static checks block obvious risky imports and calls before the Run button is enabled.
-- Normal scene-building scripts can be larger procedural payloads up to 500k characters, but oversized scripts are still blocked before execution.
-- `draft_script` treats helper overlap as advisory for normal scene-building, animation, material, transform, and setup scripts. It still refuses external asset downloads/imports, project file lifecycle operations, and persistent simulation/cache bakes.
-- `draft_privileged_script` is the elevated custom path for external asset and project-file lifecycle scripts. It requires a manifest with declared capabilities, paths, URLs, and destructive actions; it can allow filesystem/network/project-file APIs after static checks, but it never auto-runs under normal external script trust. The manifest is review/audit context for the user, not a runtime filesystem or network sandbox.
-- The single sidebar panel stays lean: bridge status/start-stop, MCP config, active script-trust warning/revocation, pending script approval, and pending preview commit/revert are the only rendered sections. Full script details move into the contextual approval dialog; diagnostics and historical state remain available through bridge/tool responses.
-- Static analysis reports both declared script risk and detected risk (`low`, `medium`, `high`, or `blocked`) with risk reasons and checkpoint recommendation.
+- With **Trust Agent Scripts** off, `draft_script` is refused without creating a Text datablock or pending UI.
+- With trust on, ordinary generated Python runs immediately after static checks. Blocked scripts are refused and never staged.
+- Trust is runtime-only and lasts until **Revoke**, add-on reload, file load, or Blender exit. Starting or stopping the bridge does not silently change the user's choice.
+- `draft_privileged_script` and `run_approved_script` remain compatibility endpoints but always refuse execution. Privileged generated Python cannot be enabled by session trust.
+- Filesystem, network, external-asset, project-file, render, capture, save, and persistent-cache outcomes must use bounded structured tools. Persistent simulation bake scripts are disabled; inspect first and bake manually in Blender.
+- Static checks are guardrails, not a sandbox. A trusted ordinary script executes inside Blender with Blender's OS permissions, so the switch means trusting the connected agent for the current session.
 - Execution pushes a Blender undo step when possible, saves a timestamped `.blend` checkpoint when enabled, and records stdout/errors in `Agent Bridge Script Log`.
-- Failed scripts keep their pending code, traceback, and logs available locally so the external client can inspect and stage a corrected draft.
-- External clients can normally call `run_approved_script` with a short-lived one-time token issued by the Blender UI for the current pending script.
-- A pending non-privileged script can grant Blender-side session trust; active trust always exposes `Revoke` in the sidebar. During that runtime-only trust, external clients may call `draft_script` and have non-privileged scripts auto-run after static checks pass, or run an already staged non-privileged script without a per-script token. Blocked scripts remain refused. Session trust lasts until `Revoke`, add-on reload, file load, or bridge start.
+- The single sidebar contains connection controls, the binary trust/revoke control, and pending preview **Commit**/**Revert** actions only. The removed **Run Now**, **Reject**, and **Allow Agent Once** operators are not registered.
 
 ### Limited Autonomous
 
@@ -63,12 +55,12 @@ Defaults and boundaries:
 - Add-on preferences can require a bearer token for HTTP bridge requests.
 - MCP clients call `mcp_server.py`; they do not import Blender Python or touch `bpy`.
 - Mutating helper tools still run inside Blender and use the live-preview/revert path.
-- Generated arbitrary Python is normally staged with `draft_script` or `draft_privileged_script` and must be approved in Blender. When the user turns on runtime external script trust, `draft_script` auto-runs normal scripts that pass static checks until trust is revoked or cleared by reload/file load/bridge start.
+- Generated Python is refused while session script trust is off. With trust on, `draft_script` runs ordinary scripts after static checks.
 - External script trust can run animation-like and helper-overlap scripts after static checks pass. Responses may still include helper advice so clients can choose a structured helper path when it clearly fits.
-- External script trust does not auto-run privileged external asset/project-file scripts or persistent simulation/cache bake/free operators; those require manual Run or a fresh one-time approval token.
+- Privileged generated scripts and persistent simulation/cache bake/free scripts are disabled. Use bounded structured tools or perform the operation manually in Blender.
 - Viewport screenshots, sampled animation playblast frames, inspection renders, render thumbnails, and async render-job outputs exposed through MCP resources are local artifacts. Saved `.blend` files use a project-local `.claude_blender/captures/` folder by default, while unsaved or unwritable projects use Blender's extension user-data directory. Async render jobs launch a background Blender process from a temporary `.blend` copy and can be cancelled with `cancel_render_job` while the bridge session is tracking the process.
 - MCP search summaries, schema lookups, and tool-call results may include `guardrail_warnings` for client routing and recovery. These warnings are advisory; Blender-side path checks, approval gates, preview rollback, and static script analysis remain the enforcement layer.
-- The Blender sidebar surfaces only connection state, active trust, and pending safety decisions. Source freshness, recovery, audit, rollback, active-operation, and visual-evidence details remain available through bridge/tool responses rather than a secondary Blender panel.
+- The Blender sidebar surfaces only connection state, binary session trust, and pending preview decisions. Source freshness, recovery, audit, rollback, active-operation, and visual-evidence details remain available through bridge/tool responses rather than a secondary Blender panel.
 - External clients should surface tool calls clearly because MCP tools are model-controlled.
 
 ## Risk Checks
@@ -86,7 +78,7 @@ Flag or block proposed scripts that include:
 - Deleting or renaming many objects, collections, materials, or actions.
 - Mutating linked library data without warning.
 
-These checks are guardrails, not a true sandbox. Blender Python runs with broad local privileges, so user approval and checkpointing remain essential.
+These checks are guardrails, not a true sandbox. Blender Python runs with broad local privileges, so session trust and checkpointing remain essential.
 
 Live-preview reverts return a rollback manifest and warnings when restoration is incomplete. This is visibility, not a guarantee that every possible Blender API mutation is reversible.
 
@@ -113,13 +105,13 @@ If a helper call opens a new preview transaction and then fails, the dispatcher 
 
 ## Recovery
 
-Before approved execution:
+Before trusted execution:
 
 - Push an undo step when possible.
 - Save a timestamped bridge-created `.blend` checkpoint when checkpoints are enabled.
 - Record the generated script and result log locally.
-- For external clients, require the approval token to match the current pending script and consume it before execution.
-- If external script trust is active, auto-run normal `draft_script` calls after static checks pass and accept tokenless external execution only within the runtime grant for a currently staged non-privileged script that still passes static checks.
+- Require active session script trust before accepting `draft_script`.
+- Refuse blocked or privileged scripts without creating a pending approval state.
 - For animation-like scripts, enforce workflow-first routing before considering trust auto-run.
 
 During live preview:

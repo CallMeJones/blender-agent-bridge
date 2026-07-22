@@ -206,12 +206,12 @@ def main():
                 },
             )
         )
-        assert advised_script["ok"] is True, advised_script
-        assert advised_script["requires_user_approval"] is True, advised_script
+        assert advised_script["ok"] is False, advised_script
+        assert advised_script["code"] == "script_trust_required", advised_script
+        assert advised_script["requires_user_approval"] is False, advised_script
         assert advised_script["helper_advisory"]["code"] == "animation_workflow_advised", advised_script
         assert "run_animation_workflow" in advised_script["helper_advisory"]["recommended_tools"], advised_script
-        rejected_advised_script = script_runner.reject_pending_script(context)
-        assert rejected_advised_script["ok"], rejected_advised_script
+        assert not context.scene.claude_blender.pending_script
 
         explicit_gap_script = json.loads(
             tool_dispatcher.execute_tool(
@@ -225,10 +225,10 @@ def main():
                 },
             )
         )
-        assert explicit_gap_script["ok"], explicit_gap_script
-        assert explicit_gap_script["requires_user_approval"] is True, explicit_gap_script
-        rejected_gap_script = script_runner.reject_pending_script(context)
-        assert rejected_gap_script["ok"], rejected_gap_script
+        assert not explicit_gap_script["ok"], explicit_gap_script
+        assert explicit_gap_script["code"] == "script_trust_required", explicit_gap_script
+        assert explicit_gap_script["requires_user_approval"] is False, explicit_gap_script
+        assert not context.scene.claude_blender.pending_script
 
         preflight_brief = _execute(
             context,
@@ -523,12 +523,12 @@ def main():
                 },
             )
         )
-        assert advised_after_ambiguous["ok"] is True, advised_after_ambiguous
-        assert advised_after_ambiguous["requires_user_approval"] is True, advised_after_ambiguous
+        assert advised_after_ambiguous["ok"] is False, advised_after_ambiguous
+        assert advised_after_ambiguous["code"] == "script_trust_required", advised_after_ambiguous
+        assert advised_after_ambiguous["requires_user_approval"] is False, advised_after_ambiguous
         assert advised_after_ambiguous["helper_advisory"]["code"] == "animation_workflow_advised", advised_after_ambiguous
         assert advised_after_ambiguous["helper_advisory"]["animation_workflow_seen"] is True, advised_after_ambiguous
-        rejected_ambiguous_script = script_runner.reject_pending_script(context)
-        assert rejected_ambiguous_script["ok"], rejected_ambiguous_script
+        assert not context.scene.claude_blender.pending_script
 
         no_count = _execute(
             context,

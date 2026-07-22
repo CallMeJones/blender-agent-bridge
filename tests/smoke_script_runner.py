@@ -137,7 +137,13 @@ def main():
         external_tool = bridge_tools["run_approved_script"]
         assert "approval_token" not in external_tool["inputSchema"].get("required", []), external_tool
         assert "minLength" not in external_tool["inputSchema"]["properties"]["approval_token"], external_tool
-        assert external_tool["annotations"]["requiresApproval"] is True, external_tool
+        assert external_tool["annotations"]["requiresApproval"] is False, external_tool
+        assert external_tool["annotations"]["readOnlyHint"] is True, external_tool
+        removed_approval = json.loads(
+            tool_dispatcher.execute_tool(context, "run_approved_script", {"approval_token": "legacy-token"})
+        )
+        assert not removed_approval["ok"], removed_approval
+        assert removed_approval["code"] == "per_script_approval_removed", removed_approval
 
         blocked = script_runner.stage_script(
             context,
@@ -235,12 +241,10 @@ print("created", obj.name)
                 },
             )
         )
-        assert alternate_field["ok"], alternate_field
-        assert state.pending_script
-        assert not state.pending_script_blocked
-
-        rejected = script_runner.reject_pending_script(context)
-        assert rejected["ok"], rejected
+        assert not alternate_field["ok"], alternate_field
+        assert alternate_field["code"] == "script_trust_required", alternate_field
+        assert alternate_field["requires_user_approval"] is False, alternate_field
+        assert not state.pending_script
         staged = script_runner.stage_script(
             context,
             intent="Create a simple smoke-test mesh object",
@@ -256,7 +260,7 @@ print("created", obj.name)
 
         missing_external = script_runner.run_externally_approved_script(context, "", checkpoint_enabled=False)
         assert not missing_external["ok"], missing_external
-        assert "approval token" in missing_external["message"], missing_external
+        assert "script trust" in missing_external["message"], missing_external
 
         trusted = script_runner.approve_external_script_trust_window(context, ttl_seconds=900)
         assert trusted["ok"], trusted
@@ -330,34 +334,12 @@ print("created", obj.name)
         assert session_revoked["ok"], session_revoked
         assert not script_runner.external_script_trust_active(context, state=state)
 
-        pending_before_trust = script_runner.stage_script(
-            context,
-            intent="Run automatically when session trust is approved after staging",
-            expected_changes="A scene custom property is set without pressing Run or Approve External",
-            risk_level="medium",
-            target_objects=[],
-            code="scene['claude_session_trust_button_smoke'] = 'ok'\nprint(scene['claude_session_trust_button_smoke'])",
-        )
-        assert pending_before_trust["ok"], pending_before_trust
-        assert state.pending_script
-        original_get_preferences = preferences.get_preferences
-        try:
-            preferences.get_preferences = lambda _context: smoke_preferences
-            trust_button = bpy.ops.claude_blender.approve_external_script_trust(
-                ttl_seconds=900,
-                session_trust=True,
-            )
-        finally:
-            preferences.get_preferences = original_get_preferences
+        assert not state.pending_script
+        trust_button = bpy.ops.claude_blender.approve_external_script_trust()
         assert "FINISHED" in trust_button, trust_button
-        assert context.scene["claude_session_trust_button_smoke"] == "ok"
         assert not state.pending_script
         assert script_runner.external_script_trust_active(context, state=state)
-        assert "ran automatically" in state.last_response, state.last_response
-        trust_button_checkpoint = os.path.abspath(state.last_checkpoint_path)
-        assert os.path.commonpath([os.path.abspath(checkpoint_dir), trust_button_checkpoint]) == os.path.abspath(
-            checkpoint_dir
-        ), state.last_checkpoint_path
+        assert "active for this Blender session" in state.last_response, state.last_response
         session_revoked = script_runner.revoke_external_script_trust_window(context)
         assert session_revoked["ok"], session_revoked
         assert not script_runner.external_script_trust_active(context, state=state)
@@ -436,7 +418,7 @@ print("created", obj.name)
         assert not bake_guarded_under_trust["analysis"]["trust_window_allowed"], bake_guarded_under_trust
         bake_guarded_result = script_runner.run_externally_approved_script(context, "", checkpoint_enabled=False)
         assert not bake_guarded_result["ok"], bake_guarded_result
-        assert "explicit one-time user approval" in bake_guarded_result["message"], bake_guarded_result
+        assert "disabled" in bake_guarded_result["message"], bake_guarded_result
         assert state.pending_script
         assert script_runner.external_script_trust_active(context, state=state)
         rejected = script_runner.reject_pending_script(context)
@@ -543,7 +525,7 @@ print("created", obj.name)
             )
         )
         assert not missing_privileged_manifest["ok"], missing_privileged_manifest
-        assert missing_privileged_manifest["code"] == "privileged_manifest_required", missing_privileged_manifest
+        assert missing_privileged_manifest["code"] == "privileged_scripts_disabled", missing_privileged_manifest
         assert not state.pending_script
 
         privileged_output_path = os.path.join(tempfile.gettempdir(), "claude_privileged_script_smoke.txt")
@@ -568,36 +550,15 @@ print("created", obj.name)
                 },
             )
         )
-        assert privileged_under_trust["ok"], privileged_under_trust
-        assert privileged_under_trust["privileged"] is True, privileged_under_trust
-        assert privileged_under_trust["requires_explicit_one_time_approval"] is True, privileged_under_trust
+        assert not privileged_under_trust["ok"], privileged_under_trust
+        assert privileged_under_trust["code"] == "privileged_scripts_disabled", privileged_under_trust
+        assert privileged_under_trust["requires_explicit_one_time_approval"] is False, privileged_under_trust
         assert privileged_under_trust["trust_window_auto_run_allowed"] is False, privileged_under_trust
         assert privileged_under_trust["auto_run_attempted"] is False, privileged_under_trust
-        assert privileged_under_trust["manifest_enforcement"] == "review_context_only", privileged_under_trust
-        assert "not a filesystem or network sandbox" in privileged_under_trust["manifest_notice"], privileged_under_trust
-        assert state.pending_script
-        assert state.pending_script_privileged
-        assert "filesystem" in state.pending_script_privileged_capabilities
-        assert not os.path.exists(privileged_output_path), privileged_under_trust
-        privileged_trust_run = script_runner.run_externally_approved_script(context, "", checkpoint_enabled=False)
-        assert not privileged_trust_run["ok"], privileged_trust_run
-        assert "one-time user approval" in privileged_trust_run["message"], privileged_trust_run
-        assert state.pending_script
-        assert not os.path.exists(privileged_output_path), privileged_trust_run
-        privileged_token = script_runner.approve_pending_script_for_external_run(context, ttl_seconds=60)
-        assert privileged_token["ok"], privileged_token
-        privileged_run = script_runner.run_externally_approved_script(
-            context,
-            privileged_token["approval_token"],
-            checkpoint_enabled=False,
-        )
-        assert privileged_run["ok"], privileged_run
-        assert os.path.exists(privileged_output_path), privileged_run
-        with open(privileged_output_path, "r", encoding="utf-8") as handle:
-            assert handle.read() == "ok"
+        assert "start_external_asset_job" in privileged_under_trust["recommended_tools"], privileged_under_trust
         assert not state.pending_script
+        assert not os.path.exists(privileged_output_path), privileged_under_trust
         assert script_runner.external_script_trust_active(context, state=state)
-        os.remove(privileged_output_path)
 
         privileged_project_path = os.path.join(tempfile.gettempdir(), "claude-privileged-project-smoke.blend")
         privileged_project_stage = json.loads(
@@ -617,13 +578,8 @@ print("created", obj.name)
                 },
             )
         )
-        assert privileged_project_stage["ok"], privileged_project_stage
-        assert privileged_project_stage["analysis"]["ok"], privileged_project_stage
-        assert privileged_project_stage["analysis"]["trust_window_allowed"] is False, privileged_project_stage
-        assert state.pending_script
-        assert state.pending_script_privileged_kind == "project_file"
-        rejected_privileged_project = script_runner.reject_pending_script(context)
-        assert rejected_privileged_project["ok"], rejected_privileged_project
+        assert not privileged_project_stage["ok"], privileged_project_stage
+        assert privileged_project_stage["code"] == "privileged_scripts_disabled", privileged_project_stage
         assert not state.pending_script
 
         custom_helper_gap_allowed = json.loads(
@@ -672,13 +628,11 @@ print("created", obj.name)
                 },
             )
         )
-        assert auto_blocked["ok"], auto_blocked
+        assert not auto_blocked["ok"], auto_blocked
+        assert auto_blocked["code"] == "script_blocked_by_static_checks", auto_blocked
         assert auto_blocked["analysis"]["blocked"], auto_blocked
-        assert "auto_ran" not in auto_blocked, auto_blocked
-        assert state.pending_script
-        assert state.pending_script_blocked
-        rejected = script_runner.reject_pending_script(context)
-        assert rejected["ok"], rejected
+        assert auto_blocked["auto_ran"] is False, auto_blocked
+        assert not state.pending_script
 
         trusted_second = script_runner.stage_script(
             context,
@@ -705,6 +659,23 @@ print("created", obj.name)
             ]
         trust_actions = {event.get("action") for event in trust_events}
         assert {"grant", "expire", "revoke"}.issubset(trust_actions), trust_events
+        binary_off = json.loads(
+            tool_dispatcher.execute_tool(
+                context,
+                "draft_script",
+                {
+                    "intent": "Verify binary trust-off behavior",
+                    "expected_changes": "Nothing is staged or executed",
+                    "risk_level": "low",
+                    "code": "scene['binary_trust_off_smoke'] = True",
+                },
+            )
+        )
+        assert not binary_off["ok"], binary_off
+        assert binary_off["code"] == "script_trust_required", binary_off
+        assert binary_off["requires_user_approval"] is False, binary_off
+        assert not state.pending_script
+        assert "binary_trust_off_smoke" not in context.scene
         needs_approval = script_runner.stage_script(
             context,
             intent="Require explicit approval after trust revocation",
@@ -719,25 +690,14 @@ print("created", obj.name)
         assert "script trust" in missing_after_revoke["message"], missing_after_revoke
 
         approval = script_runner.approve_pending_script_for_external_run(context, ttl_seconds=60)
-        assert approval["ok"], approval
-        assert approval["approval_token"], approval
-        assert approval["approval_token"] not in state.pending_script_external_approval_hash
-        assert approval["approval_token"] not in state.pending_script_external_approval_status
+        assert not approval["ok"], approval
+        assert approval["code"] == "per_script_approval_removed", approval
 
         wrong_token = script_runner.run_externally_approved_script(context, "wrong-token", checkpoint_enabled=False)
         assert not wrong_token["ok"], wrong_token
-        assert "did not match" in wrong_token["message"], wrong_token
+        assert "no longer supported" in wrong_token["message"], wrong_token
         assert state.pending_script
-
-        text = bpy.data.texts[state.pending_script_text_name]
-        text.write("\n# edited after external approval")
-        stale = script_runner.run_externally_approved_script(
-            context,
-            approval["approval_token"],
-            checkpoint_enabled=False,
-        )
-        assert not stale["ok"], stale
-        assert "stale" in stale["message"], stale
+        assert script_runner.reject_pending_script(context)["ok"]
 
         staged = script_runner.stage_script(
             context,
@@ -748,12 +708,12 @@ print("created", obj.name)
             code=safe_code,
         )
         assert staged["ok"], staged
-        approval = script_runner.approve_pending_script_for_external_run(context, ttl_seconds=60)
-        assert approval["ok"], approval
+        trusted_for_checkpoint = script_runner.approve_external_script_trust_window(context, session=True)
+        assert trusted_for_checkpoint["ok"], trusted_for_checkpoint
 
         result = script_runner.run_externally_approved_script(
             context,
-            approval["approval_token"],
+            "",
             checkpoint_enabled=True,
             checkpoint_dir=checkpoint_dir,
         )
@@ -771,7 +731,7 @@ print("created", obj.name)
         assert not state.pending_script_external_approval_hash
         replay = script_runner.run_externally_approved_script(
             context,
-            approval["approval_token"],
+            "",
             checkpoint_enabled=False,
         )
         assert not replay["ok"], replay

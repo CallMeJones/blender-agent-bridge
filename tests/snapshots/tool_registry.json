@@ -5775,10 +5775,10 @@
       "timeout_seconds": 300
     },
     "draft_privileged_script": {
-      "approval_policy": "Requires an approval manifest and fresh one-time user approval; session-wide external script trust cannot auto-run privileged asset or project-file scripts.",
-      "description": "Stage custom Blender Python for external asset or project-file workflows that need declared filesystem, network, asset-import, or project-file capabilities. Requires an explicit approval manifest with paths/URLs/actions. Never auto-runs under normal external script trust; the user must run it in Blender or issue a one-time external approval token.",
-      "explicit_approval_required": true,
-      "has_side_effects": true,
+      "approval_policy": "Privileged generated scripts are disabled.",
+      "description": "Compatibility endpoint that refuses privileged generated Python. Use bounded external-asset, project-file, render, capture, save, or project-output tools instead.",
+      "explicit_approval_required": false,
+      "has_side_effects": false,
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -5859,19 +5859,9 @@
             "type": "array"
           }
         },
-        "required": [
-          "script_kind",
-          "intent",
-          "expected_changes",
-          "approval_summary",
-          "declared_paths",
-          "declared_urls",
-          "destructive_actions",
-          "code"
-        ],
         "type": "object"
       },
-      "mutates_scene": true,
+      "mutates_scene": false,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -5944,19 +5934,14 @@
         "type": "object"
       },
       "permissions": [
-        "scene:read",
-        "scene:mutate",
-        "script:stage",
-        "files:read",
-        "files:write",
-        "network"
+        "scene:read"
       ],
-      "recovery_hint": "Review declared paths, URLs, destructive actions, and checkpoint status before approval. If an approved project-file script opens another .blend, trust is cleared on file load.",
-      "requires_approval": true,
+      "recovery_hint": "Use the corresponding bounded structured tool.",
+      "requires_approval": false,
       "trust_window_auto_run_allowed": false
     },
     "draft_script": {
-      "description": "Stage Blender Python in a Text datablock for explicit user approval, or auto-run after static checks when external script trust is active. Use only when safe helper tools cannot express the requested scene, animation, material, or rig change. Blocked scripts are refused even while external script trust is active.",
+      "description": "Run Blender Python immediately after static checks when Blender-side session script trust is active. When trust is off the request is refused without staging a pending script. Use only when bounded helper tools cannot express the requested scene, animation, material, or rig change.",
       "has_side_effects": true,
       "input_schema": {
         "additionalProperties": false,
@@ -6014,7 +5999,7 @@
         },
         "type": "object"
       },
-      "requires_approval": true
+      "requires_approval": false
     },
     "duplicate_selected_objects": {
       "description": "Duplicate selected objects with optional unique data, offset, animation copy, and selecting the new duplicates. Applies immediately with preview revert support.",
@@ -8964,9 +8949,9 @@
       }
     },
     "run_approved_script": {
-      "description": "Run a pending script with a one-time approval token or active Blender-side script trust",
+      "description": "Compatibility endpoint that refuses removed per-script approval flows.",
       "external_only": true,
-      "has_side_effects": true,
+      "has_side_effects": false,
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -8977,7 +8962,7 @@
         },
         "type": "object"
       },
-      "mutates_scene": true,
+      "mutates_scene": false,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -9014,11 +8999,9 @@
         "type": "object"
       },
       "permissions": [
-        "scene:read",
-        "scene:mutate",
-        "script:run"
+        "scene:read"
       ],
-      "requires_approval": true,
+      "requires_approval": false,
       "supports_headless": false,
       "timeout_seconds": 120
     },
@@ -10425,10 +10408,10 @@
       "requires_live_preview": true
     },
     "stage_persistent_simulation_bake": {
-      "approval_policy": "Requires a fresh one-time user approval; session-wide external script trust cannot auto-run persistent simulation/cache bake or free operators.",
-      "description": "Stage a fixed-template scene-wide persistent simulation point-cache bake script for explicit user approval. Persistent bake/free operators do not auto-run under session-wide external script trust.",
-      "explicit_approval_required": true,
-      "has_side_effects": true,
+      "approval_policy": "Persistent simulation/cache bake and free scripts are disabled.",
+      "description": "Compatibility tool that refuses persistent simulation bake scripts. Inspect the simulation, then perform the persistent bake manually in Blender.",
+      "explicit_approval_required": false,
+      "has_side_effects": false,
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -10460,7 +10443,7 @@
         },
         "type": "object"
       },
-      "mutates_scene": true,
+      "mutates_scene": false,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -10538,7 +10521,7 @@
         "type": "object"
       },
       "recovery_hint": "If Blender becomes unreachable after an approved bake, wait, call blender_bridge_status, then use get_blend_file_diagnostics before reporting any checkpoint path.",
-      "requires_approval": true,
+      "requires_approval": false,
       "trust_window_auto_run_allowed": false
     },
     "start_external_asset_download": {
@@ -12667,7 +12650,7 @@
       "name": "inspect_simulation_bake"
     },
     {
-      "description": "Stage a fixed-template scene-wide persistent simulation point-cache bake script for explicit user approval. Persistent bake/free operators do not auto-run under session-wide external script trust.",
+      "description": "Compatibility tool that refuses persistent simulation bake scripts. Inspect the simulation, then perform the persistent bake manually in Blender.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -18454,7 +18437,7 @@
       "name": "prune_external_asset_cache"
     },
     {
-      "description": "Stage Blender Python in a Text datablock for explicit user approval, or auto-run after static checks when external script trust is active. Use only when safe helper tools cannot express the requested scene, animation, material, or rig change. Blocked scripts are refused even while external script trust is active.",
+      "description": "Run Blender Python immediately after static checks when Blender-side session script trust is active. When trust is off the request is refused without staging a pending script. Use only when bounded helper tools cannot express the requested scene, animation, material, or rig change.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -18499,7 +18482,7 @@
       "name": "draft_script"
     },
     {
-      "description": "Stage custom Blender Python for external asset or project-file workflows that need declared filesystem, network, asset-import, or project-file capabilities. Requires an explicit approval manifest with paths/URLs/actions. Never auto-runs under normal external script trust; the user must run it in Blender or issue a one-time external approval token.",
+      "description": "Compatibility endpoint that refuses privileged generated Python. Use bounded external-asset, project-file, render, capture, save, or project-output tools instead.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -18580,16 +18563,6 @@
             "type": "array"
           }
         },
-        "required": [
-          "script_kind",
-          "intent",
-          "expected_changes",
-          "approval_summary",
-          "declared_paths",
-          "declared_urls",
-          "destructive_actions",
-          "code"
-        ],
         "type": "object"
       },
       "name": "draft_privileged_script"
@@ -18832,7 +18805,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "f9dd785705aaa070c1f73f9f710de06f3a5aeeebab8d89f23a09df03ee00d842",
+  "registry_digest": "c9c094faf3cdc29888a72fc7ed7e611c84b4604524d08bea584380fb87a1ea7d",
   "schema_version": 1,
   "specs": [
     {
@@ -22798,11 +22771,11 @@
     },
     {
       "contract": {
-        "approval_policy": "Requires a fresh one-time user approval; session-wide external script trust cannot auto-run persistent simulation/cache bake or free operators.",
-        "description": "Stage a fixed-template scene-wide persistent simulation point-cache bake script for explicit approval; persistent bake/free operators do not auto-run under session-wide script trust",
-        "explicit_approval_required": true,
-        "has_side_effects": true,
-        "mutates_scene": true,
+        "approval_policy": "Persistent simulation/cache bake and free scripts are disabled.",
+        "description": "Refuse persistent simulation bake scripts and direct the user to manual Blender baking",
+        "explicit_approval_required": false,
+        "has_side_effects": false,
+        "mutates_scene": false,
         "output_schema": {
           "additionalProperties": true,
           "properties": {
@@ -22880,10 +22853,10 @@
           "type": "object"
         },
         "recovery_hint": "If Blender becomes unreachable after an approved bake, wait, call blender_bridge_status, then use get_blend_file_diagnostics before reporting any checkpoint path.",
-        "requires_approval": true,
+        "requires_approval": false,
         "trust_window_auto_run_allowed": false
       },
-      "description": "Stage a fixed-template scene-wide persistent simulation point-cache bake script for explicit user approval. Persistent bake/free operators do not auto-run under session-wide external script trust.",
+      "description": "Compatibility tool that refuses persistent simulation bake scripts. Inspect the simulation, then perform the persistent bake manually in Blender.",
       "exposure": "compact_direct",
       "groups": [
         "animation",
@@ -34757,12 +34730,12 @@
     },
     {
       "contract": {
-        "description": "Stage generated Blender Python, or auto-run it after static checks when Blender-side external script trust is active",
+        "description": "Run generated Blender Python after static checks only while Blender-side session script trust is active",
         "has_side_effects": true,
         "mutates_scene": true,
-        "requires_approval": true
+        "requires_approval": false
       },
-      "description": "Stage Blender Python in a Text datablock for explicit user approval, or auto-run after static checks when external script trust is active. Use only when safe helper tools cannot express the requested scene, animation, material, or rig change. Blocked scripts are refused even while external script trust is active.",
+      "description": "Run Blender Python immediately after static checks when Blender-side session script trust is active. When trust is off the request is refused without staging a pending script. Use only when bounded helper tools cannot express the requested scene, animation, material, or rig change.",
       "exposure": "catalog",
       "groups": [],
       "handler_key": "draft_script",
@@ -34827,11 +34800,11 @@
     },
     {
       "contract": {
-        "approval_policy": "Requires an approval manifest and fresh one-time user approval; session-wide external script trust cannot auto-run privileged asset or project-file scripts.",
-        "description": "Stage custom asset/project-file Blender Python with declared filesystem, network, asset-import, or project-file capabilities for explicit one-time approval",
-        "explicit_approval_required": true,
-        "has_side_effects": true,
-        "mutates_scene": true,
+        "approval_policy": "Privileged generated scripts are disabled.",
+        "description": "Refuse privileged generated Python and direct clients to bounded structured tools",
+        "explicit_approval_required": false,
+        "has_side_effects": false,
+        "mutates_scene": false,
         "output_schema": {
           "additionalProperties": true,
           "properties": {
@@ -34904,18 +34877,13 @@
           "type": "object"
         },
         "permissions": [
-          "scene:read",
-          "scene:mutate",
-          "script:stage",
-          "files:read",
-          "files:write",
-          "network"
+          "scene:read"
         ],
-        "recovery_hint": "Review declared paths, URLs, destructive actions, and checkpoint status before approval. If an approved project-file script opens another .blend, trust is cleared on file load.",
-        "requires_approval": true,
+        "recovery_hint": "Use the corresponding bounded structured tool.",
+        "requires_approval": false,
         "trust_window_auto_run_allowed": false
       },
-      "description": "Stage custom Blender Python for external asset or project-file workflows that need declared filesystem, network, asset-import, or project-file capabilities. Requires an explicit approval manifest with paths/URLs/actions. Never auto-runs under normal external script trust; the user must run it in Blender or issue a one-time external approval token.",
+      "description": "Compatibility endpoint that refuses privileged generated Python. Use bounded external-asset, project-file, render, capture, save, or project-output tools instead.",
       "exposure": "catalog",
       "groups": [],
       "handler_key": "draft_privileged_script",
@@ -34999,16 +34967,6 @@
             "type": "array"
           }
         },
-        "required": [
-          "script_kind",
-          "intent",
-          "expected_changes",
-          "approval_summary",
-          "declared_paths",
-          "declared_urls",
-          "destructive_actions",
-          "code"
-        ],
         "type": "object"
       },
       "name": "draft_privileged_script",
@@ -35165,9 +35123,9 @@
     },
     {
       "contract": {
-        "description": "Run a pending script with a one-time approval token or active Blender-side script trust",
+        "description": "Refuse removed per-script approval flows",
         "external_only": true,
-        "has_side_effects": true,
+        "has_side_effects": false,
         "input_schema": {
           "additionalProperties": false,
           "properties": {
@@ -35178,7 +35136,7 @@
           },
           "type": "object"
         },
-        "mutates_scene": true,
+        "mutates_scene": false,
         "output_schema": {
           "additionalProperties": true,
           "properties": {
@@ -35215,15 +35173,13 @@
           "type": "object"
         },
         "permissions": [
-          "scene:read",
-          "scene:mutate",
-          "script:run"
+          "scene:read"
         ],
-        "requires_approval": true,
+        "requires_approval": false,
         "supports_headless": false,
         "timeout_seconds": 120
       },
-      "description": "Run a pending script with a one-time approval token or active Blender-side script trust",
+      "description": "Compatibility endpoint that refuses removed per-script approval flows.",
       "exposure": "internal",
       "groups": [],
       "handler_key": "run_approved_script",
