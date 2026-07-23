@@ -138,16 +138,20 @@ def _assert_local_release_metadata():
     assert "python scripts/check_pypi_name.py" in workflow, "PyPI name ownership must be checked immediately before publish"
     assert "python -m unittest discover" in workflow, "CI must run the conventional unittest lane"
     assert "workflow_dispatch:" in recovery_workflow, "Release recovery must require an explicit manual dispatch"
-    assert "source_run_id:" in recovery_workflow, "Release recovery must identify the retained artifact run"
-    assert "test \"$source_sha\" = \"$expected_sha\"" in recovery_workflow, (
-        "Release recovery must bind retained artifacts to the immutable tag commit"
+    assert "artifact_run_id:" in recovery_workflow, "Release recovery must identify the retained extension artifact run"
+    assert "python_run_id:" in recovery_workflow, "Release recovery must identify the exact published Python artifact run"
+    assert 'for run_id in "$ARTIFACT_RUN_ID" "$PYTHON_RUN_ID"' in recovery_workflow, (
+        "Release recovery must bind both retained artifact runs to the immutable tag commit"
     )
     assert "--require-complete" in recovery_workflow, "Release recovery must verify exact published PyPI hashes"
     assert "smoke_release_artifact_identity.py" in recovery_workflow, (
         "Release recovery must verify extension and Pages archive identity before deployment"
     )
-    assert "run-id: ${{ inputs.source_run_id }}" in recovery_workflow, (
+    assert "run-id: ${{ inputs.artifact_run_id }}" in recovery_workflow, (
         "Release recovery must reuse retained tested artifacts instead of rebuilding them"
+    )
+    assert "run-id: ${{ inputs.python_run_id }}" in recovery_workflow, (
+        "Release recovery must reuse the exact Python files already published to PyPI"
     )
     assert "uses: actions/deploy-pages@v5" in recovery_workflow, "Release recovery must deploy Pages"
     assert "uses: softprops/action-gh-release@v3" in recovery_workflow, "Release recovery must publish the GitHub Release"

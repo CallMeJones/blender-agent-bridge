@@ -7,8 +7,12 @@ on:
         description: Existing immutable release tag, for example v0.4.0
         required: true
         type: string
-      source_run_id:
-        description: Workflow run containing the exact tested publication artifacts
+      artifact_run_id:
+        description: Tag workflow run containing the tested extension and Pages artifacts
+        required: true
+        type: string
+      python_run_id:
+        description: Tag workflow run containing the exact wheel and sdist already published to PyPI
         required: true
         type: string
 
@@ -42,16 +46,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
-          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
+          PYTHON_RUN_ID: ${{ inputs.python_run_id }}
         run: |
           set -euo pipefail
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$ARTIFACT_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$PYTHON_RUN_ID" =~ ^[0-9]+$ ]]
           expected_sha=$(git rev-parse HEAD)
-          source_sha=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" --jq .head_sha)
-          source_ref=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" --jq .head_branch)
-          test "$source_sha" = "$expected_sha"
-          test "$source_ref" = "$RELEASE_TAG"
+          for run_id in "$ARTIFACT_RUN_ID" "$PYTHON_RUN_ID"; do
+            source_sha=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq .head_sha)
+            source_ref=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq .head_branch)
+            test "$source_sha" = "$expected_sha"
+            test "$source_ref" = "$RELEASE_TAG"
+          done
           version=$(python -c "import tomllib; print(tomllib.load(open('addon/claude_blender/blender_manifest.toml','rb'))['version'])")
           test "$RELEASE_TAG" = "v${version}"
 
@@ -60,7 +68,7 @@ jobs:
         with:
           name: blender-agent-bridge-official-release-candidate
           path: dist
-          run-id: ${{ inputs.source_run_id }}
+          run-id: ${{ inputs.artifact_run_id }}
           github-token: ${{ github.token }}
 
       - name: Download exact Pages repository
@@ -68,7 +76,7 @@ jobs:
         with:
           name: blender-agent-bridge-extension-repository-${{ inputs.tag }}
           path: public
-          run-id: ${{ inputs.source_run_id }}
+          run-id: ${{ inputs.artifact_run_id }}
           github-token: ${{ github.token }}
 
       - name: Download exact published Python distributions
@@ -76,7 +84,7 @@ jobs:
         with:
           name: blender-bridge-official-python-candidate
           path: python-dist
-          run-id: ${{ inputs.source_run_id }}
+          run-id: ${{ inputs.python_run_id }}
           github-token: ${{ github.token }}
 
       - name: Verify retained artifacts and completed PyPI publication
@@ -125,7 +133,7 @@ jobs:
         with:
           name: blender-agent-bridge-official-release-candidate
           path: dist
-          run-id: ${{ inputs.source_run_id }}
+          run-id: ${{ inputs.artifact_run_id }}
           github-token: ${{ github.token }}
 
       - name: Download exact published Python distributions
@@ -133,7 +141,7 @@ jobs:
         with:
           name: blender-bridge-official-python-candidate
           path: python-dist
-          run-id: ${{ inputs.source_run_id }}
+          run-id: ${{ inputs.python_run_id }}
           github-token: ${{ github.token }}
 
       - name: Publish tagged GitHub release assets
