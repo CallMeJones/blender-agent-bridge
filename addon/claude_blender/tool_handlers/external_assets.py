@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .. import asset_jobs, external_assets, preferences
-from ..handler_runtime import _bounded_int, _name_list
+from .support import _bounded_int, _name_list
 
 
 def list_poly_haven_categories(context, args):

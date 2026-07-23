@@ -695,9 +695,17 @@ def _assert_compact_tools_visible(proc):
     assert search_tool["annotations"]["readOnlyHint"] is True, search_tool
     advanced_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "plan_advanced_scene_workflow")
     assert advanced_tool["annotations"]["readOnlyHint"] is True, advanced_tool
-    object_design_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "plan_object_design")
-    assert object_design_tool["annotations"]["readOnlyHint"] is True, object_design_tool
-    assert "object_family" in object_design_tool["inputSchema"]["properties"], object_design_tool
+    retired_generators = {
+        "create_procedural_object_kit",
+        "plan_object_design",
+        "create_storyboard_panels",
+        "create_2d_cutout_layer",
+        "create_directed_animation_shot",
+        "apply_vehicle_refinement_template",
+        "apply_product_refinement_template",
+        "apply_character_refinement_template",
+    }
+    assert not retired_generators.intersection(tool["name"] for tool in listed["result"]["tools"]), listed
     two_d_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "get_2d_animation_details")
     assert two_d_tool["annotations"]["readOnlyHint"] is True, two_d_tool
     task_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "run_animation_task")
@@ -882,7 +890,10 @@ def _assert_advanced_search_routes_first(response, *, query, expected):
     for tool_name in expected:
         assert tool_name in names[:6], (query, tool_name, names)
     if "draft_script" in names:
-        assert names.index("draft_script") > 5, (query, names)
+        if "draft_script" in expected:
+            assert names.index("draft_script") > 0, (query, names)
+        else:
+            assert names.index("draft_script") > 5, (query, names)
 
 
 def _assert_material_texture_search_avoids_asset_route(response, *, query):
@@ -1021,7 +1032,7 @@ def main():
         advanced_queries = (
             (
                 "Create a 2D storyboard animatic with panels, cutout layers, and a camera dolly.",
-                {"get_2d_animation_details", "create_storyboard_panels", "create_2d_cutout_layer"},
+                {"get_2d_animation_details", "create_camera_dolly_animation", "draft_script"},
             ),
             (
                 "Make an advanced procedural 3D hard-surface array stack with bevels.",
@@ -1040,8 +1051,8 @@ def main():
                 {"inspect_modeling_quality"},
             ),
             (
-                "Create an advanced procedural object kit with a kitbash scatter grid.",
-                {"create_procedural_object_kit"},
+                "Create an advanced procedural hard-surface array with a geometry-nodes scatter grid.",
+                {"apply_procedural_array_stack", "add_geometry_nodes_modifier"},
             ),
             (
                 "Create a lookdev turntable review with Cycles denoise, inspection stills, and artifact validation.",
@@ -1061,23 +1072,23 @@ def main():
             ),
             (
                 "Design a futuristic wall-mounted coffee machine with chrome pipes, a small display, buttons, and beveled body.",
-                {"plan_object_design", "create_procedural_object_kit", "create_shader_material"},
+                {"draft_script", "create_shader_material", "apply_procedural_array_stack"},
             ),
             (
                 "Create a control panel with buttons and a display.",
-                {"plan_object_design", "create_procedural_object_kit"},
+                {"draft_script", "apply_procedural_array_stack"},
             ),
             (
                 "Create a believable architect desk lamp product prop with spring arms, counterweight, wide shade, bulb, and cable.",
-                {"plan_object_design", "create_procedural_object_kit"},
+                {"draft_script", "screw_model", "apply_procedural_array_stack"},
             ),
             (
-                "Create a modular wall panel object kit with pipe run details and geometry nodes.",
-                {"create_procedural_object_kit", "add_geometry_nodes_modifier"},
+                "Create a modular wall-panel system with pipe-run details and geometry nodes.",
+                {"apply_procedural_array_stack", "add_geometry_nodes_modifier"},
             ),
             (
-                "Create a directed shot template with a camera push reveal.",
-                {"create_directed_animation_shot"},
+                "Create an advanced camera push and orbit reveal.",
+                {"create_camera_dolly_animation", "create_camera_orbit"},
             ),
             (
                 "Add cloth simulation setup and inspect it before any bake.",
@@ -2188,10 +2199,9 @@ def main():
         )
         advanced_prompt_text = advanced_prompt["result"]["messages"][0]["content"]["text"]
         assert "plan_advanced_scene_workflow" in advanced_prompt_text, advanced_prompt
-        assert "create_storyboard_panels" in advanced_prompt_text, advanced_prompt
+        assert "get_2d_animation_details" in advanced_prompt_text, advanced_prompt
         assert "apply_procedural_array_stack" in advanced_prompt_text, advanced_prompt
-        assert "create_procedural_object_kit" in advanced_prompt_text, advanced_prompt
-        assert "create_directed_animation_shot" in advanced_prompt_text, advanced_prompt
+        assert "compose text, curve, camera, and visual-review helpers" in advanced_prompt_text, advanced_prompt
         assert "create_lookdev_turntable_review" in advanced_prompt_text, advanced_prompt
         assert "configure_render_outputs" in advanced_prompt_text, advanced_prompt
         assert "add_cloth_simulation_to_selected" in advanced_prompt_text, advanced_prompt

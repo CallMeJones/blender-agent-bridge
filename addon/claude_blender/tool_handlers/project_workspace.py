@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .. import autosave, lab_parity, project_files
-from ..handler_runtime import _bounded_int
+from .support import _bounded_int
 
 
 def get_blend_file_diagnostics(context, args):

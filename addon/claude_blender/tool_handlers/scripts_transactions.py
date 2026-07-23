@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from .. import helper_routing, live_preview, preferences, script_execution, script_runner
-from ..handler_runtime import (
+from ..animation_runtime import (
     _animation_script_fallback_recently_allowed,
     _animation_workflow_recently_seen,
-    _extract_script_code,
     _looks_like_animation_intent,
+)
+from ..handler_runtime import (
     _looks_like_render_job_intent,
 )
+from .support import _extract_script_code
 
 
 def draft_privileged_script(context, args):

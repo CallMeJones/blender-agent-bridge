@@ -117,7 +117,7 @@ class MCPStdioTests(unittest.TestCase):
 
     def test_initialize_list_and_read_only_call(self):
         initialized = self.rpc(1, "initialize", {"protocolVersion": "2025-06-18"})
-        self.assertEqual("0.3.1", initialized["result"]["serverInfo"]["version"])
+        self.assertEqual("0.4.0", initialized["result"]["serverInfo"]["version"])
         listed = self.rpc(2, "tools/list", {})
         names = {tool["name"] for tool in listed["result"]["tools"]}
         self.assertIn("list_scene_objects", names)

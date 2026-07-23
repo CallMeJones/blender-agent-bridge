@@ -107,7 +107,6 @@ ANIMATION_ROUTE_TOOLS = {
     "review_inspection_renders_against_brief",
     "repair_animation_from_findings",
     "run_animation_repair_loop",
-    "create_directed_animation_shot",
     "capture_animation_playblast",
     "set_rig_pose_hold",
     "set_rig_custom_property_keyframes",
@@ -280,11 +279,8 @@ ADVANCED_ROUTE_TERMS = {
 ADVANCED_ROUTE_TOOLS = {
     "plan_director_workflow",
     "plan_advanced_scene_workflow",
-    "plan_object_design",
     "plan_asset_import_workflow",
     "get_2d_animation_details",
-    "create_storyboard_panels",
-    "create_2d_cutout_layer",
     "apply_procedural_array_stack",
     "edit_mesh",
     "inspect_modeling_quality",
@@ -294,9 +290,8 @@ ADVANCED_ROUTE_TOOLS = {
     "symmetrize_model",
     "solidify_model",
     "screw_model",
-    "create_procedural_object_kit",
     "create_camera_dolly_animation",
-    "create_directed_animation_shot",
+    "create_camera_orbit",
     "create_lookdev_turntable_review",
     "configure_render_outputs",
     "add_cloth_simulation_to_selected",
@@ -807,11 +802,10 @@ PROMPTS = {
         "template": (
             "Handle this advanced Blender task through helper-first planning: {goal}\n\n"
             "Call plan_advanced_scene_workflow first when the helper path is not obvious. For 2D, storyboard, "
-            "animatic, cutout, or motion-graphics tasks, call get_2d_animation_details, then prefer "
-            "create_storyboard_panels, create_2d_cutout_layer, create_camera_dolly_animation, create_directed_animation_shot, "
-            "and visual review. For open-ended object creation, call plan_object_design before choosing object kits, generic modeling helpers, asset import, or scripts. "
-            "For procedural 3D modifier-stack or object-kit tasks, inspect geometry nodes when relevant "
-            "and prefer create_procedural_object_kit or apply_procedural_array_stack before custom geometry scripts. For cloth setup, use "
+            "animatic, cutout, or motion-graphics tasks, call get_2d_animation_details, then compose text, curve, camera, "
+            "and visual-review helpers. For open-ended object creation, inspect the scene and choose generic modeling helpers, asset import, or a trusted script. "
+            "For procedural 3D modifier-stack tasks, inspect geometry nodes when relevant "
+            "and prefer composable modeling helpers such as apply_procedural_array_stack before custom geometry scripts. For cloth setup, use "
             "add_cloth_simulation_to_selected, then get_simulation_details or inspect_simulation_bake before any "
             "persistent bake. For render-pass, cryptomatte, or shader AOV setup, prefer configure_render_outputs before custom compositor/render Python. "
             "For look-dev review, prefer create_lookdev_turntable_review to set up bounded staging/turntable, render controls, inspection stills, and artifact validation. "
@@ -1332,9 +1326,9 @@ def _tool_category(tool):
         return "project_files"
     if name in {"start_render_job", "get_render_job_status", "cancel_render_job", "assemble_render_job_video", "validate_render_job_output", "create_lookdev_turntable_review", "configure_render_outputs"}:
         return "camera_render"
-    if name in {"get_2d_animation_details", "create_storyboard_panels", "create_2d_cutout_layer"}:
+    if name == "get_2d_animation_details":
         return "two_d"
-    if name in {"plan_advanced_scene_workflow", "plan_object_design"}:
+    if name == "plan_advanced_scene_workflow":
         return "inspect"
     if name in {"inspect_material_setup", "repair_material_setup", "bake_maps"}:
         return "materials"
@@ -1490,6 +1484,7 @@ def _score_tool_match(tool, query):
     camera_move_query = _contains_any_phrase(normalized_query, CAMERA_MOVE_ROUTE_TERMS)
     uv_unwrap_query = _contains_any_phrase(normalized_query, UV_UNWRAP_ROUTE_TERMS)
     explicit_script_query = _contains_any_phrase(normalized_query, SCRIPT_EXPLICIT_TERMS)
+    authored_content_query = agent_tools.is_open_ended_authored_content(normalized_query)
     external_asset_query = _is_external_asset_route_query(normalized_query)
     explicit_direct_asset_query = _contains_any_phrase(normalized_query, EXTERNAL_ASSET_DIRECT_TERMS)
     matched_terms = [term for term in terms if term in text]
@@ -1497,6 +1492,8 @@ def _score_tool_match(tool, query):
         if animation_query and (name in ANIMATION_ROUTE_TOOLS or category == "animation"):
             score = 25
         elif advanced_query and (name in ADVANCED_ROUTE_TOOLS or category in {"two_d", "geometry", "simulation", "camera_render"}):
+            score = 25
+        elif authored_content_query and name == "draft_script":
             score = 25
         elif external_asset_query and (name in EXTERNAL_ASSET_WORKFLOW_TOOLS or category == "external_assets"):
             score = 25
@@ -1533,8 +1530,6 @@ def _score_tool_match(tool, query):
             score += 1000
         elif name == "run_animation_workflow":
             score += 950
-        elif name == "create_directed_animation_shot":
-            score += 700
         elif name in ANIMATION_ROUTE_TOOLS:
             score += 500
         elif category == "animation":
@@ -1548,8 +1543,6 @@ def _score_tool_match(tool, query):
             score += 3600
         if name == "plan_advanced_scene_workflow":
             score += 3000
-        if name == "plan_object_design" and any(term in normalized_query for term in ("object design", "design brief", "design mapper", "object family", "appliance", "coffee machine", "furniture", "lamp", "control panel", "electronics", "console")):
-            score += 2400
         if name == "plan_asset_import_workflow" and external_asset_query:
             score += 1800
         if name == "configure_render_outputs" and _contains_any_phrase(normalized_query, RENDER_OUTPUT_ROUTE_TERMS):
@@ -1563,12 +1556,8 @@ def _score_tool_match(tool, query):
         if two_d_query:
             if name == "get_2d_animation_details":
                 score += 900
-            elif name in {"create_storyboard_panels", "create_2d_cutout_layer"}:
-                score += 800
         if procedural_query:
-            if name == "create_procedural_object_kit":
-                score += 950
-            elif name == "inspect_modeling_quality" and any(term in normalized_query for term in ("mesh quality", "modeling quality", "validate model", "non-manifold", "loose geometry", "missing material")):
+            if name == "inspect_modeling_quality" and any(term in normalized_query for term in ("mesh quality", "modeling quality", "validate model", "non-manifold", "loose geometry", "missing material")):
                 score += 1300
             elif name == "apply_procedural_array_stack":
                 score += 900
@@ -1670,10 +1659,10 @@ def _score_tool_match(tool, query):
             elif name in {"get_simulation_details", "inspect_simulation_bake", "stage_persistent_simulation_bake"}:
                 score += 650
         if camera_move_query:
-            if name == "create_directed_animation_shot":
-                score += 950
-            elif name == "create_camera_dolly_animation":
+            if name == "create_camera_dolly_animation":
                 score += 900
+            elif name == "create_camera_orbit":
+                score += 850
             elif name in {"set_camera_settings", "capture_animation_playblast"}:
                 score += 450
         if not (two_d_query or procedural_query or simulation_setup_query or camera_move_query) and name in ADVANCED_ROUTE_TOOLS:
@@ -1682,6 +1671,8 @@ def _score_tool_match(tool, query):
             score -= 1000
     elif name == "draft_script" and not explicit_script_query:
         score -= 100
+    if authored_content_query and name == "draft_script":
+        score += 1500
     if external_asset_query:
         if name == "plan_asset_import_workflow":
             score += 1300

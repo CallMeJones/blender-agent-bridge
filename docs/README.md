@@ -21,7 +21,7 @@ Start with the top-level `README.md`, then use these deeper notes for developmen
 - Async render jobs are exposed through `blender://render-jobs/latest/metadata`, exact job metadata resources, frame PNG resources, and log resources.
 - Saved `.blend` files store generated captures and playblast frames in project-local `.claude_blender/captures/<session_id>` folders by default. Unsaved or unwritable projects use Blender's extension user-data directory, falling back to `~/.claude_blender` only outside extension-aware Blender runtimes.
 - External script trust is a runtime-only binary switch: trust off refuses generated Python, trust on grants Blender Run Script-equivalent permissions, and active trust exposes `Revoke` in the sidebar.
-- The helper catalog now includes production kits for lighting presets, material palettes, product/vehicle/character refinement, product turntable staging, and scene organization.
+- The helper catalog includes reusable modeling, material, lighting, staging, animation, project, evidence, and scene-organization operations. Opinionated finished-content and style-specific refinement generators are intentionally not part of the public surface.
 
 ## MCP Client Refresh
 

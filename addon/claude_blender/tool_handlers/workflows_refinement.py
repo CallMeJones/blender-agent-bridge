@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from .. import advanced_helpers
-from ..handler_runtime import _bounded_int, _float_list, _name_list, _optional_float_list
+from .. import advanced_presentation as advanced_helpers, two_d_inspection, workflow_planning
+from .support import _bounded_int, _float_list, _name_list, _optional_float_list
 
 
 def plan_advanced_scene_workflow(context, args):
-    return advanced_helpers.plan_advanced_scene_workflow(
+    return workflow_planning.plan_advanced_scene_workflow(
         context,
         prompt=str(args.get("prompt") or ""),
         domains=_name_list(args.get("domains")),
@@ -16,18 +16,10 @@ def plan_advanced_scene_workflow(context, args):
     )
 
 
-def plan_object_design(context, args):
-    return advanced_helpers.plan_object_design(
-        context,
-        prompt=str(args.get("prompt") or ""),
-        object_family=str(args.get("object_family") or ""),
-        target_objects=_name_list(args.get("target_objects")),
-        label=args.get("label", "Plan object design"),
-    )
 
 
 def plan_asset_import_workflow(context, args):
-    return advanced_helpers.plan_asset_import_workflow(
+    return workflow_planning.plan_asset_import_workflow(
         context,
         prompt=str(args.get("prompt") or ""),
         provider=str(args.get("provider") or ""),
@@ -40,7 +32,7 @@ def plan_asset_import_workflow(context, args):
 
 
 def plan_director_workflow(context, args):
-    return advanced_helpers.plan_director_workflow(
+    return workflow_planning.plan_director_workflow(
         context,
         prompt=str(args.get("prompt") or ""),
         target_objects=_name_list(args.get("target_objects")),
@@ -50,46 +42,14 @@ def plan_director_workflow(context, args):
 
 
 def get_2d_animation_details(context, args):
-    return advanced_helpers.get_2d_animation_details(
+    return two_d_inspection.get_2d_animation_details(
         context,
         max_items=_bounded_int(args.get("max_items"), 32, minimum=1, maximum=128),
     )
 
 
-def create_storyboard_panels(context, args):
-    return advanced_helpers.create_storyboard_panels(
-        context,
-        panel_count=_bounded_int(args.get("panel_count"), 4, minimum=1, maximum=24),
-        columns=_bounded_int(args.get("columns"), 2, minimum=1, maximum=24),
-        panel_width=float(args.get("panel_width", 3.2)),
-        panel_height=float(args.get("panel_height", 1.8)),
-        gap=float(args.get("gap", 0.35)),
-        name_prefix=str(args.get("name_prefix") or "Agent Bridge Storyboard"),
-        frame_start=int(args.get("frame_start", context.scene.frame_start)),
-        frame_step=_bounded_int(args.get("frame_step"), 24, minimum=1, maximum=10000),
-        background_color=_float_list(args.get("background_color"), 4, (0.08, 0.08, 0.09, 1.0)),
-        border_color=_float_list(args.get("border_color"), 4, (0.9, 0.9, 0.86, 1.0)),
-        text_color=_float_list(args.get("text_color"), 4, (0.95, 0.95, 0.9, 1.0)),
-        create_camera=bool(args.get("create_camera", True)),
-        label=args.get("label", "Create storyboard panels"),
-    )
 
 
-def create_2d_cutout_layer(context, args):
-    return advanced_helpers.create_2d_cutout_layer(
-        context,
-        name=str(args.get("name") or "Agent Bridge 2D Cutout"),
-        location=_float_list(args.get("location"), 3, (0.0, 0.0, 0.0)),
-        size=args.get("size") or [1.0, 1.0],
-        color=_float_list(args.get("color"), 4, (0.2, 0.55, 1.0, 1.0)),
-        frame_start=int(args.get("frame_start", context.scene.frame_start)),
-        frame_end=int(args.get("frame_end", context.scene.frame_end)),
-        location_end=_optional_float_list(args.get("location_end"), 3, (0.0, 0.0, 0.0)),
-        rotation_end=_optional_float_list(args.get("rotation_end"), 3, (0.0, 0.0, 0.0)),
-        scale_end=_optional_float_list(args.get("scale_end"), 3, (1.0, 1.0, 1.0)),
-        text=str(args.get("text") or ""),
-        label=args.get("label", "Create 2D cutout layer"),
-    )
 
 
 def shade_smooth_selected(context, args):
@@ -135,36 +95,10 @@ def add_panel_seams(context, args):
     )
 
 
-def apply_vehicle_refinement_template(context, args):
-    return advanced_helpers.apply_vehicle_refinement_template(
-        context,
-        target_name=str(args.get("target_name") or ""),
-        detail_level=str(args.get("detail_level") or "medium"),
-        label=args.get("label", "Apply vehicle refinement template"),
-    )
 
 
-def apply_product_refinement_template(context, args):
-    return advanced_helpers.apply_product_refinement_template(
-        context,
-        target_name=str(args.get("target_name") or ""),
-        style=str(args.get("style") or "studio"),
-        include_stage=bool(args.get("include_stage", True)),
-        include_callouts=bool(args.get("include_callouts", True)),
-        include_turntable=bool(args.get("include_turntable", False)),
-        label=args.get("label", "Apply product refinement template"),
-    )
 
 
-def apply_character_refinement_template(context, args):
-    return advanced_helpers.apply_character_refinement_template(
-        context,
-        target_name=str(args.get("target_name") or ""),
-        character_style=str(args.get("character_style") or "neutral"),
-        detail_level=str(args.get("detail_level") or "medium"),
-        create_guides=bool(args.get("create_guides", True)),
-        label=args.get("label", "Apply character refinement template"),
-    )
 
 
 def add_dimension_callouts(context, args):

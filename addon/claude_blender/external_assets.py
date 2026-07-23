@@ -1401,11 +1401,11 @@ def _apply_texture_material(context, manifest, *, target_object_name="", label="
             "manifest": manifest,
         }
     try:
-        from . import advanced_helpers
+        from . import advanced_materials
     except ImportError:
-        import advanced_helpers
+        import advanced_materials
     material_name = _unique_data_block_name(bpy.data.materials, f"Poly Haven {manifest.get('asset_id', 'Texture')}")
-    helper_result = advanced_helpers.create_image_texture_material(
+    helper_result = advanced_materials.create_image_texture_material(
         context,
         name=material_name,
         assign_to_objects=bool(object_names),

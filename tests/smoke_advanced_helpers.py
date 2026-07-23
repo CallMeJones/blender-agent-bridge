@@ -15,17 +15,14 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import advanced_helpers, agent_tools, blender_compat, context_bundle, live_preview, preferences, tool_dispatcher  # noqa: E402
+from claude_blender import advanced_helpers, advanced_modeling, agent_tools, blender_compat, context_bundle, live_preview, preferences, tool_dispatcher  # noqa: E402
 
 
 ADVANCED_TOOLS = {
     "plan_advanced_scene_workflow",
-    "plan_object_design",
     "plan_asset_import_workflow",
     "plan_director_workflow",
     "get_2d_animation_details",
-    "create_storyboard_panels",
-    "create_2d_cutout_layer",
     "apply_procedural_array_stack",
     "edit_mesh",
     "inspect_modeling_quality",
@@ -38,9 +35,7 @@ ADVANCED_TOOLS = {
     "symmetrize_model",
     "solidify_model",
     "screw_model",
-    "create_procedural_object_kit",
     "create_camera_dolly_animation",
-    "create_directed_animation_shot",
     "prepare_imported_asset_presentation",
     "add_cloth_simulation_to_selected",
     "create_shader_material",
@@ -285,226 +280,10 @@ def _run_phase1_modeling_helper_prop_test(context):
     }
 
 
-def _run_desk_lamp_kit_exit_test(context):
-    kit = _execute(
-        context,
-        "create_procedural_object_kit",
-        {
-            "template": "desk_lamp",
-            "name_prefix": "Agent Bridge Desk Lamp Kit",
-            "location": [7.0, -6.0, 0.0],
-            "count": 1,
-            "radius": 1.25,
-            "height": 1.85,
-            "primary_color": [0.16, 0.17, 0.18, 1.0],
-            "accent_color": [0.85, 0.62, 0.28, 1.0],
-        },
-    )
-    assert kit["template"] == "desk_lamp", kit
-    assert kit["design"]["style"] == "default", kit
-    assert kit["design"]["variant"] == "default", kit
-    assert kit["design"]["detail_level"] == "medium", kit
-    assert {"round_base", "double_arm", "open_shade", "visible_bulb", "power_cable"}.issubset(set(kit["design"]["features"])), kit
-    expected_terms = (
-        "Root",
-        "Weighted Base",
-        "Vertical Stem",
-        "Lower Arm Front",
-        "Upper Arm Rear",
-        "Stem Hinge",
-        "Elbow Hinge",
-        "Shade Hinge",
-        "Open Shade",
-        "Visible Bulb",
-        "Power Cable",
-        "Shade Glow",
-    )
-    for term in expected_terms:
-        assert any(term in name for name in kit["objects"]), (term, kit)
-    root_name = next(name for name in kit["objects"] if name.endswith(" Root"))
-    mesh_names = [name for name in kit["objects"] if bpy.data.objects[name].type == "MESH"]
-    assert len(mesh_names) >= 10, kit
-    quality = _execute(
-        context,
-        "inspect_modeling_quality",
-        {"object_names": [root_name], "selected_only": False, "include_children": True, "require_materials": True},
-    )
-    assert quality["passed"] is True, quality
-    assert quality["object_count"] >= 10, quality
-    assert quality["issue_count"] == 0, quality
-    render_result = _execute(
-        context,
-        "capture_object_inspection_renders",
-        {
-            "object_names": [root_name],
-            "views": ["front_below", "side"],
-            "resolution_x": 320,
-            "resolution_y": 240,
-            "distance_factor": 3.0,
-            "note": "Desk-lamp kit visual exit evidence",
-        },
-    )
-    render = render_result["inspection_render"]
-    assert render["available"] is True, render
-    assert len(render["images"]) == 2, render
-    for image in render["images"]:
-        assert image["available"] is True, image
-        assert image["width"] == 320 and image["height"] == 240, image
-        assert image["size_bytes"] > 128, image
-        assert os.path.isfile(image["path"]), image
-    return {"kit": kit, "root": root_name, "quality": quality, "inspection_render": render}
 
 
-def _run_desk_lamp_design_grammar_test(context):
-    kit = _execute(
-        context,
-        "create_procedural_object_kit",
-        {
-            "template": "desk_lamp",
-            "name_prefix": "Agent Bridge Architect Lamp Kit",
-            "location": [14.5, -6.0, 0.0],
-            "count": 1,
-            "radius": 1.2,
-            "height": 1.75,
-            "style": "architect",
-            "variant": "architect",
-            "detail_level": "high",
-            "features": ["spring_arms", "counterweight", "wide_shade", "label_parts"],
-        },
-    )
-    assert kit["template"] == "desk_lamp", kit
-    design = kit["design"]
-    assert design["style"] == "architect", kit
-    assert design["variant"] == "architect", kit
-    assert design["detail_level"] == "high", kit
-    for feature in ("spring_arms", "counterweight", "wide_shade", "label_parts"):
-        assert feature in design["features"], kit
-    for term in ("Lower Spring", "Upper Spring", "Counterweight", "Open Shade", "Visible Bulb"):
-        assert any(term in name for name in kit["objects"]), (term, kit)
-    root_name = next(name for name in kit["objects"] if name.endswith(" Root"))
-    quality = _execute(
-        context,
-        "inspect_modeling_quality",
-        {"object_names": [root_name], "selected_only": False, "include_children": True, "require_materials": True},
-    )
-    assert quality["passed"] is True, quality
-    assert quality["issue_count"] == 0, quality
-    render_result = _execute(
-        context,
-        "capture_object_inspection_renders",
-        {
-            "object_names": [root_name],
-            "views": ["front_below", "side"],
-            "resolution_x": 320,
-            "resolution_y": 240,
-            "distance_factor": 3.0,
-            "note": "Architect desk-lamp design grammar visual evidence",
-        },
-    )
-    render = render_result["inspection_render"]
-    assert render["available"] is True, render
-    assert len(render["images"]) == 2, render
-    for image in render["images"]:
-        assert image["available"] is True, image
-        assert image["width"] == 320 and image["height"] == 240, image
-        assert image["size_bytes"] > 128, image
-        assert os.path.isfile(image["path"]), image
-    return {"kit": kit, "root": root_name, "quality": quality, "inspection_render": render}
 
 
-def _run_coffee_machine_kit_exit_test(context):
-    kit = _execute(
-        context,
-        "create_procedural_object_kit",
-        {
-            "template": "coffee_machine",
-            "name_prefix": "Agent Bridge Coffee Machine Kit",
-            "location": [21.0, -6.0, 0.0],
-            "count": 7,
-            "radius": 1.25,
-            "height": 1.8,
-            "style": "industrial",
-            "primary_color": [0.13, 0.14, 0.15, 1.0],
-            "accent_color": [0.82, 0.48, 0.2, 1.0],
-        },
-    )
-    assert kit["template"] == "coffee_machine", kit
-    expected_terms = (
-        "Root",
-        "Chrome Rectangular Body",
-        "Top Shell Cap",
-        "Base Plinth",
-        "Mirrored Front Panel",
-        "Front Shell Column",
-        "Dispensing Bay Backplate",
-        "Mirror Trim",
-        "Red Logo Badge",
-        "Top Cup Warmer Tray",
-        "Top Cup Warmer Grate Bar",
-        "Top Reservoir Cap",
-        "Center Top Pressure Pin",
-        "Rear Water Reservoir",
-        "Walnut Steam Knob",
-        "Pressure Gauge",
-        "Round Display Badge",
-        "Control Button 01",
-        "Brew Head",
-        "Portafilter Basket",
-        "Walnut Portafilter Handle",
-        "Twin Nozzle",
-        "Drip Tray",
-        "Drip Tray Grate Bar",
-        "Walnut Foot",
-        "Left Hot Water Wand",
-        "Right Steam Wand",
-        "Chrome Pipe",
-    )
-    for term in expected_terms:
-        assert any(term in name for name in kit["objects"]), (term, kit)
-    forbidden_terms = (
-        "Rear Frame Spine",
-        "Frame Rail",
-        "Right Side Control Fascia",
-        "Right Side Status Screen",
-        "Right Side Brew Head",
-        "Right Side Demo Cup",
-        "Demo Cup",
-        "Coffee Surface",
-    )
-    for term in forbidden_terms:
-        assert not any(term in name for name in kit["objects"]), (term, kit)
-    root_name = next(name for name in kit["objects"] if name.endswith(" Root"))
-    mesh_names = [name for name in kit["objects"] if bpy.data.objects[name].type == "MESH"]
-    assert len(mesh_names) >= 18, kit
-    quality = _execute(
-        context,
-        "inspect_modeling_quality",
-        {"object_names": [root_name], "selected_only": False, "include_children": True, "require_materials": True},
-    )
-    assert quality["passed"] is True, quality
-    assert quality["object_count"] >= 18, quality
-    assert quality["issue_count"] == 0, quality
-    render_result = _execute(
-        context,
-        "capture_object_inspection_renders",
-        {
-            "object_names": [root_name],
-            "views": ["front", "side"],
-            "resolution_x": 320,
-            "resolution_y": 240,
-            "distance_factor": 3.0,
-            "note": "Coffee-machine kit visual exit evidence",
-        },
-    )
-    render = render_result["inspection_render"]
-    assert render["available"] is True, render
-    assert len(render["images"]) == 2, render
-    for image in render["images"]:
-        assert image["available"] is True, image
-        assert image["width"] == 320 and image["height"] == 240, image
-        assert image["size_bytes"] > 128, image
-        assert os.path.isfile(image["path"]), image
-    return {"kit": kit, "root": root_name, "quality": quality, "inspection_render": render}
 
 
 def main():
@@ -772,13 +551,13 @@ def main():
         assert transaction is None or transaction.get("status") != "pending", transaction
         assert not any("Agent Bridge Half Recorded " in name for name in (transaction or {}).get("changed_data_blocks", [])), transaction
 
-        original_link_object_like_source = advanced_helpers._link_object_like_source
+        original_link_object_like_source = advanced_modeling._link_object_like_source
 
         def _fail_link_object_like_source(context, source, duplicate):
             raise RuntimeError("forced link failure")
 
         try:
-            advanced_helpers._link_object_like_source = _fail_link_object_like_source
+            advanced_modeling._link_object_like_source = _fail_link_object_like_source
             failed_link_curve = json.loads(
                 tool_dispatcher.execute_tool(
                     context,
@@ -787,7 +566,7 @@ def main():
                 )
             )
         finally:
-            advanced_helpers._link_object_like_source = original_link_object_like_source
+            advanced_modeling._link_object_like_source = original_link_object_like_source
         assert failed_link_curve["ok"] is False, failed_link_curve
         assert not any(obj.name.startswith("Agent Bridge Link Failed ") for obj in bpy.data.objects), failed_link_curve
         assert not any(mesh.name.startswith("Agent Bridge Link Failed ") for mesh in bpy.data.meshes), failed_link_curve
@@ -801,60 +580,6 @@ def main():
             {"prompt": "Plan advanced 2D storyboard, procedural 3D, cloth simulation, and camera animation helpers."},
         )
         assert {"two_d_storyboard", "procedural_3d", "advanced_animation", "simulation_setup"}.intersection(set(workflow["domains"]))
-        object_design = _execute(
-            context,
-            "plan_object_design",
-            {"prompt": "Design a futuristic wall-mounted coffee machine with chrome pipes, a small display, buttons, and beveled body."},
-        )
-        assert object_design["object_family"] == "appliance", object_design
-        assert object_design["strategy"] == "procedural_kit_plus_generic_modeling", object_design
-        assert object_design["template"] == "coffee_machine", object_design
-        assert "pipe_run" in object_design["companion_templates"], object_design
-        assert "display_screen" in object_design["features"], object_design
-        assert "pipe_run" in object_design["features"], object_design
-        assert "create_procedural_object_kit" in object_design["recommended_tools"], object_design
-        assert "edit_mesh" in object_design["recommended_tools"], object_design
-        assert "create_shader_material" in object_design["recommended_tools"], object_design
-        assert object_design["kit_arguments"]["template"] == "coffee_machine", object_design
-        assert object_design["fallback_reason"] == "", object_design
-        planned_names = [call["name"] for call in object_design["planned_tool_calls"]]
-        deferred_by_name = {call["name"]: call for call in object_design["deferred_tool_calls"]}
-        assert "create_procedural_object_kit" in planned_names, object_design
-        assert "inspect_modeling_quality" not in planned_names, object_design
-        assert "capture_object_inspection_renders" not in planned_names, object_design
-        assert deferred_by_name["inspect_modeling_quality"]["input_handoff"]["source_tool"] == "create_procedural_object_kit", object_design
-        assert deferred_by_name["inspect_modeling_quality"]["input_handoff"]["source_result_field"] == "objects", object_design
-        assert "object_names" not in deferred_by_name["inspect_modeling_quality"]["input"], object_design
-        assert deferred_by_name["capture_object_inspection_renders"]["input_handoff"]["source_tool"] == "create_procedural_object_kit", object_design
-        assert "object_names" not in deferred_by_name["capture_object_inspection_renders"]["input"], object_design
-        control_panel_design = _execute(
-            context,
-            "plan_object_design",
-            {"prompt": "Create a control panel."},
-        )
-        assert control_panel_design["object_family"] == "electronics", control_panel_design
-        assert control_panel_design["template"] == "control_panel", control_panel_design
-        exact_object_design = _execute(
-            context,
-            "plan_object_design",
-            {"prompt": "Make the exact Boeing 747 landing gear from a reference image."},
-        )
-        assert exact_object_design["strategy"] == "asset_reference_then_refine", exact_object_design
-        assert exact_object_design["template"] == "", exact_object_design
-        assert exact_object_design["kit_arguments"] == {}, exact_object_design
-        assert exact_object_design["fallback_reason"], exact_object_design
-        assert "plan_asset_import_workflow" in exact_object_design["recommended_tools"], exact_object_design
-        exact_control_panel_design = _execute(
-            context,
-            "plan_object_design",
-            {"prompt": "Make the exact Sony control panel from a reference image."},
-        )
-        assert exact_control_panel_design["object_family"] == "electronics", exact_control_panel_design
-        assert exact_control_panel_design["strategy"] == "asset_reference_then_refine", exact_control_panel_design
-        assert exact_control_panel_design["template"] == "", exact_control_panel_design
-        assert exact_control_panel_design["refinement_template"] == "control_panel", exact_control_panel_design
-        assert exact_control_panel_design["kit_arguments"] == {}, exact_control_panel_design
-        assert not any(call["name"] == "create_procedural_object_kit" for call in exact_control_panel_design["planned_tool_calls"]), exact_control_panel_design
         asset_plan = _execute(
             context,
             "plan_asset_import_workflow",
@@ -918,54 +643,22 @@ def main():
             context,
             "plan_director_workflow",
             {
-                "prompt": "Director workflow: import an asset, create a modular wall panel kit, animate a reveal, review evidence, and ask before commit.",
+                "prompt": "Director workflow: import an asset, inspect procedural modeling, animate a reveal, review evidence, and ask before commit.",
                 "target_objects": ["Cube"],
             },
         )
         director_tool_names = [call["name"] for call in director_plan["next_tool_calls"]]
         assert "plan_asset_import_workflow" in director_tool_names, director_plan
-        assert "create_procedural_object_kit" in director_tool_names, director_plan
+        assert "get_geometry_nodes_details" in director_tool_names, director_plan
+        assert "inspect_modeling_quality" in director_tool_names, director_plan
         assert "run_animation_workflow" in director_tool_names, director_plan
         assert "commit_preview" not in director_tool_names, director_plan
         assert "revert_preview" not in director_tool_names, director_plan
         director_decision_names = [option["tool_call"]["name"] for option in director_plan["preview_decision_options"]]
         assert director_decision_names == ["commit_preview", "revert_preview"], director_plan
-        gn_plan_call = next(call for call in director_plan["next_tool_calls"] if call["name"] == "add_geometry_nodes_modifier")
-        assert gn_plan_call["input"]["name"], director_plan
-        assert gn_plan_call["input"]["node_group_name"], director_plan
         assert director_plan["preview_policy"]["commit_only_on_user_request"] is True, director_plan
         details = _execute(context, "get_2d_animation_details", {"max_items": 12})
         assert "recommended_tools" in details
-
-        board = _execute(
-            context,
-            "create_storyboard_panels",
-            {
-                "panel_count": 2,
-                "columns": 2,
-                "name_prefix": "Agent Bridge Advanced Board",
-                "frame_start": 1,
-                "frame_step": 12,
-            },
-        )
-        assert len(board["panels"]) == 2
-        assert board["camera"] in bpy.data.objects
-
-        cutout = _execute(
-            context,
-            "create_2d_cutout_layer",
-            {
-                "name": "Agent Bridge Advanced Cutout",
-                "location": [0.0, -0.2, 0.0],
-                "size": [0.8, 0.5],
-                "frame_start": 1,
-                "frame_end": 24,
-                "location_end": [0.5, -0.2, 0.25],
-                "text": "Layer",
-            },
-        )
-        assert cutout["object"] in bpy.data.objects
-        assert cutout["action"] in bpy.data.actions
 
         _select_object(context, cube)
         material = _execute(
@@ -1767,233 +1460,10 @@ def main():
         assert dolly["camera"] == "Camera"
         assert dolly["action"] in bpy.data.actions
 
-        desk_lamp = _run_desk_lamp_kit_exit_test(context)
-        assert desk_lamp["quality"]["passed"] is True, desk_lamp
-        architect_lamp = _run_desk_lamp_design_grammar_test(context)
-        assert architect_lamp["quality"]["passed"] is True, architect_lamp
-        coffee_machine = _run_coffee_machine_kit_exit_test(context)
-        assert coffee_machine["quality"]["passed"] is True, coffee_machine
-
-        object_kit = _execute(
-            context,
-            "create_procedural_object_kit",
-            {
-                "template": "radial_array",
-                "name_prefix": "Agent Bridge Smoke Kit",
-                "location": [3.0, 0.0, 0.0],
-                "count": 6,
-                "radius": 1.4,
-                "height": 0.7,
-            },
-        )
-        assert object_kit["template"] == "radial_array", object_kit
-        assert len(object_kit["objects"]) >= 7, object_kit
-        assert bpy.data.objects[object_kit["objects"][0]].type == "MESH"
-
-        mechanical_kit = _execute(
-            context,
-            "create_procedural_object_kit",
-            {
-                "template": "mechanical_joint",
-                "name_prefix": "Agent Bridge Mechanical Kit",
-                "location": [-3.0, 0.0, 0.0],
-                "count": 5,
-                "radius": 1.2,
-                "height": 0.8,
-            },
-        )
-        assert mechanical_kit["template"] == "mechanical_joint", mechanical_kit
-        assert any("Bearing" in name for name in mechanical_kit["objects"]), mechanical_kit
-        assert any("Bolt" in name for name in mechanical_kit["objects"]), mechanical_kit
-
-        product_display = _execute(
-            context,
-            "create_procedural_object_kit",
-            {
-                "template": "product_display_rig",
-                "name_prefix": "Agent Bridge Product Display Kit",
-                "location": [0.0, -3.0, 0.0],
-                "count": 8,
-                "radius": 1.3,
-                "height": 1.2,
-            },
-        )
-        assert product_display["template"] == "product_display_rig", product_display
-        assert any("Turntable Plinth" in name for name in product_display["objects"]), product_display
-        assert any("Softbox Card" in name for name in product_display["objects"]), product_display
-
-        mechanical_assembly = _execute(
-            context,
-            "create_procedural_object_kit",
-            {
-                "template": "mechanical_assembly",
-                "name_prefix": "Agent Bridge Mechanical Assembly Kit",
-                "location": [-4.5, -2.5, 0.0],
-                "count": 5,
-                "radius": 1.1,
-                "height": 0.9,
-            },
-        )
-        assert mechanical_assembly["template"] == "mechanical_assembly", mechanical_assembly
-        assert any("Base Bracket" in name for name in mechanical_assembly["objects"]), mechanical_assembly
-        assert any("Drive Screw" in name for name in mechanical_assembly["objects"]), mechanical_assembly
-
-        control_panel = _execute(
-            context,
-            "create_procedural_object_kit",
-            {
-                "template": "control_panel",
-                "name_prefix": "Agent Bridge Control Panel Kit",
-                "location": [12.0, 8.0, 0.0],
-                "count": 6,
-                "radius": 1.1,
-                "height": 1.5,
-            },
-        )
-        assert control_panel["template"] == "control_panel", control_panel
-        for term in (
-            "Root",
-            "Control Panel Enclosure",
-            "Recessed Faceplate",
-            "Status Display Screen",
-            "Status Indicator",
-            "Emergency Stop Button",
-            "Rotary Control Knob",
-            "Toggle Switch",
-            "Slider Track",
-            "Terminal Strip Port",
-        ):
-            assert any(term in name for name in control_panel["objects"]), (term, control_panel)
-        for name in control_panel["objects"]:
-            if "Terminal Strip Port" in name:
-                assert max(bpy.data.objects[name].dimensions) < 0.2, (name, bpy.data.objects[name].dimensions[:])
-        control_panel_root = next(name for name in control_panel["objects"] if name.endswith(" Root"))
-        control_panel_quality = _execute(
-            context,
-            "inspect_modeling_quality",
-            {"object_names": [control_panel_root], "selected_only": False, "include_children": True, "require_materials": True},
-        )
-        assert control_panel_quality["passed"] is True, control_panel_quality
-        control_panel_render = _execute(
-            context,
-            "capture_object_inspection_renders",
-            {
-                "object_names": [control_panel_root],
-                "views": ["front", "front_below"],
-                "resolution_x": 320,
-                "resolution_y": 240,
-                "distance_factor": 4.0,
-                "note": "Control-panel kit visual exit evidence",
-            },
-        )["inspection_render"]
-        assert control_panel_render["available"] is True, control_panel_render
-        assert len(control_panel_render["images"]) == 2, control_panel_render
-        for image in control_panel_render["images"]:
-            assert image["available"] is True, image
-            assert image["width"] == 320 and image["height"] == 240, image
-            assert image["size_bytes"] > 128, image
-            assert os.path.isfile(image["path"]), image
-
-        modular_panel = _execute(
-            context,
-            "create_procedural_object_kit",
-            {
-                "template": "modular_wall_panel",
-                "name_prefix": "Agent Bridge Modular Wall Kit",
-                "location": [3.0, 3.0, 0.0],
-                "count": 4,
-                "radius": 1.0,
-                "height": 1.4,
-            },
-        )
-        assert modular_panel["template"] == "modular_wall_panel", modular_panel
-        assert any("Wall Panel Body" in name for name in modular_panel["objects"]), modular_panel
-        assert any("Inset Bay" in name for name in modular_panel["objects"]), modular_panel
-
-        pipe_run = _execute(
-            context,
-            "create_procedural_object_kit",
-            {
-                "template": "pipe_run",
-                "name_prefix": "Agent Bridge Pipe Run Kit",
-                "location": [-3.0, 3.0, 0.0],
-                "count": 4,
-                "radius": 1.0,
-                "height": 1.0,
-            },
-        )
-        assert pipe_run["template"] == "pipe_run", pipe_run
-        assert any("Pipe 01" in name for name in pipe_run["objects"]), pipe_run
-        assert any("Pipe Support" in name for name in pipe_run["objects"]), pipe_run
-
         phase1_prop = _run_phase1_modeling_helper_prop_test(context)
         assert len(phase1_prop["objects"]) == 6, phase1_prop
         assert all(name in bpy.data.objects for name in phase1_prop["objects"]), phase1_prop
         assert all(name in bpy.data.materials for name in phase1_prop["materials"]), phase1_prop
-
-        directed = _execute(
-            context,
-            "create_directed_animation_shot",
-            {
-                "shot_type": "path_slide",
-                "object_names": ["Cube"],
-                "selected_only": False,
-                "frame_start": 1,
-                "frame_end": 36,
-                "travel_axis": "X",
-                "travel_distance": 1.25,
-                "camera_name": "Camera",
-            },
-        )
-        assert directed["shot_type"] == "path_slide", directed
-        assert "Cube" in directed["objects"], directed
-        assert directed["camera"] == "Camera", directed
-
-        crane = _execute(
-            context,
-            "create_directed_animation_shot",
-            {
-                "shot_type": "crane_reveal",
-                "object_names": ["Cube"],
-                "selected_only": False,
-                "frame_start": 1,
-                "frame_end": 48,
-                "camera_name": "Camera",
-            },
-        )
-        assert crane["shot_type"] == "crane_reveal", crane
-        assert crane["subjects"] == ["Cube"], crane
-        assert crane["objects"] == [], crane
-        assert crane["camera_action"] in bpy.data.actions, crane
-
-        truck = _execute(
-            context,
-            "create_directed_animation_shot",
-            {
-                "shot_type": "truck_slide",
-                "object_names": ["Cube"],
-                "selected_only": False,
-                "frame_start": 1,
-                "frame_end": 48,
-                "travel_axis": "X",
-                "travel_distance": 1.6,
-                "camera_name": "Camera",
-            },
-        )
-        assert truck["shot_type"] == "truck_slide", truck
-        assert truck["subjects"] == ["Cube"], truck
-        assert truck["objects"] == [], truck
-        assert truck["camera_action"] in bpy.data.actions, truck
-
-        invalid_directed = json.loads(
-            tool_dispatcher.execute_tool(
-                context,
-                "create_directed_animation_shot",
-                {"camera_name": "Cube", "object_names": ["Cube"], "selected_only": False},
-            )
-        )
-        assert invalid_directed["ok"] is False, invalid_directed
-        assert scene.claude_blender.pending_preview is True, "invalid directed shot must not clear existing preview"
 
         _execute(context, "set_render_settings", {"resolution": [1280, 720], "fps": 30, "frame_start": 1, "frame_end": 48, "film_transparent": True})
         assert scene.render.resolution_x == 1280 and scene.render.resolution_y == 720

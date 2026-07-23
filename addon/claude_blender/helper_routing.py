@@ -172,13 +172,13 @@ HELPER_FIRST_SCRIPT_RULES = (
             "grease-pencil",
         },
         "message": (
-            "Use the 2D/storyboard inspection and creation helpers before drafting Python for common "
-            "storyboard, animatic, cutout, or motion-graphics setup."
+            "Inspect 2D/storyboard state, then compose text, curve, camera, and evidence helpers before "
+            "using trusted Python for custom Grease Pencil or vector work."
         ),
         "recommended_tools": [
             "get_2d_animation_details",
-            "create_storyboard_panels",
-            "create_2d_cutout_layer",
+            "create_text_object",
+            "create_curve_path",
             "create_camera_dolly_animation",
             "capture_animation_playblast",
         ],
@@ -242,7 +242,6 @@ HELPER_FIRST_SCRIPT_RULES = (
             "plan_advanced_scene_workflow",
             "get_geometry_nodes_details",
             "inspect_modeling_quality",
-            "create_procedural_object_kit",
             "apply_procedural_array_stack",
             "edit_mesh",
             "curve_to_mesh",
@@ -267,9 +266,9 @@ HELPER_FIRST_SCRIPT_RULES = (
             "directed shot",
             "shot template",
         },
-        "message": "Use the directed shot or camera dolly animation helper before drafting Python for common camera moves.",
+        "message": "Use camera orbit or dolly helpers when the requested move has explicit targets and coordinates; otherwise inspect before trusted custom animation Python.",
         "recommended_tools": [
-            "create_directed_animation_shot",
+            "create_camera_orbit",
             "create_camera_dolly_animation",
             "set_camera_settings",
             "capture_animation_playblast",

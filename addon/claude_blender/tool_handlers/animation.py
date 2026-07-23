@@ -5,7 +5,7 @@ from __future__ import annotations
 import bpy
 
 from .. import (
-    advanced_helpers,
+    advanced_animation as advanced_helpers,
     animation_analysis,
     animation_brief,
     animation_workflow,
@@ -14,34 +14,36 @@ from .. import (
     live_preview,
     world_model,
 )
-from ..handler_runtime import (
+from ..animation_runtime import (
     _REPAIR_LOOP_DEFAULT_TOOLS,
     _WORKFLOW_GENERATION_TOOLS,
     _action_summary,
     _animation_data_summary,
     _append_action,
-    _bounded_float,
-    _bounded_int,
     _brief_frame_range,
     _constraint_summary,
     _driver_summary,
     _execute_repair_tool,
     _execute_workflow_tool,
-    _float_list,
     _mark_animation_workflow_seen,
-    _name_list,
     _object_related_actions,
-    _optional_float,
-    _optional_float_list,
     _repair_loop_brief_text,
     _repair_loop_review,
     _repair_operation_blocker,
     _repair_operation_key,
     _repair_operation_mutates,
     _repair_operation_parts,
-    _resolve_objects,
     _workflow_review,
     _workflow_tool_parts,
+)
+from .support import (
+    _bounded_float,
+    _bounded_int,
+    _float_list,
+    _name_list,
+    _optional_float,
+    _optional_float_list,
+    _resolve_objects,
 )
 
 
@@ -941,27 +943,6 @@ def create_camera_dolly_animation(context, args):
     )
 
 
-def create_directed_animation_shot(context, args):
-    return advanced_helpers.create_directed_animation_shot(
-        context,
-        shot_type=str(args.get("shot_type") or "camera_push_reveal"),
-        object_names=_name_list(args.get("object_names")),
-        selected_only=bool(args.get("selected_only", True)),
-        frame_start=int(args.get("frame_start", context.scene.frame_start)),
-        frame_end=int(args.get("frame_end", context.scene.frame_end)),
-        travel_axis=str(args.get("travel_axis") or "X"),
-        travel_distance=float(args.get("travel_distance", 2.0)),
-        scale_start=float(args.get("scale_start", 0.2)),
-        scale_end=float(args.get("scale_end", 1.0)),
-        rotation_revolutions=float(args.get("rotation_revolutions", 1.0)),
-        camera_name=str(args.get("camera_name") or ""),
-        target_name=str(args.get("target_name") or ""),
-        create_camera=bool(args.get("create_camera", True)),
-        lens_start=args.get("lens_start"),
-        lens_end=args.get("lens_end"),
-        interpolation=str(args.get("interpolation") or "BEZIER"),
-        label=args.get("label", "Create directed animation shot"),
-    )
 
 
 def set_scene_frame_range(context, args):

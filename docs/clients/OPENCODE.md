@@ -27,7 +27,7 @@ OpenCode represents a local MCP command as an array. Translate the complete comm
 Pinned `uvx` command on macOS/Linux:
 
 ```json
-["uvx", "--from", "blender-bridge==0.3.1", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
+["uvx", "--from", "blender-bridge==0.4.0", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
 ```
 
 On Windows start the command array with `"cmd", "/c", "uvx"`. Preserve the copied token, compatibility fields, and optional Sketchfab token in `environment`.

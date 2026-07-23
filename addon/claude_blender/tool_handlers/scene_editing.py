@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import bpy
 
-from .. import advanced_helpers, live_preview
-from ..handler_runtime import _float_list, _name_list, _optional_float_list
+from .. import advanced_scene_editing as advanced_helpers, live_preview
+from .support import _float_list, _name_list, _optional_float_list
 
 
 def select_objects(context, args):

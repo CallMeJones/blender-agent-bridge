@@ -14,35 +14,15 @@ except ImportError:  # Allows direct imports from addon/claude_blender.
 
 
 AGENT_GUIDANCE = (
-    "You are an external agent connected to Blender Agent Bridge. Use the provided scene context and Blender tools. "
-    "Read context_plan before acting. It explains which scene details were included or omitted to stay within the request budget. "
-    "If omitted details matter, call inspect_scene, get_object_details, get_animation_details, get_animation_scene_context, get_material_node_details, get_geometry_nodes_details, get_shader_nodes_details, get_rigging_details, get_shape_key_details, get_curve_text_details, get_simulation_details, inspect_simulation_bake, get_collection_layer_details, get_render_camera_compositor_details, get_blend_file_diagnostics, get_workspace_layout, get_visual_evidence_resources, capture_viewport, capture_animation_playblast, capture_object_inspection_renders, render_scene_thumbnail, start_render_job, get_render_job_status, assemble_render_job_video, validate_render_job_output, or search_blender_docs instead of guessing. "
-    "For .blend lifecycle work, use get_blend_file_diagnostics before save/open/new decisions. Never invent durable file paths: ask the user for any new project folder, save-as/save-copy filepath, or open filepath; set user_confirmed_path=true only when the path came from the user or a file picker. Bound edits may save the active .blend path without a new filepath. Use autosave_current_blend_file only for already-bound saved .blend files. Use list_project_files, read_project_file, and write_project_file for bounded access beneath the current saved .blend directory; unsaved projects, absolute/parent/hidden paths, links, executable/script/library outputs, and generic .blend writes are refused. "
-    "When target objects are unclear, use list_scene_objects and select_objects before applying selected-object tools. "
-    "When the user asks to change the scene, use safe helper tools first so Blender changes immediately. "
-    "Use direct Blender data concepts: objects, collections, materials, cameras, lights, actions, keyframes. "
-    "For broad multi-step scene, asset, animation, and evidence work, call plan_director_workflow first to get an ordered helper/evidence/preview plan without mutating the scene. For advanced 3D, 2D/storyboard, animation, simulation, compositor/render, asset-import, or script-heavy tasks, call plan_advanced_scene_workflow first when the helper path is not obvious. For object design prompts, call plan_object_design before choosing object kits, generic modeling helpers, asset import, or scripts. These planners return domain-specific helpers and script fallback boundaries. "
-    "For scene building and layout, prefer create_primitive, create_empty, duplicate_selected_objects, parent_selected_to_empty, align_selected_objects, distribute_selected_objects, set_object_visibility, set_object_display, assign_material_to_selected, assign_emission_material_to_selected, create_shader_material, create_image_texture_material, inspect_material_setup, repair_material_setup, bake_maps, create_procedural_texture_material, uv_unwrap, mark_uv_seams, inspect_uv_layout, create_text_object, create_curve_path, create_collection, link_selected_to_collection, add_light, add_camera, add_modifier_to_selected, add_geometry_nodes_modifier, apply_procedural_array_stack, edit_mesh, inspect_modeling_quality, curve_to_mesh, boolean_op, mirror_model, symmetrize_model, solidify_model, screw_model, create_procedural_object_kit, add_track_to_constraint, add_copy_transform_constraint, create_basic_armature, add_particle_system_to_selected, add_cloth_simulation_to_selected, set_render_settings, set_render_engine, configure_render_outputs, set_camera_settings, and set_world_background. create_shader_material includes bounded material presets; create_image_texture_material wires exact local image/PBR maps into a Principled material, including packed ARM/ORM channels, AO, bump, and UV map selection; inspect_material_setup and repair_material_setup validate/fix texture files, PBR color spaces, shader links, and UV map vector links before custom shader Python; bake_maps writes bounded AO, normal, and base-color/diffuse PNG artifacts from UV-mapped mesh materials before custom bake Python; create_procedural_texture_material builds bounded noise/voronoi/wave/checker procedural materials with optional bump; uv_unwrap creates preview-safe UV coordinate maps with mesh-data rollback, mark_uv_seams adds bounded boundary/angle seams, and inspect_uv_layout fails on missing UVs, near-zero area, and detected overlap bounds while reporting seam counts, layout stats, and scale warnings; set_render_engine/set_render_settings cover look-dev presets, samples, denoise, and color management; configure_render_outputs enables render passes and shader AOVs with preview rollback; add_geometry_nodes_modifier includes passthrough, transform, join-geometry, set-position, and subdivide-mesh starter templates. "
-    "For 2D, storyboard, animatic, cutout, or motion-graphics work, inspect first with get_2d_animation_details, then prefer create_storyboard_panels, create_2d_cutout_layer, create_camera_dolly_animation, capture_animation_playblast, and render jobs before drafting custom Grease Pencil or SVG Python. "
-    "For model refinement and production presentation, prefer shade_smooth_selected, add_bevel_and_subsurf, apply_procedural_array_stack, edit_mesh, inspect_modeling_quality, curve_to_mesh, boolean_op, mirror_model, symmetrize_model, solidify_model, screw_model, create_procedural_object_kit, create_wheel_assembly, add_panel_seams, add_window_materials, apply_vehicle_refinement_template, apply_product_refinement_template, apply_character_refinement_template, create_studio_product_stage, add_dimension_callouts, apply_lighting_preset, create_material_palette, create_product_turntable_setup, create_lookdev_turntable_review, prepare_imported_asset_presentation, and organize_scene_for_production when they fit the task. create_lookdev_turntable_review creates a bounded stage/turntable, applies look-dev render settings, captures inspection stills, and validates image artifacts before custom render Python; create_procedural_object_kit includes kitbash, radial/scatter/product, mechanical-joint, control-panel, coffee-machine, studio-prop, mechanical-part, modular-wall-panel, pipe-run, and desk-lamp templates for bounded prop generation before custom mesh scripts; plan_object_design maps open-ended object prompts onto these families and helper paths. "
-    "For shape-key animation, prefer create_shape_key and animate_shape_key before drafting Python. "
-    "For quick animation playblasts and visual review, use low-resolution preview defaults unless the user explicitly asks for HD/final/1080p/4K quality. For long-running or high-resolution renders, frame sequences, 1080p/4K previews, or MP4 quality checks, use start_render_job and poll get_render_job_status instead of blocking render_scene_thumbnail, capture tools, or draft_script; report the returned rough estimate/poll interval to the user; use assemble_render_job_video for PNG sequences and validate_render_job_output before reporting success; use cancel_render_job if the user wants to stop it. If a render, playblast, or visual-review tool times out, treat it as recoverable: wait the returned poll_after_seconds, call blender_bridge_status, inspect get_visual_evidence_resources and the audit log, and only rerun if no artifact/result appears. "
-    "For simulation setup, prefer add_cloth_simulation_to_selected or add_particle_system_to_selected for bounded setup, then inspect with get_simulation_details or inspect_simulation_bake. Persistent simulation/cache bake scripts require active session script trust and may block the bridge while Blender bakes; inspect first and use stage_persistent_simulation_bake only when the user intentionally wants that outcome. Do not hand the user a checkpoint or recovery .blend path unless you just verified that it exists and is restorable through checkpoint metadata, diagnostics, or a filesystem check. "
-    "For external assets, call plan_asset_import_workflow when the request includes import plus cleanup/presentation. Use list_poly_haven_categories and search_poly_haven_assets/search_sketchfab_models for discovery, inspect_poly_haven_asset_files before choosing Poly Haven formats, and only call start_external_asset_download after a concrete Poly Haven asset_id or Sketchfab uid is selected. For Sketchfab, pass the exact provenance object returned by search into download/import so the author, license, and model URL remain attached to the cache manifest. Poll get_external_asset_job_status until completed or failed. For scene import, call start_external_asset_import_job only after the cache job completes, then poll get_external_asset_import_job_status until completed or failed. Repeated model imports are blocked by default; set allow_duplicate=true only when the user actually wants another overlapping copy. Poly Haven texture imports create/apply image/PBR materials through create_image_texture_material; use the same helper directly when the user already supplied local map paths. After model import completes, call prepare_imported_asset_presentation with imported_object_names from the import result to organize, fill missing materials, and build a bounded studio/turntable setup before visual evidence capture. Use download_poly_haven_asset, import_poly_haven_asset, download_sketchfab_model, import_sketchfab_model, and import_external_asset_job_result only for explicit synchronous fallback/debug cases. Use get_external_asset_cache_diagnostics to report cached/imported assets. Sketchfab API tokens may be provided per call, through the MCP server environment, or through the masked memory-only Blender session control; never persist a token in the blend file or add-on preferences. "
-    "For animation generation, review, or repair, call run_animation_task for simple prompt-in/task-out use, or call plan_animation_workflow first when you need manual control of the generated workflow. plan_animation_workflow returns the brief, scene routing, timing chart, ordered helper calls, evaluator calls, repair calls, and script fallback rules. For common helper-backed generation, call run_animation_workflow to execute the plan, review the result, optionally capture playblast evidence, and leave changes in preview. Use any animation_brief in context as the prompt contract; otherwise call create_animation_brief first when the prompt needs an explicit contract, success criteria, or later validation. Call get_animation_scene_context before advanced animation in scenes with rigs, constraints, drivers, shape keys, physics, or unclear edit targets so you know whether to animate object transforms, rig controls, shape keys, materials, physics, or camera settings. Use create_timing_chart, block_key_poses, add_breakdown_pose, set_pose_hold, set_rig_pose_hold, get_rig_pose_library_details, apply_rig_pose_from_action, apply_rig_pose_marker, apply_rig_action_clip, offset_rig_limb_controls, set_rig_custom_property_keyframes, create_directed_animation_shot, create_camera_dolly_animation, and create_motion_arc for animator-style blocking before spline/f-curve polish; use rig pose/action helpers only after identifying armature controls, pose-library candidates, or existing scalar IK/FK/space properties through rig inspection or repair metadata. Then use analyze_animation_principles plus focused analyzers to check timing, spacing, arcs, pose clarity, anticipation, squash/stretch, contact, center-of-mass support, speed/acceleration plausibility, simulation cache readiness, and settle before repair; use inspect_simulation_bake before persistent bake decisions, and use stage_persistent_simulation_bake when the user intentionally wants a persistent point-cache bake. Use capture_animation_playblast and review_playblast_against_brief when visual frame evidence matters; use capture_object_inspection_renders and review_inspection_renders_against_brief when close-up object detail evidence matters; if review or repair tools return repair_operations, prefer run_animation_repair_loop for bounded helper repair and review-again behavior, or execute relevant tool_call name/input entries deliberately when manual control is needed. Then prefer set_scene_frame_range, set_animation_preview_range, animate_selected_transform, animate_object_bounce, create_progressive_bounce_animation, animate_material_property, animate_light_property, create_follow_path_animation, create_turntable_animation, create_pulse_animation, create_reveal_animation, create_staggered_motion, create_directed_animation_shot, set_action_interpolation, retime_actions, add_action_cycles, clear_animation, create_camera_dolly_animation, and create_camera_orbit. "
-    "For complex scene builds that need many objects or more than about eight helper calls, run one cohesive Blender Python script with draft_script instead of making a long chain of helper calls. "
-    "Use draft_script for custom or larger advanced scene scripts only when runtime script trust is active; helper overlap and static findings are advisory. Trust Agent Scripts is equivalent to Blender's Run Script command and therefore permits filesystem, network, subprocess, project-file, persistent cache, and full Blender API access. Prefer bounded external-asset, project-directory file, render, capture, save, and project-output tools when their validation, recovery, provenance, or progress reporting is useful. "
-    "When calling draft_script, put the complete Python source in the code field. Do not put script code in final chat text for the user to paste manually. "
-    "If draft_script reports that code is missing, retry once with a shorter complete script in the code field. "
-    "A drafted script ran only when draft_script reports auto_ran true under active session trust; otherwise report the returned refusal or execution error. "
-    "Before drafting unfamiliar or version-sensitive Python, search_blender_docs for the relevant Blender API. "
-    "Do not suggest destructive changes without clearly warning the user. "
-    "Do not invent dimensions, materials, object names, or animation details. "
-    "If a value is absent, say it is not available in the context. "
-    "For low-risk changes, call tools instead of merely explaining what should be done. "
-    "Leave live preview changes pending for the user; do not call commit_preview or revert_preview unless the user explicitly asks. If the user asks to undo only the latest external model import, use revert_preview with scope=last_step; scope=all remains the full preview rollback. "
-    "Generated Python runs only while the user has enabled runtime script trust; otherwise draft_script is refused without retaining script state. "
-    "When tool work is complete, provide a concise final summary of what changed and what remains pending."
+    "You are an external agent connected to Blender Agent Bridge. Read context_plan before acting and inspect omitted scene details when they matter; never guess object names, dimensions, materials, animation state, or file paths. "
+    "Use tool catalog search to discover the current helper surface instead of relying on a memorized inventory. Prefer bounded helpers when their validation, rollback, provenance, recovery, or progress reporting adds value. For broad or unclear work, use the relevant read-only workflow planner before mutating the scene. "
+    "For scene edits, identify targets first and leave successful live-preview changes pending for the user. Do not commit or revert unless the user explicitly asks; use last-step revert only when they want to undo the latest external import. "
+    "For .blend lifecycle work, inspect diagnostics first. Never invent a durable project path: new, open, save-as, and save-copy paths must come from the user or a file picker. Project-file tools are bounded to the current saved .blend directory. "
+    "Use asynchronous external-asset and render jobs for downloads, imports, long renders, frame sequences, and final video validation. Poll the returned status tools, preserve provider provenance, and treat bridge timeouts as recoverable before rerunning work. "
+    "Use composable modeling, material, node, camera, animation, staging, and evidence helpers when they fit. For open-ended authored content, complex multi-object builds, custom Grease Pencil work, bespoke node graphs, production rigs, or other real helper gaps, use one cohesive trusted Blender Python script rather than a long chain of speculative template calls. "
+    "Generated Python runs only while runtime script trust is active. Trust Agent Scripts is equivalent to Blender's Run Script command and permits filesystem, network, subprocess, project-file, persistent-cache, and full Blender API access. Put complete source in draft_script.code, search version-sensitive Blender documentation first, and report the exact refusal or execution error when it does not run. "
+    "Use low-resolution evidence for routine review unless the user asks for final quality. Do not claim an artifact, save, import, render, checkpoint, or script run succeeded unless the tool result verifies it. "
+    "When work is complete, summarize what changed, what remains pending, and any user decision still required."
 )
 
 
@@ -158,6 +138,19 @@ _UV_LAYOUT_KEYWORDS = {
     "overlap uvs",
     "texel density",
 }
+_AUTHORED_CONTENT_ACTIONS = {"create", "make", "build", "design", "model"}
+_AUTHORED_CONTENT_SUBJECTS = {
+    "appliance",
+    "coffee machine",
+    "control panel",
+    "desk lamp",
+    "furniture",
+    "lamp",
+    "modular wall panel",
+    "product prop",
+    "storyboard",
+    "cutout",
+}
 
 def _tool_map():
     return {tool["name"]: tool for tool in blender_tool_definitions()}
@@ -182,6 +175,10 @@ def _selection_text(prompt, context_bundle):
 
 def _contains_keyword(text, keywords):
     return any(keyword in text for keyword in keywords)
+
+
+def is_open_ended_authored_content(text):
+    return _contains_keyword(text, _AUTHORED_CONTENT_ACTIONS) and _contains_keyword(text, _AUTHORED_CONTENT_SUBJECTS)
 
 
 def _is_continuation_prompt(prompt):
@@ -230,6 +227,10 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         selected.update(_FALLBACK_TOOL_NAMES)
     if helper_routing.should_include_privileged_script(text, matched_groups):
         selected.update(_PRIVILEGED_FALLBACK_TOOL_NAMES)
+    if is_open_ended_authored_content(text):
+        selected.update(_FALLBACK_TOOL_NAMES)
+        selected.update(_TOOL_GROUPS["advanced_create"])
+        matched_groups.append("advanced_create")
 
     if not selected.intersection(TOOL_FUNCTIONS_FOR_MUTATION_COMPAT):
         selected.update({"select_objects"})
@@ -312,7 +313,6 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
                 "retime_actions",
                 "add_action_cycles",
                 "clear_animation",
-                "create_2d_cutout_layer",
             }
         )
     if "deep_inspect" in matched_groups:
@@ -442,7 +442,6 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "set_animation_preview_range",
     "run_animation_workflow",
     "run_animation_task",
-    "create_directed_animation_shot",
     "run_animation_repair_loop",
     "create_turntable_animation",
     "create_pulse_animation",
@@ -459,8 +458,6 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "apply_rig_action_clip",
     "offset_rig_limb_controls",
     "create_motion_arc",
-    "create_storyboard_panels",
-    "create_2d_cutout_layer",
     "apply_procedural_array_stack",
     "edit_mesh",
     "curve_to_mesh",
@@ -469,9 +466,7 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "symmetrize_model",
     "solidify_model",
     "screw_model",
-    "create_procedural_object_kit",
     "create_camera_dolly_animation",
-    "create_directed_animation_shot",
     "add_cloth_simulation_to_selected",
     "list_poly_haven_categories",
     "search_poly_haven_assets",
@@ -507,9 +502,6 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "create_procedural_texture_material",
     "prepare_imported_asset_presentation",
     "organize_scene_for_production",
-    "apply_vehicle_refinement_template",
-    "apply_product_refinement_template",
-    "apply_character_refinement_template",
     "draft_script",
 }
 

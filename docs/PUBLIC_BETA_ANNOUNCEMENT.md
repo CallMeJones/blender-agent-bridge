@@ -1,10 +1,10 @@
-# Blender Agent Bridge v0.3.1: Public Open-Source Beta
+# Blender Agent Bridge v0.4.0: Public Open-Source Beta
 
 Today I’m opening **Blender Agent Bridge** to the public as an open-source beta.
 
 Blender Agent Bridge connects Blender to external AI agents through the Model Context Protocol (MCP). It lets tools such as Codex, Claude Desktop, Claude Code, Cursor, and other MCP-capable clients inspect an open Blender scene, gather visual evidence, use structured editing tools, and help with longer animation and rendering workflows—while keeping Blender, and the artist, in control.
 
-![Two aircraft in a Blender dogfight scene created and reviewed while testing Blender Agent Bridge](https://raw.githubusercontent.com/CallMeJones/blender-agent-bridge/v0.3.1/docs/assets/egypt-dogfight-hero.jpg)
+![Two aircraft in a Blender dogfight scene created and reviewed while testing Blender Agent Bridge](https://raw.githubusercontent.com/CallMeJones/blender-agent-bridge/v0.4.0/docs/assets/egypt-dogfight-hero.jpg)
 
 This beta is for Blender artists, technical artists, animators, developers, and curious builders who want to explore what agent-assisted 3D work can look like without placing a hidden chat system or a provider API key inside Blender.
 
@@ -27,13 +27,13 @@ The bridge is local-first: its Blender connection binds to localhost, and Blende
 
 ## What Can It Do?
 
-The v0.3.1 beta includes a canonical registry of 189 tool contracts covering scene inspection, editing, animation, rendering, project health, bounded project-directory files, and external asset workflows.
+The current beta includes a canonical registry of 181 tool contracts covering scene inspection, editing, animation, rendering, project health, bounded project-directory files, and external asset workflows.
 
 An agent can, among other things:
 
 - inspect objects, selections, materials, lights, cameras, rigs, animation data, render settings, compositor nodes, Geometry Nodes, collections, shape keys, curves, and scene health;
 - capture viewport images, sampled playblast frames, inspection renders, and render thumbnails so it can evaluate visual results instead of relying only on scene metadata;
-- apply reversible helper edits for transforms, materials, lighting, cameras, primitives, keyframes, constraints, render settings, scene organization, procedural object kits, and directed animation shots;
+- apply reversible helper edits for transforms, materials, lighting, cameras, primitives, keyframes, constraints, render settings, scene organization, procedural modifier stacks, and camera animation;
 - plan and run animation workflows, compare playblasts with a brief, propose repairs, and iterate with visible evidence;
 - start longer renders in a background Blender process, report progress, assemble image sequences into MP4 files, and validate the result;
 - search Poly Haven and Sketchfab, cache assets through asynchronous jobs, and queue imports with source and license information;
@@ -42,7 +42,7 @@ An agent can, among other things:
 
 One of the test projects was an Egypt dogfight sequence. The agent inspected the scene, captured playblasts and renders, repaired visual problems, managed longer render jobs, and checked the output through the bridge.
 
-![Short playblast-style preview from the Egypt dogfight test project](https://raw.githubusercontent.com/CallMeJones/blender-agent-bridge/v0.3.1/docs/assets/egypt-dogfight-preview.gif)
+![Short playblast-style preview from the Egypt dogfight test project](https://raw.githubusercontent.com/CallMeJones/blender-agent-bridge/v0.4.0/docs/assets/egypt-dogfight-preview.gif)
 
 ## Safety Is Part of the Workflow
 
@@ -85,7 +85,7 @@ The recommended installation path is Blender’s extension repository:
 4. Open the 3D View sidebar, select **Agent Bridge**, and press **Start**.
 5. Press **Copy MCP Config**, paste the generated configuration into your AI client, and restart or refresh that client.
 
-You can also download the packaged extension ZIP from the [v0.3.1 GitHub Release](https://github.com/CallMeJones/blender-agent-bridge/releases/tag/v0.3.1). Do not use GitHub’s automatically generated “Source code” ZIP as the Blender extension.
+You can also download the packaged extension ZIP from the [v0.4.0 GitHub Release](https://github.com/CallMeJones/blender-agent-bridge/releases/tag/v0.4.0). Do not use GitHub’s automatically generated “Source code” ZIP as the Blender extension.
 
 Once connected, try:
 
@@ -132,7 +132,7 @@ Blender Agent Bridge is an experiment in giving AI agents meaningful creative to
 If that direction sounds useful, install the beta, connect the MCP client you already use, and try it on a copy of a real project.
 
 - [GitHub repository](https://github.com/CallMeJones/blender-agent-bridge)
-- [v0.3.1 release and downloads](https://github.com/CallMeJones/blender-agent-bridge/releases/tag/v0.3.1)
+- [v0.4.0 release and downloads](https://github.com/CallMeJones/blender-agent-bridge/releases/tag/v0.4.0)
 - [Installation guide](https://github.com/CallMeJones/blender-agent-bridge/blob/main/docs/INSTALL_FROM_GITHUB.md)
 - [Safety model](https://github.com/CallMeJones/blender-agent-bridge/blob/main/docs/SAFETY_MODEL.md)
 - [Contributing guide](https://github.com/CallMeJones/blender-agent-bridge/blob/main/CONTRIBUTING.md)

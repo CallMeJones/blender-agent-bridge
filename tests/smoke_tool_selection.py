@@ -51,7 +51,6 @@ def main():
         )
         vehicle_names = _names(vehicle_tools)
         for expected in {
-            "apply_vehicle_refinement_template",
             "create_wheel_assembly",
             "add_window_materials",
             "add_panel_seams",
@@ -115,7 +114,6 @@ def main():
         )
         product_names = _names(product_tools)
         for expected in {
-            "apply_product_refinement_template",
             "create_studio_product_stage",
             "add_dimension_callouts",
             "create_product_turntable_setup",
@@ -128,7 +126,6 @@ def main():
         )
         character_names = _names(character_tools)
         for expected in {
-            "apply_character_refinement_template",
             "create_basic_armature",
             "create_curve_path",
         }:
@@ -227,7 +224,6 @@ def main():
         advanced_names = _names(advanced_tools)
         assert "plan_director_workflow" in advanced_names, advanced_meta
         assert "plan_advanced_scene_workflow" in advanced_names, advanced_meta
-        assert "plan_object_design" in advanced_names, advanced_meta
         assert "get_2d_animation_details" in advanced_names, advanced_meta
         assert "get_render_camera_compositor_details" in advanced_names, advanced_meta
 
@@ -251,19 +247,19 @@ def main():
         for expected in {
             "plan_advanced_scene_workflow",
             "get_2d_animation_details",
-            "create_storyboard_panels",
-            "create_2d_cutout_layer",
+            "create_text_object",
+            "create_curve_path",
             "create_camera_dolly_animation",
         }:
             assert expected in storyboard_names, (expected, storyboard_meta)
-        assert "draft_script" not in storyboard_names, storyboard_meta
+        assert "draft_script" in storyboard_names, storyboard_meta
 
         storyboard_script_tools, storyboard_script_meta = agent_tools.select_blender_tool_definitions(
             "Write a Python script to create a storyboard animatic with 2D panels.",
             bundle,
         )
         storyboard_script_names = _names(storyboard_script_tools)
-        assert "create_storyboard_panels" in storyboard_script_names, storyboard_script_meta
+        assert "create_text_object" in storyboard_script_names, storyboard_script_meta
         assert "draft_script" in storyboard_script_names, storyboard_script_meta
 
         procedural_tools, procedural_meta = agent_tools.select_blender_tool_definitions(
@@ -272,8 +268,6 @@ def main():
         )
         procedural_names = _names(procedural_tools)
         assert "plan_advanced_scene_workflow" in procedural_names, procedural_meta
-        assert "plan_object_design" in procedural_names, procedural_meta
-        assert "create_procedural_object_kit" in procedural_names, procedural_meta
         assert "apply_procedural_array_stack" in procedural_names, procedural_meta
         assert "edit_mesh" in procedural_names, procedural_meta
         assert "inspect_modeling_quality" in procedural_names, procedural_meta
@@ -292,21 +286,17 @@ def main():
         )
         lamp_names = _names(lamp_tools)
         assert "plan_advanced_scene_workflow" in lamp_names, lamp_meta
-        assert "plan_object_design" in lamp_names, lamp_meta
-        assert "create_procedural_object_kit" in lamp_names, lamp_meta
         assert "inspect_modeling_quality" in lamp_names, lamp_meta
-        assert "draft_script" not in lamp_names, lamp_meta
+        assert "draft_script" in lamp_names, lamp_meta
 
         appliance_tools, appliance_meta = agent_tools.select_blender_tool_definitions(
             "Design a futuristic wall-mounted coffee machine with chrome pipes, a small display, buttons, and beveled body.",
             bundle,
         )
         appliance_names = _names(appliance_tools)
-        assert "plan_object_design" in appliance_names, appliance_meta
-        assert "create_procedural_object_kit" in appliance_names, appliance_meta
         assert "edit_mesh" in appliance_names, appliance_meta
         assert "create_shader_material" in appliance_names, appliance_meta
-        assert "draft_script" not in appliance_names, appliance_meta
+        assert "draft_script" in appliance_names, appliance_meta
 
         lookdev_tools, lookdev_meta = agent_tools.select_blender_tool_definitions(
             "UV unwrap the selected mesh and make it texture ready with chrome and painted enamel material presets.",

@@ -4,16 +4,12 @@ from __future__ import annotations
 
 import bpy
 
-from .. import advanced_helpers, blender_compat, context_bundle, live_preview, world_model
+from .. import advanced_materials as advanced_helpers, blender_compat, context_bundle, live_preview, world_model
 from ..handler_runtime import (
-    _bounded_float,
-    _bounded_int,
-    _float_list,
     _idprops_summary,
-    _name_list,
-    _optional_float_list,
     _socket_summary,
 )
+from .support import _bounded_float, _bounded_int, _float_list, _name_list, _optional_float_list
 
 
 def get_material_node_details(context, args):

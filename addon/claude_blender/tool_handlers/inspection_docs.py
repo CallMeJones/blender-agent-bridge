@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from .. import context_bundle, docs_index, preferences, world_model
-from ..handler_runtime import _bounded_int, _idprops_summary, _mesh_data_layers, _resolve_objects
+from ..handler_runtime import _idprops_summary, _mesh_data_layers
+from .support import _bounded_int, _resolve_objects
 
 
 def inspect_scene(context, args):

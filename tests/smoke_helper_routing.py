@@ -93,7 +93,7 @@ def main():
     )
     assert storyboard_guard["code"] == "two_d_storyboard_helper_required", storyboard_guard
     assert not storyboard_guard["blocked"], storyboard_guard
-    assert "create_storyboard_panels" in storyboard_guard["recommended_tools"], storyboard_guard
+    assert "create_text_object" in storyboard_guard["recommended_tools"], storyboard_guard
 
     procedural_guard = helper_routing.helper_first_script_advisory(
         "Write Python for a non-destructive procedural array stack with bevels."
@@ -126,7 +126,7 @@ def main():
         "Write Python for a modular wall panel object kit with pipe run details."
     )
     assert modular_guard["code"] == "procedural_3d_helper_required", modular_guard
-    assert "create_procedural_object_kit" in modular_guard["recommended_tools"], modular_guard
+    assert "apply_procedural_array_stack" in modular_guard["recommended_tools"], modular_guard
 
     cloth_guard = helper_routing.helper_first_script_advisory(
         "Draft a script to add cloth simulation setup to the selected mesh."

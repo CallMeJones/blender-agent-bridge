@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .. import (
-    advanced_helpers,
+    advanced_camera_render as advanced_helpers,
     inspection_render,
     lab_parity,
     live_preview,
@@ -13,7 +13,7 @@ from .. import (
     viewport_capture,
     world_model,
 )
-from ..handler_runtime import _bounded_float, _bounded_int, _float_list, _name_list
+from .support import _bounded_float, _bounded_int, _float_list, _name_list
 
 
 def get_render_camera_compositor_details(context, args):

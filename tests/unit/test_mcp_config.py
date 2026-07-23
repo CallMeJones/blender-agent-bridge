@@ -58,7 +58,7 @@ class MCPConfigTests(unittest.TestCase):
         server = config["mcpServers"]["blender"]
         self.assertEqual("cmd", server["command"])
         self.assertEqual(
-            ["/c", "uvx", "--from", "blender-bridge==0.3.1", "blender-bridge"],
+            ["/c", "uvx", "--from", "blender-bridge==0.4.0", "blender-bridge"],
             server["args"][:5],
         )
         self.assertEqual("uvx", server["env"]["CLAUDE_BLENDER_MCP_RUNTIME_MODE"])
@@ -68,7 +68,7 @@ class MCPConfigTests(unittest.TestCase):
         config = build_info.mcp_config("http://127.0.0.1:8765", launch_mode="uvx", platform_name="posix")
         server = config["mcpServers"]["blender"]
         self.assertEqual("uvx", server["command"])
-        self.assertEqual(["--from", "blender-bridge==0.3.1", "blender-bridge"], server["args"][:3])
+        self.assertEqual(["--from", "blender-bridge==0.4.0", "blender-bridge"], server["args"][:3])
 
     def test_invalid_runtime_mode_is_rejected(self):
         with self.assertRaises(ValueError):

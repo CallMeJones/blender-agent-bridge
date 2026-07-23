@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from .. import advanced_helpers, live_preview, preferences, script_execution, script_runner, world_model
-from ..handler_runtime import _bounded_int, _float_list, _name_list, _simulation_bake_script
+from .. import advanced_rigging as advanced_helpers, live_preview, preferences, script_execution, script_runner, world_model
+from .support import _bounded_int, _float_list, _name_list, _simulation_bake_script
 
 
 def get_rigging_details(context, args):

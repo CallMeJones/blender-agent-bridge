@@ -4,17 +4,7 @@
 
 External agents can suggest changes, inspect scene state, and call narrow tools. They should not receive unchecked authority to run arbitrary Python in Blender by default.
 
-## Execution Modes
-
-### Suggest Only
-
-External agents can analyze and draft code, but nothing runs.
-
-Use this when:
-
-- The user is exploring an idea.
-- The script touches file paths, deletes data, imports modules, or edits many objects.
-- The model is using unfamiliar APIs.
+## Execution Paths
 
 ### Binary Script Trust
 
@@ -29,12 +19,6 @@ Generated Python has one session-wide switch; there is no per-script approval qu
 - Execution pushes a Blender undo step when possible, saves a timestamped `.blend` checkpoint when enabled, and records stdout/errors in `Agent Bridge Script Log`.
 - The single sidebar contains connection controls, the binary trust/revoke control, and pending preview **Commit**/**Revert** actions only. The removed **Run Now**, **Reject**, and **Allow Agent Once** operators are not registered.
 
-### Limited Autonomous
-
-External agents can call only allowlisted tools such as `inspect_scene`, `capture_viewport`, `capture_animation_playblast`, `capture_object_inspection_renders`, `set_object_transform`, or `add_light`. Arbitrary Python stays blocked.
-
-Use this later for fast iterative workflows.
-
 ### Live Helpers
 
 External agents can apply low-risk helper changes immediately to the open scene. Each change must be part of a preview transaction with visible commit/revert controls.
@@ -42,7 +26,7 @@ External agents can apply low-risk helper changes immediately to the open scene.
 Use this for transforms, primitive/empty creation, object visibility/display, materials, UV unwraps, bounded map-bake artifact output, lights, cameras, timeline settings, camera orbit setup, bounded keyframe edits, and bounded advanced helpers such as shader material setup, Geometry Nodes starter modifiers, shape keys, text/curve creation, simple particles, basic armatures, copy-transform constraints, render settings, camera settings, and world background color.
 
 Advanced helpers are not a general Blender automation sandbox. They should create or edit narrow, reversible data-blocks. Custom geometry-node networks, production rigs, compositor graphs, simulations, destructive mesh operations, import/export, and broad scene edits use session-trusted Python when bounded tools are insufficient.
-Refinement templates are also bounded live helpers. They may create multiple primitives/materials/curves at once, but every created data-block must be recorded in preview rollback. Templates should improve composition and detail without pretending to replace real topology modeling.
+The bridge does not expose style-specific refinement templates or finished-content generators. Broad authored work is composed from reusable helpers, external assets, and visual evidence, with one session-trusted custom script available when the bounded tools are not expressive enough.
 
 ### External Bridge / MCP
 

@@ -124,7 +124,7 @@ def main() -> int:
             base_url,
             "plan_advanced_scene_workflow",
             {
-                "prompt": "Create a modular wall panel object kit with material presets, Geometry Nodes starters, and a directed animation review path.",
+                "prompt": "Create a modular wall-panel system with material presets, Geometry Nodes starters, and a camera-animation review path.",
                 "target_objects": [target],
             },
             timeout=args.timeout,
@@ -231,27 +231,32 @@ def main() -> int:
         _require_ok("add_geometry_nodes_modifier", geometry_nodes)
         _print_step("geometry nodes", geometry_nodes, geometry_nodes.get("template") or "")
 
-        object_kit = _post_tool(
+        array_stack = _post_tool(
             base_url,
-            "create_procedural_object_kit",
+            "apply_procedural_array_stack",
             {
-                "template": "modular_wall_panel",
-                "name_prefix": "Agent Bridge Sweep Modular Kit",
-                "location": [2.5, 0.0, 0.8],
-                "count": 4,
-                "radius": 1.0,
-                "height": 1.3,
+                "object_names": [target],
+                "selected_only": False,
+                "count": 3,
+                "relative_offset": [1.25, 0.0, 0.0],
             },
             timeout=args.timeout,
         )
-        _require_ok("create_procedural_object_kit", object_kit)
-        _print_step("procedural object kit", object_kit, f"{len(object_kit.get('objects') or [])} objects")
+        _require_ok("apply_procedural_array_stack", array_stack)
+        array_objects = array_stack.get("objects") or []
+        array_modifiers = sum(len(item.get("modifiers") or []) for item in array_objects if isinstance(item, dict))
+        if not array_objects or array_modifiers < 2:
+            raise RuntimeError(
+                f"procedural array stack did not report expected modifiers: "
+                f"objects={len(array_objects)}, modifiers={array_modifiers}"
+            )
+        _print_step("procedural array stack", array_stack, f"{array_modifiers} modifiers")
 
         animation = _post_tool(
             base_url,
             "run_animation_workflow",
             {
-                "prompt": f"Move {target} across the frame with a directed camera shot.",
+                "prompt": f"Create a camera orbit around {target}.",
                 "subject_names": [target],
                 "frame_start": 1,
                 "frame_end": 36,
@@ -264,8 +269,8 @@ def main() -> int:
         )
         _require_ok("run_animation_workflow", animation)
         executed = [item.get("tool") for item in animation.get("executed") or []]
-        if "create_directed_animation_shot" not in executed:
-            raise RuntimeError(f"directed shot helper was not executed: {animation}")
+        if "create_camera_orbit" not in executed:
+            raise RuntimeError(f"camera orbit helper was not executed; executed={executed!r}")
         _print_step("animation workflow", animation, ",".join(executed))
 
         render_outputs = _post_tool(
@@ -286,10 +291,10 @@ def main() -> int:
         _require_ok("configure_render_outputs", render_outputs)
         applied_passes = render_outputs.get("applied_passes") or {}
         if not applied_passes.get("use_pass_normal") or not applied_passes.get("use_pass_z"):
-            raise RuntimeError(f"render output pass configuration failed: {render_outputs}")
+            raise RuntimeError(f"render output pass configuration failed: {applied_passes!r}")
         aov_names = {item.get("name") for item in render_outputs.get("aovs") or []}
         if not {"AgentBridgeLiveMask", "AgentBridgeLiveDepthHint"}.issubset(aov_names):
-            raise RuntimeError(f"render output AOV configuration failed: {render_outputs}")
+            raise RuntimeError(f"render output AOV configuration failed: {sorted(aov_names)!r}")
         _print_step("render output passes/AOVs", render_outputs, ",".join(sorted(aov_names)))
 
         lookdev_review = _post_tool(
@@ -311,7 +316,7 @@ def main() -> int:
         _require_ok("create_lookdev_turntable_review", lookdev_review)
         validation = lookdev_review.get("artifact_validation") or {}
         if not validation.get("ok") or int(validation.get("available_image_count") or 0) < 1:
-            raise RuntimeError(f"look-dev artifact validation failed: {lookdev_review}")
+            raise RuntimeError(f"look-dev artifact validation failed: {validation!r}")
         first_image = (validation.get("images") or [{}])[0]
         image_path = str(first_image.get("path") or "")
         if image_path and not os.path.isfile(image_path):

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from .. import advanced_helpers
-from ..handler_runtime import _bounded_float, _bounded_int, _float_list, _name_list, _optional_float_list
+from .. import advanced_modeling as advanced_helpers
+from .support import _bounded_float, _bounded_int, _float_list, _name_list, _optional_float_list
 
 
 def create_text_object(context, args):
@@ -174,25 +174,6 @@ def screw_model(context, args):
     )
 
 
-def create_procedural_object_kit(context, args):
-    return advanced_helpers.create_procedural_object_kit(
-        context,
-        template=str(args.get("template") or "kitbash_tower"),
-        name_prefix=str(args.get("name_prefix") or "Agent Bridge Kit"),
-        location=_float_list(args.get("location"), 3, (0.0, 0.0, 0.0)),
-        count=_bounded_int(args.get("count"), 8, minimum=1, maximum=80),
-        radius=float(args.get("radius", 2.0)),
-        spacing=float(args.get("spacing", 1.1)),
-        height=float(args.get("height", 2.0)),
-        primary_color=_float_list(args.get("primary_color"), 4, (0.18, 0.22, 0.27, 1.0)),
-        accent_color=_float_list(args.get("accent_color"), 4, (0.95, 0.62, 0.18, 1.0)),
-        style=str(args.get("style") or "default"),
-        variant=str(args.get("variant") or "default"),
-        detail_level=str(args.get("detail_level") or "medium"),
-        features=args.get("features"),
-        add_detail_modifiers=bool(args.get("add_detail_modifiers", True)),
-        label=args.get("label", "Create procedural object kit"),
-    )
 
 
 def register(handler_registry, specs):

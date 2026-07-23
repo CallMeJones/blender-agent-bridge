@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.4.0 - 2026-07-23
+
+- Removed eight opinionated finished-content generators: procedural object kits, object-design planning, vehicle/product/character refinement templates, storyboard panels, 2D cutout layers, and directed animation shots. Broad authored-content requests now route through reusable helpers, asset import, or a trusted script.
+- Split advanced Blender helpers into cohesive animation, camera/render, materials, modeling, presentation, rigging, scene-editing, and shared-support modules; retained the old helper module as a compatibility facade; split animation orchestration from the generic handler runtime; moved planning, 2D inspection, and neutral handler arguments to focused modules; and made `tool_executor.py` the sole registry-composition owner.
+- Fixed helper-first orbit workflows and animation-review playblast capture to execute through the explicit handler lookup instead of relying on removed global injection.
+- Simplified agent guidance and updated current-facing documentation, routing fixtures, registry snapshots, and smoke coverage to match the 181-tool registry.
+
 ## 0.3.1 - 2026-07-22
 
 - Reduced Blender Agent Bridge to one compact sidebar for bridge status, start/stop, MCP config, binary session script trust/revocation, and preview commit/revert. Removed the per-script Run/Reject/Allow-Once UI. Trust off refuses generated Python; trust on grants the same filesystem, network, process, project-file, persistent-cache, and Blender API permissions as Blender's Run Script command.

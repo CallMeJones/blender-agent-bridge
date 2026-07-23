@@ -118,9 +118,9 @@ def main():
         names = {tool["name"] for tool in tools["tools"]}
         assert "list_scene_objects" in names, names
         assert "capture_viewport" in names, names
-        assert "apply_vehicle_refinement_template" in names, names
-        assert "apply_product_refinement_template" in names, names
-        assert "apply_character_refinement_template" in names, names
+        assert "create_studio_product_stage" in names, names
+        assert "prepare_imported_asset_presentation" in names, names
+        assert "organize_scene_for_production" in names, names
         assert "create_studio_product_stage" in names, names
         assert "add_dimension_callouts" in names, names
         assert "apply_lighting_preset" in names, names

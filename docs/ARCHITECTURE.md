@@ -20,7 +20,7 @@ flowchart LR
   Tools --> Docs["docs_index.py"]
   Tools --> Runner["script_runner.py"]
   Tools --> Helpers["script_templates.py"]
-  Tools --> Advanced["advanced_helpers.py"]
+  Tools --> Advanced["Domain helper modules\nadvanced_*.py"]
   Helpers --> Preview
   Advanced --> Preview
   Preview --> Blender
@@ -43,7 +43,7 @@ The server can run from the extension's bundled source or from the zero-dependen
 
 This keeps the important boundary clean: MCP clients never import Blender Python and never touch `bpy` directly. Blender remains the authority for scene state, preview rollback, binary script trust, and UI status.
 
-Tool metadata is owned by the eleven deterministic modules under `tool_registry/domains/`. Blender-only callables register through the matching modules under `tool_handlers/`; each handler module declares its runtime dependencies explicitly, and `tool_dispatcher.py` is only the stable execution facade. Shared implementation details that still span several domains live in `handler_runtime.py`, keeping `bpy` completely outside the import path used by the packaged stdio runtime. Pure trusted-script result policy lives in `script_execution.py`, so the Blender runner, handlers, and helper metadata use one authorization model and status mapping while the standalone registry retains its serialized contract defaults.
+Tool metadata is owned by the eleven deterministic modules under `tool_registry/domains/`. Blender-only callables register through the matching modules under `tool_handlers/`; each handler module declares its runtime dependencies explicitly, and `tool_dispatcher.py` is only the stable execution facade. Generic preview and inspection support lives in `handler_runtime.py`, while animation workflow state and repair orchestration live in `animation_runtime.py`. This keeps domain policy out of the shared runtime and keeps `bpy` completely outside the import path used by the packaged stdio runtime. Pure trusted-script result policy lives in `script_execution.py`, so the Blender runner, handlers, and helper metadata use one authorization model and status mapping while the standalone registry retains its serialized contract defaults.
 
 ## Blender Extension Layer
 
@@ -58,7 +58,7 @@ The add-on should be packaged as a Blender extension:
 The UI should use normal Blender classes:
 
 - `bpy.types.Panel` for the 3D View sidebar.
-- `bpy.types.Operator` for capture, approve, run, cancel, undo, bridge control, and checkpoint actions.
+- `bpy.types.Operator` for bridge control, MCP config copying, binary script trust/revocation, and preview commit/revert actions.
 - `bpy.types.AddonPreferences` for local paths, bridge settings, privacy, execution mode, and docs settings.
 - `bpy.props` for persistent settings and operator inputs.
 
@@ -74,7 +74,7 @@ External clients should receive or request a context bundle for the current user
 - Optional image content for viewport screenshots.
 - Tool definitions for safe, narrow operations.
 
-External clients may respond directly or request a tool. For tool calls, the add-on executes the tool locally and returns the result through MCP/bridge. Generated Python should be stored as a proposal first. Running a proposal is a separate user-approved or trust-window action.
+External clients may respond directly or request a tool. For tool calls, the add-on executes the tool locally and returns the result through MCP/bridge. Generated Python is checked against the session's binary trust state. When script trust is off, Blender refuses it without retaining a pending approval. When the user enables trust, scripts run with the same Blender/Python and operating-system access as code run manually in Blender until trust is disabled or Blender exits.
 
 Before generating non-trivial code, external agents should either already have enough scene/docs context or explicitly call tools to get it. The bridge should steer clients toward this sequence: inspect, retrieve docs if needed, plan, draft, review, run.
 
@@ -173,9 +173,6 @@ Common changes should use typed helper tools before arbitrary code:
 - `create_wheel_assembly`
 - `add_panel_seams`
 - `add_window_materials`
-- `apply_vehicle_refinement_template`
-- `apply_product_refinement_template`
-- `apply_character_refinement_template`
 - `create_studio_product_stage`
 - `add_dimension_callouts`
 - `apply_lighting_preset`
@@ -186,8 +183,9 @@ Common changes should use typed helper tools before arbitrary code:
 
 Helpers can validate object names, expected types, frame ranges, and value ranges before applying changes. When a helper is too limited, an external agent can fall back to a proposed Python script.
 
-Advanced helpers live in `advanced_helpers.py` and still write through the live-preview transaction layer. They cover bounded starter actions for deep systems plus reusable procedural object kits, directed animation shot templates, render-output pass/AOV setup, and look-dev turntable review setup with inspection artifact validation, while arbitrary custom node graphs, rigs, simulations, and destructive edits use the binary session-trust script path when helpers are insufficient.
-Refinement helpers also live in `advanced_helpers.py` for now. If product/character/vehicle kits grow further, split them into a dedicated template module with shared bounds/material/primitive utilities.
+Reusable mutating helpers are owned by cohesive `advanced_animation.py`, `advanced_camera_render.py`, `advanced_materials.py`, `advanced_modeling.py`, `advanced_presentation.py`, `advanced_rigging.py`, and `advanced_scene_editing.py` modules, with shared mechanics in `advanced_support.py`; `advanced_helpers.py` is only a compatibility re-export facade. The helpers still write through the live-preview transaction layer. Read-only workflow composition lives in `workflow_planning.py`, 2D inspection lives in `two_d_inspection.py`, neutral handler parsing lives in `tool_handlers/support.py`, generic runtime support lives in `handler_runtime.py`, animation orchestration lives in `animation_runtime.py`, and `tool_executor.py` is the only registry-composition owner. This keeps domain handlers independent of registry construction and removes the former handler/runtime import cycle.
+
+The bridge intentionally does not ship finished-content generators or style-specific vehicle, product, character, storyboard, cutout, prop, or shot templates. Open-ended authored content is composed from reusable modeling, material, staging, camera, animation, asset-import, and evidence helpers; when those operations cannot express the brief, the client may use one custom script while binary session trust is active.
 
 ## Live Preview Strategy
 
@@ -200,7 +198,7 @@ The add-on should support immediate visual feedback through a reversible preview
 5. The add-on updates dependency state and requests viewport/timeline redraw.
 6. The sidebar shows the preview as pending with `Commit` and `Revert` controls.
 
-Live preview should be helper-first. Arbitrary generated Python should not run automatically in live preview mode unless the user explicitly elevates that action.
+Live preview should be helper-first. Arbitrary generated Python runs only while binary session trust is enabled; there is no per-script approval state.
 
 For animation edits, the preview layer should insert/update keyframes immediately, then either keep the current frame or jump to a relevant changed frame depending on the user's setting.
 

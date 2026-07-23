@@ -1,4 +1,4 @@
-"""Blender background smoke test for model refinement helpers."""
+"""Blender background smoke test for reusable presentation helpers."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import advanced_helpers, agent_tools, bridge_protocol, context_bundle, tool_dispatcher  # noqa: E402
+from claude_blender import advanced_helpers, advanced_support, agent_tools, bridge_protocol, context_bundle, tool_dispatcher  # noqa: E402
 
 
 REFINEMENT_TOOLS = {
@@ -22,9 +22,6 @@ REFINEMENT_TOOLS = {
     "create_wheel_assembly",
     "add_panel_seams",
     "add_window_materials",
-    "apply_vehicle_refinement_template",
-    "apply_product_refinement_template",
-    "apply_character_refinement_template",
     "create_studio_product_stage",
     "add_dimension_callouts",
     "apply_lighting_preset",
@@ -51,13 +48,6 @@ def _select_object(context, obj):
     bpy.ops.object.select_all(action="DESELECT")
     obj.select_set(True)
     context.view_layer.objects.active = obj
-
-
-def _select_objects(context, objects, active):
-    bpy.ops.object.select_all(action="DESELECT")
-    for obj in objects:
-        obj.select_set(True)
-    context.view_layer.objects.active = active
 
 
 def _snapshot(cube):
@@ -92,9 +82,9 @@ def main():
 
         bpy.ops.object.select_all(action="DESELECT")
         context.view_layer.objects.active = None
-        empty_selection = advanced_helpers._selection_snapshot(context)
+        empty_selection = advanced_support._selection_snapshot(context)
         _select_object(context, cube)
-        advanced_helpers._restore_selection_snapshot(context, empty_selection)
+        advanced_support._restore_selection_snapshot(context, empty_selection)
         assert not context.selected_objects
         assert context.view_layer.objects.active is None
         _select_object(context, cube)
@@ -187,69 +177,6 @@ def main():
         final = _snapshot(cube)
         assert final == initial, {"initial": initial, "final": final}
 
-        camera = bpy.data.objects["Camera"]
-        _select_objects(context, [cube, camera], camera)
-        original_stage_helper = advanced_helpers.create_studio_product_stage
-
-        def failing_stage(*_args, **_kwargs):
-            raise RuntimeError("synthetic product stage failure")
-
-        advanced_helpers.create_studio_product_stage = failing_stage
-        try:
-            failure = _execute_failure(
-                context,
-                "apply_product_refinement_template",
-                {"target_name": "Cube", "include_stage": True, "include_callouts": False},
-            )
-            assert "synthetic product stage failure" in failure["message"], failure
-            assert failure["auto_reverted_preview"] is True, failure
-            assert failure["auto_revert_message"] == "Preview reverted", failure
-            assert failure["auto_revert_manifest"]["status"] == "reverted", failure
-        finally:
-            advanced_helpers.create_studio_product_stage = original_stage_helper
-        assert {obj.name for obj in context.selected_objects} == {"Cube", "Camera"}
-        assert context.view_layer.objects.active == camera
-        assert context.scene.claude_blender.pending_preview is False
-        final = _snapshot(cube)
-        assert final == initial, {"initial": initial, "final": final}
-
-        _select_object(context, cube)
-        product = _execute(
-            context,
-            "apply_product_refinement_template",
-            {"target_name": "Cube", "style": "premium", "include_stage": True, "include_callouts": True},
-        )
-        assert product["created_objects"], product
-        assert "studio stage" in product["features"], product
-        assert "product presentation" in product["expected_changes"], product
-        assert cube.modifiers.get("Agent Bridge Detail Bevel")
-        _execute(context, "revert_preview", {})
-        final = _snapshot(cube)
-        assert final == initial, {"initial": initial, "final": final}
-
-        _select_object(context, cube)
-        character = _execute(
-            context,
-            "apply_character_refinement_template",
-            {"target_name": "Cube", "character_style": "toon", "detail_level": "medium", "create_guides": True},
-        )
-        assert any("Character Head" in name for name in character["created_objects"])
-        assert "gesture guides" in character["features"], character
-        assert "character presentation kit" in character["expected_changes"], character
-        _execute(context, "revert_preview", {})
-        final = _snapshot(cube)
-        assert final == initial, {"initial": initial, "final": final}
-
-        _select_object(context, cube)
-        vehicle = _execute(context, "apply_vehicle_refinement_template", {"target_name": "Cube", "detail_level": "medium"})
-        assert vehicle["created_objects"]
-        assert any("Wheel" in name for name in vehicle["created_objects"])
-        assert "vehicle detail kit" in vehicle["expected_changes"], vehicle
-        assert cube.modifiers.get("Agent Bridge Detail Bevel")
-        _execute(context, "revert_preview", {})
-        final = _snapshot(cube)
-        assert final == initial, {"initial": initial, "final": final}
-
         # Shaded playblast: invalid shading is ignored, valid shading yields a restore
         # callback, and the dispatcher plumbs `shading` through without error. Background
         # mode has no interactive viewport, so capture is unavailable but must not crash.
@@ -267,7 +194,7 @@ def main():
         assert "playblast" in shaded, shaded
         assert shaded["playblast"]["available"] is False, shaded  # headless: no interactive viewport
 
-        print("smoke_refinement_helpers: ok")
+        print("smoke_presentation_helpers: ok")
     finally:
         claude_blender.unregister()
 

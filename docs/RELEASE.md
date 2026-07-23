@@ -113,8 +113,7 @@ Run the focused Blender-background smoke tests:
 & 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python-exit-code 1 --python tests\smoke_context_docs.py
 & 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python-exit-code 1 --python tests\smoke_bridge_server.py
 & 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python-exit-code 1 --python tests\smoke_script_runner.py
-& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python-exit-code 1 --python tests\smoke_refinement_helpers.py
-& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python-exit-code 1 --python tests\smoke_refinement_visual_qa.py
+& 'C:\Program Files\Blender Foundation\Blender 5.1\blender.exe' --background --factory-startup --python-exit-code 1 --python tests\smoke_presentation_helpers.py
 ```
 
 If Blender is on `PATH`, the same commands can use `blender` instead of the full executable path.

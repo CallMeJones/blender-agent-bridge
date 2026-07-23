@@ -211,100 +211,25 @@ def _generation_tool_calls(brief, chart, *, frame_start, frame_end):
     elif action == "orbit":
         calls.append(
             _tool_call(
-                "create_directed_animation_shot",
+                "create_camera_orbit",
                 {
-                    "shot_type": "orbit_reveal",
-                    "object_names": subject_names,
-                    "selected_only": False,
+                    "target_name": primary,
                     "frame_start": frame_start,
                     "frame_end": frame_end,
-                    "scale_start": 1.0,
-                    "scale_end": 1.0,
-                    "rotation_revolutions": 0.0,
-                    "interpolation": "BEZIER",
+                    "radius": 5.0,
+                    "height": 2.5,
+                    "name": "Agent Bridge Orbit Camera",
+                    "lens": 35.0,
                 },
-                reason="Use the bounded directed-shot helper for camera orbit staging around the subject.",
+                reason="Use the composable camera-orbit helper for staging around the subject.",
                 mutates_scene=True,
                 requires_live_preview=True,
             )
         )
-    elif action == "crane":
-        calls.append(
-            _tool_call(
-                "create_directed_animation_shot",
-                {
-                    "shot_type": "crane_reveal",
-                    "object_names": subject_names,
-                    "selected_only": False,
-                    "frame_start": frame_start,
-                    "frame_end": frame_end,
-                    "scale_start": 1.0,
-                    "scale_end": 1.0,
-                    "interpolation": "BEZIER",
-                },
-                reason="Use the bounded directed-shot helper for a crane-style camera reveal around the subject.",
-                mutates_scene=True,
-                requires_live_preview=True,
-            )
-        )
-    elif action == "truck":
-        calls.append(
-            _tool_call(
-                "create_directed_animation_shot",
-                {
-                    "shot_type": "truck_slide",
-                    "object_names": subject_names,
-                    "selected_only": False,
-                    "frame_start": frame_start,
-                    "frame_end": frame_end,
-                    "travel_axis": "X",
-                    "travel_distance": 2.0,
-                    "scale_start": 1.0,
-                    "scale_end": 1.0,
-                    "interpolation": "BEZIER",
-                },
-                reason="Use the bounded directed-shot helper for a lateral truck camera move around the subject.",
-                mutates_scene=True,
-                requires_live_preview=True,
-            )
-        )
-    elif action in {"move", "follow path"}:
-        calls.append(
-            _tool_call(
-                "create_directed_animation_shot",
-                {
-                    "shot_type": "path_slide",
-                    "object_names": subject_names,
-                    "selected_only": False,
-                    "frame_start": frame_start,
-                    "frame_end": frame_end,
-                    "travel_axis": "X",
-                    "travel_distance": 2.0,
-                    "interpolation": "BEZIER",
-                },
-                reason="Use the bounded directed-shot helper for a simple path/slide move before custom path scripting.",
-                mutates_scene=True,
-                requires_live_preview=True,
-            )
-        )
-    elif action == "fall":
-        calls.append(
-            _tool_call(
-                "create_directed_animation_shot",
-                {
-                    "shot_type": "path_slide",
-                    "object_names": subject_names,
-                    "selected_only": False,
-                    "frame_start": frame_start,
-                    "frame_end": frame_end,
-                    "travel_axis": "Z",
-                    "travel_distance": -2.0,
-                    "interpolation": "BEZIER",
-                },
-                reason="Use the bounded directed-shot helper for a simple falling translation before custom physics or path scripting.",
-                mutates_scene=True,
-                requires_live_preview=True,
-            )
+    elif action in {"crane", "truck", "move", "follow path", "fall"}:
+        blockers.append(
+            "This shot needs explicit camera/object coordinates or a path. Inspect the scene, then compose camera dolly, "
+            "follow-path, or transform helpers; use trusted Python only when those operations cannot express the brief."
         )
     elif action == "reveal":
         calls.append(

@@ -2,15 +2,15 @@
 
 This guide is the runbook for asking Codex to test Blender Agent Bridge end to end. It is designed to cover every feature family, every bridge path, and every tool surface, then drive failures into focused fixes and reruns.
 
-Current project snapshot, checked on 2026-07-22:
+Current project snapshot, checked on 2026-07-23:
 
 - Extension: `Blender Agent Bridge`, manifest id `claude_blender`; version comes from `addon/claude_blender/blender_manifest.toml` and is checked against `build_info.py` and `CHANGELOG.md`.
 - Minimum Blender: `4.2.0`. CI tests 4.2 LTS, 4.5 LTS, and 5.1; newer versions are accepted with capability-based warnings.
 - Local Blender detected on this workstation: `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`.
-- Canonical registry inventory: 189 Blender tool contracts across eleven explicit domain modules.
-- Normal agent catalog inventory: 188 tool definitions; 29 are exposed directly in compact mode.
+- Canonical registry inventory: 181 Blender tool contracts across explicit domain modules.
+- Normal agent catalog inventory: 180 tool definitions; 23 are exposed directly in compact mode.
 - Intentional catalog difference: `run_approved_script` is a compatibility dispatcher path that always refuses the removed per-script flow; it is not exposed in the normal agent helper catalog.
-- The 0.3.1 release candidate was verified on 2026-07-22 with `compileall`, 53 unit tests, the complete Phase 1 pure-Python gate plus the adversarial script-analyzer smoke, the complete 19-test background suite, project-directory containment probes on Blender 4.2.0/4.5.0/5.1.2, and the clean installed-extension interactive smoke on all three versions. Tagged CI repeats the same Blender matrix under Xvfb on Linux.
+- The 0.3.1 release candidate was verified on 2026-07-22. The current cleanup baseline contains 68 unit tests and an 18-test Blender-background suite; tagged CI repeats the supported Blender matrix under Xvfb on Linux.
 
 ## How To Ask Codex To Run This
 
@@ -85,7 +85,9 @@ $PureTests = @(
   "tests\smoke_real_client_routing.py",
   "tests\smoke_mcp_server.py",
   "tests\smoke_script_analysis.py",
-  "tests\smoke_tool_contract_inventory.py"
+  "tests\smoke_script_analysis_bypass.py",
+  "tests\smoke_tool_contract_inventory.py",
+  "tests\smoke_release_consistency.py"
 )
 
 python -m unittest discover -s tests\unit -p "test_*.py" -v
@@ -130,8 +132,7 @@ $BlenderTests = @(
   "tests\smoke_full_tool_inventory.py",
   "tests\smoke_live_helpers.py",
   "tests\smoke_project_files.py",
-  "tests\smoke_refinement_helpers.py",
-  "tests\smoke_refinement_visual_qa.py",
+  "tests\smoke_presentation_helpers.py",
   "tests\smoke_render_jobs.py",
   "tests\smoke_safe_editing_helpers.py",
   "tests\smoke_script_runner.py",
@@ -422,7 +423,7 @@ Owner tests:
 
 - `tests\smoke_advanced_helpers.py`
 - `tests\smoke_safe_editing_helpers.py`
-- `tests\smoke_refinement_helpers.py`
+- `tests\smoke_presentation_helpers.py`
 - `tests\smoke_world_model.py`
 
 Required scenarios:
@@ -576,19 +577,15 @@ Required scenarios:
 - Simulation inspection is read-only and restores the original scene frame.
 - Persistent simulation bake refuses while trust is off and runs its fixed bake template immediately while session trust is active.
 
-### Advanced Creation And Refinement Kits
+### Advanced Composable Helpers
 
 Tools:
 
 ```text
 create_text_object
 create_curve_path
-create_storyboard_panels
-create_2d_cutout_layer
 apply_procedural_array_stack
-create_procedural_object_kit
 create_camera_dolly_animation
-create_directed_animation_shot
 add_particle_system_to_selected
 add_cloth_simulation_to_selected
 create_basic_armature
@@ -598,9 +595,6 @@ add_bevel_and_subsurf
 create_wheel_assembly
 add_panel_seams
 add_window_materials
-apply_vehicle_refinement_template
-apply_product_refinement_template
-apply_character_refinement_template
 create_studio_product_stage
 add_dimension_callouts
 apply_lighting_preset
@@ -614,18 +608,16 @@ add_track_to_constraint
 Owner tests:
 
 - `tests\smoke_advanced_helpers.py`
-- `tests\smoke_refinement_helpers.py`
-- `tests\smoke_refinement_visual_qa.py`
+- `tests\smoke_presentation_helpers.py`
 - `tests\smoke_safe_editing_helpers.py`
 
 Required scenarios:
 
 - Helpers create bounded, reversible data-blocks and reject unsupported complex operations.
-- 2D/storyboard helpers create reversible panels, labels, flat cutout layers, and camera moves.
+- Reusable text, curve, camera, and scene helpers remain reversible when composed for 2D work.
 - Procedural stack helpers add bounded array/bevel/weighted-normal modifiers without destructive mesh edits.
 - Cloth setup adds a modifier only; cache inspection and persistent bake remain separate explicit steps.
-- Product, vehicle, and character templates generate expected named objects/materials/collections.
-- Visual QA renders product and character outputs and rejects blank images.
+- Presentation and scene-organization helpers create expected named objects, materials, and collections without embedding a finished-content style.
 - Rollback restores created objects, materials, modifiers, constraints, collections, cameras, and lights.
 
 ### Visual Evidence And MCP Resources
@@ -657,7 +649,6 @@ Owner tests:
 
 - `tests\smoke_bridge_server.py`
 - `tests\smoke_context_docs.py`
-- `tests\smoke_refinement_visual_qa.py`
 - `tests\smoke_mcp_server.py`
 
 Required scenarios:
@@ -829,11 +820,11 @@ Make the selected cube bounce twice and get smaller each bounce. Review it again
 ```
 
 ```text
-Create an advanced procedural object kit using a radial array. Leave it as a preview.
+Apply a procedural array stack to the selected mesh. Leave it as a preview.
 ```
 
 ```text
-Create a directed camera push reveal shot for the selected cube. Leave it as a preview.
+Create a camera dolly or orbit reveal for the selected cube. Leave it as a preview.
 ```
 
 ```text

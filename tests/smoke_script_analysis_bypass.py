@@ -99,7 +99,7 @@ def _check_gaps():
     if still_open:
         print(f"smoke_script_analysis_bypass: {len(still_open)} advisory classification gap(s) still open:")
         for name, auto_run in still_open:
-            flag = " [AUTO-RUNS under trust window]" if auto_run else ""
+            flag = " [AUTO-RUNS under binary session trust]" if auto_run else ""
             print(f"  - {name}{flag}")
         raise AssertionError(f"{len(still_open)} advisory classification gap(s) remain")
     else:

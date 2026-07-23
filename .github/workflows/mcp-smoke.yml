@@ -206,8 +206,7 @@ jobs:
           set -euo pipefail
           tests=(
             smoke_advanced_helpers
-            smoke_refinement_helpers
-            smoke_refinement_visual_qa
+            smoke_presentation_helpers
             smoke_script_runner
             smoke_context_docs
             smoke_ui_layout
@@ -225,8 +224,7 @@ jobs:
               smoke_full_tool_inventory
               smoke_live_helpers
               smoke_project_files
-              smoke_refinement_helpers
-              smoke_refinement_visual_qa
+              smoke_presentation_helpers
               smoke_render_jobs
               smoke_safe_editing_helpers
               smoke_script_runner
