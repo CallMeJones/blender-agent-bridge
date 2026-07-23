@@ -41,8 +41,8 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 - [x] **Done** — The copied Bundled config resolves Blender's own Python interpreter and the clean installed-extension smoke launches the packaged MCP server with that exact command.
 - [x] **Done** — Claude Code 2.1.85 started as a new isolated, non-persistent process with only the exact config copied by a clean installed extension, connected to Blender, invoked `blender_bridge_status` once, and returned the correct Blender/add-on/source status. Only that MCP server targeted the bridge.
 - [x] **Done** — All observed local test failures were resolved and the affected owner tests were rerun.
-- [ ] **Required** — Freeze the final reviewed commit, audit its exact staged scope, and record its commit SHA; generated artifacts, local capture helpers, credentials, and unrelated files must be excluded.
-- [ ] **Required** — Rebuild the official ZIP, wheel, sdist, and Pages repository from that commit, then rerun installed-extension and packaged-MCP smoke against those exact artifacts.
+- [x] **Done locally** — Implementation commit `fcafaee` was frozen after an exact 81-file staged-scope audit; generated artifacts, temporary UI-capture helpers, credentials, the parked audit-status experiment, and unrelated files were excluded.
+- [x] **Done locally** — The official ZIP and Pages repository were rebuilt from `fcafaee` and retained the exact SHA-256 exercised by the three clean installed-extension smokes; the matching wheel/sdist passed isolated installation and runtime import.
 
 ## 3. Compatibility
 
@@ -143,5 +143,6 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 | 2026-07-23 | Official Blender validation, wheel/sdist build, isolated wheel install/runtime import, generated Pages repository, and local release-artifact identity | Passed; extension/Pages SHA-256 `2e33aab2ea28f6f813f60dfb8ae355d6cca918490044130b5050828aca4fa46f` |
 | 2026-07-23 | Gitleaks 8.30.1 on the 142-commit history, working candidate, source/documentation inputs, extension ZIP, wheel, and sdist | Passed; no leaks found |
 | 2026-07-23 | Isolated-artifact PyPI preflight | `blender-bridge` still identifies this project (latest 0.3.0); v0.4.0 is unpublished and requires wheel plus sdist upload |
+| 2026-07-23 | Final implementation scope audit and commit `fcafaee`, followed by a fresh official ZIP/Pages rebuild and artifact-identity check | Passed; 81 intended files committed, temporary/generated/unrelated files excluded, extension SHA-256 remained `2e33aab2ea28f6f813f60dfb8ae355d6cca918490044130b5050828aca4fa46f` |
 
 Add evidence here only after it has run against the candidate being evaluated. A previous release proves the pipeline, not the current release contents.
