@@ -99,7 +99,7 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                         {
                             "name": "draft_script",
                             "title": "Draft Script",
-                            "description": "Stage script for approval",
+                            "description": "Run generated Python under active binary session trust",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -116,7 +116,7 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                         {
                             "name": "draft_privileged_script",
                             "title": "Draft Privileged Script",
-                            "description": "Stage privileged asset/project-file script for approval",
+                            "description": "Compatibility alias for session-trusted generated Python",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -149,7 +149,7 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                         {
                             "name": "run_approved_script",
                             "title": "Run Approved Script",
-                            "description": "Run a user-approved pending script with a Blender-issued token",
+                            "description": "Compatibility endpoint that refuses removed per-script approval flows",
                             "inputSchema": bridge_protocol.normalized_tool_contract("run_approved_script")["input_schema"],
                             "annotations": bridge_protocol.mcp_annotations_for_tool("run_approved_script"),
                         }
@@ -244,15 +244,15 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                                     },
                                     {
                                         "name": "draft_script",
-                                        "risk_level": "approval",
-                                        "permissions": ["script:stage"],
-                                        "requires_approval": True,
+                                        "risk_level": "destructive",
+                                        "permissions": ["blender:full", "filesystem:full", "network:full", "process:spawn"],
+                                        "requires_approval": False,
                                     },
                                     {
                                         "name": "draft_privileged_script",
-                                        "risk_level": "approval",
-                                        "permissions": ["script:stage", "files:write", "network"],
-                                        "requires_approval": True,
+                                        "risk_level": "destructive",
+                                        "permissions": ["blender:full", "filesystem:full", "network:full", "process:spawn"],
+                                        "requires_approval": False,
                                     },
                                 ],
                                 "full_contracts_resource": "blender://tools/contracts",
@@ -965,7 +965,7 @@ def main():
                 "jsonrpc": "2.0",
                 "id": 89,
                 "method": "tools/call",
-                "params": {"name": "search_blender_tools", "arguments": {"query": "approved script", "limit": 5}},
+                "params": {"name": "search_blender_tools", "arguments": {"query": "trusted script", "limit": 5}},
             },
         )
         offline_found = {tool["name"] for tool in offline_search["result"]["structuredContent"]["tools"]}
@@ -991,7 +991,7 @@ def main():
                 "method": "tools/call",
                 "params": {
                     "name": "blender_tool_catalog",
-                    "arguments": {"action": "search", "query": "approved script", "limit": 5},
+                    "arguments": {"action": "search", "query": "trusted script", "limit": 5},
                 },
             },
         )
@@ -1456,7 +1456,7 @@ def main():
                 "jsonrpc": "2.0",
                 "id": 21,
                 "method": "tools/call",
-                "params": {"name": "search_blender_tools", "arguments": {"query": "approved script", "limit": 5}},
+                "params": {"name": "search_blender_tools", "arguments": {"query": "trusted script", "limit": 5}},
             },
         )
         searched_names = {tool["name"] for tool in searched["result"]["structuredContent"]["tools"]}
@@ -1476,7 +1476,7 @@ def main():
                 "method": "tools/call",
                 "params": {
                     "name": "search_blender_tools",
-                    "arguments": {"query": "approved script", "limit": 5, "include_schemas": True},
+                    "arguments": {"query": "trusted script", "limit": 5, "include_schemas": True},
                 },
             },
         )
@@ -2134,6 +2134,8 @@ def main():
         assert "advanced_scene_workflow" in prompt_names, prompts
         assert "advanced_animation_workflow" in prompt_names, prompts
         assert "external_asset_workflow" in prompt_names, prompts
+        assert "trusted_script" in prompt_names, prompts
+        assert "draft_approved_script" not in prompt_names, prompts
 
         prompt = _send(
             proc,
@@ -2193,6 +2195,21 @@ def main():
         assert "create_lookdev_turntable_review" in advanced_prompt_text, advanced_prompt
         assert "configure_render_outputs" in advanced_prompt_text, advanced_prompt
         assert "add_cloth_simulation_to_selected" in advanced_prompt_text, advanced_prompt
+        assert "persistent bake/free scripts are disabled" not in advanced_prompt_text, advanced_prompt
+        assert "Persistent bake/free scripts may run under active trust" in advanced_prompt_text, advanced_prompt
+        trusted_prompt = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 47,
+                "method": "prompts/get",
+                "params": {"name": "trusted_script", "arguments": {"goal": "build a procedural set"}},
+            },
+        )
+        trusted_prompt_text = trusted_prompt["result"]["messages"][0]["content"]["text"]
+        assert "Trust Agent Scripts" in trusted_prompt_text, trusted_prompt
+        assert "runs it immediately" in trusted_prompt_text, trusted_prompt
+        assert "auto_ran=true" in trusted_prompt_text, trusted_prompt
         asset_prompt = _send(
             proc,
             {

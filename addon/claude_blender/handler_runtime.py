@@ -1115,48 +1115,6 @@ def _simulation_bake_script(*, object_names, frame_start, frame_end, clear_exist
 
 
 
-PRIVILEGED_SCRIPT_KINDS = {"external_asset", "project_file", "asset_project_file"}
-PRIVILEGED_SCRIPT_CAPABILITIES = {"filesystem", "network", "asset_import", "project_file"}
-
-
-def _string_list_arg(value):
-    if isinstance(value, (list, tuple)):
-        return [str(item).strip() for item in value if str(item).strip()]
-    if value:
-        return [str(value).strip()]
-    return []
-
-
-def _privileged_script_capabilities(kind, args):
-    capabilities = {
-        str(item).strip().lower()
-        for item in _string_list_arg(args.get("capabilities"))
-        if str(item).strip().lower() in PRIVILEGED_SCRIPT_CAPABILITIES
-    }
-    if kind in {"external_asset", "asset_project_file"}:
-        capabilities.update({"filesystem", "network", "asset_import"})
-    if kind in {"project_file", "asset_project_file"}:
-        capabilities.update({"filesystem", "project_file"})
-    return sorted(capabilities)
-
-
-def _privileged_helper_advisory(text):
-    advisory = helper_routing.helper_first_script_guard(text) or helper_routing.helper_first_script_advisory(text)
-    if not advisory:
-        return None
-    advisory = dict(advisory)
-    advisory["ok"] = True
-    advisory["blocked"] = False
-    advisory["message"] = (
-        "Dedicated helpers may be safer for this privileged workflow; the custom script is staged "
-        "because a privileged manifest was provided."
-    )
-    advisory["recommended_next_step"] = (
-        f"Consider {advisory['recommended_tools'][0]} before approval if it covers the workflow."
-        if advisory.get("recommended_tools")
-        else "Review the privileged manifest before approval."
-    )
-    return advisory
 
 
 

@@ -122,6 +122,20 @@ def _is_reparse_path(path):
     return bool(file_attributes & reparse_flag)
 
 
+def _is_hidden_path(path):
+    if os.path.basename(path).startswith("."):
+        return True
+    if os.name != "nt":
+        return False
+    try:
+        stat_result = os.lstat(path)
+    except OSError:
+        return False
+    file_attributes = getattr(stat_result, "st_file_attributes", 0)
+    hidden_flag = getattr(stat_result, "FILE_ATTRIBUTE_HIDDEN", 0x2)
+    return bool(file_attributes & hidden_flag)
+
+
 def _path_is_within(root, path):
     try:
         return os.path.normcase(os.path.commonpath([root, path])) == os.path.normcase(root)
@@ -132,15 +146,17 @@ def _path_is_within(root, path):
 def _existing_path_components_are_safe(root, path):
     relative = os.path.relpath(path, root)
     if relative == ".":
-        return True, ""
+        return True, "", ""
     current = root
     for part in relative.split(os.sep):
         current = os.path.join(current, part)
         if not os.path.lexists(current):
             continue
         if _is_reparse_path(current):
-            return False, current
-    return True, ""
+            return False, current, "link"
+        if _is_hidden_path(current):
+            return False, current, "hidden"
+    return True, "", ""
 
 
 def _resolve_project_path(relative_path, *, allow_root=False, for_write=False):
@@ -168,13 +184,24 @@ def _resolve_project_path(relative_path, *, allow_root=False, for_write=False):
             "project_root": scope["project_root"],
             "relative_path": str(relative_path or ""),
         }
-    safe_components, unsafe_component = _existing_path_components_are_safe(scope["project_root"], candidate)
+    safe_components, unsafe_component, unsafe_kind = _existing_path_components_are_safe(
+        scope["project_root"],
+        candidate,
+    )
     if not safe_components:
         return {
             "ok": False,
             "blocked": True,
-            "code": "project_path_link_blocked",
-            "message": "Symbolic links and filesystem reparse points are not followed by project-file tools.",
+            "code": (
+                "project_path_hidden_blocked"
+                if unsafe_kind == "hidden"
+                else "project_path_link_blocked"
+            ),
+            "message": (
+                "Hidden filesystem paths are not exposed by project-file tools."
+                if unsafe_kind == "hidden"
+                else "Symbolic links and filesystem reparse points are not followed by project-file tools."
+            ),
             "project_root": scope["project_root"],
             "relative_path": normalized,
             "blocked_component": unsafe_component,
@@ -247,7 +274,7 @@ def list_project_files(*, relative_path="", recursive=False, max_entries=200):
             children = children[:remaining]
         children.sort(key=lambda item: item.name.lower())
         for entry in children:
-            if entry.name.startswith("."):
+            if _is_hidden_path(entry.path):
                 continue
             if len(entries) >= limit:
                 return
@@ -401,14 +428,25 @@ def write_project_file(*, relative_path, content, encoding="utf-8", overwrite=Fa
         created, error = _ensure_project_parent(resolved["project_root"], path)
         if not created:
             return {**resolved, "ok": False, "message": error}
-    safe_components, unsafe_component = _existing_path_components_are_safe(resolved["project_root"], path)
+    safe_components, unsafe_component, unsafe_kind = _existing_path_components_are_safe(
+        resolved["project_root"],
+        path,
+    )
     if not safe_components:
         return {
             **resolved,
             "ok": False,
             "blocked": True,
-            "code": "project_path_link_blocked",
-            "message": "A project path component became a link or reparse point before the write.",
+            "code": (
+                "project_path_hidden_blocked"
+                if unsafe_kind == "hidden"
+                else "project_path_link_blocked"
+            ),
+            "message": (
+                "A project path component became hidden before the write."
+                if unsafe_kind == "hidden"
+                else "A project path component became a link or reparse point before the write."
+            ),
             "blocked_component": unsafe_component,
         }
     temp_path = ""
@@ -546,16 +584,6 @@ def _clear_scene_runtime_state(message):
     state.pending_preview_label = ""
     state.pending_preview_summary = ""
     state.pending_preview_warnings = ""
-    state.pending_script = False
-    state.pending_script_blocked = False
-    state.pending_script_text_name = ""
-    state.pending_script_intent = ""
-    state.pending_script_expected_changes = ""
-    state.pending_script_risk = ""
-    state.pending_script_status = "No pending script"
-    state.pending_script_issues = ""
-    state.pending_script_warnings = ""
-    script_runner.clear_external_script_approval(state=state)
     state.status = str(message or "Project file operation finished")
 
 

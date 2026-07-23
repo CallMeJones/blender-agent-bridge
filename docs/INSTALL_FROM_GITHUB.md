@@ -62,7 +62,7 @@ After enabling the extension:
 6. Paste the generated config into your external MCP client.
 7. Restart or refresh the MCP client so stale tool caches are cleared.
 
-Once connected, `guardrail_warnings` in catalog, schema, or tool results are expected advisory hints. They steer clients toward async external asset jobs, queued imports, background render/MP4 polling, user-confirmed paths, and Blender approval/preview controls without requiring extra prompts.
+Once connected, `guardrail_warnings` in catalog, schema, or tool results are expected advisory hints. They steer clients toward async external asset jobs, queued imports, background render/MP4 polling, user-confirmed paths, session-trust checks, and preview controls without requiring extra prompts.
 
 Useful smoke prompt once connected:
 

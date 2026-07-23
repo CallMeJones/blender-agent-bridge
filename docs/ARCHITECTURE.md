@@ -33,7 +33,7 @@ flowchart LR
 
 Use a Blender extension as the source of truth for scene access, plus a local companion bridge surface. The extension can read and write `bpy` state directly, while a stdio MCP server can let external clients such as Codex, Claude Desktop, Claude Code, or other agents discover Blender resources and call Blender tools.
 
-The add-on does not host an LLM provider. External clients own model/provider connections; Blender owns scene access, safety checks, preview rollback, script approval, local resources, and diagnostics.
+The add-on does not host an LLM provider. External clients own model/provider connections; Blender owns scene access, safety checks, preview rollback, binary script trust, local resources, and diagnostics.
 
 ## External Bridge Strategy
 
@@ -41,7 +41,7 @@ The add-on does not host an LLM provider. External clients own model/provider co
 
 The server can run from the extension's bundled source or from the zero-dependency `blender-bridge` distribution through an exact `uvx` version pin. Bundled mode is the default. The PyPI runtime imports only the pure-Python MCP, protocol, and registry path; neither mode imports `bpy` outside Blender. Protocol and registry-digest compatibility is checked before tool calls, while bundled mode also retains source-tree freshness diagnostics.
 
-This keeps the important boundary clean: MCP clients never import Blender Python and never touch `bpy` directly. Blender remains the authority for scene state, preview rollback, script approval, and UI status.
+This keeps the important boundary clean: MCP clients never import Blender Python and never touch `bpy` directly. Blender remains the authority for scene state, preview rollback, binary script trust, and UI status.
 
 Tool metadata is owned by the eleven deterministic modules under `tool_registry/domains/`. Blender-only callables register through the matching modules under `tool_handlers/`; `tool_dispatcher.py` is only the stable execution facade. Shared implementation details that still span several domains live in `handler_runtime.py`, keeping `bpy` completely outside the import path used by the packaged stdio runtime.
 
@@ -186,7 +186,7 @@ Common changes should use typed helper tools before arbitrary code:
 
 Helpers can validate object names, expected types, frame ranges, and value ranges before applying changes. When a helper is too limited, an external agent can fall back to a proposed Python script.
 
-Advanced helpers live in `advanced_helpers.py` and still write through the live-preview transaction layer. They cover bounded starter actions for deep systems plus reusable procedural object kits, directed animation shot templates, render-output pass/AOV setup, and look-dev turntable review setup with inspection artifact validation, while arbitrary custom node graphs, rigs, simulations, and destructive edits stay in the approval-gated script path.
+Advanced helpers live in `advanced_helpers.py` and still write through the live-preview transaction layer. They cover bounded starter actions for deep systems plus reusable procedural object kits, directed animation shot templates, render-output pass/AOV setup, and look-dev turntable review setup with inspection artifact validation, while arbitrary custom node graphs, rigs, simulations, and destructive edits use the binary session-trust script path when helpers are insufficient.
 Refinement helpers also live in `advanced_helpers.py` for now. If product/character/vehicle kits grow further, split them into a dedicated template module with shared bounds/material/primitive utilities.
 
 ## Live Preview Strategy
@@ -233,4 +233,4 @@ Options:
 - UI: support sidebar first, design for optional floating surface.
 - Live safe helper changes: apply immediately and show logs/status rather than pre-change plans.
 - Arbitrary generated Python: refused by default; binary session trust grants Blender Run Script-equivalent permissions.
-- Import/export: approval required.
+- Import/export: prefer bounded tools with validation and provenance; custom import/export Python requires active session trust.

@@ -18,10 +18,10 @@ AI agents are becoming good at planning, using tools, and iterating on complex t
 
 Blender Agent Bridge separates those responsibilities:
 
-- **Blender remains the execution layer.** It owns the scene, files, previews, approvals, checkpoints, visual captures, and local resources.
+- **Blender remains the execution layer.** It owns the scene, files, previews, binary script trust, checkpoints, visual captures, and local resources.
 - **Your existing AI client remains the agent host.** It owns the conversation, model connection, planning, and memory.
 - **Structured tools come first.** The bridge exposes bounded helpers for common Blender operations instead of defaulting to generated code.
-- **You remain the decision-maker.** Helper edits appear as live previews that can be committed, reverted, or undone. Generated Python is staged for review unless you explicitly grant temporary session trust.
+- **You remain the decision-maker.** Helper edits appear as live previews that can be committed, reverted, or undone. Generated Python is refused unless you explicitly enable runtime session trust, then it runs immediately with Blender Run Script-equivalent permissions.
 
 The bridge is local-first: its Blender connection binds to localhost, and Blender Agent Bridge does not store model-provider credentials.
 
@@ -38,7 +38,7 @@ An agent can, among other things:
 - start longer renders in a background Blender process, report progress, assemble image sequences into MP4 files, and validate the result;
 - search Poly Haven and Sketchfab, cache assets through asynchronous jobs, and queue imports with source and license information;
 - inspect `.blend` file health, autosave an already-saved project, and request user-confirmed paths for opening or creating project files; and
-- stage custom Blender Python in a visible Text datablock for approval when a task falls outside the structured helper set.
+- run custom Blender Python under active runtime session trust when a task falls outside the structured helper set.
 
 One of the test projects was an Egypt dogfight sequence. The agent inspected the scene, captured playblasts and renders, repaired visual problems, managed longer render jobs, and checked the output through the bridge.
 

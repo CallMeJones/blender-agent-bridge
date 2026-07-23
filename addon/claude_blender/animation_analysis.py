@@ -3217,14 +3217,14 @@ def repair_animation_from_findings(context, *, findings=None, brief=None):
             operations.append(
                 _operation(
                     "inspect_simulation_bake",
-                    "Check sampled simulation/cache readiness; persistent bake/free still requires explicit approval.",
+                    "Check sampled simulation/cache readiness before any persistent bake/free operation under session trust.",
                     arguments={"object_names": target_object_names or subject_names, "frame_start": frame_start, "frame_end": frame_end},
                     source_index=index,
                     finding=finding,
                     confidence="medium",
                     target_frames=target_frames,
                     target_frame_range=target_frame_range,
-                    metadata={"persistent_bake_requires_approval": True},
+                    metadata={"persistent_bake_requires_session_trust": True},
                 )
             )
         if "camera" in text or "framing" in text:

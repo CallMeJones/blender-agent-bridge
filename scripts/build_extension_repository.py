@@ -149,7 +149,7 @@ def _write_html(repo_dir, entry, zip_name, *, repository_url=DEFAULT_REPOSITORY_
 <body>
   <h1>{title}</h1>
   <p class="meta">{tagline}</p>
-  <p>{title} is a safe, provider-neutral bridge between Blender and external AI agents. Blender executes bounded helper tools, visual evidence capture, previews, approvals, checkpoints, and the local MCP bridge; external clients host the model and conversation.</p>
+  <p>{title} is a safe, provider-neutral bridge between Blender and external AI agents. Blender executes bounded helper tools, visual evidence capture, previews, binary script trust, checkpoints, and the local MCP bridge; external clients host the model and conversation.</p>
 
   <img class="hero" src="./assets/egypt-dogfight-hero.jpg" alt="Two aircraft in a Blender dogfight test scene with smoke and motion blur">
 
@@ -185,7 +185,7 @@ def _write_html(repo_dir, entry, zip_name, *, repository_url=DEFAULT_REPOSITORY_
 
   <h2>Safety by design</h2>
   <div class="grid">
-    <div class="panel"><h3>Bounded tools first</h3><p>Structured helpers cover routine scene work. Generated Python remains staged and approval-gated.</p></div>
+    <div class="panel"><h3>Bounded tools first</h3><p>Structured helpers cover routine scene work. Generated Python runs only while binary session trust is active.</p></div>
     <div class="panel"><h3>Reversible editing</h3><p>Mutating helpers use visible preview transactions with commit, revert, and Blender undo paths.</p></div>
     <div class="panel"><h3>Local and inspectable</h3><p>The bridge binds to loopback, redacts audit data, exposes status and evidence resources, and stores no model-provider keys.</p></div>
   </div>

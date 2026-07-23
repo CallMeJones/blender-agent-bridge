@@ -73,70 +73,41 @@ def draft_script(context, args):
         )
     if helper_advisory is None:
         helper_advisory = helper_routing.helper_first_script_advisory(guard_text)
-    if not script_runner.external_script_trust_active(context):
-        return {
-            "ok": False,
-            "blocked": True,
-            "code": "script_trust_required",
-            "message": (
-                "Agent script trust is off. Start the bridge and select Trust Agent Scripts in Blender, "
-                "or complete the task with bounded structured tools."
-            ),
-            "requires_user_approval": False,
-            "auto_run_attempted": False,
-            "auto_ran": False,
-            "helper_advisory": helper_advisory,
-        }
-    analysis = script_runner.analyze_trusted_script(script_text)
-    if not analysis.get("ok"):
-        return {
-            "ok": False,
-            "blocked": True,
-            "code": "invalid_script_payload",
-            "message": "Trusted script payload is invalid",
-            "analysis": analysis,
-            "requires_user_approval": False,
-            "auto_run_attempted": False,
-            "auto_ran": False,
-            "helper_advisory": helper_advisory,
-        }
-    staged = script_runner.stage_script(
+    prefs = preferences.get_preferences(context)
+    run_result = script_runner.run_trusted_script(
         context,
         code=script_text,
         intent=str(args.get("intent") or ""),
         expected_changes=str(args.get("expected_changes") or ""),
         risk_level=str(args.get("risk_level") or "medium"),
         target_objects=args.get("target_objects") or [],
-        trusted_manual_mode=True,
-    )
-    if helper_advisory:
-        staged["helper_advisory"] = helper_advisory
-    if not staged.get("ok") or staged.get("analysis", {}).get("blocked"):
-        return staged
-    prefs = preferences.get_preferences(context)
-    run_result = script_runner.run_externally_approved_script(
-        context,
-        "",
         checkpoint_enabled=bool(getattr(prefs, "checkpoints_enabled", True)),
         checkpoint_dir=getattr(prefs, "checkpoint_dir", None),
     )
-    if not run_result.get("ok"):
-        script_runner.discard_pending_script(
-            context,
-            status=run_result.get("message", "Trusted script did not run"),
+    if run_result.get("code") == "script_trust_required":
+        run_result["message"] = (
+            "Agent script trust is off. Start the bridge and select Trust Agent Scripts in Blender, "
+            "or complete the task with bounded structured tools."
         )
     return {
         "ok": bool(run_result.get("ok")),
         "message": (
             "Script auto-ran with Blender Run Script permissions under active session trust"
             if run_result.get("ok")
-            else "Trusted script auto-run failed"
+            else run_result.get("message", "Trusted script did not run")
         ),
-        "auto_ran": bool(run_result.get("ok")),
-        "auto_run_attempted": True,
-        "auto_run_reason": "external_script_trust_active",
+        "auto_ran": bool(run_result.get("auto_ran")),
+        "auto_run_attempted": bool(run_result.get("auto_run_attempted")),
+        "auto_run_reason": (
+            "external_script_trust_active"
+            if run_result.get("auto_run_attempted")
+            else "external_script_trust_required"
+        ),
         "authorization_model": "blender_run_script_equivalent",
-        "staged": staged,
+        "blocked": bool(run_result.get("blocked")),
+        "code": run_result.get("code"),
+        "analysis": run_result.get("analysis"),
+        "staged": run_result.get("prepared"),
         "run_result": run_result,
         "requires_user_approval": False,
         "helper_advisory": helper_advisory,

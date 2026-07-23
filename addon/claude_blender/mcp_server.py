@@ -410,7 +410,7 @@ SCRIPT_EXPLICIT_TERMS = {
     "draft_privileged_script",
     "helper tools cannot express",
     "helpers cannot express",
-    "approved script",
+    "trusted script",
 }
 EXTERNAL_ASSET_STRONG_ROUTE_TERMS = {
     "asset catalog",
@@ -515,7 +515,7 @@ TOOL_CATEGORY_LABELS = {
     "simulation": "Simulation",
     "organization": "Collections And Organization",
     "preview": "Preview Control",
-    "script": "Approval-Gated Python",
+    "script": "Session-Trusted Python",
     "scene": "Scene Settings",
     "navigation": "Workspace And View Navigation",
     "project_files": "Project Files",
@@ -735,7 +735,7 @@ PROMPTS = {
     "safe_scene_change": {
         "name": "safe_scene_change",
         "title": "Plan Safe Blender Change",
-        "description": "Plan a scene change using reversible helper tools before approval-gated Python.",
+        "description": "Plan a scene change using reversible helper tools before session-trusted Python.",
         "arguments": [
             {
                 "name": "goal",
@@ -789,8 +789,8 @@ PROMPTS = {
             "For manual control, follow next_tool_calls in order for brief, scene routing, timing, "
             "helper generation, validation, playblast review, and repair. "
             "When rendered visual evidence is needed for object details, use capture_object_inspection_renders. "
-            "Prefer helpers when they clearly fit; use draft_script for custom advanced animation code when "
-            "static checks pass and the user has approved or trusted script execution."
+            "Prefer helpers when they clearly fit; use draft_script for custom advanced animation code only after "
+            "the user enables Trust Agent Scripts. Under trust, static findings are advisory and the script runs immediately."
         ),
     },
     "advanced_scene_workflow": {
@@ -815,9 +815,9 @@ PROMPTS = {
             "add_cloth_simulation_to_selected, then get_simulation_details or inspect_simulation_bake before any "
             "persistent bake. For render-pass, cryptomatte, or shader AOV setup, prefer configure_render_outputs before custom compositor/render Python. "
             "For look-dev review, prefer create_lookdev_turntable_review to set up bounded staging/turntable, render controls, inspection stills, and artifact validation. "
-            "Use draft_script for custom advanced scene scripts only when session script trust is active and static "
-            "checks pass. Use bounded structured tools for external assets and project files; persistent bake/free "
-            "scripts are disabled."
+            "Use draft_script for custom advanced scene scripts only when session script trust is active. Static "
+            "findings are advisory under trust. Prefer bounded structured tools for external assets and project files "
+            "when their validation or recovery helps. Persistent bake/free scripts may run under active trust and can block Blender."
         ),
     },
     "external_asset_workflow": {
@@ -845,10 +845,10 @@ PROMPTS = {
             "import_external_asset_job_result as synchronous fallback/debug paths, not the normal client workflow."
         ),
     },
-    "draft_approved_script": {
-        "name": "draft_approved_script",
-        "title": "Draft Approval-Gated Blender Python",
-        "description": "Draft Blender Python for explicit user approval inside Blender.",
+    "trusted_script": {
+        "name": "trusted_script",
+        "title": "Run Session-Trusted Blender Python",
+        "description": "Run Blender Python after the user enables Trust Agent Scripts inside Blender.",
         "arguments": [
             {
                 "name": "goal",
@@ -857,9 +857,11 @@ PROMPTS = {
             }
         ],
         "template": (
-            "Draft Blender Python for this task without running it: {goal}\n\n"
-            "Search Blender docs before unfamiliar APIs. Call draft_script with complete code, intent, "
-            "expected_changes, risk_level, and target_objects. Do not claim the script has executed."
+            "Run Blender Python for this task only after the user enables Trust Agent Scripts: {goal}\n\n"
+            "Search Blender docs before unfamiliar APIs. Prefer bounded helpers when their validation, recovery, or "
+            "progress reporting helps. Otherwise call draft_script with complete code, intent, expected_changes, "
+            "risk_level, and target_objects. Trust off refuses the request; trust on runs it immediately with Blender "
+            "Run Script-equivalent permissions. Do not claim success unless draft_script returns auto_ran=true."
         ),
     },
 }
@@ -1095,7 +1097,7 @@ def _compact_tool_definitions():
                 "requiresApproval": False,
                 "requiresLivePreview": False,
                 "riskLevel": "dynamic",
-                "permissions": ["tools:read", "scene:read", "scene:mutate", "script:stage"],
+                "permissions": ["tools:read", "scene:read", "scene:mutate", "script:trusted_run"],
                 "readOnlyHint": False,
                 "destructiveHint": False,
                 "idempotentHint": False,
@@ -1183,7 +1185,7 @@ def _compact_tool_definitions():
                 "requiresApproval": False,
                 "requiresLivePreview": False,
                 "riskLevel": "dynamic",
-                "permissions": ["scene:read", "scene:mutate", "script:stage"],
+                "permissions": ["scene:read", "scene:mutate", "script:trusted_run"],
                 "readOnlyHint": False,
                 "destructiveHint": False,
                 "idempotentHint": False,
@@ -1828,8 +1830,8 @@ def _guardrail_warnings_for_tool(tool, arguments=None):
                 "code": "approval_required",
                 "severity": "warning",
                 "message": (
-                    "This stages or runs approval-gated Python. Do not claim execution succeeded until Blender "
-                    "returns an approved run result."
+                    "This may run session-trusted Python. Do not claim execution succeeded until Blender returns "
+                    "a successful execution result."
                 ),
                 "approval_policy": str(annotations.get("approvalPolicy") or ""),
             }

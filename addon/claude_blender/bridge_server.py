@@ -337,7 +337,6 @@ def _scene_status():
         "context_summary": context_bundle.summarize_for_status(bundle),
         "ui_status": getattr(state, "status", "") if state else "",
         "pending_preview": bool(getattr(state, "pending_preview", False)) if state else False,
-        "pending_script": bool(getattr(state, "pending_script", False)) if state else False,
         "external_script_trust": bool(trust.get("active", False)),
         "external_script_trust_status": str(trust.get("status", "")),
         "external_script_trust_expires_at": float(trust.get("expires_at", 0.0) or 0.0),

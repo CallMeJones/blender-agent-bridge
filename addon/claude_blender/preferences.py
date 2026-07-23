@@ -22,16 +22,6 @@ def _default_checkpoint_dir():
 class CLAUDEBLENDER_AP_preferences(bpy.types.AddonPreferences):
     bl_idname = __package__
 
-    execution_mode: bpy.props.EnumProperty(
-        name="Execution",
-        description="Default execution behavior",
-        items=(
-            ("LIVE_HELPERS", "Live Helpers", "Safe helper tools apply immediately with revert support"),
-            ("APPROVAL_REQUIRED", "Approval Required", "Generated Python requires explicit approval"),
-            ("SUGGEST_ONLY", "Suggest Only", "External agents can advise and draft, but cannot mutate the scene"),
-        ),
-        default="LIVE_HELPERS",
-    )
     screenshot_default: bpy.props.BoolProperty(
         name="Screenshot Toggle Default",
         description="Default state for viewport screenshot inclusion",
@@ -56,7 +46,7 @@ class CLAUDEBLENDER_AP_preferences(bpy.types.AddonPreferences):
     )
     checkpoint_dir: bpy.props.StringProperty(
         name="Checkpoint Directory",
-        description="Directory for timestamped blend backups before approved scripts run",
+        description="Directory for timestamped blend backups before trusted scripts run",
         subtype="DIR_PATH",
         default=_default_checkpoint_dir(),
     )
@@ -111,7 +101,6 @@ class CLAUDEBLENDER_AP_preferences(bpy.types.AddonPreferences):
         layout = self.layout
         safety = layout.box()
         safety.label(text="Safety")
-        safety.prop(self, "execution_mode")
         safety.prop(self, "checkpoints_enabled")
         safety.prop(self, "autosave_enabled")
 

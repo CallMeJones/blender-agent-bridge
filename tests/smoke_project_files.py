@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import ctypes
 import json
 import os
 import shutil
@@ -198,6 +199,39 @@ def main():
             )
             assert hardlinked_read["ok"] is False, hardlinked_read
             assert hardlinked_read["code"] == "project_path_link_blocked", hardlinked_read
+
+        if os.name == "nt":
+            hidden_file = os.path.join(work_dir, "assets", "generated", "hidden.txt")
+            with open(hidden_file, "w", encoding="utf-8") as handle:
+                handle.write("hidden")
+            set_file_attributes = ctypes.windll.kernel32.SetFileAttributesW
+            assert set_file_attributes(hidden_file, 0x2)
+            hidden_list = _execute(
+                bpy.context,
+                "list_project_files",
+                {"relative_path": "assets/generated"},
+            )
+            assert hidden_list["ok"] is True, hidden_list
+            assert not any(item["name"] == "hidden.txt" for item in hidden_list["entries"]), hidden_list
+            hidden_read = _execute(
+                bpy.context,
+                "read_project_file",
+                {"relative_path": "assets/generated/hidden.txt"},
+            )
+            assert hidden_read["ok"] is False, hidden_read
+            assert hidden_read["code"] == "project_path_hidden_blocked", hidden_read
+            hidden_write = _execute(
+                bpy.context,
+                "write_project_file",
+                {
+                    "relative_path": "assets/generated/hidden.txt",
+                    "content": "replacement",
+                    "overwrite": True,
+                },
+            )
+            assert hidden_write["ok"] is False, hidden_write
+            assert hidden_write["code"] == "project_path_hidden_blocked", hidden_write
+            assert set_file_attributes(hidden_file, 0x80)
 
         copy_path = os.path.join(work_dir, "copy.blend")
         copy_without_user_path = _execute(bpy.context, "save_blend_file", {"filepath": copy_path, "copy": True})

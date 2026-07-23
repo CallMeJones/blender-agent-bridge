@@ -650,7 +650,7 @@ def plan_animation_workflow(
             "Call plan_animation_workflow first for animation generation, review, or repair tasks.",
             "Follow next_tool_calls in order; do not call draft_script before the workflow has produced brief, scene context, and timing chart.",
             "Leave helper mutations in preview state unless the user explicitly asks to commit or revert.",
-            "Use draft_script for custom animation code when static checks pass; keep persistent bake/free operations on explicit approval paths.",
+            "Use draft_script for custom animation code only under active session trust; static findings are advisory, and persistent bake/free operations may run under the same trust after inspection.",
             "Use animation_hardening.required_before_mutation before changing rig controls, shape keys, material nodes, or simulation-backed objects.",
         ],
     }

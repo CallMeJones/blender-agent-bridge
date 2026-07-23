@@ -211,7 +211,6 @@ def main():
         assert advised_script["requires_user_approval"] is False, advised_script
         assert advised_script["helper_advisory"]["code"] == "animation_workflow_advised", advised_script
         assert "run_animation_workflow" in advised_script["helper_advisory"]["recommended_tools"], advised_script
-        assert not context.scene.claude_blender.pending_script
 
         explicit_gap_script = json.loads(
             tool_dispatcher.execute_tool(
@@ -228,7 +227,6 @@ def main():
         assert not explicit_gap_script["ok"], explicit_gap_script
         assert explicit_gap_script["code"] == "script_trust_required", explicit_gap_script
         assert explicit_gap_script["requires_user_approval"] is False, explicit_gap_script
-        assert not context.scene.claude_blender.pending_script
 
         preflight_brief = _execute(
             context,
@@ -528,7 +526,6 @@ def main():
         assert advised_after_ambiguous["requires_user_approval"] is False, advised_after_ambiguous
         assert advised_after_ambiguous["helper_advisory"]["code"] == "animation_workflow_advised", advised_after_ambiguous
         assert advised_after_ambiguous["helper_advisory"]["animation_workflow_seen"] is True, advised_after_ambiguous
-        assert not context.scene.claude_blender.pending_script
 
         no_count = _execute(
             context,
@@ -1144,7 +1141,7 @@ def main():
         repair_tools = [item["tool"] for item in repair_plan["repair_operations"]]
         assert "get_simulation_details" in repair_tools, repair_plan
         simulation_bake = next(item for item in repair_plan["repair_operations"] if item["tool"] == "inspect_simulation_bake")
-        assert simulation_bake["metadata"]["persistent_bake_requires_approval"] is True, repair_plan
+        assert simulation_bake["metadata"]["persistent_bake_requires_session_trust"] is True, repair_plan
         assert "get_shape_key_details" in repair_tools, repair_plan
         shape_repair = next(item for item in repair_plan["repair_operations"] if item["tool"] == "animate_shape_key")
         assert shape_repair["arguments"]["object_name"] == "Cube", repair_plan

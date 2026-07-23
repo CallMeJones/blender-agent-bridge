@@ -470,7 +470,7 @@ def _draw_script_trust_control(layout, context, state):
         row.operator("claude_blender.revoke_external_script_trust", text="Revoke", icon="CANCEL")
         return
 
-    trust = layout.operator(
+    layout.operator(
         "claude_blender.approve_external_script_trust",
         text="Trust Agent Scripts",
         icon="LOCKED",

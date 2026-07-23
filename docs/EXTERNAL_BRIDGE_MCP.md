@@ -192,7 +192,7 @@ Set `BLENDER_MCP_FULL_TOOL_LIST=1` in the MCP server environment to expose every
 
 `tools/list`, `resources/list`, `resources/templates/list`, and `prompts/list` support cursor pagination. Tool definitions include `inputSchema`, `outputSchema`, and risk/permission annotations derived from the bridge contract.
 
-Catalog summaries, schema lookups, and tool-call results may include `guardrail_warnings`. These are advisory, machine-readable nudges for MCP clients; they do not replace Blender-side enforcement. Current warning categories cover synchronous external asset fallbacks, cache cleanup writes, destructive project-file operations, user-confirmed paths, approval-gated scripts, live-preview mutations, long-running synchronous calls, helper-first advanced 2D/3D/simulation/camera routing, and background job polling.
+Catalog summaries, schema lookups, and tool-call results may include `guardrail_warnings`. These are advisory, machine-readable nudges for MCP clients; they do not replace Blender-side enforcement. Current warning categories cover synchronous external asset fallbacks, cache cleanup writes, destructive project-file operations, user-confirmed paths, session-trusted scripts, live-preview mutations, long-running synchronous calls, helper-first advanced 2D/3D/simulation/camera routing, and background job polling.
 
 `draft_script` is available for custom and larger advanced Blender Python, with a 500k-character payload ceiling. With trust off it refuses without staging. With trust on it runs immediately with the same filesystem, network, subprocess, project-file, persistent-cache, and Blender API permissions as Blender's **Run Script** command. Helper and static-analysis findings may be returned as advice, but they do not become hidden authorization filters after trust.
 
@@ -235,7 +235,7 @@ Use these prompts after installing a fresh zip and refreshing the MCP client. Du
 | `create an advanced procedural object kit` | `plan_advanced_scene_workflow` -> `create_procedural_object_kit` | The client creates a reversible bounded kit before custom mesh or geometry-node scripts. |
 | `create a believable architect desk lamp with spring arms and capture inspection renders` | `plan_advanced_scene_workflow` -> `create_procedural_object_kit(template=desk_lamp, style=architect, variant=architect, features=[spring_arms,counterweight,wide_shade])` -> `inspect_modeling_quality` -> `capture_object_inspection_renders` | The client uses a bounded semantic prop grammar plus visual evidence instead of low-level primitive assembly or `draft_script`. |
 | `create a directed camera push reveal shot` | `plan_advanced_scene_workflow` or `plan_animation_workflow` -> `create_directed_animation_shot` -> visual review | The client uses a bounded shot template before custom animation Python. |
-| `add cloth simulation setup and inspect it before baking` | `plan_advanced_scene_workflow` or `get_simulation_details` -> `add_cloth_simulation_to_selected` -> `inspect_simulation_bake` | The client does not stage custom bake Python and does not bake persistently without explicit approval. |
+| `add cloth simulation setup and inspect it before baking` | `plan_advanced_scene_workflow` or `get_simulation_details` -> `add_cloth_simulation_to_selected` -> `inspect_simulation_bake` -> `stage_persistent_simulation_bake` | The client inspects first; a persistent bake runs only while binary session trust is active and may block Blender. |
 
 If a client still calls `draft_script` first for these prompts, refresh or restart the MCP client, press `Copy MCP Config` again, confirm `tools/list` includes `run_animation_task`, and check `blender_bridge_status` for matching add-on, bridge, MCP server, and config versions.
 
@@ -281,7 +281,7 @@ Current resources:
 
 `start_render_job` is the long-render path for high-resolution animation renders, frame sequences, MP4 quality checks, 1080p/4K previews, and anything likely to exceed the MCP request timeout. It saves a temporary copy of the current `.blend`, starts a background Blender process, and returns a `job_id`, rough estimate, and polling interval immediately. With `quality=auto`, final renders keep final-quality defaults, while playblast/preview/review/draft job names or notes default to a low-resolution preview profile unless the caller explicitly passes `quality`, `resolution_x`, `resolution_y`, or `samples`. Poll `get_render_job_status` until the job reaches `completed`, `failed`, or `cancelled`; status updates include elapsed time, frame rate when frames are available, estimated remaining time, `poll_after_seconds`, frame counts, progress, output paths, log tails, and newest frame resource URI. Logs are available at `blender://render-jobs/{job_id}/log`; exact frames are available at `blender://render-jobs/{job_id}/frames/{frame}`. After a PNG sequence completes, call `assemble_render_job_video` to start a background MP4 assembly pass, then poll `get_render_job_status` again and call `validate_render_job_output` before reporting success. MP4 output is exposed through `blender://render-jobs/{job_id}/video` when small enough for MCP, and always reports a local path in metadata. Use `cancel_render_job` when a tracked job should stop. `render_scene_thumbnail` refuses large synchronous stills by default and returns `recommended_tool: start_render_job`; pass `allow_blocking_render=true` only for an intentional one-off blocking still. `draft_script` warns clients to use this path first when a generated script appears to be a long render or playblast job.
 
-Persistent simulation/cache bakes are separate from render jobs. Inspect with `get_simulation_details` or `inspect_simulation_bake`, then ask the user to bake manually in Blender. Generated scripts containing `bpy.ops.fluid.*` or `bpy.ops.ptcache.*` bake/free operators are refused even while session trust is active.
+Persistent simulation/cache bakes are separate from render jobs. Inspect with `get_simulation_details` or `inspect_simulation_bake`, then call `stage_persistent_simulation_bake` only when the user intentionally wants the scene-wide operation. Trust off refuses it; active binary session trust runs the fixed bake template immediately with Blender Run Script-equivalent permissions. Baking can keep Blender busy after an MCP timeout, so inspect status and evidence before considering a retry.
 
 Official Blender Lab parity helpers are exposed as direct tools:
 
@@ -310,7 +310,7 @@ For real MCP clients, the normal route is discovery, `start_external_asset_downl
 
 ## Prompts
 
-The MCP server exposes prompt templates for common safe workflows: scene inspection, reversible scene changes, broad advanced scene workflow planning, advanced animation workflow planning, async external asset import, and approval-gated Python drafts.
+The MCP server exposes prompt templates for common safe workflows: scene inspection, reversible scene changes, broad advanced scene workflow planning, advanced animation workflow planning, async external asset import, and session-trusted Python execution.
 
 ## Safety
 

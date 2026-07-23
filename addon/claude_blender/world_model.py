@@ -1249,7 +1249,7 @@ def simulation_details(context, *, object_names=None, max_objects=20):
         "objects": result,
         "recommended_next_tools": sorted(recommended_next_tools),
         "cautions": cautions[:24],
-        "note": "Read-only simulation inspection; use inspect_simulation_bake for evaluated samples and stage_persistent_simulation_bake for explicit approval-gated persistent bakes.",
+        "note": "Read-only simulation inspection; use inspect_simulation_bake for evaluated samples and stage_persistent_simulation_bake for intentional persistent bakes under active session trust.",
     }
 
 

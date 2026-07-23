@@ -106,7 +106,8 @@ def stage_persistent_simulation_bake(context, args):
         include_scene_rigid_body_world=include_world,
     )
     range_scope = "requested objects plus scene rigid-body world" if object_names else "all simulation caches in the active scene"
-    staged = script_runner.stage_script(
+    prefs = preferences.get_preferences(context)
+    run_result = script_runner.run_trusted_script(
         context,
         code=code,
         intent="Bake persistent Blender simulation point caches with a fixed Agent Bridge template.",
@@ -116,22 +117,6 @@ def stage_persistent_simulation_bake(context, args):
         ),
         risk_level="high",
         target_objects=object_names,
-        trusted_manual_mode=True,
-    )
-    if not staged.get("ok"):
-        return {
-            "ok": False,
-            "message": staged.get("message", "Persistent simulation bake script is invalid"),
-            "inspection": inspection,
-            "staged": staged,
-            "requires_user_approval": False,
-            "auto_run_attempted": False,
-            "auto_ran": False,
-        }
-    prefs = preferences.get_preferences(context)
-    run_result = script_runner.run_externally_approved_script(
-        context,
-        "",
         checkpoint_enabled=bool(getattr(prefs, "checkpoints_enabled", True)),
         checkpoint_dir=getattr(prefs, "checkpoint_dir", None),
     )
@@ -143,7 +128,7 @@ def stage_persistent_simulation_bake(context, args):
             else "Persistent simulation bake script failed"
         ),
         "inspection": inspection,
-        "staged": staged,
+        "staged": run_result.get("prepared"),
         "run_result": run_result,
         "frame_range": [frame_start, frame_end],
         "range_preparation_scope": range_scope,

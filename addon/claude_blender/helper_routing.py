@@ -10,7 +10,7 @@ SCRIPT_REQUEST_KEYWORDS = {
     "python",
     "draft_script",
     "draft script",
-    "approved script",
+    "trusted script",
 }
 
 EXPLICIT_SCRIPT_FALLBACK_KEYWORDS = {

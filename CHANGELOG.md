@@ -5,6 +5,8 @@
 ## 0.3.1 - 2026-07-22
 
 - Reduced Blender Agent Bridge to one compact sidebar for bridge status, start/stop, MCP config, binary session script trust/revocation, and preview commit/revert. Removed the per-script Run/Reject/Allow-Once UI. Trust off refuses generated Python; trust on grants the same filesystem, network, process, project-file, persistent-cache, and Blender API permissions as Blender's Run Script command.
+- Removed the underlying pending-script properties, approval tokens, staging/reject/run helpers, and legacy execution-mode preference so the per-script workflow cannot reappear through dormant state. The compatibility `run_approved_script` endpoint now only returns a permanent refusal.
+- Made script checkpoints collision-safe at sub-second frequency and blocked native Windows hidden files/directories from the bounded project-file tools in addition to dot-prefixed paths.
 - Added bounded project-directory list/read/write tools rooted at the current saved `.blend`, with traversal/link protection, hidden-path exclusion, 4 MiB limits, opt-in overwrite, and blocked executable/script/library/`.blend` targets.
 - Hardened external-asset downloads with DNS-pinned public-address connections, redirect revalidation, credential isolation, and a 4 GiB streaming limit.
 - Made PyPI publication safely resumable by comparing tested artifact hashes before upload, skipping only verified existing files, and checking the complete public artifact set afterward.

@@ -2,7 +2,7 @@
 
 The safe, production-shaped bridge between Blender and external AI agents.
 
-Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets tools such as Codex, Claude Desktop, Claude Code, Cursor, and other MCP-capable clients inspect the open Blender scene, gather visual evidence, call safe editing helpers, stage risky Python for approval, and leave every helper edit in a visible commit/revert preview.
+Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets tools such as Codex, Claude Desktop, Claude Code, Cursor, and other MCP-capable clients inspect the open Blender scene, gather visual evidence, call safe editing helpers, run Python under explicit session trust, and leave every helper edit in a visible commit/revert preview.
 
 <p align="center">
   <img src="docs/assets/egypt-dogfight-hero.jpg" alt="Two aircraft in a generated Blender dogfight scene with smoke and motion blur" />
@@ -63,15 +63,15 @@ For a quick local smoke with Blender open and the bridge running:
 python scripts\live_bridge_smoke.py
 ```
 
-After connecting, MCP results may include `guardrail_warnings`. These are advisory client-routing hints, not failures: follow them toward async external asset jobs, queued imports, background render/MP4 polling, user-confirmed file paths, approval-gated scripts, and preview commit/revert controls.
+After connecting, MCP results may include `guardrail_warnings`. These are advisory client-routing hints, not failures: follow them toward async external asset jobs, queued imports, background render/MP4 polling, user-confirmed file paths, session-trusted scripts, and preview commit/revert controls.
 
 ## Why This Exists
 
 AI agents are getting good at using tools, but Blender needs guardrails. This bridge gives agents real scene context and practical tools without turning Blender into a chat app or storing provider API keys.
 
-- Blender stays the execution layer: scene state, viewport evidence, preview changes, approvals, checkpoints, and local resources.
+- Blender stays the execution layer: scene state, viewport evidence, preview changes, binary script trust, checkpoints, and local resources.
 - The external client stays the agent host: model connection, conversation memory, provider account, planning, and user chat.
-- Generated Python is not the default path. Agents get structured helpers first, and arbitrary scripts stay approval-gated unless the user grants runtime session trust.
+- Generated Python is not the default path. Agents get structured helpers first; arbitrary scripts are refused while trust is off and run immediately after the user grants runtime session trust.
 - Blender has one deliberately small sidebar panel: bridge status/start-stop, `Copy MCP Config`, active script-trust revocation, and decisions that currently need attention. Diagnostics, manifests, audit state, captures, and asset configuration stay in bridge/tool responses instead of returning as sidebar sections.
 - Advanced helper paths include bounded procedural object kits and directed animation shot templates before custom Python fallback.
 
@@ -121,7 +121,7 @@ Connected agents do not get blanket access by default. Enabling session script t
 | Trusted Python | Equivalent to manually using Blender **Run Script**: full Blender API plus the filesystem, network, subprocess, project-file, and persistent-cache access available to the Blender process. |
 | External script trust | Explicit, runtime-only, session-scoped, and visibly revocable. It is cleared by Revoke, file load, add-on reload, or Blender exit. Static findings become warnings, not a sandbox or permission filter. |
 | Audit and status | Local redacted JSONL audit events and bridge/MCP diagnostics are available through MCP resources and status calls. |
-| MCP guardrail warnings | Advisory hints in catalog, schema, and tool results steer clients toward async jobs, queued imports, user-confirmed paths, approval gates, dry-run cleanup, preview commit/revert, and background-job polling. |
+| MCP guardrail warnings | Advisory hints in catalog, schema, and tool results steer clients toward async jobs, queued imports, user-confirmed paths, session-trust checks, dry-run cleanup, preview commit/revert, and background-job polling. |
 | Model provider keys | Not stored in Blender Agent Bridge. External clients bring their own model/provider connection. |
 
 See [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), and [docs/SAFETY_MODEL.md](docs/SAFETY_MODEL.md) for the detailed model.
@@ -182,10 +182,10 @@ flowchart LR
   bridge --> evidence["Viewport, playblast, render resources"]
   bridge --> assets["External asset cache/jobs"]
   bridge --> files["Project file lifecycle"]
-  bridge --> scripts["Approval-gated Python"]
+  bridge --> scripts["Session-trusted Python"]
   helpers --> preview["Live preview transaction"]
   preview --> commit["Commit / Revert / Undo"]
-  scripts --> approve["Run / Reject / Trust / Revoke"]
+  scripts --> trust["Trust / Revoke"]
 ```
 
 The MCP surface is compact by default, so clients do not need to load the whole helper catalog into prompt context. They get a small direct surface for status, scene listing, `.blend` diagnostics, external asset discovery/jobs, animation workflows, and async render jobs, plus `blender_tool_catalog` / `search_blender_tools` to search compact summaries. Fetch one schema only when needed with `get_blender_tool_schema`, then call it through `invoke_blender_tool`. When a result includes `guardrail_warnings`, treat them as routing and recovery hints before retrying direct fallback tools.
@@ -306,7 +306,7 @@ Run Blender-background smoke tests when Blender is available:
 - [docs/INSTALL_FROM_GITHUB.md](docs/INSTALL_FROM_GITHUB.md) - GitHub install, update, and release flow.
 - [docs/CONTEXT_AND_DOCS_ENGINE.md](docs/CONTEXT_AND_DOCS_ENGINE.md) - context planning, docs cache, visual evidence, and prompt budgeting.
 - [docs/LIVE_PREVIEW_LOOP.md](docs/LIVE_PREVIEW_LOOP.md) - reversible live helper transactions.
-- [docs/SAFETY_MODEL.md](docs/SAFETY_MODEL.md) - approval, preview, script, and bridge safety rules.
+- [docs/SAFETY_MODEL.md](docs/SAFETY_MODEL.md) - trust, preview, script, and bridge safety rules.
 - [docs/EXTERNAL_BRIDGE_MCP.md](docs/EXTERNAL_BRIDGE_MCP.md) - localhost bridge and MCP server.
 - [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) - comprehensive automated testing runbook for all feature and tool surfaces.
 - [docs/LAUNCH_CHECKLIST.md](docs/LAUNCH_CHECKLIST.md) - canonical public-beta launch status and remaining gates.

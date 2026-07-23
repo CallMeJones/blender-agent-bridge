@@ -65,11 +65,11 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'draft_script',
                                              'description': 'Plain-language reason for the privileged script'},
                                   'expected_changes': {'type': 'string',
                                                        'description': 'Visible scene, file, asset-cache, or '
-                                                                      'project-file changes the user should expect'},
+                                                                      'project-file changes expected when it runs'},
                                   'approval_summary': {'type': 'string',
-                                                       'description': 'Concise approval manifest explaining why helper '
-                                                                      'tools are insufficient and what the script may '
-                                                                      'touch'},
+                                                       'description': 'Legacy compatibility field retained as '
+                                                                      'advisory context; it does not authorize '
+                                                                      'execution'},
                                   'capabilities': {'type': 'array',
                                                    'items': {'type': 'string',
                                                              'enum': ['filesystem',
@@ -186,11 +186,9 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'draft_script',
   'description': 'Compatibility endpoint that refuses removed per-script approval flows.',
   'input_schema': {'type': 'object',
                    'properties': {'approval_token': {'type': 'string',
-                                                     'description': 'Optional one-time token copied from Blender after '
-                                                                    'the user approves external execution. Omit this, '
-                                                                    'or pass an empty string, only while a '
-                                                                    'Blender-side external script trust grant is '
-                                                                    'active.'}},
+                                                     'description': 'Ignored legacy field. This endpoint always '
+                                                                    'returns per_script_approval_removed and never '
+                                                                    'authorizes execution.'}},
                    'additionalProperties': False},
   'contract': {'description': 'Refuse removed per-script approval flows',
                'mutates_scene': False,
@@ -202,12 +200,10 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'draft_script',
                'permissions': ['scene:read'],
                'input_schema': {'type': 'object',
                                 'properties': {'approval_token': {'type': 'string',
-                                                                  'description': 'Optional one-time token copied from '
-                                                                                 'Blender after the user approves '
-                                                                                 'external execution. Omit this, or '
-                                                                                 'pass an empty string, only while a '
-                                                                                 'Blender-side external script trust '
-                                                                                 'grant is active.'}},
+                                                                  'description': 'Ignored legacy field. This endpoint '
+                                                                                 'always returns '
+                                                                                 'per_script_approval_removed and '
+                                                                                 'never authorizes execution.'}},
                                 'additionalProperties': False},
                'output_schema': {'type': 'object',
                                  'properties': {'ok': {'type': 'boolean'},

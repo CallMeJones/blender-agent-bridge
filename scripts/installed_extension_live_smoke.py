@@ -263,13 +263,20 @@ def run_interactive_ui_smoke():
                 },
             )
         )
-        if trust_off.get("ok") or trust_off.get("code") != "script_trust_required" or state.pending_script:
-            raise AssertionError(f"Installed trust-off request created executable or pending work: {trust_off}")
+        if trust_off.get("ok") or trust_off.get("code") != "script_trust_required":
+            raise AssertionError(f"Installed trust-off request executed: {trust_off}")
         if trusted_fs_path.exists():
             raise AssertionError("Installed trust-off request wrote a filesystem marker")
-        approval = script_runner.approve_pending_script_for_external_run(bpy.context, ttl_seconds=60)
-        if approval.get("ok") or approval.get("code") != "per_script_approval_removed":
-            raise AssertionError(f"Installed per-script approval compatibility path was not disabled: {approval}")
+        for removed_name in (
+            "approve_pending_script_for_external_run",
+            "reject_pending_script",
+            "run_pending_script",
+            "stage_script",
+        ):
+            if hasattr(script_runner, removed_name):
+                raise AssertionError(f"Installed legacy per-script helper still exists: {removed_name}")
+        if hasattr(state, "pending_script"):
+            raise AssertionError("Installed legacy pending-script state still exists")
         session_trust = script_runner.approve_external_script_trust_window(bpy.context, session=True)
         if not session_trust.get("ok"):
             raise AssertionError(f"Installed session trust did not activate: {session_trust}")
@@ -297,8 +304,6 @@ def run_interactive_ui_smoke():
             raise AssertionError(f"Installed trusted script did not receive normal filesystem access: {trusted_run}")
         if trusted_run.get("authorization_model") != "blender_run_script_equivalent":
             raise AssertionError(f"Installed trusted script reported the wrong authorization model: {trusted_run}")
-        if state.pending_script:
-            raise AssertionError("Installed trusted execution left pending script state")
         del bpy.context.scene["installed_trust_smoke"]
         trusted_fs_path.unlink(missing_ok=True)
 

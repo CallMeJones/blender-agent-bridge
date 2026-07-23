@@ -9,7 +9,7 @@ Current project snapshot, checked on 2026-07-22:
 - Local Blender detected on this workstation: `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`.
 - Canonical registry inventory: 189 Blender tool contracts across eleven explicit domain modules.
 - Normal agent catalog inventory: 188 tool definitions; 29 are exposed directly in compact mode.
-- Intentional catalog difference: `run_approved_script` is a dispatcher path for external approval/trust execution, but it is not exposed in the normal agent helper catalog.
+- Intentional catalog difference: `run_approved_script` is a compatibility dispatcher path that always refuses the removed per-script flow; it is not exposed in the normal agent helper catalog.
 - The 0.3.1 release candidate was verified on 2026-07-22 with `compileall`, 53 unit tests, the complete Phase 1 pure-Python gate plus the adversarial script-analyzer smoke, the complete 19-test background suite, project-directory containment probes on Blender 4.2.0/4.5.0/5.1.2, and the clean installed-extension interactive smoke on all three versions. Tagged CI repeats the same Blender matrix under Xvfb on Linux.
 
 ## How To Ask Codex To Run This
@@ -574,7 +574,7 @@ Required scenarios:
 - Pose library/action helpers reject missing action or marker names clearly.
 - Shape-key helpers validate object support, key existence, and value ranges.
 - Simulation inspection is read-only and restores the original scene frame.
-- Persistent simulation bake stages approval-gated Python and does not silently bake caches.
+- Persistent simulation bake refuses while trust is off and runs its fixed bake template immediately while session trust is active.
 
 ### Advanced Creation And Refinement Kits
 
@@ -875,7 +875,7 @@ Required negative cases:
 - `open_blend_file`, `create_new_blender_project`, and save-as/copy refuse unconfirmed paths.
 - Sketchfab token arguments are redacted from logs and not written to preferences.
 - Render child processes do not inherit `BLENDER_BRIDGE_TOKEN` or `BLENDER_BRIDGE_URL`.
-- Revoke Session Trust/reload/file-load/bridge-start revokes trust and tokenless `run_approved_script` fails afterward.
+- Revoke Session Trust/reload/file-load clears trust; `draft_script` then refuses, while the legacy `run_approved_script` endpoint always refuses regardless of trust state.
 
 ## Phase 9: Coverage Gap Audit
 

@@ -111,7 +111,7 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'get_rigging_details'
                                     'message': 'If baking times out, wait before calling blender_bridge_status and '
                                                'get_blend_file_diagnostics; do not rerun while the original bake may '
                                                'still be active.'},
-               'recovery_hint': 'If Blender becomes unreachable after an approved bake, wait, call '
+               'recovery_hint': 'If Blender becomes unreachable after a trusted bake, wait, call '
                                 'blender_bridge_status, then use get_blend_file_diagnostics before reporting any '
                                 'checkpoint path.',
                'output_schema': {'type': 'object',

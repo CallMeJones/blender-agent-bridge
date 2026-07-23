@@ -63,7 +63,6 @@ def main():
         context = bpy.context
         state = context.scene.claude_blender
         state.bridge_source_status = ""
-        state.pending_script = False
         state.pending_preview = False
         state.last_script_error_summary = ""
         state.last_checkpoint_path = ""
@@ -181,16 +180,22 @@ def main():
         state.last_script_error_summary = ""
         state.last_checkpoint_status = "No script checkpoint yet"
 
-        # Even stale state created through an old/internal staging API must not
-        # resurrect the removed per-script approval controls.
-        staged = script_runner.stage_script(
-            context,
-            code="value = 1",
-            intent="Create a test value",
-            expected_changes="No scene changes",
-            risk_level="low",
-        )
-        assert staged["ok"], staged
+        # The removed per-script workflow has no state properties or execution
+        # helpers left that a later panel edit could accidentally expose.
+        for removed_property in (
+            "pending_script",
+            "pending_script_blocked",
+            "pending_script_text_name",
+            "pending_script_external_approval_hash",
+        ):
+            assert not hasattr(state, removed_property), removed_property
+        for removed_helper in (
+            "approve_pending_script_for_external_run",
+            "reject_pending_script",
+            "run_pending_script",
+            "stage_script",
+        ):
+            assert not hasattr(script_runner, removed_helper), removed_helper
         script_layout = _FakeLayout()
         script_panel = type("_Sidebar", (), {"layout": script_layout})()
         ui.CLAUDEBLENDER_PT_sidebar.draw(script_panel, context)
@@ -200,25 +205,6 @@ def main():
             "claude_blender.copy_mcp_config",
             "claude_blender.approve_external_script_trust",
         ], script_layout.operators
-        assert script_runner.reject_pending_script(context)["ok"]
-
-        blocked = script_runner.stage_script(
-            context,
-            code="import subprocess",
-            intent="Blocked test script",
-            risk_level="high",
-        )
-        assert blocked["ok"] and blocked["analysis"]["blocked"], blocked
-        blocked_layout = _FakeLayout()
-        blocked_panel = type("_Sidebar", (), {"layout": blocked_layout})()
-        ui.CLAUDEBLENDER_PT_sidebar.draw(blocked_panel, context)
-        assert blocked_layout.labels == ["Bridge is offline"], blocked_layout.labels
-        assert blocked_layout.operators == [
-            "claude_blender.start_bridge",
-            "claude_blender.copy_mcp_config",
-            "claude_blender.approve_external_script_trust",
-        ], blocked_layout.operators
-        assert script_runner.reject_pending_script(context)["ok"]
 
         bridge_server.is_running = lambda: False
         state.pending_preview = True
@@ -272,13 +258,13 @@ def main():
         preferences.CLAUDEBLENDER_AP_preferences.draw(prefs_panel, context)
         assert prefs_layout.labels == ["Safety", "Connection"], prefs_layout.labels
         assert prefs_layout.properties == [
-            "execution_mode",
             "checkpoints_enabled",
             "autosave_enabled",
             "bridge_port",
             "bridge_auth_token",
             "mcp_launch_mode",
         ], prefs_layout.properties
+        assert not hasattr(preferences.CLAUDEBLENDER_AP_preferences, "execution_mode")
 
         print("smoke_ui_layout: ok")
     finally:

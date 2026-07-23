@@ -5786,7 +5786,7 @@
         "additionalProperties": false,
         "properties": {
           "approval_summary": {
-            "description": "Concise approval manifest explaining why helper tools are insufficient and what the script may touch",
+            "description": "Legacy compatibility field retained as advisory context; it does not authorize execution",
             "type": "string"
           },
           "capabilities": {
@@ -5829,7 +5829,7 @@
             "type": "array"
           },
           "expected_changes": {
-            "description": "Visible scene, file, asset-cache, or project-file changes the user should expect",
+            "description": "Visible scene, file, asset-cache, or project-file changes expected when it runs",
             "type": "string"
           },
           "intent": {
@@ -9085,7 +9085,7 @@
         "additionalProperties": false,
         "properties": {
           "approval_token": {
-            "description": "Optional one-time token copied from Blender after the user approves external execution. Omit this, or pass an empty string, only while a Blender-side external script trust grant is active.",
+            "description": "Ignored legacy field. This endpoint always returns per_script_approval_removed and never authorizes execution.",
             "type": "string"
           }
         },
@@ -10657,7 +10657,7 @@
         "blender:full",
         "filesystem:full"
       ],
-      "recovery_hint": "If Blender becomes unreachable after an approved bake, wait, call blender_bridge_status, then use get_blend_file_diagnostics before reporting any checkpoint path.",
+      "recovery_hint": "If Blender becomes unreachable after a trusted bake, wait, call blender_bridge_status, then use get_blend_file_diagnostics before reporting any checkpoint path.",
       "requires_approval": false,
       "timeout_recovery": {
         "message": "If baking times out, wait before calling blender_bridge_status and get_blend_file_diagnostics; do not rerun while the original bake may still be active.",
@@ -18786,7 +18786,7 @@
         "additionalProperties": false,
         "properties": {
           "approval_summary": {
-            "description": "Concise approval manifest explaining why helper tools are insufficient and what the script may touch",
+            "description": "Legacy compatibility field retained as advisory context; it does not authorize execution",
             "type": "string"
           },
           "capabilities": {
@@ -18829,7 +18829,7 @@
             "type": "array"
           },
           "expected_changes": {
-            "description": "Visible scene, file, asset-cache, or project-file changes the user should expect",
+            "description": "Visible scene, file, asset-cache, or project-file changes expected when it runs",
             "type": "string"
           },
           "intent": {
@@ -19107,7 +19107,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "70a8ac8b24139278b2392dadd326758042e336095e00ff4c88f5065fc8f69179",
+  "registry_digest": "b8484ae20d7c04e7541200a960024143885a6d3c41d431edd3750a49f21743d5",
   "schema_version": 1,
   "specs": [
     {
@@ -23345,7 +23345,7 @@
           "blender:full",
           "filesystem:full"
         ],
-        "recovery_hint": "If Blender becomes unreachable after an approved bake, wait, call blender_bridge_status, then use get_blend_file_diagnostics before reporting any checkpoint path.",
+        "recovery_hint": "If Blender becomes unreachable after a trusted bake, wait, call blender_bridge_status, then use get_blend_file_diagnostics before reporting any checkpoint path.",
         "requires_approval": false,
         "timeout_recovery": {
           "message": "If baking times out, wait before calling blender_bridge_status and get_blend_file_diagnostics; do not rerun while the original bake may still be active.",
@@ -35427,7 +35427,7 @@
         "additionalProperties": false,
         "properties": {
           "approval_summary": {
-            "description": "Concise approval manifest explaining why helper tools are insufficient and what the script may touch",
+            "description": "Legacy compatibility field retained as advisory context; it does not authorize execution",
             "type": "string"
           },
           "capabilities": {
@@ -35470,7 +35470,7 @@
             "type": "array"
           },
           "expected_changes": {
-            "description": "Visible scene, file, asset-cache, or project-file changes the user should expect",
+            "description": "Visible scene, file, asset-cache, or project-file changes expected when it runs",
             "type": "string"
           },
           "intent": {
@@ -35666,7 +35666,7 @@
           "additionalProperties": false,
           "properties": {
             "approval_token": {
-              "description": "Optional one-time token copied from Blender after the user approves external execution. Omit this, or pass an empty string, only while a Blender-side external script trust grant is active.",
+              "description": "Ignored legacy field. This endpoint always returns per_script_approval_removed and never authorizes execution.",
               "type": "string"
             }
           },
@@ -35723,7 +35723,7 @@
         "additionalProperties": false,
         "properties": {
           "approval_token": {
-            "description": "Optional one-time token copied from Blender after the user approves external execution. Omit this, or pass an empty string, only while a Blender-side external script trust grant is active.",
+            "description": "Ignored legacy field. This endpoint always returns per_script_approval_removed and never authorizes execution.",
             "type": "string"
           }
         },

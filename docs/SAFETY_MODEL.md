@@ -41,7 +41,7 @@ External agents can apply low-risk helper changes immediately to the open scene.
 
 Use this for transforms, primitive/empty creation, object visibility/display, materials, UV unwraps, bounded map-bake artifact output, lights, cameras, timeline settings, camera orbit setup, bounded keyframe edits, and bounded advanced helpers such as shader material setup, Geometry Nodes starter modifiers, shape keys, text/curve creation, simple particles, basic armatures, copy-transform constraints, render settings, camera settings, and world background color.
 
-Advanced helpers are not a general Blender automation sandbox. They should create or edit narrow, reversible data-blocks. Custom geometry-node networks, production rigs, compositor graphs, simulations, destructive mesh operations, import/export, and broad scene edits should stay in approval-required Python.
+Advanced helpers are not a general Blender automation sandbox. They should create or edit narrow, reversible data-blocks. Custom geometry-node networks, production rigs, compositor graphs, simulations, destructive mesh operations, import/export, and broad scene edits use session-trusted Python when bounded tools are insufficient.
 Refinement templates are also bounded live helpers. They may create multiple primitives/materials/curves at once, but every created data-block must be recorded in preview rollback. Templates should improve composition and detail without pretending to replace real topology modeling.
 
 ### External Bridge / MCP
@@ -120,7 +120,7 @@ During live preview:
 - Keep the transaction pending until the user commits it.
 - Provide a one-click revert for pending preview changes.
 - Show rollback coverage and warnings after commit/revert.
-- Escalate to approval-required mode when rollback state cannot be captured confidently.
+- Do not use the live-preview helper path when rollback state cannot be captured confidently; use an explicit plan plus session-trusted Python or refuse the operation.
 
 After execution:
 

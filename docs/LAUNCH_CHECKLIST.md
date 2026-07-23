@@ -15,7 +15,7 @@ Any source, workflow, packaging, or user-facing documentation change after candi
 | Scope and user experience | Required | The single compact sidebar, binary trust switch, and preview Commit/Revert states are visually reviewed. |
 | Code and regression tests | Done locally | Unit, pure-Python, Blender 5.1 background, and installed-extension gates pass for the candidate. |
 | Blender compatibility | Required | Blender 4.2 LTS, 4.5 LTS, and 5.1 pass in CI; newer versions remain capability-gated without an artificial maximum. |
-| Security and privacy | Required | Approval boundaries, external downloads, secrets, permissions, and packaged artifacts are reviewed. |
+| Security and privacy | Required | Trust boundaries, external downloads, secrets, permissions, and packaged artifacts are reviewed. |
 | Release artifacts | Required | One tagged artifact set publishes an identical extension ZIP to GitHub Releases and Pages plus the matching wheel/sdist to PyPI. |
 | GitHub and community | Manual | Repository metadata, support routes, Discussions, and starter issues are ready. |
 | Public announcement | Manual | Final announcement points to the released version and verified install path. |
@@ -28,7 +28,7 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 - [x] **Done** — Bundled MCP remains the default; `uvx / PyPI` remains optional.
 - [x] **Done** — Public tool names, safety contracts, compact exposure, and provider-neutral architecture remain backward compatible.
 - [x] **Done** — The secondary panel and per-script Run/Reject/Allow-Once operators are removed; the one remaining sidebar renders only bridge/MCP setup, binary runtime script trust/revocation, and preview Commit/Revert.
-- [x] **Done** — `tests/smoke_ui_layout.py` locks the exact offline, ready-to-trust, active-trust, removed-approval, conditional rollback, one-panel, and six-setting Preferences contracts.
+- [x] **Done** — `tests/smoke_ui_layout.py` locks the exact offline, ready-to-trust, active-trust, removed-approval, conditional rollback, one-panel, and five-setting Preferences contracts.
 - [ ] **Required** — Inspect the single sidebar and trust confirmation at normal and narrow widths in Blender 5.1.2.
 - [ ] **Required** — Repeat the same real sidebar inspection in Blender 4.2.0 and 4.5.0.
 - [ ] **Required** — Confirm a first-time user can install, start the bridge, copy a config, connect one MCP host, run the smoke prompt, and find preview commit/revert without maintainer help.
@@ -65,7 +65,7 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 - [x] **Done** — `blender_manifest.toml` permissions, [PRIVACY.md](../PRIVACY.md), and [SAFETY_MODEL.md](SAFETY_MODEL.md) were reviewed against the v0.3.1 behavior.
 - [x] **Done** — The official extension ZIP contains `LICENSE` and excludes repository metadata, bytecode, logs, caches, captures, checkpoints, tokens, and private `.blend` artifacts.
 - [ ] **Required** — Run the secret scan against the final reviewed commit and every candidate artifact input; record the scanner version and result.
-- [x] **Done locally** — Clean installed-extension smoke confirms trust-off refusal without pending state, trust-on immediate execution, disabled per-script/privileged paths, revoke, reload cleanup, and bridge-restart persistence on Blender 4.2.0, 4.5.0, and 5.1.2.
+- [x] **Done locally** — Clean installed-extension smoke confirms trust-off refusal without pending state, trust-on immediate execution, permanent refusal of the removed per-script path, compatibility-alias execution under trust, revoke, reload cleanup, and bridge-restart persistence on Blender 4.2.0, 4.5.0, and 5.1.2.
 - [ ] **Required** — Confirm GitHub Release and Pages extension ZIPs have the same SHA-256 digest.
 
 ## 5. Packaging and Release
@@ -103,7 +103,7 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 
 ## 8. First 72 Hours
 
-- [ ] **Required** — Monitor security advisories, issues, and Discussions for install failures, data-loss risk, approval bypasses, and Blender-version regressions.
+- [ ] **Required** — Monitor security advisories, issues, and Discussions for install failures, data-loss risk, script-trust bypasses, and Blender-version regressions.
 - [ ] **Required** — Label launch blockers, publish workarounds quickly, and prepare v0.3.2 only from reproduced fixes with owner tests.
 - [ ] **Required** — Record recurring setup friction and update the relevant client guide rather than answering the same question only in a thread.
 - [ ] **Optional** — Curate permission-cleared community work into the showcase.
@@ -119,7 +119,7 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 | 2026-07-22 | Official source/ZIP validation, wheel/sdist build, clean wheel MCP subprocess, and local release/Pages artifact identity | Passed; final extension SHA-256 `0afc6f63ee145a1cecac5f08dc8a590b889764503888864de15b04874c6b68bf` |
 | 2026-07-22 | Clean installed-extension interactive smoke: clipboard config, session token, Material Preview, bridge, workflows, evidence resources, and 29-tool MCP catalog | Passed |
 | 2026-07-22 | Blender 5.1.2 sidebar review at 1200×800 and 800×800, with Advanced collapsed and expanded | Historical evidence for the removed two-panel layout; current one-panel UI still needs visual review |
-| 2026-07-22 | Clean installed-extension approval/trust lifecycle: wrong-token rejection, one-time consumption, expiry, revoke, reload, and bridge restart | Passed |
+| 2026-07-22 | Historical pre-consolidation approval/trust lifecycle: wrong-token rejection, one-time consumption, expiry, revoke, reload, and bridge restart | Superseded by the binary-trust implementation |
 | 2026-07-22 | Copied Bundled config launched the installed MCP server with Blender 5.1.2's own Python interpreter | Passed; 29-tool MCP catalog and bridge status returned successfully |
 | 2026-07-22 | Official Blender 4.2.0 and 4.5.0 portable archives checked against Blender's published SHA-256 manifests | Passed |
 | 2026-07-22 | Complete 19-test background suite on Blender 4.2.0 and 4.5.0 | Passed on both versions |
@@ -135,5 +135,7 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 | 2026-07-22 | Gitleaks 8.30.1 on 133-commit history and final binary-trust working diff | Passed; no leaks found |
 | 2026-07-23 | Blender Run Script-equivalent binary trust: 53 unit tests, complete pure-Python gate and adversarial analyzer smoke, complete 19-test Blender 5.1.2 suite, script-trust/UI owner smokes on Blender 4.2/4.5/5.1, official source/ZIP/repository validation, and clean installed-extension live smoke proving trust-off refusal plus trusted filesystem/`os`/socket/subprocess imports on all three versions | Passed; candidate extension SHA-256 `cc5c53a2edf8aa002399c5b934095a6b486817c843715208f2f74ff26ea7e84e` |
 | 2026-07-23 | Gitleaks 8.30.1 on 136-commit history and Blender Run Script-equivalent trust working tree | Passed; no leaks found |
+| 2026-07-23 | Final simplified-trust candidate: 53 unit tests, complete pure-Python gate, complete 19-test Blender 5.1.2 suite, trust/project-file/UI/animation owner smokes on Blender 4.2/4.5, source/ZIP/Pages/artifact-identity validation, wheel/sdist build plus clean wheel install, and clean installed-extension live smoke on Blender 4.2/4.5/5.1 | Passed; candidate extension SHA-256 `3d124947bff22b55b709f4ca1c712eea30942bd5df5fa11ad37e4f8811145bac` |
+| 2026-07-23 | Gitleaks 8.30.1 on 137-commit history, final working tree, Pages extension archive, wheel, and sdist with archive scanning enabled | Passed; no leaks found |
 
 Add evidence here only after it has run against the candidate being evaluated. A previous release proves the pipeline, not the current release contents.
