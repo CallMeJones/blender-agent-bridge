@@ -138,6 +138,7 @@ The source `.blend` file and full 1080p videos are not committed here; the repos
 ## What Agents Can Do
 
 - Inspect the current scene, selection, materials, animation, rigs, cameras, nodes, render settings, and `.blend` health.
+- Keep complete inspection results by default, with optional summaries, field selection, pagination, and digest-based unchanged responses for lower-token follow-ups.
 - Make reversible preview edits to common objects, materials, animation, lighting, cameras, rigs, and scene organization.
 - Capture viewport, playblast, inspection-render, thumbnail, and render-job evidence.
 - Search and import Poly Haven or Sketchfab assets through asynchronous download and import jobs.
@@ -183,7 +184,7 @@ flowchart LR
   scripts --> trust["Trust / Revoke"]
 ```
 
-The MCP surface stays compact and exposes searchable Blender tool schemas only when the client needs them. Blender owns the open scene, previews, evidence, and trusted execution; the external MCP client owns the model, conversation, and provider account.
+The MCP surface stays compact and exposes searchable Blender tool schemas only when the client needs them. Its initialization and tool definitions are deterministic for provider prompt-cache reuse, and content-free payload telemetry identifies response-size hotspots without storing scene output. Blender owns the open scene, previews, evidence, and trusted execution; the external MCP client owns the model, conversation, provider account, and provider cache policy.
 
 See [docs/EXTERNAL_BRIDGE_MCP.md](docs/EXTERNAL_BRIDGE_MCP.md) for setup and troubleshooting.
 

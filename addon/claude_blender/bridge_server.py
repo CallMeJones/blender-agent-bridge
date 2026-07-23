@@ -26,6 +26,7 @@ from . import (
     playblast_capture,
     preferences,
     render_jobs,
+    response_controls,
     script_runner,
     tool_dispatcher,
     transcript,
@@ -71,8 +72,12 @@ _active_operation = {}
 _last_operation = {}
 
 
+def _json_text(payload):
+    return json.dumps(payload, separators=(",", ":"), sort_keys=True, default=str)
+
+
 def _json_bytes(payload):
-    return json.dumps(payload, indent=2, sort_keys=True, default=str).encode("utf-8")
+    return _json_text(payload).encode("utf-8")
 
 
 def _public_context():
@@ -484,49 +489,45 @@ def _capture_cache_dir():
 
 def _read_resource(uri):
     if uri == "blender://scene/status":
-        return {"mimeType": "application/json", "text": json.dumps(_scene_status(), indent=2, sort_keys=True)}
+        return {"mimeType": "application/json", "text": _json_text(_scene_status())}
     if uri == "blender://scene/context":
-        return {"mimeType": "application/json", "text": json.dumps(_public_context(), indent=2, sort_keys=True, default=str)}
+        return {"mimeType": "application/json", "text": _json_text(_public_context())}
     if uri == "blender://tools/catalog":
         return {
             "mimeType": "application/json",
-            "text": json.dumps(_compact_tool_catalog(), indent=2, sort_keys=True),
+            "text": _json_text(_compact_tool_catalog()),
         }
     if uri == "blender://tools/contracts":
         return {
             "mimeType": "application/json",
-            "text": json.dumps(bridge_protocol.list_tool_contracts(), indent=2, sort_keys=True),
+            "text": _json_text(bridge_protocol.list_tool_contracts()),
         }
     if uri == "blender://transcript/latest":
         return {"mimeType": "text/plain", "text": transcript.transcript_text()}
     if uri == "blender://audit/latest":
         return {
             "mimeType": "application/json",
-            "text": json.dumps(
+            "text": _json_text(
                 {
                     "ok": True,
                     "events": audit_log.read_recent(AUDIT_LATEST_EVENT_LIMIT),
                     "event_limit": AUDIT_LATEST_EVENT_LIMIT,
                     "summary_resource": "blender://audit/summary",
-                },
-                indent=2,
-                sort_keys=True,
+                }
             ),
         }
     if uri == "blender://audit/summary":
         return {
             "mimeType": "application/json",
-            "text": json.dumps(_audit_summary(), indent=2, sort_keys=True),
+            "text": _json_text(_audit_summary()),
         }
     if uri == viewport_capture.LATEST_CAPTURE_RESOURCE_URI:
         return viewport_capture.latest_capture_resource(context=bpy.context, preferred_dir=_capture_cache_dir())
     if uri == viewport_capture.LATEST_CAPTURE_METADATA_URI:
         return {
             "mimeType": "application/json",
-            "text": json.dumps(
-                viewport_capture.latest_capture_metadata(context=bpy.context, preferred_dir=_capture_cache_dir()),
-                indent=2,
-                sort_keys=True,
+            "text": _json_text(
+                viewport_capture.latest_capture_metadata(context=bpy.context, preferred_dir=_capture_cache_dir())
             ),
         }
     capture_id, wants_metadata = viewport_capture.parse_capture_resource_uri(uri)
@@ -541,7 +542,7 @@ def _read_resource(uri):
                 return None
             return {
                 "mimeType": "application/json",
-                "text": json.dumps(metadata, indent=2, sort_keys=True),
+                "text": _json_text(metadata),
             }
         return viewport_capture.capture_resource(
             capture_id,
@@ -553,10 +554,8 @@ def _read_resource(uri):
         if playblast_id == "latest" and playblast_kind == "metadata":
             return {
                 "mimeType": "application/json",
-                "text": json.dumps(
-                    playblast_capture.latest_playblast_metadata(context=bpy.context, preferred_dir=_capture_cache_dir()),
-                    indent=2,
-                    sort_keys=True,
+                "text": _json_text(
+                    playblast_capture.latest_playblast_metadata(context=bpy.context, preferred_dir=_capture_cache_dir())
                 ),
             }
         if playblast_kind == "metadata":
@@ -569,7 +568,7 @@ def _read_resource(uri):
                 return None
             return {
                 "mimeType": "application/json",
-                "text": json.dumps(metadata, indent=2, sort_keys=True),
+                "text": _json_text(metadata),
             }
         if playblast_kind == "frame":
             return playblast_capture.playblast_frame_resource(
@@ -583,13 +582,11 @@ def _read_resource(uri):
         if render_id == "latest" and render_kind == "metadata":
             return {
                 "mimeType": "application/json",
-                "text": json.dumps(
+                "text": _json_text(
                     inspection_render.latest_inspection_render_metadata(
                         context=bpy.context,
                         preferred_dir=_capture_cache_dir(),
-                    ),
-                    indent=2,
-                    sort_keys=True,
+                    )
                 ),
             }
         if render_kind == "metadata":
@@ -602,7 +599,7 @@ def _read_resource(uri):
                 return None
             return {
                 "mimeType": "application/json",
-                "text": json.dumps(metadata, indent=2, sort_keys=True),
+                "text": _json_text(metadata),
             }
         if render_kind == "image":
             return inspection_render.inspection_render_image_resource(
@@ -616,13 +613,11 @@ def _read_resource(uri):
         if thumbnail_id == "latest" and thumbnail_kind == "metadata":
             return {
                 "mimeType": "application/json",
-                "text": json.dumps(
+                "text": _json_text(
                     lab_parity.latest_render_thumbnail_metadata(
                         context=bpy.context,
                         preferred_dir=_capture_cache_dir(),
-                    ),
-                    indent=2,
-                    sort_keys=True,
+                    )
                 ),
             }
         if thumbnail_kind == "metadata":
@@ -635,7 +630,7 @@ def _read_resource(uri):
                 return None
             return {
                 "mimeType": "application/json",
-                "text": json.dumps(metadata, indent=2, sort_keys=True),
+                "text": _json_text(metadata),
             }
         if thumbnail_kind == "image":
             return lab_parity.render_thumbnail_resource(
@@ -648,13 +643,11 @@ def _read_resource(uri):
         if job_id == "latest" and job_kind == "metadata":
             return {
                 "mimeType": "application/json",
-                "text": json.dumps(
+                "text": _json_text(
                     render_jobs.latest_render_job_metadata(
                         context=bpy.context,
                         preferred_dir=_capture_cache_dir(),
-                    ),
-                    indent=2,
-                    sort_keys=True,
+                    )
                 ),
             }
         if job_kind == "metadata":
@@ -667,7 +660,7 @@ def _read_resource(uri):
                 return None
             return {
                 "mimeType": "application/json",
-                "text": json.dumps(metadata, indent=2, sort_keys=True),
+                "text": _json_text(metadata),
             }
         if job_kind == "frame":
             return render_jobs.render_job_frame_resource(
@@ -722,6 +715,7 @@ def _execute_tool(payload):
             result = json.loads(result_text)
         except json.JSONDecodeError:
             result = {"ok": True, "text": result_text}
+        result = response_controls.apply_response_controls(name, args, result)
         ok = bool(result.get("ok", True))
         try:
             contract = bridge_protocol.normalized_tool_contract(name)

@@ -78,7 +78,11 @@ External clients may respond directly or request a tool. For tool calls, the add
 
 Before generating non-trivial code, external agents should either already have enough scene/docs context or explicitly call tools to get it. The bridge should steer clients toward this sequence: inspect, retrieve docs if needed, plan, draft, review, run.
 
-Tool schemas are selected dynamically per request. The full local tool catalog remains available inside Blender, while compact MCP mode exposes the bridge/control/animation/render tools that should be easy for clients to find. Provider-neutral routing hints keep the request closer to Codex-style local tool use: Blender owns the toolbox, and external clients decide what to show their models.
+Standard MCP `tools/list` has no user-prompt field, so the default discovery surface is fixed rather than selected dynamically per request. Compact MCP mode keeps all 28 established bridge/control and directly routed workflow tools visible with their names, descriptions, input schemas, and essential safety/routing annotations. Its client-facing discovery projection omits optional output schemas and annotation fields that only repeat default values; canonical output schemas and complete safety metadata remain available one tool at a time through `get_blender_tool_schema` and remain authoritative for internal validation. The full local catalog stays available through catalog search/schema/invoke, while `BLENDER_MCP_FULL_TOOL_LIST=1` exposes every public helper for legacy clients and debugging.
+
+`response_controls.py` owns one cross-domain, read-only policy for large inspectors. The registry adds optional full/summary, dotted field-selection, pagination, and known-digest inputs only to the allowlisted inspection tools. Blender handlers still build their original complete results. The bridge hashes that complete result before any opt-in reduction; a digest mismatch returns the complete result, while a match returns a tiny unchanged marker. This keeps response shaping out of scene/domain code and prevents partial client state from becoming an implicit source of truth.
+
+The MCP process keeps aggregate payload-size telemetry in memory and exposes it through `blender://mcp/payload-telemetry`. Records contain only tool identifiers and byte counts and disappear with the process. Initialization instructions and tool definitions are deterministic so provider clients can reuse prompt-prefix caches, but cache enablement and cache usage metrics remain client/provider responsibilities.
 
 ## Canonical Tool Registry
 

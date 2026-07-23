@@ -81,7 +81,7 @@ Use follow-up tools for detailed data:
 - `get_render_camera_compositor_details()`
 - `search_blender_docs(query)`
 
-This lets external agents ask for more when needed without dumping the whole file into every request.
+This lets external agents ask for more when needed without dumping the whole file into every request. These large read-only inspectors return the complete result by default and also accept shared optional response controls: `detail=summary`, dotted `fields`, `page`/`page_size`/`page_field`, and `known_digest`. The digest is computed from the complete result before reduction. A matching digest returns `not_modified`; any mismatch returns the complete current result.
 
 ### Deep World Model
 
@@ -149,7 +149,9 @@ The search tool returns only top matching snippets and URLs. It never exposes th
 
 This keeps the local docs cache, screenshots, and large Blender scenes from killing the LLM request with oversized context.
 
-`agent_tools.select_blender_tool_definitions()` also applies a tool-schema budget. The full tool catalog remains available locally, while compact surfaces expose a core inspection/docs set plus task-matched reusable groups such as materials, animation, 2D inspection, modeling, simulation setup, camera/render, geometry nodes, rigging, particles, curves/text, asset import, and scene organization.
+`agent_tools.select_blender_tool_definitions()` remains available to embedded callers that already have the user prompt and applies a tool-schema budget there. Standard MCP discovery cannot use that selector because `tools/list` does not receive the prompt. MCP therefore exposes a stable compact surface and protects context by omitting optional output schemas from discovery, sparsifying default-valued annotations, returning compact catalog summaries, and retrieving the complete canonical schema only for the selected tool.
+
+The stable MCP initialization text, tool order, and definitions contain no request-specific scene data or timestamps. This makes them eligible for provider prompt-prefix caching without moving cache policy into Blender. Payload telemetry is process-local and content-free: it aggregates only tool identifiers and response byte counts so maintainers can find real hotspots without retaining scene output.
 
 ### Docs-First Rule
 

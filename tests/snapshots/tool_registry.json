@@ -5679,7 +5679,46 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_items": {
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           }
         },
@@ -5714,6 +5753,30 @@
             },
             "type": "array"
           },
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_actions": {
             "description": "Maximum actions to return",
             "type": "integer"
@@ -5728,6 +5791,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -5753,6 +5831,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "description": "Maximum objects to summarize.",
             "type": "integer"
@@ -5763,6 +5865,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           },
           "selected_only": {
             "description": "Inspect only selected objects when object_names is empty.",
@@ -5820,7 +5937,46 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_depth": {
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           }
         },
@@ -5847,6 +6003,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "type": "integer"
           },
@@ -5855,6 +6035,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -5982,6 +6177,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "type": "integer"
           },
@@ -5990,6 +6209,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -6015,6 +6249,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "material_names": {
             "description": "Optional material names to inspect",
             "items": {
@@ -6028,6 +6286,21 @@
           },
           "max_nodes": {
             "description": "Maximum nodes per material",
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           },
           "selected_only": {
@@ -6058,6 +6331,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "description": "Maximum objects to return",
             "type": "integer"
@@ -6068,6 +6365,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           },
           "selected_only": {
             "description": "Inspect current selected objects when object_names is empty",
@@ -6165,7 +6477,46 @@
             },
             "type": "array"
           },
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_actions": {
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           },
           "paths": {
@@ -6208,6 +6559,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "type": "integer"
           },
@@ -6216,6 +6591,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -6241,6 +6631,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "material_names": {
             "items": {
               "type": "string"
@@ -6248,6 +6662,21 @@
             "type": "array"
           },
           "max_materials": {
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           },
           "selected_only": {
@@ -6277,6 +6706,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "type": "integer"
           },
@@ -6285,6 +6738,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -6310,6 +6778,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "type": "integer"
           },
@@ -6318,6 +6810,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -6617,7 +7124,31 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
           "expected_uv_map_name": {
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
             "type": "string"
           },
           "material_names": {
@@ -6634,6 +7165,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           },
           "require_uv_maps": {
             "type": "boolean"
@@ -6753,9 +7299,48 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
           "include_visual": {
             "description": "Whether viewport image context was requested",
             "type": "boolean"
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -6781,11 +7366,35 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
           "frame_end": {
             "type": "integer"
           },
           "frame_start": {
             "type": "integer"
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
           },
           "max_objects": {
             "type": "integer"
@@ -6795,6 +7404,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           },
           "sample_count": {
             "type": "integer"
@@ -6823,8 +7447,32 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
           "include_children": {
             "type": "boolean"
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
           },
           "max_objects": {
             "type": "integer"
@@ -6837,6 +7485,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           },
           "selected_only": {
             "type": "boolean"
@@ -7023,8 +7686,47 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "description": "Maximum objects to return",
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           },
           "type_filter": {
@@ -10575,9 +11277,48 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
           "include_visual": {
             "description": "Whether viewport image context was requested",
             "type": "boolean"
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -11306,6 +12047,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "description": "Maximum objects to return",
             "type": "integer"
@@ -11316,6 +12081,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           },
           "selected_only": {
             "description": "Inspect current selected objects when object_names is empty",
@@ -11331,8 +12111,47 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "description": "Maximum objects to return",
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           },
           "type_filter": {
@@ -11356,6 +12175,30 @@
             },
             "type": "array"
           },
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_actions": {
             "description": "Maximum actions to return",
             "type": "integer"
@@ -11370,6 +12213,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -11381,6 +12239,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "description": "Maximum objects to summarize.",
             "type": "integer"
@@ -11391,6 +12273,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           },
           "selected_only": {
             "description": "Inspect only selected objects when object_names is empty.",
@@ -12138,6 +13035,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "material_names": {
             "description": "Optional material names to inspect",
             "items": {
@@ -12151,6 +13072,21 @@
           },
           "max_nodes": {
             "description": "Maximum nodes per material",
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           },
           "selected_only": {
@@ -12167,6 +13103,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "type": "integer"
           },
@@ -12175,6 +13135,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -12186,6 +13161,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "material_names": {
             "items": {
               "type": "string"
@@ -12193,6 +13192,21 @@
             "type": "array"
           },
           "max_materials": {
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           },
           "selected_only": {
@@ -12208,6 +13222,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "type": "integer"
           },
@@ -12216,6 +13254,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -12227,6 +13280,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "type": "integer"
           },
@@ -12235,6 +13312,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -12246,6 +13338,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "type": "integer"
           },
@@ -12254,6 +13370,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -12265,6 +13396,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "type": "integer"
           },
@@ -12273,6 +13428,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -12284,11 +13454,35 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
           "frame_end": {
             "type": "integer"
           },
           "frame_start": {
             "type": "integer"
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
           },
           "max_objects": {
             "type": "integer"
@@ -12298,6 +13492,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           },
           "sample_count": {
             "type": "integer"
@@ -12347,7 +13556,46 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_depth": {
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           }
         },
@@ -13039,7 +14287,31 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
           "expected_uv_map_name": {
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
             "type": "string"
           },
           "material_names": {
@@ -13056,6 +14328,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           },
           "require_uv_maps": {
             "type": "boolean"
@@ -13368,8 +14655,32 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
           "include_children": {
             "type": "boolean"
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
           },
           "max_objects": {
             "type": "integer"
@@ -13382,6 +14693,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           },
           "selected_only": {
             "type": "boolean"
@@ -14586,7 +15912,46 @@
             },
             "type": "array"
           },
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_actions": {
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           },
           "paths": {
@@ -15493,7 +16858,46 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_items": {
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           }
         },
@@ -17962,7 +19366,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "9f92a339085bfc958a2f47c49046942523f47c66ba7c809a8225291d70cc551c",
+  "registry_digest": "889ce43e3587f6f605449cad228393cf1ff33f041d1c9c8008819af08668d140",
   "schema_version": 1,
   "specs": [
     {
@@ -17977,9 +19381,48 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
           "include_visual": {
             "description": "Whether viewport image context was requested",
             "type": "boolean"
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -20094,6 +21537,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "description": "Maximum objects to return",
             "type": "integer"
@@ -20104,6 +21571,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           },
           "selected_only": {
             "description": "Inspect current selected objects when object_names is empty",
@@ -20142,8 +21624,47 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "description": "Maximum objects to return",
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           },
           "type_filter": {
@@ -20192,6 +21713,30 @@
             },
             "type": "array"
           },
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_actions": {
             "description": "Maximum actions to return",
             "type": "integer"
@@ -20206,6 +21751,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -20243,6 +21803,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "description": "Maximum objects to summarize.",
             "type": "integer"
@@ -20253,6 +21837,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           },
           "selected_only": {
             "description": "Inspect only selected objects when object_names is empty.",
@@ -21737,6 +23336,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "material_names": {
             "description": "Optional material names to inspect",
             "items": {
@@ -21750,6 +23373,21 @@
           },
           "max_nodes": {
             "description": "Maximum nodes per material",
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           },
           "selected_only": {
@@ -21794,6 +23432,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "type": "integer"
           },
@@ -21802,6 +23464,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -21839,6 +23516,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "material_names": {
             "items": {
               "type": "string"
@@ -21846,6 +23547,21 @@
             "type": "array"
           },
           "max_materials": {
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           },
           "selected_only": {
@@ -21887,6 +23603,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "type": "integer"
           },
@@ -21895,6 +23635,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -21931,6 +23686,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "type": "integer"
           },
@@ -21939,6 +23718,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -21976,6 +23770,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "type": "integer"
           },
@@ -21984,6 +23802,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -22023,6 +23856,30 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_objects": {
             "type": "integer"
           },
@@ -22031,6 +23888,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -22070,11 +23942,35 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
           "frame_end": {
             "type": "integer"
           },
           "frame_start": {
             "type": "integer"
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
           },
           "max_objects": {
             "type": "integer"
@@ -22084,6 +23980,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           },
           "sample_count": {
             "type": "integer"
@@ -22346,7 +24257,46 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_depth": {
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           }
         },
@@ -23844,7 +25794,31 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
           "expected_uv_map_name": {
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
             "type": "string"
           },
           "material_names": {
@@ -23861,6 +25835,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           },
           "require_uv_maps": {
             "type": "boolean"
@@ -24639,8 +26628,32 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
           "include_children": {
             "type": "boolean"
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
           },
           "max_objects": {
             "type": "integer"
@@ -24653,6 +26666,21 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
           },
           "selected_only": {
             "type": "boolean"
@@ -26511,7 +28539,46 @@
             },
             "type": "array"
           },
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_actions": {
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           },
           "paths": {
@@ -28198,7 +30265,46 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "detail": {
+            "default": "full",
+            "description": "Optional response detail. Full preserves the complete existing result and remains the default.",
+            "enum": [
+              "summary",
+              "full"
+            ],
+            "type": "string"
+          },
+          "fields": {
+            "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "known_digest": {
+            "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
+            "maxLength": 64,
+            "minLength": 8,
+            "type": "string"
+          },
           "max_items": {
+            "type": "integer"
+          },
+          "page": {
+            "description": "Optional 1-based page for one top-level result collection.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "page_field": {
+            "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "type": "string"
+          },
+          "page_size": {
+            "description": "Optional number of collection items per page. Defaults to 25 when pagination is requested.",
+            "maximum": 100,
+            "minimum": 1,
             "type": "integer"
           }
         },

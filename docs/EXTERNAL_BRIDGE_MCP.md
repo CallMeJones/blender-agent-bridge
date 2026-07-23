@@ -162,7 +162,7 @@ The stdio MCP server implements:
 - `logging/setLevel`
 - `ping`
 
-By default it exposes a compact, client-friendly tool surface:
+By default it exposes a fixed compact, client-friendly surface of 28 tools: five MCP bridge/catalog controls plus 23 directly routed inspection, planning, animation, render, simulation, and external-asset workflow tools. The controls and representative direct tools include:
 
 - `blender_bridge_status`
 - `blender_tool_catalog`
@@ -190,7 +190,46 @@ The older `search_blender_tools`, `get_blender_tool_schema`, and `invoke_blender
 
 Set `BLENDER_MCP_FULL_TOOL_LIST=1` in the MCP server environment to expose every Blender helper as a top-level MCP tool for legacy clients or debugging. Do not enable it for normal client use unless that client handles large tool lists well.
 
-`tools/list`, `resources/list`, `resources/templates/list`, and `prompts/list` support cursor pagination. Tool definitions include `inputSchema`, `outputSchema`, and risk/permission annotations derived from the bridge contract.
+`tools/list`, `resources/list`, `resources/templates/list`, and `prompts/list` support cursor pagination. Default tool discovery keeps every established tool name, description, `inputSchema`, and essential risk/routing annotation, but omits the optional `outputSchema` and annotation fields that only repeat defaults. `get_blender_tool_schema` returns the selected tool's complete canonical input/output schemas and safety annotations; those canonical contracts remain in force for validation regardless of the compact discovery projection.
+
+JSON returned as MCP tool text, bridge HTTP responses, and JSON resources uses compact serialization. This removes formatting whitespace only: clients receive identical names, values, arrays, objects, schemas, warnings, and resource metadata after parsing.
+
+### Large Inspection Response Controls
+
+Large read-only scene, material, node, rig, simulation, and animation inspectors keep their complete existing response as the default. Their schemas also expose optional controls:
+
+- `detail: "full" | "summary"`; `full` remains the default.
+- `fields: ["objects.name", "scene.frame_current"]` for dotted field projection.
+- `page`, `page_size`, and optional `page_field` for one top-level collection such as `objects`, `materials`, or `actions`.
+- `known_digest` to avoid resending an unchanged result.
+
+Every complete result includes `response_digest`. A matching `known_digest` returns only `ok`, `not_modified`, `response_digest`, and the tool name. A missing or mismatched digest returns the complete current result, even if summary, field, or pagination arguments were also supplied. This fail-open-to-full rule prevents stale client state or a bad digest from hiding current scene data.
+
+Example:
+
+```json
+{"name":"get_animation_details","arguments":{"detail":"summary","page_field":"actions","page":1,"page_size":10}}
+```
+
+```json
+{"name":"get_animation_details","arguments":{"known_digest":"<response_digest from the previous complete result>"}}
+```
+
+`get_blender_tool_schema` follows the same unchanged-response pattern with `schema_digest`. Its mismatch path always returns the complete schema and safety annotations.
+
+### Payload Size Telemetry
+
+`blender://mcp/payload-telemetry` reports process-local aggregate response sizes by tool. It contains only tool identifiers, call counts, and response byte counts. It never records arguments, object/material names, paths, schemas, or scene content. Restarting the MCP process clears it.
+
+### Prompt Caching
+
+The bridge cannot enable a provider cache from MCP. It makes the cacheable prefix stable instead: initialization instructions, tool order, tool definitions, and compact serialization are deterministic and contain no timestamps or scene state.
+
+- Claude Code manages prompt caching automatically. Keep the MCP server connected and its tool set unchanged during a session; use Claude's cache usage fields or status-line/telemetry support to verify cache reads.
+- OpenAI API prompt caching is automatic for eligible stable prefixes. Custom Responses API clients should use a stable `prompt_cache_key` for equivalent Blender sessions and verify cached-token usage in the API response.
+- Cursor owns its provider request and cache policy. There is no Blender MCP setting that can force or prove provider caching; verify it through Cursor/provider usage reporting when available.
+
+Do not reconnect the server or change the advertised tool set merely to save context. Those changes can invalidate a provider prefix cache and can also reduce agent understanding. Large schemas remain available on demand through `get_blender_tool_schema`.
 
 Catalog summaries, schema lookups, and tool-call results may include `guardrail_warnings`. These are advisory, machine-readable nudges for MCP clients; they do not replace Blender-side enforcement. Current warning categories cover synchronous external asset fallbacks, cache cleanup writes, destructive project-file operations, user-confirmed paths, session-trusted scripts, live-preview mutations, long-running synchronous calls, helper-first advanced 2D/3D/simulation/camera routing, and background job polling.
 
@@ -245,6 +284,7 @@ If a client still calls `draft_script` first for these prompts, refresh or resta
 Current resources:
 
 - `blender://bridge/status`
+- `blender://mcp/payload-telemetry`
 - `blender://scene/status`
 - `blender://scene/context`
 - `blender://tools/catalog`

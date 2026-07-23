@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.join(ROOT, "addon", "claude_blender"))
 import bridge_protocol  # noqa: E402
 import build_info  # noqa: E402
 import mcp_server  # noqa: E402
+import response_controls  # noqa: E402
 
 
 class FakeBridgeHandler(BaseHTTPRequestHandler):
@@ -70,11 +71,14 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                             "name": "list_scene_objects",
                             "title": "List Scene Objects",
                             "description": "List objects",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {"max_objects": {"type": "integer"}},
-                                "additionalProperties": False,
-                            },
+                            "inputSchema": response_controls.augment_input_schema(
+                                "list_scene_objects",
+                                {
+                                    "type": "object",
+                                    "properties": {"max_objects": {"type": "integer"}},
+                                    "additionalProperties": False,
+                                },
+                            ),
                             "annotations": {"mutatesScene": False},
                         },
                         {
@@ -663,8 +667,18 @@ def _assert_compact_tools_visible(proc):
     assert names == expected_names, listed
     assert "draft_script" not in names, listed
     assert "run_approved_script" not in names, listed
+    assert all("outputSchema" not in tool for tool in listed["result"]["tools"]), listed
     status_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "blender_bridge_status")
-    status_properties = status_tool["outputSchema"]["properties"]
+    status_schema = _send(
+        proc,
+        {
+            "jsonrpc": "2.0",
+            "id": 201,
+            "method": "tools/call",
+            "params": {"name": "get_blender_tool_schema", "arguments": {"name": "blender_bridge_status"}},
+        },
+    )
+    status_properties = status_schema["result"]["structuredContent"]["tool"]["outputSchema"]["properties"]
     assert "external_script_trust_seconds_remaining" in status_properties, status_tool
     assert "external_script_trust_session" in status_properties, status_tool
     assert "mcp_client_refresh_hint" in status_properties, status_tool
@@ -685,7 +699,6 @@ def _assert_compact_tools_visible(proc):
     assert "active_operation" in status_properties, status_tool
     assert "poll_after_seconds" in status_properties, status_tool
     scene_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "list_scene_objects")
-    assert scene_tool["outputSchema"]["type"] == "object", scene_tool
     assert scene_tool["annotations"]["riskLevel"] == "read", scene_tool
     assert "scene:read" in scene_tool["annotations"]["permissions"], scene_tool
     catalog_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "blender_tool_catalog")
@@ -735,11 +748,26 @@ def _assert_compact_tools_visible(proc):
     assert "import_sketchfab_model" not in names, listed
     bake_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "stage_persistent_simulation_bake")
     assert bake_tool["annotations"]["requiresApproval"] is False, bake_tool
-    assert bake_tool["annotations"]["requiresExplicitOneTimeApproval"] is False, bake_tool
-    assert bake_tool["annotations"]["trustWindowAutoRunAllowed"] is True, bake_tool
+    assert bake_tool["annotations"].get("requiresExplicitOneTimeApproval", False) is False, bake_tool
+    assert bake_tool["annotations"].get("trustWindowAutoRunAllowed", True) is True, bake_tool
     assert "active binary session trust" in bake_tool["annotations"]["approvalPolicy"], bake_tool
     assert bake_tool["annotations"]["readOnlyHint"] is False, bake_tool
-    assert "requires_explicit_one_time_approval" in bake_tool["outputSchema"]["properties"], bake_tool
+    bake_schema = _send(
+        proc,
+        {
+            "jsonrpc": "2.0",
+            "id": 202,
+            "method": "tools/call",
+            "params": {
+                "name": "get_blender_tool_schema",
+                "arguments": {"name": "stage_persistent_simulation_bake"},
+            },
+        },
+    )
+    assert (
+        "requires_explicit_one_time_approval"
+        in bake_schema["result"]["structuredContent"]["tool"]["outputSchema"]["properties"]
+    ), bake_schema
     assemble_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "assemble_render_job_video")
     assert assemble_tool["inputSchema"]["required"] == ["job_id"], assemble_tool
     assert assemble_tool["annotations"]["returnsBackgroundJob"] is True, assemble_tool
@@ -774,8 +802,8 @@ def _assert_full_tools_visible(proc):
     assert draft_tool["annotations"]["readOnlyHint"] is False, draft_tool
     privileged_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "draft_privileged_script")
     assert privileged_tool["annotations"]["requiresApproval"] is False, privileged_tool
-    assert privileged_tool["annotations"]["requiresExplicitOneTimeApproval"] is False, privileged_tool
-    assert privileged_tool["annotations"]["trustWindowAutoRunAllowed"] is True, privileged_tool
+    assert privileged_tool["annotations"].get("requiresExplicitOneTimeApproval", False) is False, privileged_tool
+    assert privileged_tool["annotations"].get("trustWindowAutoRunAllowed", True) is True, privileged_tool
     assert privileged_tool["annotations"]["permissions"] == [
         "blender:full",
         "filesystem:full",
@@ -793,7 +821,7 @@ def _assert_full_tools_visible(proc):
     assert open_tool["annotations"]["requiresUserPath"] is True, open_tool
     assert "user_confirmed_path" in open_tool["inputSchema"]["required"], open_tool
     autosave_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "autosave_current_blend_file")
-    assert autosave_tool["annotations"]["requiresUserPath"] is False, autosave_tool
+    assert autosave_tool["annotations"].get("requiresUserPath", False) is False, autosave_tool
     assert autosave_tool["annotations"]["pathPolicy"], autosave_tool
     assert open_tool["annotations"]["timeoutRecovery"]["status_tool"] == "blender_bridge_status", open_tool
     return listed
@@ -1769,8 +1797,8 @@ def main():
         )
         simulation_catalog_tools = simulation_catalog_search["result"]["structuredContent"]["tools"]
         bake_summary = next(tool for tool in simulation_catalog_tools if tool["name"] == "stage_persistent_simulation_bake")
-        assert bake_summary["requires_explicit_one_time_approval"] is False, simulation_catalog_search
-        assert bake_summary["trust_window_auto_run_allowed"] is True, simulation_catalog_search
+        assert bake_summary.get("requires_explicit_one_time_approval", False) is False, simulation_catalog_search
+        assert bake_summary.get("trust_window_auto_run_allowed", True) is True, simulation_catalog_search
 
         schema = _send(
             proc,
@@ -1811,6 +1839,30 @@ def main():
         sparse_scene_tool = sparse_scene_schema["result"]["structuredContent"]["tool"]
         assert sparse_scene_tool["annotations"]["riskLevel"] == "read", sparse_scene_schema
         assert "scene:read" in sparse_scene_tool["annotations"]["permissions"], sparse_scene_schema
+        for response_control in ("detail", "fields", "page", "page_size", "page_field", "known_digest"):
+            assert response_control in sparse_scene_tool["inputSchema"]["properties"], response_control
+        schema_digest = sparse_scene_schema["result"]["structuredContent"]["schema_digest"]
+        unchanged_schema = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 262,
+                "method": "tools/call",
+                "params": {
+                    "name": "get_blender_tool_schema",
+                    "arguments": {
+                        "name": "list_scene_objects",
+                        "known_digest": schema_digest,
+                    },
+                },
+            },
+        )
+        assert unchanged_schema["result"]["structuredContent"] == {
+            "ok": True,
+            "not_modified": True,
+            "name": "list_scene_objects",
+            "schema_digest": schema_digest,
+        }, unchanged_schema
 
         called = _send(
             proc,
@@ -2067,6 +2119,7 @@ def main():
         resources = _send(proc, {"jsonrpc": "2.0", "id": 4, "method": "resources/list"})
         uris = {item["uri"] for item in resources["result"]["resources"]}
         assert "blender://bridge/status" in uris
+        assert "blender://mcp/payload-telemetry" in uris
         assert "blender://scene/status" in uris
         assert "blender://tools/catalog" in uris
         assert "blender://tools/contracts" not in uris
@@ -2079,6 +2132,34 @@ def main():
         assert "blender://render-thumbnails/latest" in uris
         assert "blender://render-thumbnails/latest/metadata" in uris
         assert "blender://render-jobs/latest/metadata" in uris
+
+        telemetry_resource = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 41,
+                "method": "resources/read",
+                "params": {"uri": "blender://mcp/payload-telemetry"},
+            },
+        )
+        telemetry_text = telemetry_resource["result"]["contents"][0]["text"]
+        telemetry = json.loads(telemetry_text)
+        assert telemetry["call_count"] > 0, telemetry
+        assert telemetry["total_response_bytes"] > 0, telemetry
+        assert all(
+            set(item)
+            == {
+                "tool_name",
+                "call_count",
+                "total_response_bytes",
+                "max_response_bytes",
+                "last_response_bytes",
+                "average_response_bytes",
+            }
+            for item in telemetry["tools"]
+        ), telemetry
+        assert "Cube" not in telemetry_text, telemetry_text
+        assert "arguments" not in telemetry_text, telemetry_text
 
         tool_catalog_resource = _send(
             proc,

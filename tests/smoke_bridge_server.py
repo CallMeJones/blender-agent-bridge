@@ -109,6 +109,7 @@ def main():
     claude_blender.register()
     try:
         assert bridge_server._BridgeHandler.server_version.endswith(build_info.MCP_SERVER_VERSION)
+        assert bridge_server._json_bytes({"b": 2, "a": 1}) == b'{"a":1,"b":2}'
         result = bridge_server.start_bridge(port=0)
         assert result["ok"], result
         base = result["url"]
@@ -143,6 +144,12 @@ def main():
         assert "validate_render_job_output" in names, names
         assert "jump_to_workspace" in names, names
         assert "focus_object_in_viewport" in names, names
+        list_objects_schema = next(
+            tool["inputSchema"] for tool in tools["tools"] if tool["name"] == "list_scene_objects"
+        )
+        for response_control in ("detail", "fields", "page", "page_size", "page_field", "known_digest"):
+            assert response_control in list_objects_schema["properties"], response_control
+        assert list_objects_schema["properties"]["detail"]["default"] == "full"
 
         health = _request_with_pump(lambda: _get(base + "/health"))
         assert health["ok"], health
@@ -201,12 +208,76 @@ def main():
             403,
         )
 
+        for index in range(4):
+            bpy.data.objects.new(f"ResponseControl.{index}", None)
+            bpy.context.scene.collection.objects.link(bpy.data.objects[f"ResponseControl.{index}"])
         objects = _request_with_pump(
             lambda: _post(base + "/tool", {"name": "list_scene_objects", "arguments": {"max_objects": 5}})
         )
         assert objects["ok"], objects
         assert objects["result"]["ok"], objects
         assert any(item["name"] == "Cube" for item in objects["result"]["objects"]), objects
+        response_digest = objects["result"]["response_digest"]
+        assert len(response_digest) == 64, response_digest
+        summary = _request_with_pump(
+            lambda: _post(
+                base + "/tool",
+                {
+                    "name": "list_scene_objects",
+                    "arguments": {"max_objects": 5, "detail": "summary"},
+                },
+            )
+        )["result"]
+        assert summary["response_detail"] == "summary", summary
+        assert summary["objects_count"] == 5, summary
+        page = _request_with_pump(
+            lambda: _post(
+                base + "/tool",
+                {
+                    "name": "list_scene_objects",
+                    "arguments": {
+                        "max_objects": 5,
+                        "page": 2,
+                        "page_size": 2,
+                        "fields": ["objects.name"],
+                    },
+                },
+            )
+        )["result"]
+        assert len(page["objects"]) == 2, page
+        assert set(page["objects"][0]) == {"name"}, page
+        assert page["pagination"]["total_items"] == 5, page
+        unchanged = _request_with_pump(
+            lambda: _post(
+                base + "/tool",
+                {
+                    "name": "list_scene_objects",
+                    "arguments": {"max_objects": 5, "known_digest": response_digest},
+                },
+            )
+        )["result"]
+        assert unchanged == {
+            "ok": True,
+            "not_modified": True,
+            "response_digest": response_digest,
+            "tool": "list_scene_objects",
+        }, unchanged
+        changed = _request_with_pump(
+            lambda: _post(
+                base + "/tool",
+                {
+                    "name": "list_scene_objects",
+                    "arguments": {
+                        "max_objects": 5,
+                        "known_digest": "0" * 64,
+                        "detail": "summary",
+                    },
+                },
+            )
+        )["result"]
+        assert len(changed["objects"]) == 5, changed
+        assert changed["known_digest_match"] is False, changed
+        assert "response_detail" not in changed, changed
         invalid_args = _request_with_pump(
             lambda: _post(base + "/tool", {"name": "validate_render_job_output", "arguments": {}})
         )
@@ -231,6 +302,7 @@ def main():
         resource = _request_with_pump(lambda: _get(resource_url))
         assert resource["ok"], resource
         status_resource = json.loads(resource["text"])
+        assert resource["text"] == json.dumps(status_resource, separators=(",", ":"), sort_keys=True)
         assert status_resource["scene"] == bpy.context.scene.name
         assert status_resource["addon_source_hash"] == build_info.source_tree_hash(), status_resource
         assert status_resource["addon_loaded_source_hash"] == build_info.LOADED_SOURCE_HASH, status_resource
@@ -242,6 +314,11 @@ def main():
         tool_catalog_url = base + "/resource?" + urllib.parse.urlencode({"uri": "blender://tools/catalog"})
         tool_catalog_resource = _request_with_pump(lambda: _get(tool_catalog_url))
         tool_catalog = json.loads(tool_catalog_resource["text"])
+        assert tool_catalog_resource["text"] == json.dumps(
+            tool_catalog,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
         assert tool_catalog["ok"] is True, tool_catalog
         assert tool_catalog["full_contracts_resource"] == "blender://tools/contracts", tool_catalog
         assert tool_catalog["count"] == len(tool_catalog["tools"]), tool_catalog
@@ -249,6 +326,11 @@ def main():
         audit_summary_url = base + "/resource?" + urllib.parse.urlencode({"uri": "blender://audit/summary"})
         audit_summary_resource = _request_with_pump(lambda: _get(audit_summary_url))
         audit_summary = json.loads(audit_summary_resource["text"])
+        assert audit_summary_resource["text"] == json.dumps(
+            audit_summary,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
         assert audit_summary["ok"] is True, audit_summary
         assert audit_summary["latest_full_resource"] == "blender://audit/latest", audit_summary
 

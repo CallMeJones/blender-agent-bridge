@@ -1,6 +1,6 @@
 # Claude Desktop And Claude Code
 
-Last verified: 2026-07-19
+Last verified: 2026-07-23
 
 ## Prerequisites
 
@@ -33,6 +33,10 @@ On Windows use `"command": "cmd"` and prefix the args with `"/c", "uvx"`. Claude
 ## Restart And Smoke Test
 
 Fully restart Claude Desktop after editing its config. In Claude Code, reconnect or restart the session and use `/mcp` to confirm the server. Ask: `Check Blender bridge status, list scene objects, and make no changes.`
+
+## Prompt Caching
+
+Claude Code manages prompt caching automatically unless it is explicitly disabled. Keep the Blender MCP server connected and avoid changing its advertised tools mid-session. Claude places tool definitions in a cache-sensitive prompt layer when they are not deferred; reconnects or definition changes can cause a cache rebuild. Use Claude's reported `cache_creation_input_tokens` and `cache_read_input_tokens` to verify behavior rather than assuming a hit.
 
 ## Troubleshooting
 

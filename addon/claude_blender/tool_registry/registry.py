@@ -8,6 +8,11 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping
 
+try:
+    from .. import response_controls
+except ImportError:  # Allows direct imports from addon/claude_blender.
+    import response_controls
+
 
 EMPTY_INPUT_SCHEMA = MappingProxyType({"type": "object", "properties": {}, "additionalProperties": False})
 DEFAULT_OUTPUT_SCHEMA = MappingProxyType(
@@ -60,7 +65,11 @@ class ToolSpec:
             if self.output_schema is not None
             else self.contract.get("output_schema") or DEFAULT_OUTPUT_SCHEMA
         )
-        object.__setattr__(self, "input_schema", _copy_mapping(self.input_schema))
+        object.__setattr__(
+            self,
+            "input_schema",
+            response_controls.augment_input_schema(self.name, self.input_schema),
+        )
         object.__setattr__(self, "contract", _copy_mapping(self.contract))
         object.__setattr__(self, "output_schema", _copy_mapping(output_schema))
 

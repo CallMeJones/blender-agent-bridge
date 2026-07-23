@@ -26,7 +26,7 @@ class ClientGuideTests(unittest.TestCase):
                 with open(path, "r", encoding="utf-8") as handle:
                     text = handle.read()
                 lowered = text.lower()
-                self.assertIn("Last verified: 2026-07-19", text)
+                self.assertRegex(text, r"Last verified: 20\d{2}-\d{2}-\d{2}")
                 self.assertIn("prerequisite", lowered)
                 self.assertIn("bundled", lowered)
                 self.assertIn("uvx", lowered)

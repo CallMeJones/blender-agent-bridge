@@ -244,7 +244,7 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
     for group in matched_groups:
         if group == "refinement" and specific_refinement_groups:
             continue
-        if group in {"vehicle", "product", "character", "refinement", "camera_render", "rigging", "curves_text", "particles", "geometry_nodes", "external_assets", "advanced_workflow", "two_d_storyboard", "procedural_3d", "simulation_setup"}:
+        if group in {"vehicle", "product", "character", "refinement", "camera_render", "rigging", "curves_text", "particles", "geometry_nodes", "external_assets", "advanced_workflow", "two_d_storyboard", "procedural_3d", "simulation_setup", "preview_control"}:
             protected.update(_TOOL_GROUPS.get(group, set()))
     if _contains_keyword(text, _RENDER_OUTPUT_KEYWORDS):
         protected.add("configure_render_outputs")

@@ -82,7 +82,7 @@ $PureTests = @(
   "tests\smoke_extension_repository.py",
   "tests\smoke_external_assets.py",
   "tests\smoke_helper_routing.py",
-  "tests\smoke_real_client_routing.py",
+  "tests\smoke_client_profile_routing.py",
   "tests\smoke_mcp_server.py",
   "tests\smoke_script_analysis.py",
   "tests\smoke_script_analysis_bypass.py",
@@ -108,11 +108,32 @@ What this covers:
 - Static extension repository generation.
 - External asset catalog/cache helpers that do not need Blender imports.
 - Helper-first script routing metadata and recommended-tool drift.
-- Real-client prompt routing fixtures for animation, visual inspection, advanced creation, asset import, preview/revert, and director orchestration.
+- One provider-neutral offline discovery/routing contract shaped like Claude, Codex, and Cursor clients across animation, materials, visual inspection, advanced creation, asset import, project files, binary script trust, preview commit/revert, and director orchestration. This is a deterministic regression gate, not a live model evaluation.
 - Stdio MCP protocol, compact catalog, pagination, prompts, resources, wrappers, and error paths.
+- Lossless full-default inspection controls, dotted field selection, result pagination, complete-on-digest-mismatch behavior, tiny unchanged responses, schema digests, and content-free payload-size telemetry.
+- Byte-stable initialization and tool definitions required for provider prompt-prefix caching.
 - Static script analysis and risk classification.
 - Catalog-to-contract inventory drift, including intentional external-only tools.
 - Deterministic registry registration, snapshot/digest stability, config generation, client-guide completeness, and real stdio subprocess behavior.
+
+## Real Client Evaluation Before Release
+
+The offline routing gate does not prove model behavior. Before a release, run the same read-only tasks in current Claude Code/Desktop, Codex, and Cursor sessions against the same generated Blender scene:
+
+1. `Check bridge status, inspect the scene, and list its objects. Make no changes.`
+2. `Inspect animation and material state. Use summaries where sufficient, then fetch full detail for one selected item. Make no changes.`
+3. `Repeat the scene inspection using the previous response digest and report whether Blender returned not_modified. Make no changes.`
+
+Record for each client:
+
+- exact client and model version;
+- selected MCP tools in order;
+- completion success;
+- failed calls and retries;
+- input, cached-input, and output token counts when the client/provider exposes them;
+- full, summary, and unchanged response byte sizes from `blender://mcp/payload-telemetry`.
+
+Use a fresh generated scene and identical prompt text. Keep the MCP server connected and do not change its tool set between cache measurements. Mark unavailable metrics as `not exposed`; never infer a cache hit from elapsed time alone. A client passes when it completes all tasks read-only, routes through inspection tools rather than trusted Python, uses a valid prior digest for the unchanged check, and does not require more than one avoidable retry per task.
 
 ## Phase 2: Blender-Background Suite
 
@@ -305,6 +326,7 @@ Pass criteria:
 - Wrapper tools cannot invoke wrapper tools recursively through `invoke_blender_tool`.
 - Pagination works for `tools/list`, `resources/list`, `resources/templates/list`, and `prompts/list`.
 - `resources/read` works for status resources before captures and for exact artifact resources after captures.
+- JSON tool/resource payloads use compact serialization and round-trip to the identical structured data.
 
 ## Phase 6: Tool Coverage Matrix
 

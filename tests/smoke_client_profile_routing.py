@@ -1,7 +1,8 @@
-"""Fixture-driven routing checks for real MCP client prompt classes."""
+"""Fixture-driven offline routing checks for MCP client-shaped profiles."""
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 
@@ -16,8 +17,17 @@ import mcp_server  # noqa: E402
 
 
 class OfflineBridge:
-    def get(self, _path, params=None):
+    def get(self, path, params=None):
+        if path == "/tools":
+            return {"ok": True, "tools": mcp_server._static_tool_definitions()}
         raise RuntimeError("offline routing smoke uses static tool contracts")
+
+
+CLIENT_PROFILES = [
+    {"id": "claude", "clientInfo": {"name": "claude-desktop", "version": "routing-eval"}},
+    {"id": "codex", "clientInfo": {"name": "codex", "version": "routing-eval"}},
+    {"id": "cursor", "clientInfo": {"name": "cursor", "version": "routing-eval"}},
+]
 
 
 ROUTING_FIXTURES = [
@@ -85,6 +95,42 @@ ROUTING_FIXTURES = [
         "search": "custom python geometry node network helpers cannot express",
         "search_before": [("plan_advanced_scene_workflow", "draft_script")],
     },
+    {
+        "id": "material_inspection_and_repair",
+        "prompt": "Inspect the selected object's material, repair missing shader nodes, assign a PBR material, and leave the changes in preview.",
+        "must_select": ["inspect_material_setup", "repair_material_setup", "create_shader_material"],
+        "must_not_select": ["draft_script"],
+        "search": "material shader repair",
+        "search_contains": ["inspect_material_setup", "repair_material_setup", "create_shader_material"],
+        "search_before": [("inspect_material_setup", "draft_script"), ("repair_material_setup", "draft_script")],
+    },
+    {
+        "id": "project_file_diagnostics_and_save",
+        "prompt": "Inspect blend file diagnostics before saving the current project to a user-confirmed path.",
+        "must_select": ["get_blend_file_diagnostics"],
+        "must_not_select": ["draft_script"],
+        "search": "blend file save diagnostics",
+        "search_contains": ["get_blend_file_diagnostics", "save_blend_file"],
+        "search_before": [("get_blend_file_diagnostics", "draft_script"), ("save_blend_file", "draft_script")],
+    },
+    {
+        "id": "preview_commit_or_revert",
+        "prompt": "Inspect pending preview changes and let the user choose whether to commit or revert them.",
+        "must_select": ["commit_preview", "revert_preview"],
+        "must_not_select": ["draft_script"],
+        "search": "pending live preview commit revert",
+        "search_contains": ["commit_preview", "revert_preview"],
+        "search_before": [],
+    },
+    {
+        "id": "binary_session_script_trust",
+        "prompt": "Use custom Blender Python only after the user enables session script trust.",
+        "must_select": ["draft_script"],
+        "must_not_select": [],
+        "search": "trusted script python",
+        "search_contains": ["draft_script", "run_approved_script"],
+        "search_before": [],
+    },
 ]
 
 
@@ -93,7 +139,7 @@ def _selected_names(prompt):
     return {tool["name"] for tool in tools}, meta
 
 
-def _search_names(server, query, limit=16):
+def _search_names(server, query, limit=12):
     result = server._search_blender_tools({"query": query, "limit": limit})
     structured = result["structuredContent"]
     return [tool["name"] for tool in structured["tools"]], structured
@@ -105,8 +151,45 @@ def _assert_before(names, earlier, later, fixture_id):
         assert names.index(earlier) < names.index(later), (fixture_id, earlier, later, names)
 
 
+def _client_discovery_contract(server, profile):
+    initialized = server.initialize(
+        {
+            "protocolVersion": mcp_server.PROTOCOL_VERSION,
+            "capabilities": {},
+            "clientInfo": profile["clientInfo"],
+        }
+    )
+    assert initialized["protocolVersion"] == mcp_server.PROTOCOL_VERSION, (profile, initialized)
+    instructions = initialized["instructions"]
+    for required_guidance in (
+        "search_blender_tools",
+        "get_blender_tool_schema",
+        "invoke_blender_tool",
+        "session script trust",
+        "external asset",
+        "bridge_timeout",
+    ):
+        assert required_guidance in instructions, (profile["id"], required_guidance, instructions)
+
+    tools = server.tools_list({})["tools"]
+    expected_names = set(mcp_server.WRAPPER_TOOL_NAMES) | set(mcp_server.COMPACT_DIRECT_TOOL_NAMES)
+    assert {tool["name"] for tool in tools} == expected_names, profile
+    assert all(str(tool.get("description") or "").strip() for tool in tools), profile
+    assert all((tool.get("inputSchema") or {}).get("type") == "object" for tool in tools), profile
+    return json.dumps(tools, separators=(",", ":"), sort_keys=True)
+
+
 def main():
-    server = mcp_server.BlenderMCPServer(OfflineBridge())
+    servers = {
+        profile["id"]: mcp_server.BlenderMCPServer(OfflineBridge())
+        for profile in CLIENT_PROFILES
+    }
+    discovery_contracts = {
+        profile["id"]: _client_discovery_contract(servers[profile["id"]], profile)
+        for profile in CLIENT_PROFILES
+    }
+    assert len(set(discovery_contracts.values())) == 1, discovery_contracts
+
     for fixture in ROUTING_FIXTURES:
         selected, meta = _selected_names(fixture["prompt"])
         for name in fixture["must_select"]:
@@ -114,11 +197,14 @@ def main():
         for name in fixture["must_not_select"]:
             assert name not in selected, (fixture["id"], name, meta)
 
-        search_names, search = _search_names(server, fixture["search"])
-        for earlier, later in fixture["search_before"]:
-            _assert_before(search_names, earlier, later, fixture["id"])
-        assert search["count"] > 0, (fixture["id"], search)
-    print("smoke_real_client_routing: ok")
+        for profile in CLIENT_PROFILES:
+            search_names, search = _search_names(servers[profile["id"]], fixture["search"])
+            for name in fixture.get("search_contains", []):
+                assert name in search_names, (profile["id"], fixture["id"], name, search_names)
+            for earlier, later in fixture["search_before"]:
+                _assert_before(search_names, earlier, later, f"{profile['id']}:{fixture['id']}")
+            assert search["count"] > 0, (profile["id"], fixture["id"], search)
+    print("smoke_client_profile_routing: ok")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # Cursor
 
-Last verified: 2026-07-19
+Last verified: 2026-07-23
 
 ## Prerequisites
 
@@ -33,6 +33,10 @@ On Windows, use `"command": "cmd"` and prefix args with `"/c", "uvx"`. Keep all 
 ## Restart And Smoke Test
 
 Save the file, refresh Cursor's MCP servers or restart Cursor, and ask: `Check Blender bridge status, list scene objects, and make no changes.`
+
+## Prompt Caching
+
+The Blender server returns deterministic initialization and tool definitions, which preserves a stable cacheable prefix. Cursor controls the model/provider request and does not expose an MCP setting that lets this bridge force prompt caching. Keep the server connected and tool set unchanged during a session, and use Cursor or the configured provider's usage reporting when it exposes cached-token metrics.
 
 ## Troubleshooting
 

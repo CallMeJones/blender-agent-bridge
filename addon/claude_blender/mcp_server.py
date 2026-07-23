@@ -14,19 +14,28 @@ import urllib.parse
 import urllib.request
 
 try:
-    from . import agent_tools, audit_log, bridge_protocol, build_info, external_assets, tool_registry
+    from . import agent_tools, audit_log, bridge_protocol, build_info, external_assets, response_controls, tool_registry
 except ImportError:  # Allows direct execution as addon/claude_blender/mcp_server.py.
     package_parent = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     if package_parent not in sys.path:
         sys.path.insert(0, package_parent)
     try:
-        from claude_blender import agent_tools, audit_log, bridge_protocol, build_info, external_assets, tool_registry
+        from claude_blender import (
+            agent_tools,
+            audit_log,
+            bridge_protocol,
+            build_info,
+            external_assets,
+            response_controls,
+            tool_registry,
+        )
     except ImportError:
         import agent_tools
         import audit_log
         import build_info
         import bridge_protocol
         import external_assets
+        import response_controls
         import tool_registry
 
 
@@ -1024,6 +1033,68 @@ def _client_input_schema(schema):
 def _client_tool_definition(tool):
     result = dict(tool if isinstance(tool, dict) else {})
     result["inputSchema"] = _client_input_schema(result.get("inputSchema"))
+    result["inputSchema"] = response_controls.discovery_input_schema(
+        result.get("name"),
+        result["inputSchema"],
+    )
+    # Output schemas remain canonical internally and are available through
+    # get_blender_tool_schema. They are optional in MCP tools/list and add
+    # substantial context without helping the model choose or call a tool.
+    result.pop("outputSchema", None)
+    result["annotations"] = _client_tool_annotations(result.get("annotations"))
+    return result
+
+
+_CLIENT_ANNOTATION_ALWAYS = frozenset(
+    {
+        "mutatesScene",
+        "hasSideEffects",
+        "requiresApproval",
+        "requiresLivePreview",
+        "riskLevel",
+        "permissions",
+        "readOnlyHint",
+        "destructiveHint",
+        "idempotentHint",
+        "openWorldHint",
+    }
+)
+_CLIENT_ANNOTATION_TRUE_ONLY = frozenset(
+    {
+        "returnsBackgroundJob",
+        "longRunningHint",
+        "humanInLoopRequired",
+        "requiresUserPath",
+        "requiresExplicitOneTimeApproval",
+    }
+)
+_CLIENT_ANNOTATION_FALSE_ONLY = frozenset({"trustWindowAutoRunAllowed"})
+_CLIENT_ANNOTATION_NONEMPTY = frozenset(
+    {
+        "timeoutSeconds",
+        "durationHint",
+        "timeoutRecovery",
+        "pathPolicy",
+        "approvalPolicy",
+        "recoveryHint",
+    }
+)
+
+
+def _client_tool_annotations(annotations):
+    """Project canonical annotations into a capability-preserving sparse discovery view."""
+
+    annotations = dict(annotations or {})
+    result = {}
+    for key, value in annotations.items():
+        if key in _CLIENT_ANNOTATION_ALWAYS:
+            result[key] = copy.deepcopy(value)
+        elif key in _CLIENT_ANNOTATION_TRUE_ONLY and value is True:
+            result[key] = True
+        elif key in _CLIENT_ANNOTATION_FALSE_ONLY and value is False:
+            result[key] = False
+        elif key in _CLIENT_ANNOTATION_NONEMPTY and value not in ("", None, False, 0, [], {}):
+            result[key] = copy.deepcopy(value)
     return result
 
 
@@ -1073,6 +1144,12 @@ def _compact_tool_definitions():
                     "query": {"type": "string", "description": "Search text such as material, camera, script, or preview"},
                     "limit": {"type": "integer", "description": "Maximum matching tools to return"},
                     "name": {"type": "string", "description": "Tool name for schema or invoke actions"},
+                    "known_digest": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 64,
+                        "description": "Prior schema digest for a tiny not_modified schema response.",
+                    },
                     "arguments": {"type": "object", "description": "Target tool arguments for invoke", "additionalProperties": True},
                     "category": {"type": "string", "description": "Filter by catalog category"},
                     "permission": {"type": "string", "description": "Filter by a required permission such as scene:mutate"},
@@ -1138,10 +1215,21 @@ def _compact_tool_definitions():
         {
             "name": "get_blender_tool_schema",
             "title": "Get Blender Tool Schema",
-            "description": "Return the input schema, output schema, and safety annotations for one Blender tool.",
+            "description": (
+                "Return the input schema, output schema, and safety annotations for one Blender tool. "
+                "Pass a prior known_digest to receive a tiny not_modified response when unchanged."
+            ),
             "inputSchema": {
                 "type": "object",
-                "properties": {"name": {"type": "string", "minLength": 1}},
+                "properties": {
+                    "name": {"type": "string", "minLength": 1},
+                    "known_digest": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 64,
+                        "description": "Schema digest returned by an earlier call.",
+                    },
+                },
                 "required": ["name"],
                 "additionalProperties": False,
             },
@@ -1379,10 +1467,11 @@ def _tool_summary(tool, *, include_schema=True):
         "title": tool.get("title", ""),
         "description": tool.get("description", ""),
         "category": category,
-        "category_label": TOOL_CATEGORY_LABELS.get(category, TOOL_CATEGORY_LABELS["other"]),
         "risk_level": annotations.get("riskLevel", ""),
         "permissions": list(annotations.get("permissions", []) or []),
         "mutates_scene": bool(annotations.get("mutatesScene", False)),
+    }
+    optional_values = {
         "has_side_effects": bool(annotations.get("hasSideEffects", False)),
         "requires_approval": bool(annotations.get("requiresApproval", False)),
         "requires_live_preview": bool(annotations.get("requiresLivePreview", False)),
@@ -1395,10 +1484,14 @@ def _tool_summary(tool, *, include_schema=True):
         "requires_user_path": bool(annotations.get("requiresUserPath", False)),
         "path_policy": str(annotations.get("pathPolicy", "") or ""),
         "requires_explicit_one_time_approval": bool(annotations.get("requiresExplicitOneTimeApproval", False)),
-        "trust_window_auto_run_allowed": bool(annotations.get("trustWindowAutoRunAllowed", True)),
         "approval_policy": str(annotations.get("approvalPolicy", "") or ""),
         "recovery_hint": str(annotations.get("recoveryHint", "") or ""),
     }
+    for key, value in optional_values.items():
+        if value not in ("", None, False, 0, [], {}):
+            summary[key] = value
+    if annotations.get("trustWindowAutoRunAllowed", True) is False:
+        summary["trust_window_auto_run_allowed"] = False
     if guardrail_warnings:
         summary["guardrail_warnings"] = guardrail_warnings
         summary["guardrail_warning_count"] = len(guardrail_warnings)
@@ -1426,6 +1519,59 @@ def _tool_result(content_text, structured, *, is_error=False):
         "structuredContent": structured,
         "isError": bool(is_error),
     }
+
+
+def _json_text(value):
+    return json.dumps(value, separators=(",", ":"), sort_keys=True, default=str)
+
+
+def _catalog_search_content(structured):
+    tools = list((structured or {}).get("tools") or [])
+    lines = [
+        f"Found {len(tools)} of {int((structured or {}).get('total', len(tools)) or 0)} matching Blender tools."
+    ]
+    for tool in tools:
+        name = str(tool.get("name") or "")
+        category = str(tool.get("category") or "other")
+        risk = str(tool.get("risk_level") or "unknown")
+        description = str(tool.get("description") or "").strip()
+        flags = []
+        if tool.get("mutates_scene"):
+            flags.append("mutates scene")
+        if tool.get("requires_live_preview"):
+            flags.append("live preview")
+        if tool.get("returns_background_job"):
+            flags.append("background job")
+        if tool.get("long_running"):
+            flags.append("long-running")
+        suffix = f"; {', '.join(flags)}" if flags else ""
+        lines.append(f"- {name} [{category}; {risk}{suffix}]: {description}")
+        for warning in tool.get("guardrail_warnings") or []:
+            message = str((warning or {}).get("message") or "").strip()
+            if message:
+                lines.append(f"  Warning: {message}")
+    if not (structured or {}).get("include_schemas"):
+        lines.append("Call get_blender_tool_schema for the selected tool, then invoke_blender_tool.")
+    return "\n".join(lines)
+
+
+def _bridge_status_content(status):
+    status = dict(status or {})
+    if status.get("ok"):
+        parts = ["Blender bridge is connected."]
+        compatibility = str(status.get("compatibility_message") or "").strip()
+        if compatibility:
+            parts.append(compatibility)
+        if status.get("bridge_busy"):
+            parts.append(
+                f"Blender is busy; retry after {int(status.get('poll_after_seconds') or 5)} seconds."
+            )
+        trust_status = str(status.get("external_script_trust_status") or "").strip()
+        if trust_status:
+            parts.append(f"Script trust: {trust_status}.")
+        return " ".join(parts)
+    message = str(status.get("message") or "Bridge unavailable.").strip()
+    return f"Blender bridge is unavailable: {message}"
 
 
 def _catalog_filters(arguments):
@@ -1734,7 +1880,7 @@ def _tool_error(message, *, code="tool_error", data=None):
     structured = {"ok": False, "code": str(code), "message": str(message)}
     if data is not None:
         structured["data"] = data
-    return _tool_result(json.dumps(structured, indent=2, sort_keys=True), structured, is_error=True)
+    return _tool_result(_json_text(structured), structured, is_error=True)
 
 
 def _guardrail_warnings_for_tool(tool, arguments=None):
@@ -2063,6 +2209,7 @@ class BlenderMCPServer:
         self._full_tool_list = _truthy_env(FULL_TOOL_LIST_ENV)
         self._compatibility_cache = None
         self._compatibility_cache_at = 0.0
+        self._payload_telemetry = {}
 
     def initialize(self, params):
         requested = (params or {}).get("protocolVersion") or PROTOCOL_VERSION
@@ -2094,7 +2241,10 @@ class BlenderMCPServer:
                 "If a bridge_timeout occurs, treat it as recoverable: wait the returned poll_after_seconds, call "
                 "blender_bridge_status, then inspect visual evidence resources or audit logs before rerunning work. "
                 "Generated Python is refused unless the user enables session script trust in Blender. Once enabled, "
-                "trusted Python has Blender Run Script-equivalent filesystem, network, process, and Blender API access."
+                "trusted Python has Blender Run Script-equivalent filesystem, network, process, and Blender API access. "
+                "Large read-only inspectors keep full responses by default; their on-demand schemas support optional "
+                "summary, fields, pagination, and known_digest controls, and a digest mismatch always returns the "
+                "complete current result."
             ),
         }
 
@@ -2186,6 +2336,53 @@ class BlenderMCPServer:
         return page
 
     def tools_call(self, params):
+        result = self._tools_call(params)
+        params = params or {}
+        tool_name = params.get("name")
+        arguments = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
+        if tool_name == "invoke_blender_tool":
+            tool_name = arguments.get("name") or tool_name
+        elif tool_name == CATALOG_TOOL_NAME and arguments.get("action") == "invoke":
+            tool_name = arguments.get("name") or tool_name
+        self._record_payload_size(tool_name, result)
+        return result
+
+    def _record_payload_size(self, name, result):
+        tool_name = str(name or "(unknown)")
+        size_bytes = len(_json_text(result).encode("utf-8"))
+        entry = self._payload_telemetry.setdefault(
+            tool_name,
+            {
+                "tool_name": tool_name,
+                "call_count": 0,
+                "total_response_bytes": 0,
+                "max_response_bytes": 0,
+                "last_response_bytes": 0,
+            },
+        )
+        entry["call_count"] += 1
+        entry["total_response_bytes"] += size_bytes
+        entry["max_response_bytes"] = max(entry["max_response_bytes"], size_bytes)
+        entry["last_response_bytes"] = size_bytes
+
+    def _payload_telemetry_summary(self):
+        tools = []
+        for entry in self._payload_telemetry.values():
+            row = dict(entry)
+            row["average_response_bytes"] = int(
+                round(row["total_response_bytes"] / max(1, row["call_count"]))
+            )
+            tools.append(row)
+        tools.sort(key=lambda item: (-item["total_response_bytes"], item["tool_name"]))
+        return {
+            "tools": tools,
+            "tool_count": len(tools),
+            "call_count": sum(item["call_count"] for item in tools),
+            "total_response_bytes": sum(item["total_response_bytes"] for item in tools),
+            "privacy": "Contains only tool identifiers and response byte counts.",
+        }
+
+    def _tools_call(self, params):
         params = params or {}
         name = params.get("name")
         arguments = params.get("arguments")
@@ -2217,7 +2414,7 @@ class BlenderMCPServer:
         if name == "blender_bridge_status":
             status = self._bridge_status()
             result = _tool_result(
-                json.dumps(status, indent=2, sort_keys=True),
+                _bridge_status_content(status),
                 status,
                 is_error=not bool(status.get("ok")),
             )
@@ -2260,7 +2457,7 @@ class BlenderMCPServer:
         result = response.get("result", response)
         ok = bool(response.get("ok", True)) and bool(result.get("ok", True) if isinstance(result, dict) else True)
         result = _attach_guardrail_warnings(result, name, call_arguments, tool=tool)
-        text = json.dumps(result, indent=2, sort_keys=True, default=str)
+        text = _json_text(result)
         tool_result = _tool_result(text, result if isinstance(result, dict) else {"text": text}, is_error=not ok)
         _audit_tool_call(name, call_arguments, tool_result, tool=tool)
         return tool_result
@@ -2294,7 +2491,7 @@ class BlenderMCPServer:
                 if value not in ("", None)
             },
         }
-        return _tool_result(json.dumps(structured, indent=2, sort_keys=True), structured)
+        return _tool_result(_catalog_search_content(structured), structured)
 
     def _search_blender_tools(self, arguments):
         return self._search_catalog(arguments)
@@ -2307,7 +2504,7 @@ class BlenderMCPServer:
             if _tool_matches_filters(tool, filters) and _score_tool_match(tool, filters["query"]) is not None
         ]
         structured = {"ok": True, "total": len(tools), "facets": _catalog_facets(tools)}
-        return _tool_result(json.dumps(structured, indent=2, sort_keys=True), structured)
+        return _tool_result(_json_text(structured), structured)
 
     def _blender_tool_catalog(self, arguments):
         action = str(arguments.get("action") or "search").strip().lower()
@@ -2316,7 +2513,12 @@ class BlenderMCPServer:
         if action == "categories":
             return self._catalog_categories(arguments)
         if action == "schema":
-            return self._get_blender_tool_schema({"name": arguments.get("name")})
+            return self._get_blender_tool_schema(
+                {
+                    "name": arguments.get("name"),
+                    "known_digest": arguments.get("known_digest"),
+                }
+            )
         if action == "invoke":
             return self._invoke_blender_tool(
                 {
@@ -2328,16 +2530,34 @@ class BlenderMCPServer:
 
     def _get_blender_tool_schema(self, arguments):
         name = str(arguments.get("name") or "").strip()
-        tool = self._full_tool_definition(name)
+        # Canonical schema lookup must prefer the full registry definition.
+        # Directly advertised tools use a compact discovery projection that
+        # intentionally omits optional response controls.
+        tool = self._full_tool_definition(name) or self._tool_definition(name)
         if tool is None:
             return _tool_error(f"Unknown Blender tool: {name}", code="unknown_tool")
         normalized = _normalize_tool_definition(tool)
+        schema_digest = response_controls.canonical_digest(normalized)
+        known_digest = str(arguments.get("known_digest") or "").strip().lower()
+        if known_digest and known_digest == schema_digest:
+            structured = {
+                "ok": True,
+                "not_modified": True,
+                "name": name,
+                "schema_digest": schema_digest,
+            }
+            return _tool_result(_json_text(structured), structured)
         guardrail_warnings = _guardrail_warnings_for_tool(normalized)
         if guardrail_warnings:
             normalized["guardrail_warnings"] = guardrail_warnings
             normalized["guardrail_warning_count"] = len(guardrail_warnings)
-        structured = {"ok": True, "tool": normalized}
-        return _tool_result(json.dumps(structured, indent=2, sort_keys=True), structured)
+        structured = {
+            "ok": True,
+            "tool": normalized,
+            "schema_digest": schema_digest,
+            "not_modified": False,
+        }
+        return _tool_result(_json_text(structured), structured)
 
     def _invoke_blender_tool(self, arguments):
         target_name = str(arguments.get("name") or "").strip()
@@ -2378,7 +2598,7 @@ class BlenderMCPServer:
         else:
             structured = {"ok": ok, "text": str(result), "invoked_tool": target_name}
         structured = _attach_guardrail_warnings(structured, target_name, target_args, tool=target_tool)
-        text = json.dumps(structured, indent=2, sort_keys=True, default=str)
+        text = _json_text(structured)
         return _tool_result(text, structured, is_error=not ok)
 
     def _augment_bridge_status(self, status):
@@ -2534,7 +2754,14 @@ class BlenderMCPServer:
                 "title": "Blender Bridge Connection Status",
                 "description": "MCP server connection status for the Blender bridge",
                 "mimeType": "application/json",
-            }
+            },
+            {
+                "uri": "blender://mcp/payload-telemetry",
+                "name": "mcp-payload-telemetry",
+                "title": "MCP Payload Size Telemetry",
+                "description": "Aggregate tool response byte sizes without arguments or scene content",
+                "mimeType": "application/json",
+            },
         ]
         try:
             response = self.bridge.get("/resources")
@@ -2552,7 +2779,17 @@ class BlenderMCPServer:
                     {
                         "uri": uri,
                         "mimeType": "application/json",
-                        "text": json.dumps(status, indent=2, sort_keys=True),
+                        "text": _json_text(status),
+                    }
+                ]
+            }
+        if uri == "blender://mcp/payload-telemetry":
+            return {
+                "contents": [
+                    {
+                        "uri": uri,
+                        "mimeType": "application/json",
+                        "text": _json_text(self._payload_telemetry_summary()),
                     }
                 ]
             }

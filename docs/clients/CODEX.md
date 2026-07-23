@@ -1,6 +1,6 @@
 # Codex
 
-Last verified: 2026-07-19
+Last verified: 2026-07-23
 
 ## Prerequisites
 
@@ -37,6 +37,10 @@ On Windows the generated entry uses `command = "cmd"` and begins `args` with `"/
 ## Restart And Smoke Test
 
 Save the config, restart Codex/ChatGPT desktop or refresh its MCP servers, and keep Blender open. Ask: `Check Blender bridge status, list scene objects, and make no changes.`
+
+## Prompt Caching
+
+The Blender server keeps initialization and tool definitions byte-stable so they are eligible for OpenAI's prefix cache. OpenAI API prompt caching is automatic for eligible prefixes; a custom Responses API client can additionally use one stable `prompt_cache_key` for equivalent Blender sessions and inspect cached-token usage in the response. Codex owns its provider request, so there is no MCP config flag that can force caching from the bridge.
 
 ## Troubleshooting
 
