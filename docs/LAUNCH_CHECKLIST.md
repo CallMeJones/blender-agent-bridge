@@ -14,11 +14,11 @@ Any source, workflow, packaging, or user-facing documentation change after candi
 | --- | --- | --- |
 | Scope and user experience | Done locally | The single compact sidebar, binary trust switch, and preview Commit/Revert states are visually reviewed. |
 | Code and regression tests | Done locally | Unit, pure-Python, Blender 5.1 background, and installed-extension gates pass for the candidate. |
-| Blender compatibility | Required | Blender 4.2 LTS, 4.5 LTS, and 5.1 pass in CI; newer versions remain capability-gated without an artificial maximum. |
+| Blender compatibility | Done | Blender 4.2 LTS, 4.5 LTS, and 5.1 pass in CI; newer versions remain capability-gated without an artificial maximum. |
 | Security and privacy | Done locally | Trust boundaries, external downloads, secrets, permissions, and packaged artifacts are reviewed. |
-| Release artifacts | Required | One tagged artifact set publishes an identical extension ZIP to GitHub Releases and Pages plus the matching wheel/sdist to PyPI. |
-| GitHub and community | Manual | Repository metadata, support routes, Discussions, and starter issues are ready. |
-| Public announcement | Manual | Final announcement points to the released version and verified install path. |
+| Release artifacts | Done | One tagged artifact set publishes an identical extension ZIP to GitHub Releases and Pages plus the matching wheel/sdist to PyPI. |
+| GitHub and community | Done | Repository metadata, support routes, Discussions, and starter issues are ready. |
+| Public announcement | Done | Final announcement points to the released version and verified install path. |
 | Post-launch support | Required | Issues and Discussions are monitored and launch regressions have an owner. |
 
 Launch is a **go** only when every Required gate is Done and each Manual item is either completed or explicitly accepted by the maintainer.
@@ -50,7 +50,7 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 - [x] **Done** — CI covers Blender 4.2 LTS, 4.5 LTS, and 5.1 and uses capability checks for newer releases.
 - [x] **Done** — There is no maximum-version rejection; untested future versions receive a compatibility warning.
 - [x] **Done locally** — The complete 18-test Blender-background suite and clean installed-extension live smoke pass on Blender 4.2.0, 4.5.0, and 5.1.2 for the reviewed v0.4.0 candidate; each clean install built the same official extension ZIP digest.
-- [ ] **Required** — All three supported CI lanes pass for the v0.4.0 tag, including clean installed-extension smoke.
+- [x] **Done** — All three supported CI lanes pass for the v0.4.0 tag, including the complete background suite, clean installed-extension smoke, and official candidate build.
 - [x] **Done locally** — Material, compositor, external-asset, preview, and UI behavior pass on each supported local lane.
 - [x] **Done locally (optional)** — Blender 5.2.0, the newest stable build on 2026-07-23, passes the complete 18-test background suite and clean installed-extension live smoke. Record it as compatible-untested for v0.4.0 rather than adding a permanent fourth launch lane immediately.
 
@@ -66,7 +66,7 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 - [x] **Done** — The official extension ZIP contains `LICENSE` and excludes repository metadata, bytecode, logs, caches, captures, checkpoints, tokens, and private `.blend` artifacts.
 - [x] **Done locally** — Gitleaks 8.30.1 reports no leaks in the 142-commit history, working candidate, or exact extension/wheel/sdist artifact inputs.
 - [x] **Done locally** — Clean installed-extension smoke confirms trust-off refusal without pending state, trust-on immediate execution, permanent refusal of the removed per-script path, compatibility-alias execution under trust, revoke, reload cleanup, and bridge-restart persistence on Blender 4.2.0, 4.5.0, and 5.1.2.
-- [ ] **Required** — Confirm GitHub Release and Pages extension ZIPs have the same SHA-256 digest.
+- [x] **Done** — GitHub Release and Pages extension ZIPs are byte-identical at SHA-256 `487df34d8205b8371261762a9822bbc9024dcc68d7d0cd3e70847f8b415e2bb6`.
 
 ## 5. Packaging and Release
 
@@ -74,8 +74,8 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 - [x] **Done locally** — Version 0.4.0 is consistent in the extension manifest, Python package metadata, runtime output, generated `uvx` config, client guides, and changelog. The tag is intentionally deferred until review is complete.
 - [x] **Done locally** — `smoke_release_consistency.py`, official Blender source/ZIP validation, wheel/sdist build, clean wheel install/runtime import, and local release/Pages artifact-identity checks pass for the reviewed candidate.
 - [x] **Done locally** — PyPI confirms `blender-bridge` still belongs to this project; v0.4.0 is unpublished and requires both candidate artifacts.
-- [ ] **Required** — Tag only the reviewed release commit and let the release workflow publish the already-tested artifacts.
-- [ ] **Required** — Verify the public GitHub Release, PyPI package, Pages index, hosted ZIP, checksums, and installation instructions after publication.
+- [x] **Done** — Annotated tag `v0.4.0` points to reviewed commit `b7c5328`; the tag workflow tested and staged the publication artifacts.
+- [x] **Done** — The public GitHub Release, exact PyPI wheel/sdist, Pages index, hosted ZIP, checksums, and installation instructions were independently verified after publication.
 - [x] **Done** — The changelog and announcement draft identify the one-panel compact UI, external-download hardening, deterministic registry behavior, and resumable PyPI publication using the final control labels.
 
 ## 6. GitHub and Community
@@ -96,10 +96,10 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 ## 7. Announcement and Launch Day
 
 - [x] **Done locally** — [PUBLIC_BETA_ANNOUNCEMENT.md](PUBLIC_BETA_ANNOUNCEMENT.md) is updated to the v0.4.0 facts, links, screenshots, and one-panel UI wording; public links must still be checked after the tag exists.
-- [ ] **Required** — Test every announcement link in a signed-out browser and confirm the install repository is publicly reachable.
-- [ ] **Manual** — Publish the release and wait for every required GitHub Actions job and public artifact check to pass.
-- [ ] **Manual** — Publish the announcement in GitHub Discussions **Announcements** and link it from the repository and project site.
-- [ ] **Manual** — Seed one focused feedback prompt: Blender version, OS, MCP client, attempted workflow, expected result, actual result, and shareable evidence.
+- [x] **Done** — Every announcement/install/support link returns a signed-out HTTP 200 response, and the install repository is publicly reachable.
+- [x] **Done** — v0.4.0 is published; all test, recovery, Pages, GitHub Release, PyPI, and public artifact-identity jobs pass.
+- [x] **Done** — The [v0.4.0 announcement](https://github.com/CallMeJones/blender-agent-bridge/discussions/12) is published in GitHub Discussions **Announcements**, linked from the README and GitHub Release, and reachable from the project site's Discussions link.
+- [x] **Done** — The focused [v0.4.0 feedback prompt](https://github.com/CallMeJones/blender-agent-bridge/discussions/13) asks for Blender version, OS, MCP client, attempted workflow, expected result, actual result, and shareable evidence.
 
 ## 8. First 72 Hours
 
@@ -145,5 +145,8 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 | 2026-07-23 | Isolated-artifact PyPI preflight | `blender-bridge` still identifies this project (latest 0.3.0); v0.4.0 is unpublished and requires wheel plus sdist upload |
 | 2026-07-23 | Final implementation scope audit and commit `fcafaee`, followed by a fresh official ZIP/Pages rebuild and artifact-identity check | Passed; 81 intended files committed and temporary/generated/unrelated files excluded. The pre-merge Windows working copy produced `2e33aab2ea28f6f813f60dfb8ae355d6cca918490044130b5050828aca4fa46f`; this digest was superseded after checkout normalized six unchanged text files to the repository's required LF line endings. |
 | 2026-07-23 | Merged implementation tree `a4e1414`: official source/ZIP validation and clean installed-extension live smoke on Blender 4.2.0, 4.5.0, 5.1.2, and optional 5.2.0 after `.gitattributes` LF normalization | Passed; no semantic source diff, every version built and exercised extension SHA-256 `59042d7b7f52bd4937073ed2c0d1bf7fc141c1fd669f8dcf6e41e86b177d34ef` |
+| 2026-07-23 | v0.4.0 tag workflow on commit `b7c5328` | All MCP/package and Blender 4.2/4.5/5.1 tag gates passed; PyPI published the tested wheel/sdist. GitHub artifact-service duplication caused the initial Pages deployment to fail closed. |
+| 2026-07-23 | Immutable partial-release recovery workflow (`33d89fd`, `0c4bc3a`) using tag-bound retained artifact runs | Passed: exact PyPI hashes, extension/Pages identity, fresh Pages deployment, GitHub Release publication, and public identity verification; public extension SHA-256 `487df34d8205b8371261762a9822bbc9024dcc68d7d0cd3e70847f8b415e2bb6` |
+| 2026-07-23 | Signed-out launch-link sweep plus GitHub Discussions announcement [#12](https://github.com/CallMeJones/blender-agent-bridge/discussions/12) and feedback prompt [#13](https://github.com/CallMeJones/blender-agent-bridge/discussions/13) | Passed; Pages, index, Release, install/safety/contribution/showcase docs, Discussions, Issues, and private security-report route all resolved successfully |
 
 Add evidence here only after it has run against the candidate being evaluated. A previous release proves the pipeline, not the current release contents.

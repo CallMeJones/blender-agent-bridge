@@ -46,6 +46,8 @@ Bundled mode is the zero-install default. Optional `uvx / PyPI` setup and client
 
 Manual fallback: download `claude_blender-<version>.zip` from the [latest GitHub release](https://github.com/CallMeJones/blender-agent-bridge/releases/latest), then use Blender's `Install from Disk`. Do not install GitHub's generated source archive. See [Install from GitHub](docs/INSTALL_FROM_GITHUB.md) for updates, checksums, and troubleshooting.
 
+The public beta is live: read the [release announcement](https://github.com/CallMeJones/blender-agent-bridge/discussions/12) and share structured [beta feedback](https://github.com/CallMeJones/blender-agent-bridge/discussions/13).
+
 ## After Updates
 
 Restart Blender, press `Start`, copy the MCP config again, replace the old client config, and refresh or restart the client. This prevents cached server paths and tool lists from keeping an older extension active.
