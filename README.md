@@ -17,38 +17,42 @@ Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets
   <a href="LICENSE"><img alt="License GPL-3.0-or-later" src="https://img.shields.io/badge/License-GPL--3.0--or--later-111827"></a>
 </p>
 
-## Quick Start
+## 1. Install the Blender Extension
 
-1. Install Blender `4.2.0` or newer. CI continuously checks Blender 4.2 LTS, 4.5 LTS, and 5.1; newer versions are allowed and use capability checks rather than an artificial maximum-version gate.
-2. In Blender, open `Edit > Preferences > Get Extensions`, add this remote repository, then sync and install `Blender Agent Bridge`:
+Install Blender `4.2.0` or newer. CI continuously checks Blender 4.2 LTS, 4.5 LTS, and 5.1; newer versions are allowed and use capability checks instead of an artificial maximum-version gate.
+
+### Recommended: install from the extension repository
+
+1. In Blender, open `Edit > Preferences > Get Extensions`.
+2. Enable online access if Blender asks.
+3. Press `Repositories`.
+4. In the repository popover, press `+`, choose `Add Remote Repository`, and name it `Blender Agent Bridge`.
+5. Paste this repository URL:
 
    ```text
    https://callmejones.github.io/blender-agent-bridge/index.json
    ```
 
-3. Enable the extension, open the 3D View sidebar, find `Agent Bridge`, and press `Start`.
-4. Press `Copy MCP Config`, paste the generated config into your client, then refresh or restart it.
-5. Ask the client:
+6. Close the repository popover, open the down-arrow extension settings menu, and choose `Refresh Remote`.
+7. Search for `Blender Agent Bridge`.
+8. Press `Install`, then confirm the extension is enabled.
+9. Close Preferences. In the 3D View, press `N` to open the sidebar and select the `Agent Bridge` tab.
+10. Press `Start`. The panel should report that the bridge is on.
 
-   ```text
-   List the objects in the current Blender scene and tell me which Blender Agent Bridge tools are available.
-   ```
+Updates use the same repository: sync it in `Get Extensions`, install the offered update, restart Blender, and copy a fresh MCP config.
 
-6. Try a reversible helper edit:
+### Manual fallback: install the release ZIP
 
-   ```text
-   Move the selected cube up 1 Blender unit and make it red. Leave the change as a preview.
-   ```
+1. Open the [latest GitHub release](https://github.com/CallMeJones/blender-agent-bridge/releases/latest).
+2. Under **Assets**, download `claude_blender-<version>.zip`.
+3. Do **not** download GitHub's generated `Source code` ZIP; it is not an installable Blender extension.
+4. In Blender, open `Edit > Preferences > Get Extensions`.
+5. Open the extension menu, choose `Install from Disk`, and select the downloaded `claude_blender-<version>.zip`.
+6. Enable `Blender Agent Bridge`, close Preferences, open the 3D View sidebar with `N`, select `Agent Bridge`, and press `Start`.
 
-Preview edits stay pending in Blender until you use `Commit`, `Revert`, or Blender undo. Generated Python is refused while **Trust Agent Scripts** is off. With trust on, it runs immediately with the same filesystem, network, subprocess, project-file, persistent-cache, and Blender API permissions as Blender's **Run Script** command.
+The extension ZIP already includes the MCP server, so the recommended bundled mode needs no Python package, `pip`, `uv`, or `uvx` installation. See [Install from GitHub](docs/INSTALL_FROM_GITHUB.md) for checksum verification, command-line installation, updates, and troubleshooting.
 
-Bundled mode is the zero-install default. Optional `uvx / PyPI` setup and client-specific instructions are in the [client guide matrix](docs/clients/README.md).
-
-Manual fallback: download `claude_blender-<version>.zip` from the [latest GitHub release](https://github.com/CallMeJones/blender-agent-bridge/releases/latest), then use Blender's `Install from Disk`. Do not install GitHub's generated source archive. See [Install from GitHub](docs/INSTALL_FROM_GITHUB.md) for updates, checksums, and troubleshooting.
-
-The public beta is live: read the [release announcement](https://github.com/CallMeJones/blender-agent-bridge/discussions/12) and share structured [beta feedback](https://github.com/CallMeJones/blender-agent-bridge/discussions/13).
-
-## Connect Claude, Codex, or Cursor
+## 2. Connect Claude, Codex, or Cursor
 
 The MCP server is already bundled with the Blender extension. After pressing `Start`, press `Copy MCP Config`. Blender copies a complete `mcpServers.blender` JSON entry containing the correct local Python path, bridge URL, session token, version metadata, and tool-registry digest. Keep every generated `command`, `args`, and `env` value together.
 
@@ -80,6 +84,24 @@ Merge the Blender MCP config currently on my clipboard into my global ~/.cursor/
 ```
 
 If the agent cannot read the clipboard, use the manual route above. The generated config contains a localhost bridge token: keep it in local configuration, never paste it into an issue or public chat, and press `Copy MCP Config` again after changing the extension or bridge settings. Full walkthroughs: [Claude](docs/clients/CLAUDE.md), [Codex](docs/clients/CODEX.md), and [Cursor](docs/clients/CURSOR.md).
+
+## 3. Test the Connection
+
+Keep Blender open with the bridge running, refresh or restart the MCP client, then ask:
+
+```text
+Check Blender bridge status, list the objects in the current scene, and tell me which Blender Agent Bridge tools are available. Make no changes.
+```
+
+Then try a reversible edit:
+
+```text
+Move the selected cube up 1 Blender unit and make it red. Leave the change as a preview.
+```
+
+Preview edits stay pending in Blender until you use `Commit`, `Revert`, or Blender undo. Generated Python is refused while **Trust Agent Scripts** is off. With trust on, it runs immediately with the same filesystem, network, subprocess, project-file, persistent-cache, and Blender API permissions as Blender's **Run Script** command.
+
+The public beta is live: read the [release announcement](https://github.com/CallMeJones/blender-agent-bridge/discussions/12) and share structured [beta feedback](https://github.com/CallMeJones/blender-agent-bridge/discussions/13).
 
 ## After Updates
 
