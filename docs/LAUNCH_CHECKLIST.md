@@ -4,7 +4,7 @@ This is the single source of truth for launching Blender Agent Bridge. Detailed 
 
 Target: **v0.4.0 public beta**. Version 0.3.0 proved the distribution pipeline. Version 0.4.0 intentionally removes eight opinionated public generators, keeps the compact sidebar and binary trust model, and uses a pre-1.0 minor version because the public tool surface changes.
 
-Status keys: **Done** has current evidence, **Done locally** still needs remote/tag evidence, **Required** blocks launch, **Manual** needs a maintainer or provider action, and **Optional** may follow the launch.
+Status keys: **Done** has current release evidence, **Done locally** records completed local evidence, **Monitoring** is an active time-bound post-launch gate, **Required** blocks launch, **Manual** needs a maintainer or provider action, and **Optional** may follow the launch.
 
 Any source, workflow, packaging, or user-facing documentation change after candidate evidence is collected invalidates the affected evidence. Rebuild from the final reviewed commit and record that commit SHA plus artifact SHA-256 before tagging.
 
@@ -12,14 +12,14 @@ Any source, workflow, packaging, or user-facing documentation change after candi
 
 | Gate | Status | Exit condition |
 | --- | --- | --- |
-| Scope and user experience | Done locally | The single compact sidebar, binary trust switch, and preview Commit/Revert states are visually reviewed. |
-| Code and regression tests | Done locally | Unit, pure-Python, Blender 5.1 background, and installed-extension gates pass for the candidate. |
+| Scope and user experience | Done | The single compact sidebar, binary trust switch, and preview Commit/Revert states are visually reviewed. |
+| Code and regression tests | Done | Unit, pure-Python, supported-Blender, optional-newest-Blender, and installed-extension gates pass for the release. |
 | Blender compatibility | Done | Blender 4.2 LTS, 4.5 LTS, and 5.1 pass in CI; newer versions remain capability-gated without an artificial maximum. |
-| Security and privacy | Done locally | Trust boundaries, external downloads, secrets, permissions, and packaged artifacts are reviewed. |
+| Security and privacy | Done | Trust boundaries, external downloads, secrets, permissions, and packaged artifacts are reviewed. |
 | Release artifacts | Done | One tagged artifact set publishes an identical extension ZIP to GitHub Releases and Pages plus the matching wheel/sdist to PyPI. |
 | GitHub and community | Done | Repository metadata, support routes, Discussions, and starter issues are ready. |
 | Public announcement | Done | Final announcement points to the released version and verified install path. |
-| Post-launch support | Required | Issues and Discussions are monitored and launch regressions have an owner. |
+| Post-launch support | Monitoring | The 72-hour launch monitor is active; launch regressions have a triage and patch policy. |
 
 Launch is a **go** only when every Required gate is Done and each Manual item is either completed or explicitly accepted by the maintainer.
 
@@ -71,9 +71,9 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 ## 5. Packaging and Release
 
 - [x] **Done** — v0.3.0 proved Trusted Publishing, GitHub Release, Pages, repository install, and public artifact-identity verification from one tested artifact set.
-- [x] **Done locally** — Version 0.4.0 is consistent in the extension manifest, Python package metadata, runtime output, generated `uvx` config, client guides, and changelog. The tag is intentionally deferred until review is complete.
-- [x] **Done locally** — `smoke_release_consistency.py`, official Blender source/ZIP validation, wheel/sdist build, clean wheel install/runtime import, and local release/Pages artifact-identity checks pass for the reviewed candidate.
-- [x] **Done locally** — PyPI confirms `blender-bridge` still belongs to this project; v0.4.0 is unpublished and requires both candidate artifacts.
+- [x] **Done** — Version 0.4.0 is consistent in the extension manifest, Python package metadata, runtime output, generated `uvx` config, client guides, changelog, annotated tag, and public artifacts.
+- [x] **Done** — `smoke_release_consistency.py`, official Blender source/ZIP validation, wheel/sdist build, clean wheel install/runtime import, and release/Pages artifact-identity checks pass for the published release.
+- [x] **Done** — PyPI published the exact v0.4.0 wheel and sdist from the tested, tag-bound artifact run; the recovery workflow verifies both hashes before completing any partial release.
 - [x] **Done** — Annotated tag `v0.4.0` points to reviewed commit `b7c5328`; the tag workflow tested and staged the publication artifacts.
 - [x] **Done** — The public GitHub Release, exact PyPI wheel/sdist, Pages index, hosted ZIP, checksums, and installation instructions were independently verified after publication.
 - [x] **Done** — The changelog and announcement draft identify the one-panel compact UI, external-download hardening, deterministic registry behavior, and resumable PyPI publication using the final control labels.
@@ -83,19 +83,19 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 - [x] **Done** — GitHub Discussions is enabled with Announcements, Ideas, Q&A, and Show and tell categories.
 - [x] **Done** — Three bounded `good first issue` tasks are open.
 - [x] **Done** — Client guides, showcase guidance, contribution guidance, issue templates, support policy, and security reporting are present.
-- [x] **Done locally** — `LICENSE` starts with the canonical GPL text so GitHub can detect it; the extension and Python package still declare `GPL-3.0-or-later` explicitly.
+- [x] **Done** — `LICENSE` starts with the canonical GPL text; GitHub detects GPL-3.0, and the extension and Python package declare `GPL-3.0-or-later` explicitly.
 - [x] **Done** — Use GitHub Discussions **Q&A** as the permanent Help surface; do not add a duplicate Help category.
 - [x] **Done** — Repository description is `Safe, scene-aware MCP bridge for Blender with reversible editing and visual evidence.`
-- [x] **Done** — Homepage and requested repository topics are set; GitHub license detection still needs rechecking after the follow-up change is merged.
+- [x] **Done** — Homepage and requested repository topics are set, and GitHub detects the repository license as GPL-3.0.
 - [x] **Done** — `main` remains direct-push-capable while there is one maintainer, but release candidates use a reviewable PR and must pass the release workflow before tagging; enable branch protection when a second regular contributor begins merging.
-- [x] **Done locally** — Add a monthly GitHub Actions Dependabot check capped at two open PRs; do not add dependency automation for the zero-runtime-dependency Python package.
+- [x] **Done** — A monthly GitHub Actions Dependabot check is capped at two open PRs; the zero-runtime-dependency Python package intentionally has no dependency automation.
 - [x] **Done** — GitHub vulnerability alerts are enabled. Automated security-fix PRs remain off initially.
 - [x] **Done** — Reviewed starter Issues [#2](https://github.com/CallMeJones/blender-agent-bridge/issues/2), [#3](https://github.com/CallMeJones/blender-agent-bridge/issues/3), and [#4](https://github.com/CallMeJones/blender-agent-bridge/issues/4); each is bounded and already has concrete acceptance criteria.
 - [ ] **Optional** — Do not launch Discord yet. Reconsider after ten distinct monthly support/contributor conversations show demand for synchronous help.
 
 ## 7. Announcement and Launch Day
 
-- [x] **Done locally** — [PUBLIC_BETA_ANNOUNCEMENT.md](PUBLIC_BETA_ANNOUNCEMENT.md) is updated to the v0.4.0 facts, links, screenshots, and one-panel UI wording; public links must still be checked after the tag exists.
+- [x] **Done** — [PUBLIC_BETA_ANNOUNCEMENT.md](PUBLIC_BETA_ANNOUNCEMENT.md) matches the published v0.4.0 facts, links, screenshots, and one-panel UI wording; every public link passed a signed-out check.
 - [x] **Done** — Every announcement/install/support link returns a signed-out HTTP 200 response, and the install repository is publicly reachable.
 - [x] **Done** — v0.4.0 is published; all test, recovery, Pages, GitHub Release, PyPI, and public artifact-identity jobs pass.
 - [x] **Done** — The [v0.4.0 announcement](https://github.com/CallMeJones/blender-agent-bridge/discussions/12) is published in GitHub Discussions **Announcements**, linked from the README and GitHub Release, and reachable from the project site's Discussions link.
@@ -103,10 +103,10 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 
 ## 8. First 72 Hours
 
-- [ ] **Required** — Monitor security advisories, issues, and Discussions for install failures, data-loss risk, script-trust bypasses, and Blender-version regressions.
-- [ ] **Required** — Label launch blockers, publish workarounds quickly, and prepare v0.4.1 only from reproduced fixes with owner tests.
-- [ ] **Required** — Record recurring setup friction and update the relevant client guide rather than answering the same question only in a thread.
-- [ ] **Optional** — Curate permission-cleared community work into the showcase.
+- [ ] **Monitoring** — The `Monitor Blender Agent Bridge v0.4.0 launch` automation checks security advisories, issues, Discussions, workflows, Pages, and PyPI every six hours for 72 hours, including install failures, data-loss risk, script-trust bypasses, and Blender-version regressions.
+- [ ] **Monitoring** — Label launch blockers, publish workarounds quickly, and prepare v0.4.1 only from reproduced fixes with owner tests.
+- [ ] **Monitoring** — Record recurring setup friction and update the relevant client guide rather than answering the same question only in a thread.
+- [ ] **Optional** — Curate permission-cleared community work into the showcase when qualifying submissions exist; never fabricate examples or republish work without permission.
 
 ## Evidence Log
 
