@@ -6,9 +6,10 @@ from ..registry import ToolSpec
 
 
 SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'draft_script',
-  'description': 'Run Blender Python immediately after static checks when Blender-side session script trust is active. '
-                 'When trust is off the request is refused without staging a pending script. Use only when bounded '
-                 'helper tools cannot express the requested scene, animation, material, or rig change.',
+  'description': "Run Blender Python immediately with the same process permissions as Blender's Run Script command "
+                 'when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, '
+                 'and Blender API access are allowed. When trust is off the request is refused without staging a '
+                 'pending script. Prefer bounded helpers when they provide better recovery or progress reporting.',
   'input_schema': {'type': 'object',
                    'properties': {'intent': {'type': 'string', 'description': 'Plain-language reason for the script'},
                                   'expected_changes': {'type': 'string',
@@ -24,27 +25,42 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'draft_script',
                                                                     'touch'},
                                   'code': {'type': 'string',
                                            'maxLength': 500000,
-                                           'description': 'Complete Blender Python script to stage for approval'}},
+                                           'description': 'Complete Blender Python script to run under active session trust'}},
                    'required': ['intent', 'expected_changes', 'risk_level', 'code'],
                    'additionalProperties': False},
-  'contract': {'description': 'Run generated Blender Python after static checks only while Blender-side session script '
-                              'trust is active',
+  'contract': {'description': "Run generated Blender Python with Blender Run Script-equivalent permissions only while "
+                              'Blender-side session script trust is active',
                'mutates_scene': True,
                'has_side_effects': True,
-               'requires_approval': False},
+               'requires_approval': False,
+               'authorization_model': 'blender_run_script_equivalent',
+               'permissions': ['blender:full', 'filesystem:full', 'network:full', 'process:spawn'],
+               'long_running': True,
+               'destructive_hint': True,
+               'open_world_hint': True,
+               'timeout_seconds': 300,
+               'duration_hint': 'Synchronous trusted Python may finish in seconds or keep Blender busy indefinitely, '
+                                'depending on the script.',
+               'timeout_recovery': {'recoverable': True,
+                                    'poll_after_seconds': 5,
+                                    'status_tool': 'blender_bridge_status',
+                                    'resource_tool': 'get_visual_evidence_resources',
+                                    'message': 'If trusted Python times out, wait, call blender_bridge_status, inspect '
+                                               'visual evidence and the audit log, and rerun only if no result or '
+                                               'side effect appeared.'}},
   'handler_key': 'draft_script',
   'order': 1810,
   'groups': (),
   'exposure': 'catalog',
   'owner': 'scripts_transactions'},
  {'name': 'draft_privileged_script',
-  'description': 'Compatibility endpoint that refuses privileged generated Python. Use bounded external-asset, '
-                 'project-file, render, capture, save, or project-output tools instead.',
+  'description': 'Compatibility alias for draft_script. Under active Blender-side session trust it runs generated '
+                 "Python with the same process permissions as Blender's Run Script command; otherwise it refuses.",
   'input_schema': {'type': 'object',
                    'properties': {'script_kind': {'type': 'string',
                                                   'enum': ['external_asset', 'project_file', 'asset_project_file'],
-                                                  'description': 'Privileged workflow class that determines default '
-                                                                 'capabilities and approval checks.'},
+                                                  'description': 'Legacy workflow classification retained for client '
+                                                                 'compatibility and audit context.'},
                                   'intent': {'type': 'string',
                                              'description': 'Plain-language reason for the privileged script'},
                                   'expected_changes': {'type': 'string',
@@ -60,9 +76,9 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'draft_script',
                                                                       'network',
                                                                       'asset_import',
                                                                       'project_file']},
-                                                   'description': 'Requested elevated capabilities. Defaults are '
-                                                                  'inferred from script_kind and merged with this '
-                                                                  'list.'},
+                                                   'description': 'Legacy capability declaration retained as advisory '
+                                                                  'context; active session trust grants full '
+                                                                  'manual-script permissions.'},
                                   'declared_paths': {'type': 'array',
                                                      'items': {'type': 'string'},
                                                      'description': 'Files, directories, cache locations, or .blend '
@@ -86,18 +102,32 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'draft_script',
                                                                     'touch'},
                                   'code': {'type': 'string',
                                            'maxLength': 500000,
-                                           'description': 'Complete privileged Blender Python script to stage for '
-                                                          'approval'}},
+                                           'description': 'Complete Blender Python script to run under active session '
+                                                          'trust'}},
                    'additionalProperties': False},
-  'contract': {'description': 'Refuse privileged generated Python and direct clients to bounded structured tools',
-               'mutates_scene': False,
-               'has_side_effects': False,
+  'contract': {'description': 'Compatibility alias that uses the same session-trusted execution path as draft_script',
+               'mutates_scene': True,
+               'has_side_effects': True,
                'requires_approval': False,
                'explicit_approval_required': False,
-               'trust_window_auto_run_allowed': False,
-               'approval_policy': 'Privileged generated scripts are disabled.',
-               'recovery_hint': 'Use the corresponding bounded structured tool.',
-               'permissions': ['scene:read'],
+               'trust_window_auto_run_allowed': True,
+               'approval_policy': 'Requires the binary Blender-side Trust Agent Scripts session control.',
+               'recovery_hint': 'Use checkpoints, Blender undo, or bounded structured tools when stronger recovery is needed.',
+               'authorization_model': 'blender_run_script_equivalent',
+               'permissions': ['blender:full', 'filesystem:full', 'network:full', 'process:spawn'],
+               'long_running': True,
+               'destructive_hint': True,
+               'open_world_hint': True,
+               'timeout_seconds': 300,
+               'duration_hint': 'Synchronous trusted Python may finish in seconds or keep Blender busy indefinitely, '
+                                'depending on the script.',
+               'timeout_recovery': {'recoverable': True,
+                                    'poll_after_seconds': 5,
+                                    'status_tool': 'blender_bridge_status',
+                                    'resource_tool': 'get_visual_evidence_resources',
+                                    'message': 'If trusted Python times out, wait, call blender_bridge_status, inspect '
+                                               'visual evidence and the audit log, and rerun only if no result or '
+                                               'side effect appeared.'},
                'output_schema': {'type': 'object',
                                  'properties': {'ok': {'type': 'boolean'},
                                                 'message': {'type': 'string'},

@@ -206,17 +206,17 @@ For animation edits, the preview layer should insert/update keyframes immediatel
 
 ## Script Execution Strategy
 
-Execution should go through one controlled Blender operator:
+Execution uses one binary trust boundary:
 
 1. Generate code proposal.
-2. Parse and compile the proposal.
-3. Display code, target objects, expected changes, and risk labels.
-4. Run static checks for blocked modules, dangerous calls, file/network/process access, and broad destructive edits.
-5. Save undo point/checkpoint.
-6. Execute inside Blender's main thread with controlled globals and captured stdout/stderr/reports.
+2. Refuse it without staging when runtime session trust is off.
+3. Parse/compile it and enforce the 500k operational payload ceiling.
+4. Record advisory static findings, target objects, expected changes, and risk labels.
+5. Save an undo point/checkpoint.
+6. Execute inside Blender's main thread with Blender Run Script-equivalent process permissions and captured stdout/errors.
 7. Return the result to the external client and show it to the user.
 
-Default mode should be approval-required. Later, an autonomous mode can allow only prebuilt safe tools without arbitrary code execution.
+Default mode is trust off. Structured helpers remain available without arbitrary Python; enabling trust deliberately grants full manual-script permissions for the session.
 
 ## Dependency Strategy
 
@@ -232,5 +232,5 @@ Options:
 - Screenshot context: controlled by a toggle.
 - UI: support sidebar first, design for optional floating surface.
 - Live safe helper changes: apply immediately and show logs/status rather than pre-change plans.
-- Arbitrary generated Python: approval required.
+- Arbitrary generated Python: refused by default; binary session trust grants Blender Run Script-equivalent permissions.
 - Import/export: approval required.

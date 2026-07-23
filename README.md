@@ -42,7 +42,7 @@ Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets
    Move the selected cube up 1 Blender unit and make it red. Leave the change as a preview.
    ```
 
-Live helper edits stay pending in Blender until you use `Commit`, `Revert`, or Blender undo. For Sketchfab downloads/imports, add `SKETCHFAB_API_TOKEN` to the copied MCP config `env` block before restarting the MCP client. Generated Python uses a binary runtime switch: with **Trust Agent Scripts** off it is refused without a pending dialog; with trust on, ordinary static-check-passing scripts run immediately. Privileged generated scripts are disabled—downloads, imports, project files, renders, captures, saves, and cache outcomes use bounded structured tools.
+Live helper edits stay pending in Blender until you use `Commit`, `Revert`, or Blender undo. For Sketchfab downloads/imports, add `SKETCHFAB_API_TOKEN` to the copied MCP config `env` block before restarting the MCP client. Generated Python uses a binary runtime switch: with **Trust Agent Scripts** off it is refused without a pending dialog; with trust on it runs immediately with the same filesystem, network, subprocess, project-file, persistent-cache, and Blender API permissions as Blender's **Run Script** command. Bounded tools remain the recommended path when their validation, recovery, provenance, or progress reporting is useful.
 
 Bundled mode remains the zero-install default. Optional `uvx / PyPI` mode requires [`uv`](https://docs.astral.sh/uv/getting-started/installation/) and generates an exact version pin such as `uvx --from blender-bridge==0.3.1 blender-bridge`. Both modes expose the same registry and safety contracts; the protocol and registry digest handshake rejects incompatible combinations. See the [client guide matrix](docs/clients/README.md) for client- and OS-specific setup.
 
@@ -105,11 +105,11 @@ The source `.blend` file and full 1080p videos are not committed here; the repos
 - Apply safe helper edits for transforms, materials, lights, cameras, primitives, keyframes, rigs, constraints, render settings, 2D storyboard/animatic panels, cutout animation layers, camera dolly shots, cloth setup, procedural array stacks, product stages, character/vehicle kits, geometry-node starters, and scene organization.
 - Start long-running render jobs in a background Blender process, poll progress, assemble PNG sequences into MP4, and validate the output before reporting success.
 - Search cached Blender Python API and Manual docs before using version-sensitive APIs, and use status/audit resources to spot stale client configs or timed-out work.
-- Run custom or larger Blender Python only while session script trust is active, with helper advice and a 500k-character ceiling. Trust-off, blocked, and privileged requests are refused without creating pending UI.
+- Run custom or larger Blender Python only while session script trust is active, with helper/static-analysis advice and a 500k-character ceiling. Trust off refuses without creating pending UI; trust on grants Blender Run Script-equivalent permissions.
 
 ## Safety Model
 
-Connected agents do not get blanket access to Blender.
+Connected agents do not get blanket access by default. Enabling session script trust deliberately grants broad Blender-process access.
 
 | Path | Behavior |
 | --- | --- |
@@ -117,9 +117,9 @@ Connected agents do not get blanket access to Blender.
 | Visual capture tools | Store local project/session-scoped screenshots, playblast frames, inspection renders, thumbnails, and render outputs. |
 | Project files | Save-as, save-copy, open, and new-project tools require a user-confirmed path. Autosave only saves an already-bound active `.blend` file in place. |
 | External assets | Poly Haven uses public catalog/file APIs. Sketchfab downloads/imports accept a per-call token, the MCP server environment, or a masked memory-only Blender-session token. Tokens are redacted and never written to preferences, blend files, or job metadata. |
-| Generated Python | Staged into a Text datablock and blocked until approved in Blender, unless runtime-only script trust is active. |
-| Privileged Python | Disabled; use bounded asset, project-file, render, capture, save, and cache tools. |
-| External script trust | A pending non-privileged script can offer session trust for iterative work. Trust is runtime-only, session-scoped, visibly revocable, and never bypasses blocked-script checks. |
+| Generated Python | Refused without pending UI while trust is off; runs immediately while runtime-only session trust is active. Syntax errors and payloads above 500k are rejected operationally. |
+| Trusted Python | Equivalent to manually using Blender **Run Script**: full Blender API plus the filesystem, network, subprocess, project-file, and persistent-cache access available to the Blender process. |
+| External script trust | Explicit, runtime-only, session-scoped, and visibly revocable. It is cleared by Revoke, file load, add-on reload, or Blender exit. Static findings become warnings, not a sandbox or permission filter. |
 | Audit and status | Local redacted JSONL audit events and bridge/MCP diagnostics are available through MCP resources and status calls. |
 | MCP guardrail warnings | Advisory hints in catalog, schema, and tool results steer clients toward async jobs, queued imports, user-confirmed paths, approval gates, dry-run cleanup, preview commit/revert, and background-job polling. |
 | Model provider keys | Not stored in Blender Agent Bridge. External clients bring their own model/provider connection. |
@@ -234,7 +234,7 @@ Check whether Sketchfab auth is available in this MCP config, then search for a 
 Check the current blend-file diagnostics and autosave only if the scene is already saved to a real .blend path.
 ```
 
-Live helper changes, including external asset imports, remain pending until you use `Commit`, `Revert`, or Blender undo. Generated Python never enters a pending approval queue: trust off refuses it, and trust on runs ordinary static-check-passing scripts immediately. Privileged generated Python is always refused.
+Live helper changes, including external asset imports, remain pending until you use `Commit`, `Revert`, or Blender undo. Generated Python never enters a pending approval queue: trust off refuses it, and trust on runs it immediately with Blender Run Script-equivalent permissions.
 
 ## Install From Source
 

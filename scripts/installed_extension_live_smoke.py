@@ -249,20 +249,24 @@ def run_interactive_ui_smoke():
         state = bpy.context.scene.claude_blender
 
         script_runner.revoke_external_script_trust_window(bpy.context)
+        trusted_fs_path = status_path.parent / "blender-agent-bridge-installed-trust-smoke.txt"
+        trusted_fs_path.unlink(missing_ok=True)
         trust_off = json.loads(
             tool_dispatcher.execute_tool(
                 bpy.context,
                 "draft_script",
                 {
                     "intent": "Verify installed binary script trust",
-                    "expected_changes": "Nothing runs while trust is off",
+                    "expected_changes": "Nothing runs and no file is written while trust is off",
                     "risk_level": "low",
-                    "code": "scene['installed_trust_smoke'] = 'unexpected'",
+                    "code": f"open({str(trusted_fs_path)!r}, 'w').write('unexpected')",
                 },
             )
         )
         if trust_off.get("ok") or trust_off.get("code") != "script_trust_required" or state.pending_script:
             raise AssertionError(f"Installed trust-off request created executable or pending work: {trust_off}")
+        if trusted_fs_path.exists():
+            raise AssertionError("Installed trust-off request wrote a filesystem marker")
         approval = script_runner.approve_pending_script_for_external_run(bpy.context, ttl_seconds=60)
         if approval.get("ok") or approval.get("code") != "per_script_approval_removed":
             raise AssertionError(f"Installed per-script approval compatibility path was not disabled: {approval}")
@@ -275,17 +279,28 @@ def run_interactive_ui_smoke():
                 "draft_script",
                 {
                     "intent": "Verify installed trusted execution",
-                    "expected_changes": "Sets one temporary scene property",
+                    "expected_changes": "Writes one temporary file and sets one scene property",
                     "risk_level": "low",
-                    "code": "scene['installed_trust_smoke'] = 'ok'",
+                    "code": (
+                        "import os\\n"
+                        "import socket\\n"
+                        "import subprocess\\n"
+                        f"open({str(trusted_fs_path)!r}, 'w').write(os.path.basename({str(trusted_fs_path)!r}))\\n"
+                        "scene['installed_trust_smoke'] = 'ok'\\n"
+                    ),
                 },
             )
         )
         if not trusted_run.get("ok") or not trusted_run.get("auto_ran") or bpy.context.scene.get("installed_trust_smoke") != "ok":
             raise AssertionError(f"Installed trusted script did not run immediately: {trusted_run}")
+        if not trusted_fs_path.is_file() or trusted_fs_path.read_text(encoding="utf-8") != trusted_fs_path.name:
+            raise AssertionError(f"Installed trusted script did not receive normal filesystem access: {trusted_run}")
+        if trusted_run.get("authorization_model") != "blender_run_script_equivalent":
+            raise AssertionError(f"Installed trusted script reported the wrong authorization model: {trusted_run}")
         if state.pending_script:
             raise AssertionError("Installed trusted execution left pending script state")
         del bpy.context.scene["installed_trust_smoke"]
+        trusted_fs_path.unlink(missing_ok=True)
 
         expiring = script_runner.approve_external_script_trust_window(bpy.context, ttl_seconds=1)
         if not expiring.get("ok") or not script_runner.external_script_trust_active(bpy.context, state=state):

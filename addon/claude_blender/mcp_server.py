@@ -2100,8 +2100,8 @@ class BlenderMCPServer:
                 "fallbacks for explicit direct/debug use. "
                 "If a bridge_timeout occurs, treat it as recoverable: wait the returned poll_after_seconds, call "
                 "blender_bridge_status, then inspect visual evidence resources or audit logs before rerunning work. "
-                "Generated Python is refused unless the user enables session script trust in Blender. Privileged and "
-                "persistent simulation/cache bake or free scripts remain disabled."
+                "Generated Python is refused unless the user enables session script trust in Blender. Once enabled, "
+                "trusted Python has Blender Run Script-equivalent filesystem, network, process, and Blender API access."
             ),
         }
 

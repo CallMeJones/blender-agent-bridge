@@ -502,7 +502,7 @@ def _draw_action_center(layout, state):
 class CLAUDEBLENDER_OT_approve_external_script_trust(bpy.types.Operator):
     bl_idname = "claude_blender.approve_external_script_trust"
     bl_label = "Trust Agent Scripts"
-    bl_description = "Trust static-check-passing agent scripts for this Blender session"
+    bl_description = "Let connected agent clients run Python with Blender's Run Script permissions for this session"
     bl_options = {"REGISTER", "INTERNAL"}
 
     def invoke(self, context, event):
@@ -510,8 +510,9 @@ class CLAUDEBLENDER_OT_approve_external_script_trust(bpy.types.Operator):
 
     def draw(self, context):
         self.layout.label(text="Trust agent-generated Python for this Blender session?", icon="ERROR")
-        self.layout.label(text="Scripts run with Blender's OS permissions; static checks are not a sandbox.")
-        self.layout.label(text="Privileged script requests remain disabled. Revoke trust at any time.")
+        self.layout.label(text="Equivalent to Blender Run Script: files, network, and processes are allowed.")
+        self.layout.label(text="Any client connected to this local bridge can use these permissions.")
+        self.layout.label(text="Runs with Blender's OS permissions until Revoke, file load, reload, or exit.")
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -523,8 +524,8 @@ class CLAUDEBLENDER_OT_approve_external_script_trust(bpy.types.Operator):
         if result.get("ok"):
             state.last_response = (
                 "Agent script trust is active for this Blender session.\n"
-                "Static-check-passing scripts can run immediately until Revoke, reload, file load, or Blender exit.\n"
-                "Privileged generated scripts remain disabled."
+                "Agent Python now has Blender Run Script permissions, including files, network, and processes.\n"
+                "Trust lasts until Revoke, reload, file load, or Blender exit."
             )
             self.report({"INFO"}, "External script trust approved")
             return {"FINISHED"}

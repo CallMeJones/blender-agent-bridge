@@ -56,7 +56,7 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 
 ## 4. Security and Privacy
 
-- [x] **Done** — Generated Python uses binary session trust: trust off refuses without pending state, trust on immediately runs ordinary static-check-passing scripts, and privileged generated scripts are disabled. Static analysis remains a guardrail, not a sandbox.
+- [x] **Done** — Generated Python uses binary session trust: trust off refuses without pending state, while trust on matches Blender **Run Script** permissions, including filesystem, network, subprocess, project-file, persistent-cache, and Blender API access. Static analysis is advisory under trust, not a sandbox or hidden privilege gate.
 - [x] **Done** — The bridge binds to loopback and supports bearer-token authentication.
 - [x] **Done** — External-asset workers opt into online mode only for explicit asset jobs.
 - [x] **Done** — External downloads reject private/local destinations, pin a validated public address, constrain redirects and credential forwarding, and enforce a 4 GiB limit.
@@ -133,5 +133,7 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 | 2026-07-22 | Post-evidence one-panel UI and documentation changes | Previous candidate scope, package, installed-extension, secret-scan, and artifact evidence invalidated; final-commit evidence required before tag |
 | 2026-07-22 | Binary trust plus project-directory filesystem candidate: 53 unit tests, complete pure-Python gate and adversarial analyzer smoke, complete 19-test Blender 5.1.2 suite, project-file containment smoke on Blender 4.2/4.5/5.1, official source/ZIP/repository validation, artifact identity, and clean installed-extension live smoke on all three versions | Passed; candidate extension SHA-256 `e9d239b7d25a7024187946f0dffcb924f3cdce09259d7fba41be48ccf421b0a7` |
 | 2026-07-22 | Gitleaks 8.30.1 on 133-commit history and final binary-trust working diff | Passed; no leaks found |
+| 2026-07-23 | Blender Run Script-equivalent binary trust: 53 unit tests, complete pure-Python gate and adversarial analyzer smoke, complete 19-test Blender 5.1.2 suite, script-trust/UI owner smokes on Blender 4.2/4.5/5.1, official source/ZIP/repository validation, and clean installed-extension live smoke proving trust-off refusal plus trusted filesystem/`os`/socket/subprocess imports on all three versions | Passed; candidate extension SHA-256 `cc5c53a2edf8aa002399c5b934095a6b486817c843715208f2f74ff26ea7e84e` |
+| 2026-07-23 | Gitleaks 8.30.1 on 136-commit history and Blender Run Script-equivalent trust working tree | Passed; no leaks found |
 
 Add evidence here only after it has run against the candidate being evaluated. A previous release proves the pipeline, not the current release contents.

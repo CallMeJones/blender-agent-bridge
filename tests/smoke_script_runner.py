@@ -405,24 +405,28 @@ print("created", obj.name)
         assert not state.pending_script
         assert script_runner.external_script_trust_active(context, state=state)
 
-        bake_guarded_under_trust = script_runner.stage_script(
+        bake_allowed_under_trust = script_runner.stage_script(
             context,
-            intent="Bake persistent simulation cache while script trust is active",
-            expected_changes="Runs a point-cache bake",
+            intent="Verify persistent simulation operators use trusted manual-script semantics",
+            expected_changes="Records the trusted branch without running a real bake",
             risk_level="high",
             target_objects=[],
-            code="import bpy\nbpy.ops.ptcache.bake_all(bake=True)",
+            code=(
+                "import bpy\n"
+                "if False:\n"
+                "    bpy.ops.ptcache.bake_all(bake=True)\n"
+                "scene['claude_trusted_bake_semantics'] = 'allowed'\n"
+            ),
+            trusted_manual_mode=True,
         )
-        assert bake_guarded_under_trust["ok"], bake_guarded_under_trust
-        assert bake_guarded_under_trust["analysis"]["explicit_approval_required"], bake_guarded_under_trust
-        assert not bake_guarded_under_trust["analysis"]["trust_window_allowed"], bake_guarded_under_trust
-        bake_guarded_result = script_runner.run_externally_approved_script(context, "", checkpoint_enabled=False)
-        assert not bake_guarded_result["ok"], bake_guarded_result
-        assert "disabled" in bake_guarded_result["message"], bake_guarded_result
-        assert state.pending_script
+        assert bake_allowed_under_trust["ok"], bake_allowed_under_trust
+        assert bake_allowed_under_trust["analysis"]["trusted_manual_mode"], bake_allowed_under_trust
+        assert not bake_allowed_under_trust["analysis"]["explicit_approval_required"], bake_allowed_under_trust
+        assert bake_allowed_under_trust["analysis"]["trust_window_allowed"], bake_allowed_under_trust
+        bake_allowed_result = script_runner.run_externally_approved_script(context, "", checkpoint_enabled=False)
+        assert bake_allowed_result["ok"], bake_allowed_result
+        assert context.scene["claude_trusted_bake_semantics"] == "allowed"
         assert script_runner.external_script_trust_active(context, state=state)
-        rejected = script_runner.reject_pending_script(context)
-        assert rejected["ok"], rejected
 
         animation_allowed_under_trust = json.loads(
             tool_dispatcher.execute_tool(
@@ -468,7 +472,7 @@ print("created", obj.name)
         assert "Should Not Stage Red" in bpy.data.materials
         assert script_runner.external_script_trust_active(context, state=state)
 
-        asset_guarded_under_trust = json.loads(
+        asset_allowed_under_trust = json.loads(
             tool_dispatcher.execute_tool(
                 context,
                 "draft_script",
@@ -480,15 +484,13 @@ print("created", obj.name)
                 },
             )
         )
-        assert not asset_guarded_under_trust["ok"], asset_guarded_under_trust
-        assert asset_guarded_under_trust["code"] == "external_asset_workflow_required", asset_guarded_under_trust
-        assert "start_external_asset_download" in asset_guarded_under_trust["recommended_tools"], asset_guarded_under_trust
-        assert "start_external_asset_import_job" in asset_guarded_under_trust["recommended_tools"], asset_guarded_under_trust
-        assert "auto_ran" not in asset_guarded_under_trust, asset_guarded_under_trust
+        assert asset_allowed_under_trust["ok"], asset_allowed_under_trust
+        assert asset_allowed_under_trust["auto_ran"] is True, asset_allowed_under_trust
+        assert asset_allowed_under_trust["helper_advisory"]["code"] == "external_asset_workflow_required", asset_allowed_under_trust
         assert not state.pending_script
         assert script_runner.external_script_trust_active(context, state=state)
 
-        project_file_guarded_under_trust = json.loads(
+        project_file_allowed_under_trust = json.loads(
             tool_dispatcher.execute_tool(
                 context,
                 "draft_script",
@@ -496,36 +498,42 @@ print("created", obj.name)
                     "intent": "Save this blend file as a new .blend path with Python.",
                     "expected_changes": "The current project is saved to a new file.",
                     "risk_level": "medium",
-                    "code": "import bpy\nbpy.ops.wm.save_as_mainfile(filepath='C:/tmp/should-not-stage.blend')",
+                    "code": (
+                        "import bpy\n"
+                        "if False:\n"
+                        "    bpy.ops.wm.save_as_mainfile(filepath='C:/tmp/manual-semantics.blend')\n"
+                        "scene['claude_project_file_script_semantics'] = 'allowed'\n"
+                    ),
                 },
             )
         )
-        assert not project_file_guarded_under_trust["ok"], project_file_guarded_under_trust
-        assert project_file_guarded_under_trust["code"] == "project_file_helper_required", project_file_guarded_under_trust
-        assert "get_blend_file_diagnostics" in project_file_guarded_under_trust["recommended_tools"], project_file_guarded_under_trust
-        assert "save_blend_file" in project_file_guarded_under_trust["recommended_tools"], project_file_guarded_under_trust
-        assert "auto_ran" not in project_file_guarded_under_trust, project_file_guarded_under_trust
+        assert project_file_allowed_under_trust["ok"], project_file_allowed_under_trust
+        assert project_file_allowed_under_trust["auto_ran"] is True, project_file_allowed_under_trust
+        assert project_file_allowed_under_trust["helper_advisory"]["code"] == "project_file_helper_required", project_file_allowed_under_trust
+        assert context.scene["claude_project_file_script_semantics"] == "allowed"
         assert not state.pending_script
         assert script_runner.external_script_trust_active(context, state=state)
 
-        missing_privileged_manifest = json.loads(
+        legacy_privileged_without_manifest = json.loads(
             tool_dispatcher.execute_tool(
                 context,
                 "draft_privileged_script",
                 {
                     "script_kind": "external_asset",
                     "intent": "Download a custom asset with Python.",
-                    "expected_changes": "No script should stage without URL/source manifest.",
-                    "approval_summary": "Try missing URLs.",
+                    "expected_changes": "The compatibility endpoint runs under active session trust.",
+                    "approval_summary": "Legacy manifest fields are advisory only.",
                     "declared_paths": [tempfile.gettempdir()],
                     "declared_urls": [],
                     "destructive_actions": [],
-                    "code": "print('missing manifest should not stage')",
+                    "code": "scene['claude_legacy_privileged_alias'] = 'allowed'",
                 },
             )
         )
-        assert not missing_privileged_manifest["ok"], missing_privileged_manifest
-        assert missing_privileged_manifest["code"] == "privileged_scripts_disabled", missing_privileged_manifest
+        assert legacy_privileged_without_manifest["ok"], legacy_privileged_without_manifest
+        assert legacy_privileged_without_manifest["auto_ran"] is True, legacy_privileged_without_manifest
+        assert legacy_privileged_without_manifest["compatibility_alias"] == "draft_script", legacy_privileged_without_manifest
+        assert context.scene["claude_legacy_privileged_alias"] == "allowed"
         assert not state.pending_script
 
         privileged_output_path = os.path.join(tempfile.gettempdir(), "claude_privileged_script_smoke.txt")
@@ -540,8 +548,8 @@ print("created", obj.name)
                 {
                     "script_kind": "external_asset",
                     "intent": "Write a custom external asset cache marker with Python.",
-                    "expected_changes": "A marker file is written only after explicit one-time approval.",
-                    "approval_summary": "Allows filesystem write for a declared cache marker and names the external source.",
+                    "expected_changes": "A marker file is written under active session trust.",
+                    "approval_summary": "Legacy declaration retained as execution context.",
                     "declared_paths": [privileged_output_path],
                     "declared_urls": ["https://example.com/custom-asset.zip"],
                     "destructive_actions": [],
@@ -550,37 +558,43 @@ print("created", obj.name)
                 },
             )
         )
-        assert not privileged_under_trust["ok"], privileged_under_trust
-        assert privileged_under_trust["code"] == "privileged_scripts_disabled", privileged_under_trust
-        assert privileged_under_trust["requires_explicit_one_time_approval"] is False, privileged_under_trust
-        assert privileged_under_trust["trust_window_auto_run_allowed"] is False, privileged_under_trust
-        assert privileged_under_trust["auto_run_attempted"] is False, privileged_under_trust
-        assert "start_external_asset_download" in privileged_under_trust["recommended_tools"], privileged_under_trust
-        assert "start_external_asset_import_job" in privileged_under_trust["recommended_tools"], privileged_under_trust
+        assert privileged_under_trust["ok"], privileged_under_trust
+        assert privileged_under_trust["auto_ran"] is True, privileged_under_trust
+        assert privileged_under_trust["authorization_model"] == "blender_run_script_equivalent", privileged_under_trust
+        assert privileged_under_trust["compatibility_alias"] == "draft_script", privileged_under_trust
         assert not state.pending_script
-        assert not os.path.exists(privileged_output_path), privileged_under_trust
+        assert os.path.exists(privileged_output_path), privileged_under_trust
+        with open(privileged_output_path, "r", encoding="utf-8") as handle:
+            assert handle.read() == "ok"
+        os.remove(privileged_output_path)
         assert script_runner.external_script_trust_active(context, state=state)
 
         privileged_project_path = os.path.join(tempfile.gettempdir(), "claude-privileged-project-smoke.blend")
-        privileged_project_stage = json.loads(
+        privileged_project_alias = json.loads(
             tool_dispatcher.execute_tool(
                 context,
                 "draft_privileged_script",
                 {
                     "script_kind": "project_file",
                     "intent": "Save this project through a custom Python project-file script.",
-                    "expected_changes": "A .blend file would be saved at the declared path after approval.",
+                    "expected_changes": "The project-file operator is accepted under active trust.",
                     "approval_summary": "Allows Blender project-file save to one declared path.",
                     "declared_paths": [privileged_project_path],
                     "declared_urls": [],
                     "destructive_actions": ["save_as_mainfile"],
                     "risk_level": "high",
-                    "code": f"import bpy\nbpy.ops.wm.save_as_mainfile(filepath={privileged_project_path!r})",
+                    "code": (
+                        "import bpy\n"
+                        "if False:\n"
+                        f"    bpy.ops.wm.save_as_mainfile(filepath={privileged_project_path!r})\n"
+                        "scene['claude_privileged_project_alias'] = 'allowed'\n"
+                    ),
                 },
             )
         )
-        assert not privileged_project_stage["ok"], privileged_project_stage
-        assert privileged_project_stage["code"] == "privileged_scripts_disabled", privileged_project_stage
+        assert privileged_project_alias["ok"], privileged_project_alias
+        assert privileged_project_alias["auto_ran"] is True, privileged_project_alias
+        assert context.scene["claude_privileged_project_alias"] == "allowed"
         assert not state.pending_script
 
         custom_helper_gap_allowed = json.loads(
@@ -601,38 +615,50 @@ print("created", obj.name)
         assert not state.pending_script
         assert script_runner.external_script_trust_active(context, state=state)
 
-        trusted_blocked = script_runner.stage_script(
+        trusted_remove_path = os.path.join(tempfile.gettempdir(), "claude-trusted-remove-smoke.txt")
+        with open(trusted_remove_path, "w", encoding="utf-8") as handle:
+            handle.write("remove me")
+        trusted_filesystem_stage = script_runner.stage_script(
             context,
-            intent="Try blocked code while script trust is active",
-            expected_changes="No scene changes should occur",
+            intent="Remove a file while script trust is active",
+            expected_changes="The marker file is removed",
             risk_level="high",
             target_objects=[],
-            code="import os\nos.remove('still_blocked.blend')",
+            code=f"import os\nos.remove({trusted_remove_path!r})",
+            trusted_manual_mode=True,
         )
-        assert trusted_blocked["ok"], trusted_blocked
-        trusted_blocked_run = script_runner.run_externally_approved_script(context, "", checkpoint_enabled=False)
-        assert not trusted_blocked_run["ok"], trusted_blocked_run
-        assert "blocked" in trusted_blocked_run["message"].lower(), trusted_blocked_run
+        assert trusted_filesystem_stage["ok"], trusted_filesystem_stage
+        assert trusted_filesystem_stage["analysis"]["advisory_findings"], trusted_filesystem_stage
+        trusted_filesystem_run = script_runner.run_externally_approved_script(context, "", checkpoint_enabled=False)
+        assert trusted_filesystem_run["ok"], trusted_filesystem_run
+        assert trusted_filesystem_run["authorization_model"] == "blender_run_script_equivalent", trusted_filesystem_run
+        assert not os.path.exists(trusted_remove_path)
         assert script_runner.external_script_trust_active(context, state=state)
-        rejected = script_runner.reject_pending_script(context)
-        assert rejected["ok"], rejected
 
-        auto_blocked = json.loads(
+        auto_remove_path = os.path.join(tempfile.gettempdir(), "claude-auto-trusted-remove-smoke.txt")
+        with open(auto_remove_path, "w", encoding="utf-8") as handle:
+            handle.write("remove me too")
+        auto_filesystem = json.loads(
             tool_dispatcher.execute_tool(
                 context,
                 "draft_script",
                 {
-                    "intent": "Try blocked code through active trust",
-                    "expected_changes": "No scene changes should occur",
+                    "intent": "Use normal Python filesystem access through active trust",
+                    "expected_changes": "The marker file is removed",
                     "risk_level": "high",
-                    "code": "import os\nos.remove('auto_trust_blocked.blend')",
+                    "code": (
+                        "import os\n"
+                        "import socket\n"
+                        "import subprocess\n"
+                        f"os.remove({auto_remove_path!r})\n"
+                    ),
                 },
             )
         )
-        assert not auto_blocked["ok"], auto_blocked
-        assert auto_blocked["code"] == "script_blocked_by_static_checks", auto_blocked
-        assert auto_blocked["analysis"]["blocked"], auto_blocked
-        assert auto_blocked["auto_ran"] is False, auto_blocked
+        assert auto_filesystem["ok"], auto_filesystem
+        assert auto_filesystem["auto_ran"] is True, auto_filesystem
+        assert auto_filesystem["staged"]["analysis"]["advisory_findings"], auto_filesystem
+        assert not os.path.exists(auto_remove_path)
         assert not state.pending_script
 
         trusted_second = script_runner.stage_script(

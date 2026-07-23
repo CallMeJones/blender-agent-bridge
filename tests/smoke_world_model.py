@@ -329,11 +329,11 @@ def main():
             )
         )
         assert not staged_bake["ok"], staged_bake
-        assert staged_bake["code"] == "persistent_bake_script_disabled", staged_bake
+        assert staged_bake["code"] == "script_trust_required", staged_bake
         assert staged_bake["requires_user_approval"] is False, staged_bake
         assert staged_bake["requires_explicit_one_time_approval"] is False, staged_bake
         assert staged_bake["auto_ran"] is False, staged_bake
-        assert "manually in Blender" in staged_bake["recommended_next_step"], staged_bake
+        assert "enable session trust" in staged_bake["recommended_next_step"], staged_bake
 
         bpy.ops.mesh.primitive_cube_add(size=0.25, location=(3.0, 3.0, 0.0))
         plain_object = context.object

@@ -183,8 +183,8 @@ Expose external agents to narrow client tools rather than raw Python first:
 - `create_camera_orbit`: creates a keyframed camera orbit rig around a target object.
 - `commit_preview`: accepts the current live preview changes.
 - `revert_preview`: rolls back the current live preview changes.
-- `draft_script`: stores proposed code without running it by default; auto-runs after static checks while external script trust is active.
-- `run_approved_script`: only runs code after explicit user approval.
+- `draft_script`: refuses while trust is off and auto-runs with Blender Run Script-equivalent permissions while binary session trust is active.
+- `run_approved_script`: compatibility endpoint that refuses the removed per-script approval flow.
 - `undo_last_action`: calls Blender undo for the last approved execution.
 - `save_checkpoint`: saves a copy of the current `.blend` before risky work.
 ## Milestones
@@ -243,7 +243,7 @@ Acceptance:
 - Add-on can create and modify Blender objects.
 - Failures show readable errors and do not silently corrupt state.
 
-Status: Binary runtime script trust is implemented. With trust off, `draft_script` is refused without pending state; with trust on, ordinary static-check-passing scripts run immediately. The lean sidebar exposes one **Trust Agent Scripts**/**Revoke** control plus preview **Commit**/**Revert**. Per-script Run/Reject/token operators are not registered. Privileged generated scripts and persistent simulation bake scripts are refused and must use bounded structured tools or manual Blender operations. Execution still pushes undo when possible, checkpoints when enabled, and records stdout/errors locally.
+Status: Binary runtime script trust is implemented. With trust off, `draft_script` is refused without pending state; with trust on, generated Python runs immediately with Blender Run Script-equivalent filesystem, network, process, project-file, cache, and Blender API access. The lean sidebar exposes one **Trust Agent Scripts**/**Revoke** control plus preview **Commit**/**Revert**. Per-script Run/Reject/token operators are not registered. Static findings are advisory under trust. Execution still pushes undo when possible, checkpoints when enabled, and records stdout/errors locally.
 Tool-loop calls now have a larger output budget for complete `draft_script.code` payloads, and the dispatcher tolerates common alternate script field names before reporting missing code.
 
 ### Milestone 3.5: Live Preview Transactions

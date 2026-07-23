@@ -21,11 +21,11 @@ Use this when:
 Generated Python has one session-wide switch; there is no per-script approval queue.
 
 - With **Trust Agent Scripts** off, `draft_script` is refused without creating a Text datablock or pending UI.
-- With trust on, ordinary generated Python runs immediately after static checks. Blocked scripts are refused and never staged.
+- With trust on, generated Python runs immediately with the same permissions as Blender's **Run Script** command: full Blender API access plus any filesystem, network, subprocess, project-file, and persistent-cache access available to the Blender process.
 - Trust is runtime-only and lasts until **Revoke**, add-on reload, file load, or Blender exit. Starting or stopping the bridge does not silently change the user's choice.
-- `draft_privileged_script` and `run_approved_script` remain compatibility endpoints but always refuse execution. Privileged generated Python cannot be enabled by session trust.
-- Filesystem, network, external-asset, project-file, render, capture, save, and persistent-cache outcomes must use bounded structured tools. `list_project_files`, `read_project_file`, and `write_project_file` are confined to the directory containing the current saved `.blend`; they refuse unsaved projects, path traversal, absolute/hidden paths, and link/reparse-point traversal. Generic writes are capped at 4 MiB and cannot create executable/script/library or `.blend` files. Persistent simulation bake scripts are disabled; inspect first and bake manually in Blender.
-- Static checks are guardrails, not a sandbox. A trusted ordinary script executes inside Blender with Blender's OS permissions, so the switch means trusting the connected agent for the current session.
+- `draft_privileged_script` remains a compatibility alias to `draft_script`; `run_approved_script` refuses the removed per-script token flow.
+- Bounded structured tools are still preferable for external assets, project files, renders, captures, saves, and cache work because they add path/provider validation, provenance, rollback, polling, or recovery. Their restrictions do not constrain trusted Python. In particular, `list_project_files`, `read_project_file`, and `write_project_file` stay confined to the current saved `.blend` directory while trusted Python is not.
+- Static analysis remains visible as advisory risk information after trust; it is not a sandbox or permission filter. Only malformed Python and payloads above the 500k operational ceiling are refused.
 - Execution pushes a Blender undo step when possible, saves a timestamped `.blend` checkpoint when enabled, and records stdout/errors in `Agent Bridge Script Log`.
 - The single sidebar contains connection controls, the binary trust/revoke control, and pending preview **Commit**/**Revert** actions only. The removed **Run Now**, **Reject**, and **Allow Agent Once** operators are not registered.
 
@@ -55,17 +55,17 @@ Defaults and boundaries:
 - Add-on preferences can require a bearer token for HTTP bridge requests.
 - MCP clients call `mcp_server.py`; they do not import Blender Python or touch `bpy`.
 - Mutating helper tools still run inside Blender and use the live-preview/revert path.
-- Generated Python is refused while session script trust is off. With trust on, `draft_script` runs ordinary scripts after static checks.
-- External script trust can run animation-like and helper-overlap scripts after static checks pass. Responses may still include helper advice so clients can choose a structured helper path when it clearly fits.
-- Privileged generated scripts and persistent simulation/cache bake/free scripts are disabled. Project-directory file access uses the bounded project-file tools; broader access requires a purpose-built tool or a manual Blender action.
+- Generated Python is refused while session script trust is off. With trust on, `draft_script` and its compatibility alias run with Blender Run Script-equivalent process permissions.
+- External script trust can run animation-like, helper-overlap, filesystem, network, subprocess, project-file, and persistent simulation/cache scripts. Responses may still include helper and static-analysis advice.
+- Project-directory file tools remain deliberately bounded. That containment applies to those tools only, not to trusted Python.
 - Viewport screenshots, sampled animation playblast frames, inspection renders, render thumbnails, and async render-job outputs exposed through MCP resources are local artifacts. Saved `.blend` files use a project-local `.claude_blender/captures/` folder by default, while unsaved or unwritable projects use Blender's extension user-data directory. Async render jobs launch a background Blender process from a temporary `.blend` copy and can be cancelled with `cancel_render_job` while the bridge session is tracking the process.
-- MCP search summaries, schema lookups, and tool-call results may include `guardrail_warnings` for client routing and recovery. These warnings are advisory; Blender-side path checks, approval gates, preview rollback, and static script analysis remain the enforcement layer.
+- MCP search summaries, schema lookups, and tool-call results may include `guardrail_warnings` for client routing and recovery. These warnings are advisory. Structured tools retain their Blender-side validation and preview rollback, while trusted Python intentionally follows Blender's unrestricted manual-script model.
 - The Blender sidebar surfaces only connection state, binary session trust, and pending preview decisions. Source freshness, recovery, audit, rollback, active-operation, and visual-evidence details remain available through bridge/tool responses rather than a secondary Blender panel.
 - External clients should surface tool calls clearly because MCP tools are model-controlled.
 
 ## Risk Checks
 
-Flag or block proposed scripts that include:
+Flag proposed trusted scripts that include:
 
 - File deletion, overwrite, or broad filesystem traversal.
 - Network calls from generated scripts.
@@ -78,7 +78,7 @@ Flag or block proposed scripts that include:
 - Deleting or renaming many objects, collections, materials, or actions.
 - Mutating linked library data without warning.
 
-These checks are guardrails, not a true sandbox. Blender Python runs with broad local privileges, so session trust and checkpointing remain essential.
+These checks are advisory guardrails under active trust, not a sandbox. Blender Python runs with broad local privileges, so session trust and checkpointing remain essential.
 
 Live-preview reverts return a rollback manifest and warnings when restoration is incomplete. This is visibility, not a guarantee that every possible Blender API mutation is reversible.
 
@@ -111,8 +111,8 @@ Before trusted execution:
 - Save a timestamped bridge-created `.blend` checkpoint when checkpoints are enabled.
 - Record the generated script and result log locally.
 - Require active session script trust before accepting `draft_script`.
-- Refuse blocked or privileged scripts without creating a pending approval state.
-- For animation-like scripts, enforce workflow-first routing before considering trust auto-run.
+- Refuse syntax-invalid or oversized payloads without creating a pending approval state.
+- Return helper-first guidance as advice without preventing a trusted script from running.
 
 During live preview:
 

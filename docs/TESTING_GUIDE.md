@@ -538,7 +538,7 @@ Regression prompts for real clients:
 
 | Prompt | Expected route | Pass condition |
 | --- | --- | --- |
-| `make selected cube bounce twice and get smaller each bounce` | `run_animation_task` or `run_animation_workflow`, then `create_progressive_bounce_animation` | Workflow route preferred; explicit script/Python requests may still use `draft_script` after static checks. |
+| `make selected cube bounce twice and get smaller each bounce` | `run_animation_task` or `run_animation_workflow`, then `create_progressive_bounce_animation` | Workflow route preferred; explicit script/Python requests may use `draft_script` under active session trust. |
 | `block a jump with anticipation, contact, apex, settle` | `plan_animation_workflow` or `run_animation_task`, then timing/blocking helpers | Workflow-first path before Python. |
 | `review this animation for spacing/contact` | Workflow/evaluator/review tools | Review helpers before script repair. |
 
@@ -788,12 +788,12 @@ Owner tests:
 
 Required scenarios:
 
-- Missing code, alternate code field names, compile errors, static warnings, blocked imports/calls, and harmless scripts.
-- Trust off refuses `draft_script` without creating pending script state; trust on immediately runs ordinary static-check-passing scripts.
-- Runtime external script trust allows tokenless runs only while active and only after static checks pass.
+- Missing code, alternate code field names, compile errors, static warnings, analyzer-only blocked imports/calls, and harmless scripts.
+- Trust off refuses `draft_script` without creating pending script state; trust on immediately grants Blender Run Script-equivalent permissions.
+- Runtime external script trust allows tokenless runs only while active. Syntax-invalid and oversized payloads remain operationally invalid.
 - Trust is cleared on add-on reload and file load, but persists across bridge stop/start within the same Blender session.
-- Animation-like and helper-overlap script drafts can stage or auto-run under trust after static checks pass, with helper advice returned as metadata.
-- `draft_privileged_script`, `run_approved_script`, and persistent simulation bake-script requests are refused. Filesystem/network/project outcomes must use bounded structured tools.
+- Animation-like and helper-overlap script drafts auto-run under trust, with helper advice returned as metadata rather than enforcement.
+- Filesystem, `os`, compatibility `draft_privileged_script`, project-file operator, and persistent-bake operator probes execute under trust without performing destructive release-test actions. `run_approved_script` still refuses the removed per-script flow.
 - Checkpoints, undo, stdout/stderr logs, and error tracebacks remain visible; no pending-script approval UI is registered.
 - Audit logs redact code/token-like fields and record bridge/MCP tool calls.
 - Commit/revert preview status and rollback warnings are returned and shown.
@@ -854,7 +854,7 @@ Use `--skip-viewport` when Blender is running headless or the foreground viewpor
 
 Pass criteria:
 
-- Client uses helper/workflow tools when they clearly fit, but custom advanced `draft_script` calls can proceed after static checks and approval/trust.
+- Client uses helper/workflow tools when they clearly fit, but custom advanced `draft_script` calls can proceed under active session trust.
 - Preview changes are visible in Blender and reversible.
 - MCP resources can be read by URI.
 - Blender sidebar stays lean while bridge/tool responses expose source/hash status, audit status, preview manifest, and visual evidence inventory.

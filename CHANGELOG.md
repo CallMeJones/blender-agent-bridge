@@ -4,7 +4,7 @@
 
 ## 0.3.1 - 2026-07-22
 
-- Reduced Blender Agent Bridge to one compact sidebar for bridge status, start/stop, MCP config, binary session script trust/revocation, and preview commit/revert. Removed the per-script Run/Reject/Allow-Once UI and disabled privileged generated scripts; filesystem/network/project outcomes now use bounded structured tools.
+- Reduced Blender Agent Bridge to one compact sidebar for bridge status, start/stop, MCP config, binary session script trust/revocation, and preview commit/revert. Removed the per-script Run/Reject/Allow-Once UI. Trust off refuses generated Python; trust on grants the same filesystem, network, process, project-file, persistent-cache, and Blender API permissions as Blender's Run Script command.
 - Added bounded project-directory list/read/write tools rooted at the current saved `.blend`, with traversal/link protection, hidden-path exclusion, 4 MiB limits, opt-in overwrite, and blocked executable/script/library/`.blend` targets.
 - Hardened external-asset downloads with DNS-pinned public-address connections, redirect revalidation, credential isolation, and a 4 GiB streaming limit.
 - Made PyPI publication safely resumable by comparing tested artifact hashes before upload, skipping only verified existing files, and checking the complete public artifact set afterward.
@@ -26,8 +26,8 @@
 ## 0.2.0 - 2026-07-19
 
 - Kept the Blender sidebar lean around bridge start/stop, MCP config, script trust, pending script approval, preview commit/revert, and checkpoint restore; rich diagnostics remain available through bridge/operator responses instead of always showing in the panel.
-- Relaxed `draft_script` routing so helper-overlap scene, material, and animation scripts can stage or auto-run under trust after static checks, while external asset, project-file, and persistent simulation bake/free paths stay out of the normal script-trust lane.
-- Added `draft_privileged_script` for custom external asset and project-file lifecycle scripts with a declared path/URL/action manifest, elevated static-analysis capabilities, and mandatory one-time approval; these scripts never auto-run under normal external script trust.
+- Relaxed `draft_script` routing so helper-overlap scene, material, and animation scripts can stage or auto-run under trust after static checks, while external asset, project-file, and persistent simulation bake/free paths stayed in a separate privileged lane at the time.
+- Added the original `draft_privileged_script` manifest and one-time-approval path; it is now retained as a compatibility alias to the binary session-trust execution path.
 - Raised the approval-gated script size ceiling to 500k characters for larger procedural scene scripts and allowed safe in-memory `io` use while continuing to block file-opening aliases such as `io.open`.
 - Hardened script analysis so aliased Blender project-file/window operators such as `ops.wm.save_as_mainfile`, `wm.open_mainfile`, and assigned `save_as_mainfile` functions cannot bypass the privileged approval path.
 - Clarified that privileged script manifests are user review/audit context rather than a runtime filesystem or network sandbox.

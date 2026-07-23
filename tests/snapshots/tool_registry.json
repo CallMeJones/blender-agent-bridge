@@ -5775,10 +5775,13 @@
       "timeout_seconds": 300
     },
     "draft_privileged_script": {
-      "approval_policy": "Privileged generated scripts are disabled.",
-      "description": "Compatibility endpoint that refuses privileged generated Python. Use bounded external-asset, project-file, render, capture, save, or project-output tools instead.",
+      "approval_policy": "Requires the binary Blender-side Trust Agent Scripts session control.",
+      "authorization_model": "blender_run_script_equivalent",
+      "description": "Compatibility alias for draft_script. Under active Blender-side session trust it runs generated Python with the same process permissions as Blender's Run Script command; otherwise it refuses.",
+      "destructive_hint": true,
+      "duration_hint": "Synchronous trusted Python may finish in seconds or keep Blender busy indefinitely, depending on the script.",
       "explicit_approval_required": false,
-      "has_side_effects": false,
+      "has_side_effects": true,
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -5787,7 +5790,7 @@
             "type": "string"
           },
           "capabilities": {
-            "description": "Requested elevated capabilities. Defaults are inferred from script_kind and merged with this list.",
+            "description": "Legacy capability declaration retained as advisory context; active session trust grants full manual-script permissions.",
             "items": {
               "enum": [
                 "filesystem",
@@ -5800,7 +5803,7 @@
             "type": "array"
           },
           "code": {
-            "description": "Complete privileged Blender Python script to stage for approval",
+            "description": "Complete Blender Python script to run under active session trust",
             "maxLength": 500000,
             "type": "string"
           },
@@ -5843,7 +5846,7 @@
             "type": "string"
           },
           "script_kind": {
-            "description": "Privileged workflow class that determines default capabilities and approval checks.",
+            "description": "Legacy workflow classification retained for client compatibility and audit context.",
             "enum": [
               "external_asset",
               "project_file",
@@ -5861,7 +5864,9 @@
         },
         "type": "object"
       },
-      "mutates_scene": false,
+      "long_running": true,
+      "mutates_scene": true,
+      "open_world_hint": true,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -5934,20 +5939,34 @@
         "type": "object"
       },
       "permissions": [
-        "scene:read"
+        "blender:full",
+        "filesystem:full",
+        "network:full",
+        "process:spawn"
       ],
-      "recovery_hint": "Use the corresponding bounded structured tool.",
+      "recovery_hint": "Use checkpoints, Blender undo, or bounded structured tools when stronger recovery is needed.",
       "requires_approval": false,
-      "trust_window_auto_run_allowed": false
+      "timeout_recovery": {
+        "message": "If trusted Python times out, wait, call blender_bridge_status, inspect visual evidence and the audit log, and rerun only if no result or side effect appeared.",
+        "poll_after_seconds": 5,
+        "recoverable": true,
+        "resource_tool": "get_visual_evidence_resources",
+        "status_tool": "blender_bridge_status"
+      },
+      "timeout_seconds": 300,
+      "trust_window_auto_run_allowed": true
     },
     "draft_script": {
-      "description": "Run Blender Python immediately after static checks when Blender-side session script trust is active. When trust is off the request is refused without staging a pending script. Use only when bounded helper tools cannot express the requested scene, animation, material, or rig change.",
+      "authorization_model": "blender_run_script_equivalent",
+      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without staging a pending script. Prefer bounded helpers when they provide better recovery or progress reporting.",
+      "destructive_hint": true,
+      "duration_hint": "Synchronous trusted Python may finish in seconds or keep Blender busy indefinitely, depending on the script.",
       "has_side_effects": true,
       "input_schema": {
         "additionalProperties": false,
         "properties": {
           "code": {
-            "description": "Complete Blender Python script to stage for approval",
+            "description": "Complete Blender Python script to run under active session trust",
             "maxLength": 500000,
             "type": "string"
           },
@@ -5984,7 +6003,9 @@
         ],
         "type": "object"
       },
+      "long_running": true,
       "mutates_scene": true,
+      "open_world_hint": true,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -5999,7 +6020,21 @@
         },
         "type": "object"
       },
-      "requires_approval": false
+      "permissions": [
+        "blender:full",
+        "filesystem:full",
+        "network:full",
+        "process:spawn"
+      ],
+      "requires_approval": false,
+      "timeout_recovery": {
+        "message": "If trusted Python times out, wait, call blender_bridge_status, inspect visual evidence and the audit log, and rerun only if no result or side effect appeared.",
+        "poll_after_seconds": 5,
+        "recoverable": true,
+        "resource_tool": "get_visual_evidence_resources",
+        "status_tool": "blender_bridge_status"
+      },
+      "timeout_seconds": 300
     },
     "duplicate_selected_objects": {
       "description": "Duplicate selected objects with optional unique data, offset, animation copy, and selecting the new duplicates. Applies immediately with preview revert support.",
@@ -10502,15 +10537,18 @@
       "requires_live_preview": true
     },
     "stage_persistent_simulation_bake": {
-      "approval_policy": "Persistent simulation/cache bake and free scripts are disabled.",
-      "description": "Compatibility tool that refuses persistent simulation bake scripts. Inspect the simulation, then perform the persistent bake manually in Blender.",
+      "approval_policy": "Requires active binary session trust and then runs immediately.",
+      "authorization_model": "blender_run_script_equivalent",
+      "description": "Inspect the requested simulation scope, then run a fixed-template scene-wide persistent point-cache bake when Blender-side session script trust is active. Trust off refuses without staging.",
+      "destructive_hint": true,
+      "duration_hint": "Synchronous scene-wide simulation baking may take from seconds to hours and can keep Blender unavailable while it runs.",
       "explicit_approval_required": false,
-      "has_side_effects": false,
+      "has_side_effects": true,
       "input_schema": {
         "additionalProperties": false,
         "properties": {
           "auto_run_if_trusted": {
-            "description": "Compatibility option only; explicit-approval-only bake/free scripts remain staged even when external script trust is active.",
+            "description": "Deprecated compatibility option. Active session trust always runs immediately; trust off always refuses.",
             "type": "boolean"
           },
           "clear_existing": {
@@ -10537,7 +10575,8 @@
         },
         "type": "object"
       },
-      "mutates_scene": false,
+      "long_running": true,
+      "mutates_scene": true,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -10614,9 +10653,21 @@
         ],
         "type": "object"
       },
+      "permissions": [
+        "blender:full",
+        "filesystem:full"
+      ],
       "recovery_hint": "If Blender becomes unreachable after an approved bake, wait, call blender_bridge_status, then use get_blend_file_diagnostics before reporting any checkpoint path.",
       "requires_approval": false,
-      "trust_window_auto_run_allowed": false
+      "timeout_recovery": {
+        "message": "If baking times out, wait before calling blender_bridge_status and get_blend_file_diagnostics; do not rerun while the original bake may still be active.",
+        "poll_after_seconds": 10,
+        "recoverable": true,
+        "resource_tool": "get_blend_file_diagnostics",
+        "status_tool": "blender_bridge_status"
+      },
+      "timeout_seconds": 300,
+      "trust_window_auto_run_allowed": true
     },
     "start_external_asset_download": {
       "description": "Default client path: start an asynchronous external asset download/cache job for Poly Haven or Sketchfab. Use this for any normal asset download/cache or import request. Returns immediately with a job id; poll get_external_asset_job_status until completed or failed, then queue scene import with start_external_asset_import_job.",
@@ -12898,12 +12949,12 @@
       "name": "inspect_simulation_bake"
     },
     {
-      "description": "Compatibility tool that refuses persistent simulation bake scripts. Inspect the simulation, then perform the persistent bake manually in Blender.",
+      "description": "Inspect the requested simulation scope, then run a fixed-template scene-wide persistent point-cache bake when Blender-side session script trust is active. Trust off refuses without staging.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
           "auto_run_if_trusted": {
-            "description": "Compatibility option only; explicit-approval-only bake/free scripts remain staged even when external script trust is active.",
+            "description": "Deprecated compatibility option. Active session trust always runs immediately; trust off always refuses.",
             "type": "boolean"
           },
           "clear_existing": {
@@ -18685,12 +18736,12 @@
       "name": "prune_external_asset_cache"
     },
     {
-      "description": "Run Blender Python immediately after static checks when Blender-side session script trust is active. When trust is off the request is refused without staging a pending script. Use only when bounded helper tools cannot express the requested scene, animation, material, or rig change.",
+      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without staging a pending script. Prefer bounded helpers when they provide better recovery or progress reporting.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
           "code": {
-            "description": "Complete Blender Python script to stage for approval",
+            "description": "Complete Blender Python script to run under active session trust",
             "maxLength": 500000,
             "type": "string"
           },
@@ -18730,7 +18781,7 @@
       "name": "draft_script"
     },
     {
-      "description": "Compatibility endpoint that refuses privileged generated Python. Use bounded external-asset, project-file, render, capture, save, or project-output tools instead.",
+      "description": "Compatibility alias for draft_script. Under active Blender-side session trust it runs generated Python with the same process permissions as Blender's Run Script command; otherwise it refuses.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -18739,7 +18790,7 @@
             "type": "string"
           },
           "capabilities": {
-            "description": "Requested elevated capabilities. Defaults are inferred from script_kind and merged with this list.",
+            "description": "Legacy capability declaration retained as advisory context; active session trust grants full manual-script permissions.",
             "items": {
               "enum": [
                 "filesystem",
@@ -18752,7 +18803,7 @@
             "type": "array"
           },
           "code": {
-            "description": "Complete privileged Blender Python script to stage for approval",
+            "description": "Complete Blender Python script to run under active session trust",
             "maxLength": 500000,
             "type": "string"
           },
@@ -18795,7 +18846,7 @@
             "type": "string"
           },
           "script_kind": {
-            "description": "Privileged workflow class that determines default capabilities and approval checks.",
+            "description": "Legacy workflow classification retained for client compatibility and audit context.",
             "enum": [
               "external_asset",
               "project_file",
@@ -19056,7 +19107,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "165dfe8bf1712adced0f20996a89fd0fe2dea6aa6226b04b27ea79042b1aee04",
+  "registry_digest": "70a8ac8b24139278b2392dadd326758042e336095e00ff4c88f5065fc8f69179",
   "schema_version": 1,
   "specs": [
     {
@@ -23205,11 +23256,15 @@
     },
     {
       "contract": {
-        "approval_policy": "Persistent simulation/cache bake and free scripts are disabled.",
-        "description": "Refuse persistent simulation bake scripts and direct the user to manual Blender baking",
+        "approval_policy": "Requires active binary session trust and then runs immediately.",
+        "authorization_model": "blender_run_script_equivalent",
+        "description": "Run a fixed-template scene-wide persistent point-cache bake under active binary session trust",
+        "destructive_hint": true,
+        "duration_hint": "Synchronous scene-wide simulation baking may take from seconds to hours and can keep Blender unavailable while it runs.",
         "explicit_approval_required": false,
-        "has_side_effects": false,
-        "mutates_scene": false,
+        "has_side_effects": true,
+        "long_running": true,
+        "mutates_scene": true,
         "output_schema": {
           "additionalProperties": true,
           "properties": {
@@ -23286,11 +23341,23 @@
           ],
           "type": "object"
         },
+        "permissions": [
+          "blender:full",
+          "filesystem:full"
+        ],
         "recovery_hint": "If Blender becomes unreachable after an approved bake, wait, call blender_bridge_status, then use get_blend_file_diagnostics before reporting any checkpoint path.",
         "requires_approval": false,
-        "trust_window_auto_run_allowed": false
+        "timeout_recovery": {
+          "message": "If baking times out, wait before calling blender_bridge_status and get_blend_file_diagnostics; do not rerun while the original bake may still be active.",
+          "poll_after_seconds": 10,
+          "recoverable": true,
+          "resource_tool": "get_blend_file_diagnostics",
+          "status_tool": "blender_bridge_status"
+        },
+        "timeout_seconds": 300,
+        "trust_window_auto_run_allowed": true
       },
-      "description": "Compatibility tool that refuses persistent simulation bake scripts. Inspect the simulation, then perform the persistent bake manually in Blender.",
+      "description": "Inspect the requested simulation scope, then run a fixed-template scene-wide persistent point-cache bake when Blender-side session script trust is active. Trust off refuses without staging.",
       "exposure": "compact_direct",
       "groups": [
         "animation",
@@ -23303,7 +23370,7 @@
         "additionalProperties": false,
         "properties": {
           "auto_run_if_trusted": {
-            "description": "Compatibility option only; explicit-approval-only bake/free scripts remain staged even when external script trust is active.",
+            "description": "Deprecated compatibility option. Active session trust always runs immediately; trust off always refuses.",
             "type": "boolean"
           },
           "clear_existing": {
@@ -35164,12 +35231,31 @@
     },
     {
       "contract": {
-        "description": "Run generated Blender Python after static checks only while Blender-side session script trust is active",
+        "authorization_model": "blender_run_script_equivalent",
+        "description": "Run generated Blender Python with Blender Run Script-equivalent permissions only while Blender-side session script trust is active",
+        "destructive_hint": true,
+        "duration_hint": "Synchronous trusted Python may finish in seconds or keep Blender busy indefinitely, depending on the script.",
         "has_side_effects": true,
+        "long_running": true,
         "mutates_scene": true,
-        "requires_approval": false
+        "open_world_hint": true,
+        "permissions": [
+          "blender:full",
+          "filesystem:full",
+          "network:full",
+          "process:spawn"
+        ],
+        "requires_approval": false,
+        "timeout_recovery": {
+          "message": "If trusted Python times out, wait, call blender_bridge_status, inspect visual evidence and the audit log, and rerun only if no result or side effect appeared.",
+          "poll_after_seconds": 5,
+          "recoverable": true,
+          "resource_tool": "get_visual_evidence_resources",
+          "status_tool": "blender_bridge_status"
+        },
+        "timeout_seconds": 300
       },
-      "description": "Run Blender Python immediately after static checks when Blender-side session script trust is active. When trust is off the request is refused without staging a pending script. Use only when bounded helper tools cannot express the requested scene, animation, material, or rig change.",
+      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without staging a pending script. Prefer bounded helpers when they provide better recovery or progress reporting.",
       "exposure": "catalog",
       "groups": [],
       "handler_key": "draft_script",
@@ -35177,7 +35263,7 @@
         "additionalProperties": false,
         "properties": {
           "code": {
-            "description": "Complete Blender Python script to stage for approval",
+            "description": "Complete Blender Python script to run under active session trust",
             "maxLength": 500000,
             "type": "string"
           },
@@ -35234,11 +35320,16 @@
     },
     {
       "contract": {
-        "approval_policy": "Privileged generated scripts are disabled.",
-        "description": "Refuse privileged generated Python and direct clients to bounded structured tools",
+        "approval_policy": "Requires the binary Blender-side Trust Agent Scripts session control.",
+        "authorization_model": "blender_run_script_equivalent",
+        "description": "Compatibility alias that uses the same session-trusted execution path as draft_script",
+        "destructive_hint": true,
+        "duration_hint": "Synchronous trusted Python may finish in seconds or keep Blender busy indefinitely, depending on the script.",
         "explicit_approval_required": false,
-        "has_side_effects": false,
-        "mutates_scene": false,
+        "has_side_effects": true,
+        "long_running": true,
+        "mutates_scene": true,
+        "open_world_hint": true,
         "output_schema": {
           "additionalProperties": true,
           "properties": {
@@ -35311,13 +35402,24 @@
           "type": "object"
         },
         "permissions": [
-          "scene:read"
+          "blender:full",
+          "filesystem:full",
+          "network:full",
+          "process:spawn"
         ],
-        "recovery_hint": "Use the corresponding bounded structured tool.",
+        "recovery_hint": "Use checkpoints, Blender undo, or bounded structured tools when stronger recovery is needed.",
         "requires_approval": false,
-        "trust_window_auto_run_allowed": false
+        "timeout_recovery": {
+          "message": "If trusted Python times out, wait, call blender_bridge_status, inspect visual evidence and the audit log, and rerun only if no result or side effect appeared.",
+          "poll_after_seconds": 5,
+          "recoverable": true,
+          "resource_tool": "get_visual_evidence_resources",
+          "status_tool": "blender_bridge_status"
+        },
+        "timeout_seconds": 300,
+        "trust_window_auto_run_allowed": true
       },
-      "description": "Compatibility endpoint that refuses privileged generated Python. Use bounded external-asset, project-file, render, capture, save, or project-output tools instead.",
+      "description": "Compatibility alias for draft_script. Under active Blender-side session trust it runs generated Python with the same process permissions as Blender's Run Script command; otherwise it refuses.",
       "exposure": "catalog",
       "groups": [],
       "handler_key": "draft_privileged_script",
@@ -35329,7 +35431,7 @@
             "type": "string"
           },
           "capabilities": {
-            "description": "Requested elevated capabilities. Defaults are inferred from script_kind and merged with this list.",
+            "description": "Legacy capability declaration retained as advisory context; active session trust grants full manual-script permissions.",
             "items": {
               "enum": [
                 "filesystem",
@@ -35342,7 +35444,7 @@
             "type": "array"
           },
           "code": {
-            "description": "Complete privileged Blender Python script to stage for approval",
+            "description": "Complete Blender Python script to run under active session trust",
             "maxLength": 500000,
             "type": "string"
           },
@@ -35385,7 +35487,7 @@
             "type": "string"
           },
           "script_kind": {
-            "description": "Privileged workflow class that determines default capabilities and approval checks.",
+            "description": "Legacy workflow classification retained for client compatibility and audit context.",
             "enum": [
               "external_asset",
               "project_file",

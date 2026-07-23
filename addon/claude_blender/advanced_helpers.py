@@ -7066,7 +7066,7 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "create_camera_dolly_animation",
             "capture_animation_playblast",
         ],
-        "script_boundary": "Prefer storyboard/cutout helpers when they fit; draft_script can handle custom Grease Pencil stroke editing, SVG conversion, or bespoke vector workflows after static checks.",
+        "script_boundary": "Prefer storyboard/cutout helpers when they fit; under active session trust draft_script can handle custom Grease Pencil stroke editing, SVG conversion, or bespoke vector workflows.",
     },
     "procedural_3d": {
         "keywords": {"advanced 3d", "procedural", "array", "scatter", "kit", "object kit", "kitbash", "mechanical", "mechanical joint", "mechanical part", "control panel", "modular", "wall panel", "pipe run", "hard surface", "hard-surface", "geometry nodes", "node group", "modifier stack", "edit mesh", "extrude", "inset", "loop cut", "loop-cut", "knife", "proportional edit", "bridge", "dissolve", "merge", "curve to mesh", "convert curve", "boolean", "cutter", "mirror", "symmetry", "symmetrize", "solidify", "screw", "thread", "spiral", "wall thickness"},
@@ -7101,7 +7101,7 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "create_motion_arc",
             "analyze_animation_principles",
         ],
-        "script_boundary": "Prefer workflow helpers for common blocking/review/repair; draft_script can handle custom advanced animation, rig, or driver code after static checks.",
+        "script_boundary": "Prefer workflow helpers for common blocking/review/repair; under active session trust draft_script can handle custom advanced animation, rig, or driver code.",
     },
     "simulation_setup": {
         "keywords": {"simulation", "cloth", "physics", "particle", "rigid body", "cache", "bake"},
@@ -7112,7 +7112,7 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "inspect_simulation_bake",
             "stage_persistent_simulation_bake",
         ],
-        "script_boundary": "Persistent bake/free scripts are disabled; inspect first, then ask the user to bake manually in Blender.",
+        "script_boundary": "Inspect first; persistent bake/free scripts may run only under active session trust and can block Blender while they execute.",
     },
     "asset_import": {
         "keywords": {"external asset", "asset import", "import asset", "import model", "download asset", "poly haven", "polyhaven", "sketchfab", "hdri", "texture library"},
@@ -7128,7 +7128,7 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "create_studio_product_stage",
             "capture_viewport",
         ],
-        "script_boundary": "Use the bounded async asset job and project-file tools; privileged generated scripts are disabled.",
+        "script_boundary": "Prefer bounded async asset jobs and project-file tools for validation, provenance, and progress; trusted scripts retain Blender Run Script permissions.",
     },
     "compositor_render": {
         "keywords": {"compositor", "compositing", "post", "post process", "transparent", "alpha", "render preset", "render pass", "render passes", "aov", "aovs", "cryptomatte", "normal pass", "depth pass", "mp4", "preview"},
@@ -7914,7 +7914,7 @@ def plan_asset_import_workflow(
                 "prepare_imported_asset_presentation",
             ],
             "synchronous_fallbacks_debug_only": ["download_poly_haven_asset", "import_poly_haven_asset", "download_sketchfab_model", "import_sketchfab_model", "import_external_asset_job_result"],
-            "custom_asset_scripts": "Privileged generated scripts are disabled; report the helper gap instead of requesting arbitrary filesystem or network Python.",
+            "custom_asset_scripts": "Prefer bounded asset jobs; if a real helper gap remains, draft_script may use filesystem or network Python under active session trust.",
         },
     }
 
@@ -8058,8 +8058,9 @@ def plan_director_workflow(
         "script_fallback_policy": {
             "helper_first": True,
             "draft_script_allowed_after_helper_gap_when_session_trusted": True,
-            "privileged_generated_scripts_disabled": True,
-            "persistent_bake_scripts_disabled": True,
+            "trusted_script_authorization_model": "blender_run_script_equivalent",
+            "privileged_generated_scripts_allowed_when_session_trusted": True,
+            "persistent_bake_scripts_allowed_when_session_trusted": True,
         },
     }
 

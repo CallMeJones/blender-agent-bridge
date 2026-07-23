@@ -104,6 +104,16 @@ def main():
         ):
             assert not hasattr(ui, removed_renderer), removed_renderer
 
+        trust_dialog_layout = _FakeLayout()
+        trust_dialog = type("_TrustDialog", (), {"layout": trust_dialog_layout})()
+        ui.CLAUDEBLENDER_OT_approve_external_script_trust.draw(trust_dialog, context)
+        assert trust_dialog_layout.labels == [
+            "Trust agent-generated Python for this Blender session?",
+            "Equivalent to Blender Run Script: files, network, and processes are allowed.",
+            "Any client connected to this local bridge can use these permissions.",
+            "Runs with Blender's OS permissions until Revoke, file load, reload, or exit.",
+        ], trust_dialog_layout.labels
+
         # The exact operator sets are a product boundary: adding setup or
         # diagnostics to the default panel must require an intentional test change.
         for running, expected_status, expected_operators in (

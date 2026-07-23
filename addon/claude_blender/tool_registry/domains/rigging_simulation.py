@@ -76,28 +76,41 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'get_rigging_details'
   'exposure': 'compact_direct',
   'owner': 'rigging_simulation'},
  {'name': 'stage_persistent_simulation_bake',
-  'description': 'Compatibility tool that refuses persistent simulation bake scripts. Inspect the simulation, then '
-                 'perform the persistent bake manually in Blender.',
+  'description': 'Inspect the requested simulation scope, then run a fixed-template scene-wide persistent point-cache '
+                 'bake when Blender-side session script trust is active. Trust off refuses without staging.',
   'input_schema': {'type': 'object',
                    'properties': {'object_names': {'type': 'array', 'items': {'type': 'string'}},
                                   'frame_start': {'type': 'integer'},
                                   'frame_end': {'type': 'integer'},
                                   'clear_existing': {'type': 'boolean'},
-                                  'include_scene_rigid_body_world': {'type': 'boolean'},
-                                  'auto_run_if_trusted': {'type': 'boolean',
-                                                          'description': 'Compatibility option only; '
-                                                                         'explicit-approval-only bake/free scripts '
-                                                                         'remain staged even when external script '
-                                                                         'trust is active.'},
+                                   'include_scene_rigid_body_world': {'type': 'boolean'},
+                                   'auto_run_if_trusted': {'type': 'boolean',
+                                                           'description': 'Deprecated compatibility option. Active '
+                                                                          'session trust always runs immediately; '
+                                                                          'trust off always refuses.'},
                                   'max_objects': {'type': 'integer'}},
                    'additionalProperties': False},
-  'contract': {'description': 'Refuse persistent simulation bake scripts and direct the user to manual Blender baking',
-               'mutates_scene': False,
-               'has_side_effects': False,
+  'contract': {'description': 'Run a fixed-template scene-wide persistent point-cache bake under active binary session trust',
+               'mutates_scene': True,
+               'has_side_effects': True,
                'requires_approval': False,
                'explicit_approval_required': False,
-               'trust_window_auto_run_allowed': False,
-               'approval_policy': 'Persistent simulation/cache bake and free scripts are disabled.',
+               'trust_window_auto_run_allowed': True,
+               'approval_policy': 'Requires active binary session trust and then runs immediately.',
+               'authorization_model': 'blender_run_script_equivalent',
+               'permissions': ['blender:full', 'filesystem:full'],
+               'long_running': True,
+               'destructive_hint': True,
+               'timeout_seconds': 300,
+               'duration_hint': 'Synchronous scene-wide simulation baking may take from seconds to hours and can keep '
+                                'Blender unavailable while it runs.',
+               'timeout_recovery': {'recoverable': True,
+                                    'poll_after_seconds': 10,
+                                    'status_tool': 'blender_bridge_status',
+                                    'resource_tool': 'get_blend_file_diagnostics',
+                                    'message': 'If baking times out, wait before calling blender_bridge_status and '
+                                               'get_blend_file_diagnostics; do not rerun while the original bake may '
+                                               'still be active.'},
                'recovery_hint': 'If Blender becomes unreachable after an approved bake, wait, call '
                                 'blender_bridge_status, then use get_blend_file_diagnostics before reporting any '
                                 'checkpoint path.',

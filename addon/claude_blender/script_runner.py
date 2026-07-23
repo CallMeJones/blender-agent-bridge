@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import contextlib
 import datetime as _dt
 import io
@@ -95,6 +96,88 @@ def _pending_script_capabilities(state):
 
 def _analyze_pending_source(source, state=None):
     return analyze_script(source, privileged_capabilities=_pending_script_capabilities(state))
+
+
+def analyze_trusted_script(source):
+    """Validate a trusted script without pretending static analysis is a sandbox."""
+    source = str(source or "")
+    if len(source) > MAX_SCRIPT_CHARS:
+        return {
+            "ok": False,
+            "blocked": True,
+            "issues": [f"Script is too large: {len(source)} chars > {MAX_SCRIPT_CHARS}"],
+            "warnings": [],
+            "risk_level": "blocked",
+            "risk_reasons": ["script_too_large"],
+            "checkpoint_recommended": True,
+            "explicit_approval_required": False,
+            "explicit_approval_reasons": [],
+            "privileged_capabilities": [],
+            "trust_window_allowed": False,
+            "trusted_manual_mode": True,
+            "authorization_model": "blender_run_script_equivalent",
+        }
+    try:
+        ast.parse(source)
+    except SyntaxError as exc:
+        return {
+            "ok": False,
+            "blocked": True,
+            "issues": [f"Syntax error: {exc}"],
+            "warnings": [],
+            "risk_level": "blocked",
+            "risk_reasons": ["syntax_error"],
+            "checkpoint_recommended": True,
+            "explicit_approval_required": False,
+            "explicit_approval_reasons": [],
+            "privileged_capabilities": [],
+            "trust_window_allowed": False,
+            "trusted_manual_mode": True,
+            "authorization_model": "blender_run_script_equivalent",
+        }
+    try:
+        advisory = analyze_script(source)
+    except Exception as exc:
+        advisory = {
+            "ok": True,
+            "blocked": False,
+            "issues": [],
+            "warnings": [f"Static advisory analysis unavailable: {type(exc).__name__}: {exc}"],
+            "risk_level": "high",
+            "risk_reasons": ["static_advisory_unavailable"],
+            "checkpoint_recommended": True,
+            "explicit_approval_required": False,
+            "explicit_approval_reasons": [],
+            "privileged_capabilities": [],
+            "trust_window_allowed": True,
+        }
+
+    legacy_explicit_reasons = list(advisory.get("explicit_approval_reasons", []))
+    findings = list(advisory.get("issues", [])) + legacy_explicit_reasons
+    warnings = list(advisory.get("warnings", []))
+    warnings.extend(f"Advisory under session trust: {finding}" for finding in findings)
+    result = dict(advisory)
+    result.update(
+        {
+            "ok": True,
+            "blocked": False,
+            "issues": [],
+            "warnings": warnings,
+            "advisory_findings": findings,
+            "risk_level": "high" if findings or advisory.get("explicit_approval_required") else advisory.get("risk_level", "low"),
+            "checkpoint_recommended": bool(
+                findings
+                or advisory.get("explicit_approval_required")
+                or advisory.get("checkpoint_recommended")
+            ),
+            "explicit_approval_required": False,
+            "explicit_approval_reasons": [],
+            "trust_window_allowed": True,
+            "trusted_manual_mode": True,
+            "authorization_model": "blender_run_script_equivalent",
+        }
+    )
+    return result
 
 
 def _clear_pending_script_metadata(state):
@@ -283,8 +366,8 @@ def approve_external_script_trust_window(context, *, ttl_seconds=EXTERNAL_TRUST_
         )
         transcript.record_system_message(
             "User approved external script trust for this Blender session. "
-            "External clients may run staged scripts without a per-script token until revoke, reload, or bridge restart; "
-            "blocked scripts and failing static checks remain refused."
+            "Agent-generated Python now has the same process permissions as Blender's Run Script command, including "
+            "filesystem, network, subprocess, and Blender API access, until revoke, file load, add-on reload, or exit."
         )
         return {
             "ok": True,
@@ -309,8 +392,8 @@ def approve_external_script_trust_window(context, *, ttl_seconds=EXTERNAL_TRUST_
     )
     transcript.record_system_message(
         "User approved external script trust. "
-        "Static-check-passing ordinary scripts may run until trust is revoked or cleared; "
-        "blocked and privileged scripts remain refused."
+        "Agent-generated Python now has the same process permissions as Blender's Run Script command, including "
+        "filesystem, network, subprocess, and Blender API access, until trust expires, is revoked, or is cleared."
     )
     return {
         "ok": True,
@@ -351,21 +434,19 @@ def _external_approval_error(state, message, *, clear=False):
 
 
 def _validate_current_pending_script_for_external_run(context, state):
-    if state.pending_script_blocked:
-        return _external_approval_error(state, "Pending script is blocked by static checks", clear=True)
     text_name = state.pending_script_text_name or PENDING_SCRIPT_NAME
     source = _read_text_block(text_name)
     if not source:
         return _external_approval_error(state, "No pending script text found", clear=True)
-    analysis = _analyze_pending_source(source, state)
+    analysis = analyze_trusted_script(source)
     if not analysis["ok"]:
         state.pending_script_blocked = True
-        state.pending_script_status = "Blocked by static checks"
+        state.pending_script_status = "Trusted script payload is invalid"
         state.pending_script_issues = _join_lines(analysis.get("issues"))
         state.pending_script_warnings = _join_lines(analysis.get("warnings"))
         state.status = state.pending_script_status
-        clear_external_script_approval(state=state, status="External approval blocked by static checks")
-        return {"ok": False, "message": "Script blocked by static checks", "analysis": analysis}
+        clear_external_script_approval(state=state, status="Trusted script payload is invalid")
+        return {"ok": False, "message": "Trusted script payload is invalid", "analysis": analysis}
     return {"ok": True, "message": "Pending script accepted", "text_name": text_name, "source": source, "analysis": analysis}
 
 
@@ -382,10 +463,12 @@ def validate_external_script_approval(context, approval_token):
     accepted = _validate_current_pending_script_for_external_run(context, state)
     if not accepted.get("ok"):
         return accepted
-    analysis = accepted.get("analysis") or {}
-    if getattr(state, "pending_script_privileged", False) or analysis.get("explicit_approval_required"):
-        return _external_approval_error(state, "Privileged generated scripts are disabled")
-    return {"ok": True, "message": "Session script trust accepted", "approval_mode": "session_trust"}
+    return {
+        "ok": True,
+        "message": "Session script trust accepted with Blender Run Script permissions",
+        "approval_mode": "session_trust",
+        "authorization_model": "blender_run_script_equivalent",
+    }
 
 
 def run_externally_approved_script(context, approval_token, *, checkpoint_enabled=True, checkpoint_dir=None):
@@ -520,6 +603,7 @@ def _metadata_text(
     declared_paths=None,
     declared_urls=None,
     destructive_actions=None,
+    trusted_manual_mode=False,
 ):
     privileged_capabilities = _normalize_list(privileged_capabilities)
     declared_paths = _normalize_list(declared_paths)
@@ -532,6 +616,7 @@ def _metadata_text(
         f"Declared risk: {risk_level or 'unspecified'}",
         f"Detected risk: {analysis.get('risk_level', 'unknown')}",
         f"Checkpoint recommended: {'yes' if analysis.get('checkpoint_recommended') else 'no'}",
+        f"Execution mode: {'Blender Run Script equivalent' if trusted_manual_mode else 'staged validation'}",
         f"External trust auto-run: {'yes' if analysis.get('trust_window_allowed', analysis.get('ok')) else 'no'}",
         f"Privileged: {'yes' if privileged else 'no'}",
         f"Privileged kind: {privileged_kind or 'none'}",
@@ -555,12 +640,18 @@ def _metadata_text(
         expected_changes or "No expected changes provided",
         "",
         "Static analysis:",
-        "PASS" if analysis["ok"] else "BLOCKED",
+        (
+            "ADVISORY ONLY (session trust grants Blender Run Script permissions)"
+            if trusted_manual_mode and analysis["ok"]
+            else ("PASS" if analysis["ok"] else "INVALID PAYLOAD")
+        ),
     ]
     for issue in analysis.get("issues", []):
         lines.append(f"- {issue}")
     for warning in analysis.get("warnings", []):
         lines.append(f"- Warning: {warning}")
+    for finding in analysis.get("advisory_findings", []):
+        lines.append(f"- Advisory finding: {finding}")
     for reason in analysis.get("explicit_approval_reasons", []):
         lines.append(f"- Explicit approval required: {reason}")
     for reason in analysis.get("risk_reasons", [])[:12]:
@@ -583,6 +674,7 @@ def stage_script(
     declared_paths=None,
     declared_urls=None,
     destructive_actions=None,
+    trusted_manual_mode=False,
 ):
     target_objects = [str(obj) for obj in (target_objects or []) if str(obj)]
     privileged_capabilities = _normalize_list(privileged_capabilities)
@@ -599,7 +691,11 @@ def stage_script(
             ),
             "missing_code": True,
         }
-    analysis = analyze_script(code, privileged_capabilities=privileged_capabilities if privileged else None)
+    analysis = (
+        analyze_trusted_script(code)
+        if trusted_manual_mode
+        else analyze_script(code, privileged_capabilities=privileged_capabilities if privileged else None)
+    )
     script_text = _write_text_block(PENDING_SCRIPT_NAME, code)
     metadata = _metadata_text(
         intent=str(intent or ""),
@@ -614,6 +710,7 @@ def stage_script(
         declared_paths=declared_paths,
         declared_urls=declared_urls,
         destructive_actions=destructive_actions,
+        trusted_manual_mode=bool(trusted_manual_mode),
     )
     _write_text_block(f"{PENDING_SCRIPT_NAME} Metadata", metadata)
 
@@ -623,7 +720,9 @@ def stage_script(
         issue_text = _join_lines(analysis.get("issues"))
         warning_text = _join_lines(analysis.get("warnings"))
         if analysis.get("blocked"):
-            status = "Blocked by static checks"
+            status = "Script payload is invalid" if trusted_manual_mode else "Blocked by static checks"
+        elif trusted_manual_mode:
+            status = "Trusted script staged for immediate execution"
         elif analysis.get("warnings"):
             prefix = "Pending privileged approval" if privileged else "Pending approval"
             status = f"{prefix} with {len(analysis.get('warnings', []))} warning(s)"
@@ -655,11 +754,15 @@ def stage_script(
     )
     return {
         "ok": True,
-        "message": "Script staged for approval" if analysis["ok"] else "Script staged but blocked by static checks",
+        "message": (
+            "Trusted script staged for immediate execution"
+            if trusted_manual_mode and analysis["ok"]
+            else ("Script staged for approval" if analysis["ok"] else "Script staged but validation failed")
+        ),
         "text_datablock": script_text.name,
         "metadata_datablock": f"{PENDING_SCRIPT_NAME} Metadata",
         "analysis": analysis,
-        "requires_user_approval": True,
+        "requires_user_approval": not bool(trusted_manual_mode),
         "privileged": bool(privileged),
         "privileged_kind": str(privileged_kind or ""),
         "privileged_capabilities": privileged_capabilities,
@@ -669,6 +772,8 @@ def stage_script(
         "destructive_actions": destructive_actions,
         "trust_window_auto_run_allowed": bool(analysis.get("trust_window_allowed")),
         "manifest_enforcement": "review_context_only" if privileged else "none",
+        "trusted_manual_mode": bool(trusted_manual_mode),
+        "authorization_model": "blender_run_script_equivalent" if trusted_manual_mode else "staged_validation",
     }
 
 
@@ -733,16 +838,20 @@ def run_pending_script(context, *, checkpoint_enabled=True, checkpoint_dir=None)
     if not source:
         clear_external_script_approval(state=state, status="No pending script text found")
         return {"ok": False, "message": "No pending script text found"}
-    analysis = _analyze_pending_source(source, state)
+    trusted_manual_mode = external_script_trust_active(context)
+    analysis = analyze_trusted_script(source) if trusted_manual_mode else _analyze_pending_source(source, state)
     if not analysis["ok"]:
         if state:
             state.pending_script_blocked = True
-            state.pending_script_status = "Blocked by static checks"
+            state.pending_script_status = (
+                "Trusted script payload is invalid" if trusted_manual_mode else "Blocked by static checks"
+            )
             state.pending_script_issues = _join_lines(analysis.get("issues"))
             state.pending_script_warnings = _join_lines(analysis.get("warnings"))
             state.status = state.pending_script_status
-        clear_external_script_approval(state=state, status="External approval blocked by static checks")
-        return {"ok": False, "message": "Script blocked by static checks", "analysis": analysis}
+        failure_message = "Trusted script payload is invalid" if trusted_manual_mode else "Script blocked by static checks"
+        clear_external_script_approval(state=state, status=failure_message)
+        return {"ok": False, "message": failure_message, "analysis": analysis}
 
     checkpoint = {"ok": False, "message": "Checkpoint disabled", "path": ""}
     if checkpoint_enabled:
@@ -828,10 +937,17 @@ def run_pending_script(context, *, checkpoint_enabled=True, checkpoint_dir=None)
         pass
     return {
         "ok": True,
-        "message": "Script executed",
+        "message": (
+            "Script executed with Blender Run Script permissions"
+            if trusted_manual_mode
+            else "Script executed"
+        ),
         "stdout": output,
         "log_datablock": SCRIPT_LOG_NAME,
         "checkpoint": checkpoint,
+        "authorization_model": (
+            "blender_run_script_equivalent" if trusted_manual_mode else "staged_validation"
+        ),
     }
 
 
