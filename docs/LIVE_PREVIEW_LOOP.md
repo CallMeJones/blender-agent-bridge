@@ -14,7 +14,7 @@ Live preview should feel like this:
 4. Blender's viewport, timeline, and relevant UI redraw.
 5. The sidebar shows a compact pending summary with `Commit` and `Revert`; Blender's normal undo remains available through Blender itself.
 
-This is separate from generated Python. With **Trust Agent Scripts** off, arbitrary scripts are refused without staging. With trust on, they run immediately with Blender **Run Script**-equivalent permissions and use checkpoints/undo for recovery.
+This is separate from generated Python. With **Trust Agent Scripts** off, arbitrary scripts are refused without retaining script state. With trust on, they run immediately with Blender **Run Script**-equivalent permissions and use checkpoints/undo for recovery.
 
 ## Preview Transactions
 

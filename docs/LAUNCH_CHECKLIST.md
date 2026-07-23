@@ -62,7 +62,7 @@ Launch is a **go** only when every Required gate is Done and each Manual item is
 - [x] **Done** — External downloads reject private/local destinations, pin a validated public address, constrain redirects and credential forwarding, and enforce a 4 GiB limit.
 - [x] **Done** — Sketchfab session tokens are masked, memory-only, and excluded from preferences, `.blend` files, manifests, and audit logs.
 - [x] **Done** — Negative bridge, MCP, script-analysis, project-path, external-asset, token-redaction, and trust tests pass through the unit, pure-Python, and Blender suites.
-- [x] **Done** — `blender_manifest.toml` permissions, [PRIVACY.md](../PRIVACY.md), and [SAFETY_MODEL.md](SAFETY_MODEL.md) were reviewed against the v0.3.1 behavior.
+- [x] **Done** — `blender_manifest.toml` permissions, [SECURITY.md](../SECURITY.md), [PRIVACY.md](../PRIVACY.md), and [SAFETY_MODEL.md](SAFETY_MODEL.md) match binary session trust. Unit coverage rejects the removed staged/per-script security wording.
 - [x] **Done** — The official extension ZIP contains `LICENSE` and excludes repository metadata, bytecode, logs, caches, captures, checkpoints, tokens, and private `.blend` artifacts.
 - [ ] **Required** — Run the secret scan against the final reviewed commit and every candidate artifact input; record the scanner version and result.
 - [x] **Done locally** — Clean installed-extension smoke confirms trust-off refusal without pending state, trust-on immediate execution, permanent refusal of the removed per-script path, compatibility-alias execution under trust, revoke, reload cleanup, and bridge-restart persistence on Blender 4.2.0, 4.5.0, and 5.1.2.

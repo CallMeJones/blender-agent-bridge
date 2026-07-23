@@ -125,10 +125,11 @@ def stage_persistent_simulation_bake(context, args):
         "message": (
             "Persistent simulation bake ran with Blender Run Script permissions"
             if run_result.get("ok")
-            else "Persistent simulation bake script failed"
+            else run_result.get("message", "Persistent simulation bake did not run")
         ),
+        "code": run_result.get("code"),
         "inspection": inspection,
-        "staged": run_result.get("prepared"),
+        "prepared": run_result.get("prepared"),
         "run_result": run_result,
         "frame_range": [frame_start, frame_end],
         "range_preparation_scope": range_scope,
@@ -143,8 +144,13 @@ def stage_persistent_simulation_bake(context, args):
         "requires_explicit_one_time_approval": False,
         "trust_window_auto_run_allowed": True,
         "approval_policy": "Requires active binary session trust and then runs immediately.",
-        "auto_run_attempted": True,
-        "auto_ran": bool(run_result.get("ok")),
+        "auto_run_attempted": bool(run_result.get("auto_run_attempted")),
+        "auto_run_skipped_reason": (
+            ""
+            if run_result.get("auto_run_attempted")
+            else str(run_result.get("code") or "not_attempted")
+        ),
+        "auto_ran": bool(run_result.get("auto_ran")),
         "authorization_model": "blender_run_script_equivalent",
     }
 

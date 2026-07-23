@@ -321,19 +321,19 @@ def main():
         assert simulation_bake["simulation_details"]["summary"]["rigid_body_object_count"] >= 1, simulation_bake
         assert scene.frame_current == frame_before_simulation_inspect, simulation_bake
 
-        staged_bake = json.loads(
+        trust_off_bake = json.loads(
             tool_dispatcher.execute_tool(
                 context,
                 "stage_persistent_simulation_bake",
                 {"object_names": ["Cube"], "frame_start": 1, "frame_end": 12, "auto_run_if_trusted": False},
             )
         )
-        assert not staged_bake["ok"], staged_bake
-        assert staged_bake["code"] == "script_trust_required", staged_bake
-        assert staged_bake["requires_user_approval"] is False, staged_bake
-        assert staged_bake["requires_explicit_one_time_approval"] is False, staged_bake
-        assert staged_bake["auto_ran"] is False, staged_bake
-        assert "enable session trust" in staged_bake["recommended_next_step"], staged_bake
+        assert not trust_off_bake["ok"], trust_off_bake
+        assert trust_off_bake["code"] == "script_trust_required", trust_off_bake
+        assert trust_off_bake["requires_user_approval"] is False, trust_off_bake
+        assert trust_off_bake["requires_explicit_one_time_approval"] is False, trust_off_bake
+        assert trust_off_bake["auto_ran"] is False, trust_off_bake
+        assert "enable session trust" in trust_off_bake["recommended_next_step"], trust_off_bake
 
         bpy.ops.mesh.primitive_cube_add(size=0.25, location=(3.0, 3.0, 0.0))
         plain_object = context.object

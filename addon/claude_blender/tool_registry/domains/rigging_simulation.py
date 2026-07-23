@@ -77,7 +77,7 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'get_rigging_details'
   'owner': 'rigging_simulation'},
  {'name': 'stage_persistent_simulation_bake',
   'description': 'Inspect the requested simulation scope, then run a fixed-template scene-wide persistent point-cache '
-                 'bake when Blender-side session script trust is active. Trust off refuses without staging.',
+                 'bake when Blender-side session script trust is active. Trust off refuses without retaining script state.',
   'input_schema': {'type': 'object',
                    'properties': {'object_names': {'type': 'array', 'items': {'type': 'string'}},
                                   'frame_start': {'type': 'integer'},
@@ -138,16 +138,16 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'get_rigging_details'
                                                                                                          'error '
                                                                                                          'message'}},
                                                                'additionalProperties': True},
-                                                'staged': {'type': 'object',
-                                                           'properties': {'ok': {'type': 'boolean',
-                                                                                 'description': 'Whether the tool '
-                                                                                                'completed '
-                                                                                                'successfully'},
-                                                                          'message': {'type': 'string',
-                                                                                      'description': 'Human-readable '
-                                                                                                     'status or error '
-                                                                                                     'message'}},
-                                                           'additionalProperties': True}},
+                                                 'prepared': {'type': 'object',
+                                                              'properties': {'ok': {'type': 'boolean',
+                                                                                    'description': 'Whether the tool '
+                                                                                                   'completed '
+                                                                                                   'successfully'},
+                                                                             'message': {'type': 'string',
+                                                                                         'description': 'Human-readable '
+                                                                                                        'status or error '
+                                                                                                        'message'}},
+                                                              'additionalProperties': True}},
                                  'required': ['ok'],
                                  'additionalProperties': True}},
   'handler_key': 'stage_persistent_simulation_bake',

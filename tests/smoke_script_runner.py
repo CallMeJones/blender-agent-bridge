@@ -159,6 +159,21 @@ def main():
         bridge_status = bridge_server._scene_status()
         assert bridge_status["external_script_trust"] is True, bridge_status
         assert "pending_script" not in bridge_status, bridge_status
+        invalid_tool = _execute(
+            context,
+            "draft_script",
+            {
+                "intent": "Prove invalid payload reporting under active trust",
+                "expected_changes": "Nothing runs",
+                "risk_level": "low",
+                "code": "if True print('broken')",
+            },
+        )
+        assert not invalid_tool["ok"], invalid_tool
+        assert invalid_tool["code"] == "invalid_script_payload", invalid_tool
+        assert invalid_tool["auto_run_reason"] == "invalid_script_payload", invalid_tool
+        assert invalid_tool["prepared"] is None, invalid_tool
+        assert "staged" not in invalid_tool, invalid_tool
 
         first_checkpoint = script_runner.create_checkpoint(context, checkpoint_dir=checkpoint_dir)
         second_checkpoint = script_runner.create_checkpoint(context, checkpoint_dir=checkpoint_dir)
@@ -274,7 +289,7 @@ print("created", obj.name)
             },
         )
         assert bake_semantics["ok"] and bake_semantics["auto_ran"], bake_semantics
-        assert bake_semantics["staged"]["analysis"]["advisory_findings"], bake_semantics
+        assert bake_semantics["prepared"]["analysis"]["advisory_findings"], bake_semantics
         assert context.scene["trusted_bake_semantics"] == "allowed"
 
         restored = script_runner.restore_checkpoint(context, run["run_result"]["checkpoint"]["path"])

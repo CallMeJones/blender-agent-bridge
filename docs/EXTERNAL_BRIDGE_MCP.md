@@ -194,7 +194,7 @@ Set `BLENDER_MCP_FULL_TOOL_LIST=1` in the MCP server environment to expose every
 
 Catalog summaries, schema lookups, and tool-call results may include `guardrail_warnings`. These are advisory, machine-readable nudges for MCP clients; they do not replace Blender-side enforcement. Current warning categories cover synchronous external asset fallbacks, cache cleanup writes, destructive project-file operations, user-confirmed paths, session-trusted scripts, live-preview mutations, long-running synchronous calls, helper-first advanced 2D/3D/simulation/camera routing, and background job polling.
 
-`draft_script` is available for custom and larger advanced Blender Python, with a 500k-character payload ceiling. With trust off it refuses without staging. With trust on it runs immediately with the same filesystem, network, subprocess, project-file, persistent-cache, and Blender API permissions as Blender's **Run Script** command. Helper and static-analysis findings may be returned as advice, but they do not become hidden authorization filters after trust.
+`draft_script` is available for custom and larger advanced Blender Python, with a 500k-character payload ceiling. With trust off it refuses without retaining script state. With trust on it runs immediately with the same filesystem, network, subprocess, project-file, persistent-cache, and Blender API permissions as Blender's **Run Script** command. Helper and static-analysis findings may be returned as advice, but they do not become hidden authorization filters after trust.
 
 `draft_privileged_script` is a compatibility alias to the same binary trust path. Bounded external-asset, project-file, render, capture, save, and cache tools remain preferable when their validation, provenance, recovery, or progress reporting helps. `list_project_files`, `read_project_file`, and `write_project_file` expose the current saved `.blend` directory only; they reject unsaved projects, traversal, absolute/hidden paths, and links, and cap generic reads/writes at 4 MiB. Generic writes also reject executable/script/library and `.blend` targets. Those limits apply to the structured tools, not to trusted Python.
 
@@ -318,7 +318,7 @@ MCP tools are model-controlled, so the external client must make tool use visibl
 
 - Read-only tools inspect scene context and docs.
 - Live helper tools mutate the scene through preview rollback.
-- Generated Python uses one binary, runtime-only switch. Trust off refuses `draft_script` without staging; trust on immediately runs with Blender Run Script-equivalent process permissions.
+- Generated Python uses one binary, runtime-only switch. Trust off refuses `draft_script` without retaining script state; trust on immediately runs with Blender Run Script-equivalent process permissions.
 - `draft_privileged_script` is a compatibility alias to the trusted execution path. `run_approved_script` refuses the removed per-script token flow. There are no approval tokens or pending-script actions.
 - Trust can be enabled before or after starting the bridge. It is cleared by **Revoke**, add-on reload, file load, or Blender exit. Static findings remain advisory after trust.
 - The bridge is off until started and binds to localhost only.

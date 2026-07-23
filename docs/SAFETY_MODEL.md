@@ -111,7 +111,7 @@ Before trusted execution:
 - Save a timestamped bridge-created `.blend` checkpoint when checkpoints are enabled.
 - Record the generated script and result log locally.
 - Require active session script trust before accepting `draft_script`.
-- Refuse syntax-invalid or oversized payloads without creating a pending approval state.
+- Refuse syntax-invalid or oversized payloads without creating a script Text datablock or retained execution state.
 - Return helper-first guidance as advice without preventing a trusted script from running.
 
 During live preview:

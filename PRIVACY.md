@@ -4,7 +4,7 @@ Blender Agent Bridge is a local, provider-neutral bridge. **The add-on never con
 
 ## Local Data
 
-The add-on may store local Blender Text datablocks for transcripts, pending scripts, script logs, and repair context. It may also write docs caches, checkpoints, viewport screenshots, sampled playblast frame sequences, and audit logs under user-controlled local paths.
+The add-on may store local Blender Text datablocks for transcripts, the latest trusted script and its advisory metadata, and script logs. Trust-off requests do not create a script Text datablock or pending approval state. The add-on may also write docs caches, checkpoints, viewport screenshots, sampled playblast frame sequences, and audit logs under user-controlled local paths.
 
 Viewport screenshots are generated only when visual context is requested. Sampled animation playblast frames are generated only when `capture_animation_playblast` is called. Saved `.blend` files store captures under a project-local `.claude_blender/captures/<session_id>` folder by default. Unsaved or unwritable projects use the global `~/.claude_blender/captures/<project_id>/<session_id>` fallback, and a custom capture cache preference acts as a custom base directory. Treat project-local captures as generated artifacts unless you intentionally keep them.
 
@@ -27,6 +27,7 @@ When you start the localhost MCP bridge, it binds to `127.0.0.1` only and expose
 ## User Controls
 
 - Keep the bridge off (it is off by default) until you want an external client to connect; optionally require a bearer token.
+- Remember that an untokened bridge accepts any local client that can reach it. Configure a bridge token before enabling script trust when the machine or Blender process crosses a local privilege boundary.
 - Keep screenshots off unless visual context is needed, and request playblast capture only when animation review needs visible frames.
-- Use `Reject` for unwanted pending Python, and `Revoke Trust` to end a runtime external script trust preset before it expires.
+- Keep **Trust Agent Scripts** off unless you want connected agents to run Blender Python with Blender's full process permissions, and use **Revoke** to end that runtime session grant.
 - Delete local checkpoint, screenshot, playblast, docs-cache, transcript, and audit files from disk when no longer needed.

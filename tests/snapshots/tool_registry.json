@@ -5896,7 +5896,7 @@
           "auto_run_attempted": {
             "type": "boolean"
           },
-          "auto_run_skipped_reason": {
+          "auto_run_reason": {
             "type": "string"
           },
           "declared_paths": {
@@ -5958,7 +5958,7 @@
     },
     "draft_script": {
       "authorization_model": "blender_run_script_equivalent",
-      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without staging a pending script. Prefer bounded helpers when they provide better recovery or progress reporting.",
+      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. Prefer bounded helpers when they provide better recovery or progress reporting.",
       "destructive_hint": true,
       "duration_hint": "Synchronous trusted Python may finish in seconds or keep Blender busy indefinitely, depending on the script.",
       "has_side_effects": true,
@@ -5971,7 +5971,7 @@
             "type": "string"
           },
           "expected_changes": {
-            "description": "Visible scene/data changes the user should expect if they approve it",
+            "description": "Visible scene/data changes the user should expect if it runs under active trust",
             "type": "string"
           },
           "intent": {
@@ -10539,7 +10539,7 @@
     "stage_persistent_simulation_bake": {
       "approval_policy": "Requires active binary session trust and then runs immediately.",
       "authorization_model": "blender_run_script_equivalent",
-      "description": "Inspect the requested simulation scope, then run a fixed-template scene-wide persistent point-cache bake when Blender-side session script trust is active. Trust off refuses without staging.",
+      "description": "Inspect the requested simulation scope, then run a fixed-template scene-wide persistent point-cache bake when Blender-side session script trust is active. Trust off refuses without retaining script state.",
       "destructive_hint": true,
       "duration_hint": "Synchronous scene-wide simulation baking may take from seconds to hours and can keep Blender unavailable while it runs.",
       "explicit_approval_required": false,
@@ -10618,16 +10618,7 @@
           "ok": {
             "type": "boolean"
           },
-          "recommended_next_step": {
-            "type": "string"
-          },
-          "requires_explicit_one_time_approval": {
-            "type": "boolean"
-          },
-          "requires_user_approval": {
-            "type": "boolean"
-          },
-          "staged": {
+          "prepared": {
             "additionalProperties": true,
             "properties": {
               "message": {
@@ -10640,6 +10631,15 @@
               }
             },
             "type": "object"
+          },
+          "recommended_next_step": {
+            "type": "string"
+          },
+          "requires_explicit_one_time_approval": {
+            "type": "boolean"
+          },
+          "requires_user_approval": {
+            "type": "boolean"
           },
           "trust_window_auto_run_allowed": {
             "type": "boolean"
@@ -12949,7 +12949,7 @@
       "name": "inspect_simulation_bake"
     },
     {
-      "description": "Inspect the requested simulation scope, then run a fixed-template scene-wide persistent point-cache bake when Blender-side session script trust is active. Trust off refuses without staging.",
+      "description": "Inspect the requested simulation scope, then run a fixed-template scene-wide persistent point-cache bake when Blender-side session script trust is active. Trust off refuses without retaining script state.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -18736,7 +18736,7 @@
       "name": "prune_external_asset_cache"
     },
     {
-      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without staging a pending script. Prefer bounded helpers when they provide better recovery or progress reporting.",
+      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. Prefer bounded helpers when they provide better recovery or progress reporting.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -18746,7 +18746,7 @@
             "type": "string"
           },
           "expected_changes": {
-            "description": "Visible scene/data changes the user should expect if they approve it",
+            "description": "Visible scene/data changes the user should expect if it runs under active trust",
             "type": "string"
           },
           "intent": {
@@ -19107,7 +19107,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "b8484ae20d7c04e7541200a960024143885a6d3c41d431edd3750a49f21743d5",
+  "registry_digest": "e22aeb73c2d09296700f442f0fa5ab1635b5c2fb2b6818b14fa137cf4bc209bd",
   "schema_version": 1,
   "specs": [
     {
@@ -23306,16 +23306,7 @@
             "ok": {
               "type": "boolean"
             },
-            "recommended_next_step": {
-              "type": "string"
-            },
-            "requires_explicit_one_time_approval": {
-              "type": "boolean"
-            },
-            "requires_user_approval": {
-              "type": "boolean"
-            },
-            "staged": {
+            "prepared": {
               "additionalProperties": true,
               "properties": {
                 "message": {
@@ -23328,6 +23319,15 @@
                 }
               },
               "type": "object"
+            },
+            "recommended_next_step": {
+              "type": "string"
+            },
+            "requires_explicit_one_time_approval": {
+              "type": "boolean"
+            },
+            "requires_user_approval": {
+              "type": "boolean"
             },
             "trust_window_auto_run_allowed": {
               "type": "boolean"
@@ -23357,7 +23357,7 @@
         "timeout_seconds": 300,
         "trust_window_auto_run_allowed": true
       },
-      "description": "Inspect the requested simulation scope, then run a fixed-template scene-wide persistent point-cache bake when Blender-side session script trust is active. Trust off refuses without staging.",
+      "description": "Inspect the requested simulation scope, then run a fixed-template scene-wide persistent point-cache bake when Blender-side session script trust is active. Trust off refuses without retaining script state.",
       "exposure": "compact_direct",
       "groups": [
         "animation",
@@ -23440,16 +23440,7 @@
           "ok": {
             "type": "boolean"
           },
-          "recommended_next_step": {
-            "type": "string"
-          },
-          "requires_explicit_one_time_approval": {
-            "type": "boolean"
-          },
-          "requires_user_approval": {
-            "type": "boolean"
-          },
-          "staged": {
+          "prepared": {
             "additionalProperties": true,
             "properties": {
               "message": {
@@ -23462,6 +23453,15 @@
               }
             },
             "type": "object"
+          },
+          "recommended_next_step": {
+            "type": "string"
+          },
+          "requires_explicit_one_time_approval": {
+            "type": "boolean"
+          },
+          "requires_user_approval": {
+            "type": "boolean"
           },
           "trust_window_auto_run_allowed": {
             "type": "boolean"
@@ -35255,7 +35255,7 @@
         },
         "timeout_seconds": 300
       },
-      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without staging a pending script. Prefer bounded helpers when they provide better recovery or progress reporting.",
+      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. Prefer bounded helpers when they provide better recovery or progress reporting.",
       "exposure": "catalog",
       "groups": [],
       "handler_key": "draft_script",
@@ -35268,7 +35268,7 @@
             "type": "string"
           },
           "expected_changes": {
-            "description": "Visible scene/data changes the user should expect if they approve it",
+            "description": "Visible scene/data changes the user should expect if it runs under active trust",
             "type": "string"
           },
           "intent": {
@@ -35359,7 +35359,7 @@
             "auto_run_attempted": {
               "type": "boolean"
             },
-            "auto_run_skipped_reason": {
+            "auto_run_reason": {
               "type": "string"
             },
             "declared_paths": {
@@ -35536,7 +35536,7 @@
           "auto_run_attempted": {
             "type": "boolean"
           },
-          "auto_run_skipped_reason": {
+          "auto_run_reason": {
             "type": "string"
           },
           "declared_paths": {

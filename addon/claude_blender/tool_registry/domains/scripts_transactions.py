@@ -8,13 +8,13 @@ from ..registry import ToolSpec
 SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'draft_script',
   'description': "Run Blender Python immediately with the same process permissions as Blender's Run Script command "
                  'when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, '
-                 'and Blender API access are allowed. When trust is off the request is refused without staging a '
-                 'pending script. Prefer bounded helpers when they provide better recovery or progress reporting.',
+                 'and Blender API access are allowed. When trust is off the request is refused without retaining '
+                 'script state. Prefer bounded helpers when they provide better recovery or progress reporting.',
   'input_schema': {'type': 'object',
                    'properties': {'intent': {'type': 'string', 'description': 'Plain-language reason for the script'},
                                   'expected_changes': {'type': 'string',
                                                        'description': 'Visible scene/data changes the user should '
-                                                                      'expect if they approve it'},
+                                                                      'expect if it runs under active trust'},
                                   'risk_level': {'type': 'string',
                                                  'enum': ['low', 'medium', 'high'],
                                                  'description': 'Risk estimate based on scope, destructiveness, and '
@@ -136,7 +136,7 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'draft_script',
                                                 'trust_window_auto_run_allowed': {'type': 'boolean'},
                                                 'auto_run_attempted': {'type': 'boolean'},
                                                 'auto_ran': {'type': 'boolean'},
-                                                'auto_run_skipped_reason': {'type': 'string'},
+                                                'auto_run_reason': {'type': 'string'},
                                                 'approval_policy': {'type': 'string'},
                                                 'approval_summary': {'type': 'string'},
                                                 'declared_paths': {'type': 'array', 'items': {'type': 'string'}},

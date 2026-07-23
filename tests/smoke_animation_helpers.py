@@ -220,7 +220,7 @@ def main():
                     "intent": "Animate the cube with a custom helper gap; helper tools cannot express this diagnostic fallback.",
                     "expected_changes": "A diagnostic custom property is set; no animation helper can express the exact test condition.",
                     "risk_level": "low",
-                    "code": "scene['claude_animation_helper_gap_smoke'] = 'staged'",
+                    "code": "scene['claude_animation_helper_gap_smoke'] = 'allowed'",
                 },
             )
         )

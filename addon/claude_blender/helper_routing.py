@@ -367,7 +367,7 @@ HELPER_FIRST_SCRIPT_RULES = (
             "free_bake_all",
         },
         "message": (
-            "Use simulation inspection and the fixed persistent-bake staging helper before drafting custom "
+            "Use simulation inspection and the fixed persistent-bake helper before drafting custom "
             "simulation bake Python."
         ),
         "recommended_tools": [

@@ -42,7 +42,7 @@ Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets
    Move the selected cube up 1 Blender unit and make it red. Leave the change as a preview.
    ```
 
-Live helper edits stay pending in Blender until you use `Commit`, `Revert`, or Blender undo. For Sketchfab downloads/imports, add `SKETCHFAB_API_TOKEN` to the copied MCP config `env` block before restarting the MCP client. Generated Python uses a binary runtime switch: with **Trust Agent Scripts** off it is refused without a pending dialog; with trust on it runs immediately with the same filesystem, network, subprocess, project-file, persistent-cache, and Blender API permissions as Blender's **Run Script** command. Bounded tools remain the recommended path when their validation, recovery, provenance, or progress reporting is useful.
+Live helper edits stay pending in Blender until you use `Commit`, `Revert`, or Blender undo. For Sketchfab downloads/imports, add `SKETCHFAB_API_TOKEN` to the copied MCP config `env` block before restarting the MCP client. Generated Python uses a binary runtime switch: with **Trust Agent Scripts** off it is refused without a pending dialog; with trust on it runs immediately with the same filesystem, network, subprocess, project-file, persistent-cache, and Blender API permissions as Blender's **Run Script** command. The confirmation warns that any client connected to the local bridge can use those permissions. Bounded tools remain the recommended path when their validation, recovery, provenance, or progress reporting is useful.
 
 Bundled mode remains the zero-install default. Optional `uvx / PyPI` mode requires [`uv`](https://docs.astral.sh/uv/getting-started/installation/) and generates an exact version pin such as `uvx --from blender-bridge==0.3.1 blender-bridge`. Both modes expose the same registry and safety contracts; the protocol and registry digest handshake rejects incompatible combinations. See the [client guide matrix](docs/clients/README.md) for client- and OS-specific setup.
 
@@ -72,7 +72,7 @@ AI agents are getting good at using tools, but Blender needs guardrails. This br
 - Blender stays the execution layer: scene state, viewport evidence, preview changes, binary script trust, checkpoints, and local resources.
 - The external client stays the agent host: model connection, conversation memory, provider account, planning, and user chat.
 - Generated Python is not the default path. Agents get structured helpers first; arbitrary scripts are refused while trust is off and run immediately after the user grants runtime session trust.
-- Blender has one deliberately small sidebar panel: bridge status/start-stop, `Copy MCP Config`, active script-trust revocation, and decisions that currently need attention. Diagnostics, manifests, audit state, captures, and asset configuration stay in bridge/tool responses instead of returning as sidebar sections.
+- Blender has one deliberately small sidebar panel: bridge status/start-stop, `Copy MCP Config`, **Trust Agent Scripts**/**Revoke**, and pending preview **Commit**/**Revert**. Diagnostics, manifests, audit state, captures, and asset configuration stay in bridge/tool responses instead of returning as sidebar sections.
 - Advanced helper paths include bounded procedural object kits and directed animation shot templates before custom Python fallback.
 
 ## Showcase: Egypt Dogfight
@@ -117,6 +117,7 @@ Connected agents do not get blanket access by default. Enabling session script t
 | Visual capture tools | Store local project/session-scoped screenshots, playblast frames, inspection renders, thumbnails, and render outputs. |
 | Project files | Save-as, save-copy, open, and new-project tools require a user-confirmed path. Autosave only saves an already-bound active `.blend` file in place. |
 | External assets | Poly Haven uses public catalog/file APIs. Sketchfab downloads/imports accept a per-call token, the MCP server environment, or a masked memory-only Blender-session token. Tokens are redacted and never written to preferences, blend files, or job metadata. |
+| Local bridge | Off by default and bound to `127.0.0.1`. Optional bearer authentication is available; without it, any local client that can reach the bridge may call its tools. |
 | Generated Python | Refused without pending UI while trust is off; runs immediately while runtime-only session trust is active. Syntax errors and payloads above 500k are rejected operationally. |
 | Trusted Python | Equivalent to manually using Blender **Run Script**: full Blender API plus the filesystem, network, subprocess, project-file, and persistent-cache access available to the Blender process. |
 | External script trust | Explicit, runtime-only, session-scoped, and visibly revocable. It is cleared by Revoke, file load, add-on reload, or Blender exit. Static findings become warnings, not a sandbox or permission filter. |
@@ -268,9 +269,12 @@ Run pure-Python checks:
 
 ```powershell
 python -m compileall addon\claude_blender tests
+python -m unittest discover -s tests\unit -p "test_*.py" -v
 python tests\smoke_helper_routing.py
 python tests\smoke_release_consistency.py
 python tests\smoke_bridge_protocol_validation.py
+python tests\smoke_script_analysis.py
+python tests\smoke_script_analysis_bypass.py
 python tests\smoke_mcp_server.py
 python tests\smoke_build_extension_zip.py
 python tests\smoke_audit_log.py

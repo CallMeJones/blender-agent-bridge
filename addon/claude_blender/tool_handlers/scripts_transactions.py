@@ -89,6 +89,15 @@ def draft_script(context, args):
             "Agent script trust is off. Start the bridge and select Trust Agent Scripts in Blender, "
             "or complete the task with bounded structured tools."
         )
+    run_code = str(run_result.get("code") or "")
+    if run_result.get("auto_run_attempted"):
+        auto_run_reason = "external_script_trust_active"
+    elif run_code == "script_trust_required":
+        auto_run_reason = "external_script_trust_required"
+    elif run_code:
+        auto_run_reason = run_code
+    else:
+        auto_run_reason = "not_attempted"
     return {
         "ok": bool(run_result.get("ok")),
         "message": (
@@ -98,16 +107,12 @@ def draft_script(context, args):
         ),
         "auto_ran": bool(run_result.get("auto_ran")),
         "auto_run_attempted": bool(run_result.get("auto_run_attempted")),
-        "auto_run_reason": (
-            "external_script_trust_active"
-            if run_result.get("auto_run_attempted")
-            else "external_script_trust_required"
-        ),
+        "auto_run_reason": auto_run_reason,
         "authorization_model": "blender_run_script_equivalent",
         "blocked": bool(run_result.get("blocked")),
         "code": run_result.get("code"),
         "analysis": run_result.get("analysis"),
-        "staged": run_result.get("prepared"),
+        "prepared": run_result.get("prepared"),
         "run_result": run_result,
         "requires_user_approval": False,
         "helper_advisory": helper_advisory,

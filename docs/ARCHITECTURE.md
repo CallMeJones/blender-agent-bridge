@@ -209,7 +209,7 @@ For animation edits, the preview layer should insert/update keyframes immediatel
 Execution uses one binary trust boundary:
 
 1. Generate code proposal.
-2. Refuse it without staging when runtime session trust is off.
+2. Refuse it without retaining script state when runtime session trust is off.
 3. Parse/compile it and enforce the 500k operational payload ceiling.
 4. Record advisory static findings, target objects, expected changes, and risk labels.
 5. Save an undo point/checkpoint.
