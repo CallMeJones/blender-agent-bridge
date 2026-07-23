@@ -14,7 +14,16 @@ import urllib.parse
 import urllib.request
 
 try:
-    from . import agent_tools, audit_log, bridge_protocol, build_info, external_assets, response_controls, tool_registry
+    from . import (
+        agent_tools,
+        audit_log,
+        bridge_protocol,
+        build_info,
+        external_assets,
+        response_controls,
+        tool_registry,
+        tool_surface,
+    )
 except ImportError:  # Allows direct execution as addon/claude_blender/mcp_server.py.
     package_parent = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     if package_parent not in sys.path:
@@ -28,6 +37,7 @@ except ImportError:  # Allows direct execution as addon/claude_blender/mcp_serve
             external_assets,
             response_controls,
             tool_registry,
+            tool_surface,
         )
     except ImportError:
         import agent_tools
@@ -37,6 +47,7 @@ except ImportError:  # Allows direct execution as addon/claude_blender/mcp_serve
         import external_assets
         import response_controls
         import tool_registry
+        import tool_surface
 
 
 def _env_float(name, default):
@@ -53,7 +64,8 @@ SERVER_VERSION = build_info.MCP_SERVER_VERSION
 DEFAULT_BRIDGE_URL = "http://127.0.0.1:8765"
 DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 100
-FULL_TOOL_LIST_ENV = "BLENDER_MCP_FULL_TOOL_LIST"
+TOOL_SURFACE_ENV = tool_surface.TOOL_SURFACE_ENV
+FULL_TOOL_LIST_ENV = tool_surface.LEGACY_FULL_TOOL_LIST_ENV
 DEFAULT_BRIDGE_MAIN_THREAD_TIMEOUT_SECONDS = max(10.0, _env_float("BLENDER_AGENT_BRIDGE_REQUEST_TIMEOUT", "90"))
 BRIDGE_MAIN_THREAD_TIMEOUT_GRACE_SECONDS = 10.0
 MCP_TIMEOUT_GRACE_SECONDS = 15.0
@@ -62,13 +74,14 @@ COMPACT_DIRECT_TOOL_NAMES = tuple(
     spec.name for spec in tool_registry.REGISTRY.specs() if spec.exposure == "compact_direct"
 )
 CATALOG_TOOL_NAME = "blender_tool_catalog"
-WRAPPER_TOOL_NAMES = {
+GATEWAY_TOOL_NAMES = (
     "blender_bridge_status",
     CATALOG_TOOL_NAME,
     "search_blender_tools",
     "get_blender_tool_schema",
     "invoke_blender_tool",
-}
+)
+WRAPPER_TOOL_NAMES = frozenset(GATEWAY_TOOL_NAMES)
 
 ANIMATION_ROUTE_TERMS = {
     "animate",
@@ -571,6 +584,7 @@ STATUS_OUTPUT_SCHEMA = {
         "mcp_server_path": {"type": "string"},
         "mcp_config_version": {"type": "string"},
         "mcp_runtime_mode": {"type": "string"},
+        "mcp_tool_surface": {"type": "string", "enum": ["gateway", "direct", "full"]},
         "tool_registry_digest": {"type": "string"},
         "mcp_tool_registry_digest": {"type": "string"},
         "mcp_config_tool_registry_digest": {"type": "string"},
@@ -1131,7 +1145,9 @@ def _compact_tool_definitions():
             "name": CATALOG_TOOL_NAME,
             "title": "Blender Tool Catalog",
             "description": (
-                "Search, inspect, and invoke tools from the full Blender MCP catalog through one compact entry point."
+                "Universal gateway to every Blender helper. Search, inspect schemas, or invoke scene inspection, "
+                "modeling, materials, nodes, rigging, animation, simulation, camera, lighting, rendering, viewport "
+                "capture, external assets, trusted scripts, and preview commit/revert tools."
             ),
             "inputSchema": {
                 "type": "object",
@@ -1179,8 +1195,10 @@ def _compact_tool_definitions():
             "name": "search_blender_tools",
             "title": "Search Blender Tools",
             "description": (
-                "Search the full Blender MCP tool catalog by name, description, risk, and permissions. "
-                "Returns compact summaries by default; call get_blender_tool_schema for one selected tool."
+                "Search every Blender helper by name, description, category, risk, and permissions. Use this for "
+                "scene inspection, modeling, materials, nodes, rigging, animation, simulation, camera, lighting, "
+                "rendering, viewport capture, external assets, trusted scripts, and preview commit/revert. Returns "
+                "compact summaries; then call get_blender_tool_schema for one selected tool."
             ),
             "inputSchema": {
                 "type": "object",
@@ -1216,8 +1234,9 @@ def _compact_tool_definitions():
             "name": "get_blender_tool_schema",
             "title": "Get Blender Tool Schema",
             "description": (
-                "Return the input schema, output schema, and safety annotations for one Blender tool. "
-                "Pass a prior known_digest to receive a tiny not_modified response when unchanged."
+                "Return the canonical input schema, output schema, and safety annotations for any Blender helper "
+                "named by a planner or search result, including helpers not advertised as top-level tools. Pass a "
+                "prior known_digest to receive a tiny not_modified response when unchanged."
             ),
             "inputSchema": {
                 "type": "object",
@@ -1248,8 +1267,10 @@ def _compact_tool_definitions():
             "name": "invoke_blender_tool",
             "title": "Invoke Blender Tool",
             "description": (
-                "Invoke a tool from the full Blender MCP catalog after looking up its schema. "
-                "The target tool schema is validated before forwarding to Blender."
+                "Execute any Blender helper from the complete catalog after looking up its schema: scene inspection, "
+                "modeling, materials, nodes, rigging, animation, simulation, cameras, lights, renders, viewport "
+                "evidence, external assets, trusted scripts, and preview commit/revert. The target schema is validated "
+                "before forwarding to Blender."
             ),
             "inputSchema": {
                 "type": "object",
@@ -1559,6 +1580,9 @@ def _bridge_status_content(status):
     status = dict(status or {})
     if status.get("ok"):
         parts = ["Blender bridge is connected."]
+        tool_surface_name = str(status.get("mcp_tool_surface") or "").strip()
+        if tool_surface_name:
+            parts.append(f"MCP tool surface: {tool_surface_name}.")
         compatibility = str(status.get("compatibility_message") or "").strip()
         if compatibility:
             parts.append(compatibility)
@@ -2206,7 +2230,7 @@ class BlenderMCPServer:
         self._tool_cache = None
         self._full_tool_cache = None
         self._log_level = "info"
-        self._full_tool_list = _truthy_env(FULL_TOOL_LIST_ENV)
+        self._tool_surface = tool_surface.resolve()
         self._compatibility_cache = None
         self._compatibility_cache_at = 0.0
         self._payload_telemetry = {}
@@ -2229,9 +2253,11 @@ class BlenderMCPServer:
             },
             "instructions": (
                 "Connects MCP-capable AI clients to the running Blender scene through the Blender Agent Bridge localhost service. "
-                "Start the bridge inside Blender before using scene tools. By default, this server exposes a compact "
-                "tool surface; use search_blender_tools, get_blender_tool_schema, and invoke_blender_tool for the full "
-                "Blender helper catalog. Mutating tools affect the live scene and may leave preview changes pending. "
+                "Start the bridge inside Blender before using scene tools. By default, tools/list exposes exactly five "
+                "stable gateway tools. The complete Blender helper catalog remains reachable through "
+                "search_blender_tools, get_blender_tool_schema, and invoke_blender_tool. A planner may name helpers "
+                "that are not top-level tools; this means they must be looked up and invoked through the gateway, not "
+                "that they are unavailable. Mutating tools affect the live scene and may leave preview changes pending. "
                 "For broad advanced 3D, 2D/storyboard, animation, simulation, or render tasks, call "
                 "plan_advanced_scene_workflow first when the helper path is unclear. "
                 "For external asset downloads/imports, use the async path by default after discovery selects a concrete "
@@ -2289,26 +2315,25 @@ class BlenderMCPServer:
         return None
 
     def _load_tools(self):
-        if self._full_tool_list:
-            compact = {tool["name"]: tool for tool in _compact_tool_definitions()}
-            tools = [self._bridge_status_tool(), _normalize_tool_definition(compact[CATALOG_TOOL_NAME])]
-            tools.extend(self._load_full_tools())
-        else:
-            tools = [self._bridge_status_tool()]
-            compact = {tool["name"]: tool for tool in _compact_tool_definitions()}
-            for name in COMPACT_DIRECT_TOOL_NAMES:
-                tool = self._full_tool_definition(name)
-                if tool:
-                    compact[name] = tool
-            for name in (
-                CATALOG_TOOL_NAME,
-                "search_blender_tools",
-                "get_blender_tool_schema",
-                "invoke_blender_tool",
-                *COMPACT_DIRECT_TOOL_NAMES,
-            ):
-                if name in compact:
-                    tools.append(_normalize_tool_definition(compact[name]))
+        definitions = {
+            tool["name"]: _normalize_tool_definition(tool)
+            for tool in _compact_tool_definitions()
+        }
+        definitions["blender_bridge_status"] = self._bridge_status_tool()
+        full_tools = []
+        if self._tool_surface != tool_surface.GATEWAY:
+            full_tools = self._load_full_tools()
+            for tool in full_tools:
+                name = str(tool.get("name") or "")
+                if name and name not in definitions:
+                    definitions[name] = tool
+        advertised = tool_surface.advertised_names(
+            self._tool_surface,
+            GATEWAY_TOOL_NAMES,
+            COMPACT_DIRECT_TOOL_NAMES,
+            tuple(tool["name"] for tool in full_tools),
+        )
+        tools = [definitions[name] for name in advertised if name in definitions]
         self._tool_cache = tools
         return tools
 
@@ -2634,6 +2659,7 @@ class BlenderMCPServer:
             )
         status["mcp_server_source_hash"] = mcp_source_hash
         status["mcp_runtime_mode"] = runtime_mode
+        status["mcp_tool_surface"] = self._tool_surface
         status["mcp_tool_registry_digest"] = mcp_registry_digest
         status["mcp_config_tool_registry_digest"] = config_registry_digest
         status["tool_registry_digest_match"] = (

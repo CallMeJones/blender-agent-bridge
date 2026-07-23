@@ -8,7 +8,7 @@ Current project snapshot, checked on 2026-07-23:
 - Minimum Blender: `4.2.0`. CI tests 4.2 LTS, 4.5 LTS, and 5.1; newer versions are accepted with capability-based warnings.
 - Local Blender detected on this workstation: `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`.
 - Canonical registry inventory: 181 Blender tool contracts across explicit domain modules.
-- Normal agent catalog inventory: 180 tool definitions; 23 are exposed directly in compact mode.
+- Normal agent catalog inventory: 180 tool definitions; the default surface exposes exactly five gateways. The opt-in `direct` surface adds 23 curated direct helpers.
 - Intentional catalog difference: `run_approved_script` is a compatibility dispatcher path that always refuses the removed per-script flow; it is not exposed in the normal agent helper catalog.
 - The 0.3.1 release candidate was verified on 2026-07-22. The current cleanup baseline contains 68 unit tests and an 18-test Blender-background suite; tagged CI repeats the supported Blender matrix under Xvfb on Linux.
 
@@ -25,7 +25,7 @@ Run the full Blender-background suite from docs/TESTING_GUIDE.md. If anything fa
 ```
 
 ```text
-Run the MCP live-bridge tests from docs/TESTING_GUIDE.md against the installed extension zip. Verify compact catalog mode and full tool-list mode.
+Run the MCP live-bridge tests from docs/TESTING_GUIDE.md against the installed extension zip. Verify gateway, direct compatibility, and full tool-list surfaces.
 ```
 
 ```text
@@ -109,7 +109,7 @@ What this covers:
 - External asset catalog/cache helpers that do not need Blender imports.
 - Helper-first script routing metadata and recommended-tool drift.
 - One provider-neutral offline discovery/routing contract shaped like Claude, Codex, and Cursor clients across animation, materials, visual inspection, advanced creation, asset import, project files, binary script trust, preview commit/revert, and director orchestration. This is a deterministic regression gate, not a live model evaluation.
-- Stdio MCP protocol, compact catalog, pagination, prompts, resources, wrappers, and error paths.
+- Stdio MCP protocol, five-tool gateway reachability, opt-in direct/full surfaces, pagination, prompts, resources, wrappers, and error paths.
 - Lossless full-default inspection controls, dotted field selection, result pagination, complete-on-digest-mismatch behavior, tiny unchanged responses, schema digests, and content-free payload-size telemetry.
 - Byte-stable initialization and tool definitions required for provider prompt-prefix caching.
 - Static script analysis and risk classification.
@@ -293,35 +293,37 @@ $Request = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVer
 $Request | python $Mcp --bridge-url http://127.0.0.1:8765
 ```
 
-Compact MCP mode must show these direct tools:
+Default gateway mode must show exactly:
 
 - `blender_bridge_status`
 - `blender_tool_catalog`
 - `search_blender_tools`
 - `get_blender_tool_schema`
 - `invoke_blender_tool`
-- `list_scene_objects`
-- `plan_animation_workflow`
-- `run_animation_workflow`
-- `run_animation_task`
-- `start_render_job`
-- `get_render_job_status`
-- `cancel_render_job`
-- `assemble_render_job_video`
-- `validate_render_job_output`
+
+It must then find `list_scene_objects`, retrieve its canonical schema, and execute it through `invoke_blender_tool`. A direct top-level `list_scene_objects` call must be rejected in gateway mode.
+
+Direct compatibility mode:
+
+```powershell
+$env:BLENDER_MCP_TOOL_SURFACE = "direct"
+python tests\smoke_mcp_server.py
+Remove-Item Env:\BLENDER_MCP_TOOL_SURFACE
+```
 
 Full MCP mode:
 
 ```powershell
-$env:BLENDER_MCP_FULL_TOOL_LIST = "1"
+$env:BLENDER_MCP_TOOL_SURFACE = "full"
 python tests\smoke_mcp_server.py
-Remove-Item Env:\BLENDER_MCP_FULL_TOOL_LIST
+Remove-Item Env:\BLENDER_MCP_TOOL_SURFACE
 ```
 
 Pass criteria:
 
 - `blender_bridge_status` reports matching add-on, bridge, MCP server, config version, and source hash metadata.
-- Compact mode uses catalog/search/schema/invoke for the large helper catalog.
+- Gateway mode advertises no more than five tools and reaches every helper through catalog/search/schema/invoke.
+- Direct mode preserves the former 28-tool compatibility surface.
 - Full mode can expose every bridge contract as a top-level tool for debugging.
 - Wrapper tools cannot invoke wrapper tools recursively through `invoke_blender_tool`.
 - Pagination works for `tools/list`, `resources/list`, `resources/templates/list`, and `prompts/list`.
@@ -334,7 +336,7 @@ Every dispatcher tool should have coverage at four levels unless there is a docu
 
 - Schema: `agent_tools.py` definition or intentional hidden status, JSON Schema validation, output shape, risk/permission annotations.
 - Dispatcher: direct `tool_dispatcher.execute_tool(context, name, args)` happy path and failure path.
-- Bridge/MCP: discoverable through compact catalog or direct compact tool, schema retrievable, invalid arguments rejected before dispatch, valid call forwarded.
+- Bridge/MCP: discoverable and invokable through the gateway; optionally direct in compatibility/full mode; schema retrievable, invalid arguments rejected before dispatch, valid call forwarded.
 - Behavior: scene/resource/audit/preview effects match the contract.
 
 Inspect the canonical inventory before a comprehensive sweep:

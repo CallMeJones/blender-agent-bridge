@@ -34,7 +34,10 @@ class ClientGuideTests(unittest.TestCase):
                 self.assertIn("macos", lowered)
                 self.assertIn("linux", lowered)
                 self.assertIn("restart", lowered)
-                self.assertIn("check blender bridge status, list scene objects, and make no changes", lowered)
+                self.assertIn(
+                    "check blender bridge status, find and invoke the scene-object inspection tool, and make no changes",
+                    lowered,
+                )
                 self.assertIn("only one", lowered)
                 self.assertIn("official reference", lowered)
                 self.assertIn("troubleshoot", lowered)

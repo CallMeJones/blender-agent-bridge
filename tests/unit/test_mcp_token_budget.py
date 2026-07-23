@@ -30,14 +30,15 @@ class MCPTokenBudgetTests(unittest.TestCase):
     def setUp(self):
         self.server = mcp_server.BlenderMCPServer(OfflineBridge())
 
-    def test_default_discovery_preserves_tools_and_input_schemas_within_budget(self):
+    def test_default_discovery_preserves_gateway_reachability_within_budget(self):
         tools = self.server.tools_list({})["tools"]
-        expected_names = set(mcp_server.WRAPPER_TOOL_NAMES) | set(mcp_server.COMPACT_DIRECT_TOOL_NAMES)
+        expected_names = set(mcp_server.GATEWAY_TOOL_NAMES)
 
         self.assertEqual(expected_names, {tool["name"] for tool in tools})
+        self.assertEqual(5, len(tools))
         self.assertTrue(all(tool.get("inputSchema", {}).get("type") == "object" for tool in tools))
         self.assertTrue(all("outputSchema" not in tool for tool in tools))
-        self.assertLessEqual(payload_chars(tools), 33_000)
+        self.assertLessEqual(payload_chars(tools), 8_000)
 
         canonical = self.server._get_blender_tool_schema({"name": "start_render_job"})
         self.assertIn("outputSchema", canonical["structuredContent"]["tool"])

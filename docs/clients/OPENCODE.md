@@ -34,7 +34,7 @@ On Windows start the command array with `"cmd", "/c", "uvx"`. Preserve the copie
 
 ## Restart And Smoke Test
 
-Restart OpenCode or reload its MCP configuration, then ask: `Check Blender bridge status, list scene objects, and make no changes.`
+Restart OpenCode or reload its MCP configuration, then ask: `Check Blender bridge status, find and invoke the scene-object inspection tool, and make no changes.`
 
 ## Troubleshooting
 

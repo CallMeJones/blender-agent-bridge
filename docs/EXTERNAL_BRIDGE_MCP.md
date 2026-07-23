@@ -162,22 +162,13 @@ The stdio MCP server implements:
 - `logging/setLevel`
 - `ping`
 
-By default it exposes a fixed compact, client-friendly surface of 28 tools: five MCP bridge/catalog controls plus 23 directly routed inspection, planning, animation, render, simulation, and external-asset workflow tools. The controls and representative direct tools include:
+By default it exposes exactly five stable gateway tools:
 
 - `blender_bridge_status`
 - `blender_tool_catalog`
 - `search_blender_tools`
 - `get_blender_tool_schema`
 - `invoke_blender_tool`
-- `list_scene_objects`
-- `plan_animation_workflow`
-- `run_animation_workflow`
-- `run_animation_task`
-- `start_render_job`
-- `get_render_job_status`
-- `cancel_render_job`
-- `assemble_render_job_video`
-- `validate_render_job_output`
 
 Use `blender_tool_catalog` as the primary entry point for the large helper catalog:
 
@@ -186,11 +177,17 @@ Use `blender_tool_catalog` as the primary entry point for the large helper catal
 - `{"action":"schema","name":"add_camera"}` returns one tool's input schema, output schema, and safety annotations.
 - `{"action":"invoke","name":"add_camera","arguments":{...}}` validates arguments against the target tool schema before forwarding the call to Blender.
 
-The older `search_blender_tools`, `get_blender_tool_schema`, and `invoke_blender_tool` tools remain as compatibility wrappers for clients that prefer separate operations. Search results are compact by default; set `include_schemas=true` only for compatibility or debugging. For normal agent routing, search first, fetch exactly one schema with `get_blender_tool_schema`, then call `invoke_blender_tool`.
+The separate `search_blender_tools`, `get_blender_tool_schema`, and `invoke_blender_tool` tools are first-class gateway operations for clients that route more reliably through one operation per step. Search results are compact by default; set `include_schemas=true` only for compatibility or debugging. For normal routing, search first, fetch exactly one schema, then invoke it. Planner output may name helpers that are not present as top-level tools; that is an instruction to use the gateway, not evidence that the helper is unavailable.
 
-Set `BLENDER_MCP_FULL_TOOL_LIST=1` in the MCP server environment to expose every Blender helper as a top-level MCP tool for legacy clients or debugging. Do not enable it for normal client use unless that client handles large tool lists well.
+Set `BLENDER_MCP_TOOL_SURFACE` in the MCP server environment only when a non-default surface is required:
 
-`tools/list`, `resources/list`, `resources/templates/list`, and `prompts/list` support cursor pagination. Default tool discovery keeps every established tool name, description, `inputSchema`, and essential risk/routing annotation, but omits the optional `outputSchema` and annotation fields that only repeat defaults. `get_blender_tool_schema` returns the selected tool's complete canonical input/output schemas and safety annotations; those canonical contracts remain in force for validation regardless of the compact discovery projection.
+- `gateway` is the default five-tool surface and is recommended for Claude, Codex, Cursor, and other retrieval-based clients.
+- `direct` exposes the gateways plus the former 23 curated direct helpers for compatibility evaluation.
+- `full` exposes the gateways plus every canonical helper for debugging and legacy clients.
+
+The legacy `BLENDER_MCP_FULL_TOOL_LIST=1` flag remains supported and maps to `full` when `BLENDER_MCP_TOOL_SURFACE` is unset. An explicit `BLENDER_MCP_TOOL_SURFACE` value wins. Do not use `direct` or `full` merely to make a planner-named helper visible; search and invoke it through the gateway instead.
+
+`tools/list`, `resources/list`, `resources/templates/list`, and `prompts/list` support cursor pagination. Gateway discovery carries only the five entry-point schemas and essential risk/routing annotations. `get_blender_tool_schema` returns any selected helper's complete canonical input/output schemas and safety annotations; those contracts remain in force regardless of top-level exposure.
 
 JSON returned as MCP tool text, bridge HTTP responses, and JSON resources uses compact serialization. This removes formatting whitespace only: clients receive identical names, values, arrays, objects, schemas, warnings, and resource metadata after parsing.
 
@@ -237,11 +234,11 @@ Catalog summaries, schema lookups, and tool-call results may include `guardrail_
 
 `draft_privileged_script` is a compatibility alias to the same binary trust path. Bounded external-asset, project-file, render, capture, save, and cache tools remain preferable when their validation, provenance, recovery, or progress reporting helps. `list_project_files`, `read_project_file`, and `write_project_file` expose the current saved `.blend` directory only; they reject unsaved projects, traversal, absolute/hidden paths, and links, and cap generic reads/writes at 4 MiB. Generic writes also reject executable/script/library and `.blend` targets. Those limits apply to the structured tools, not to trusted Python.
 
-For broad advanced work, compact MCP mode exposes `plan_advanced_scene_workflow` and `get_2d_animation_details` directly. Use the planner before custom scripts when a request mixes advanced 3D, 2D/storyboard, animation, simulation, compositor/render, or unclear helper coverage. For open-ended authored content, inspect the scene and compose reusable modeling, text, curve, material, staging, camera, animation, asset-import, and visual-evidence helpers. The bridge deliberately does not include finished-content generators for props, vehicles, products, characters, storyboards, cutouts, or designed shots. Use one custom script under active binary session trust when reusable helpers cannot express the brief.
+For broad advanced work, search for and invoke `plan_advanced_scene_workflow` or `get_2d_animation_details` through the gateway. Use the planner before custom scripts when a request mixes advanced 3D, 2D/storyboard, animation, simulation, compositor/render, or unclear helper coverage. For open-ended authored content, inspect the scene and compose reusable modeling, text, curve, material, staging, camera, animation, asset-import, and visual-evidence helpers. The bridge deliberately does not include finished-content generators for props, vehicles, products, characters, storyboards, cutouts, or designed shots. Use one custom script under active binary session trust when reusable helpers cannot express the brief.
 
 For procedural modeling, prefer `apply_procedural_array_stack`, `edit_mesh`, `inspect_modeling_quality`, `curve_to_mesh`, `boolean_op`, `mirror_model`, `symmetrize_model`, `solidify_model`, `screw_model`, and Geometry Nodes inspection before custom mesh or node scripts. `edit_mesh` is intentionally bounded to one topology/shape operation on single-user mesh data with live-preview snapshots. `inspect_modeling_quality` is read-only and should precede scripted repair. For cloth setup, use `add_cloth_simulation_to_selected`, then inspect simulation state before any persistent bake.
 
-Simulation tools are exposed in compact MCP mode so clients do not have to discover them through the generic invoke wrapper. `stage_persistent_simulation_bake` first inspects the requested scope, refuses while trust is off, and runs its fixed scene-wide bake template immediately while session trust is active. Baking can block Blender; if the bridge times out, wait before checking bridge status and diagnostics rather than rerunning the bake.
+Simulation tools remain canonical gateway targets. Search for the required inspection, setup, or bake helper, fetch its schema, and invoke it. `stage_persistent_simulation_bake` first inspects the requested scope, refuses while trust is off, and runs its fixed scene-wide bake template immediately while session trust is active. Baking can block Blender; if the bridge times out, wait before checking bridge status and diagnostics rather than rerunning the bake.
 
 Project file tools are human-in-the-loop. For `save_blend_file` save-as/save-copy, `open_blend_file`, and `create_new_blender_project`, clients must ask the user for the target path or use a file picker and set `user_confirmed_path=true`; agents must not invent durable paths. Saving the already-bound active `.blend` may omit `filepath`. `autosave_current_blend_file` accepts no filepath and saves only the already-bound active `.blend` in place.
 
@@ -251,7 +248,7 @@ Recovery paths have the same standard: do not tell the user to open a checkpoint
 
 `blender_bridge_status` also reports the current external script trust snapshot, including whether tokenless external script runs are allowed, seconds remaining, the runtime expiry timestamp, whether saved scene trust state is stale, and source-hash match/mismatch diagnostics. Some MCP clients cache callable tools aggressively; if a newly added Blender tool is missing, restart or refresh the MCP client after copying the latest config.
 
-For advanced animation, compact MCP mode exposes the animation workflow directly. Use `run_animation_task` when a client has one prompt and should take the default helper-first path. Use `plan_animation_workflow` for read-only manual planning before repair, generation, or arbitrary Python; it creates the animation brief, animation-aware scene context, timing chart, ordered helper/evaluator/repair tool-call payloads, and explicit `draft_script` fallback rules. For common helper-backed requests, `run_animation_workflow` executes the plan through allowlisted helpers, runs structured evaluator review, optionally captures playblast evidence, optionally applies bounded repair operations, and leaves helper edits as a normal live preview. Bounce requests that also ask the subject to get smaller route through `create_progressive_bounce_animation` instead of script fallback. The MCP catalog boosts animation workflow tools for prompts with bounce, jump, keyframe, pose, timing, arcs, settle, squash/stretch, playblast, f-curve, spacing, or contact terms, while `draft_script` is kept as an explicit script/Python fallback. `get_animation_scene_context` remains the lower-level routing tool for likely edit targets, rig-driven meshes, rig control candidates, shape keys, drivers, constraints, physics hints, contact surfaces, camera readiness, subject routing, recommended deeper inspection tools, and an `animation_hardening` block listing risk flags, required pre-mutation inspections, review tools, and repair-loop limits.
+For advanced animation, search the gateway for the animation workflow before invoking individual helpers. Use `run_animation_task` when a client has one prompt and should take the default helper-first path. Use `plan_animation_workflow` for read-only manual planning before repair, generation, or arbitrary Python; it creates the animation brief, animation-aware scene context, timing chart, ordered helper/evaluator/repair tool-call payloads, and explicit `draft_script` fallback rules. For common helper-backed requests, `run_animation_workflow` executes the plan through allowlisted helpers, runs structured evaluator review, optionally captures playblast evidence, optionally applies bounded repair operations, and leaves helper edits as a normal live preview. Bounce requests that also ask the subject to get smaller route through `create_progressive_bounce_animation` instead of script fallback. The MCP catalog boosts animation workflow tools for prompts with bounce, jump, keyframe, pose, timing, arcs, settle, squash/stretch, playblast, f-curve, spacing, or contact terms, while `draft_script` is kept as an explicit script/Python fallback. `get_animation_scene_context` remains the lower-level routing tool for likely edit targets, rig-driven meshes, rig control candidates, shape keys, drivers, constraints, physics hints, contact surfaces, camera readiness, subject routing, recommended deeper inspection tools, and an `animation_hardening` block listing risk flags, required pre-mutation inspections, review tools, and repair-loop limits.
 
 ### Animation Routing Regression Prompts
 
@@ -277,7 +274,7 @@ Use these prompts after installing a fresh zip and refreshing the MCP client. Du
 | `create an advanced camera push and orbit reveal` | `plan_advanced_scene_workflow` or `plan_animation_workflow` -> `create_camera_dolly_animation` / `create_camera_orbit` -> visual review | The client composes reusable camera operations and requests explicit coordinates when needed. |
 | `add cloth simulation setup and inspect it before baking` | `plan_advanced_scene_workflow` or `get_simulation_details` -> `add_cloth_simulation_to_selected` -> `inspect_simulation_bake` -> `stage_persistent_simulation_bake` | The client inspects first; a persistent bake runs only while binary session trust is active and may block Blender. |
 
-If a client still calls `draft_script` first for these prompts, refresh or restart the MCP client, press `Copy MCP Config` again, confirm `tools/list` includes `run_animation_task`, and check `blender_bridge_status` for matching add-on, bridge, MCP server, and config versions.
+If a client still calls `draft_script` first for these prompts, refresh or restart the MCP client, press `Copy MCP Config` again, confirm `tools/list` contains the five gateway tools, search for `run_animation_task`, and check `blender_bridge_status` for matching add-on, bridge, MCP server, config versions, and `mcp_tool_surface: gateway`.
 
 ## Resources
 
@@ -324,7 +321,7 @@ Current resources:
 
 Persistent simulation/cache bakes are separate from render jobs. Inspect with `get_simulation_details` or `inspect_simulation_bake`, then call `stage_persistent_simulation_bake` only when the user intentionally wants the scene-wide operation. Trust off refuses it; active binary session trust runs the fixed bake template immediately with Blender Run Script-equivalent permissions. Baking can keep Blender busy after an MCP timeout, so inspect status and evidence before considering a retry.
 
-Official Blender Lab parity helpers are exposed as direct tools:
+Official Blender Lab parity helpers are available as canonical gateway targets:
 
 - `get_blend_file_diagnostics` reports save path state, backup files, verified script checkpoint metadata, missing external file paths, linked libraries, and data-block usage summaries.
 - `get_workspace_layout` returns workspace/window/screen/area JSON for UI diagnostics.
@@ -370,5 +367,5 @@ MCP tools are model-controlled, so the external client must make tool use visibl
 
 - The first MCP server uses stdio only, because it is the most widely supported local MCP transport.
 - The localhost bridge is HTTP JSON, not MCP streamable HTTP. MCP clients should launch `mcp_server.py`.
-- The default MCP surface is compact because some clients do not handle large dynamic catalogs well. Full top-level exposure is still available with `BLENDER_MCP_FULL_TOOL_LIST=1`.
+- The default MCP surface is exactly five gateways because some clients retrieve only a handful of tools. Opt-in `direct` and `full` surfaces remain available through `BLENDER_MCP_TOOL_SURFACE`.
 - External clients cannot turn on Blender-side session trust. Only the user can enable it from Blender's sidebar.

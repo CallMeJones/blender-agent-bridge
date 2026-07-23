@@ -33,7 +33,7 @@ On Windows start the array with `"cmd", "/c", "uvx"`. Use Blender's copied value
 
 ## Restart And Smoke Test
 
-Restart the host after changing its config, confirm the Ollama model is selected, and ask: `Check Blender bridge status, list scene objects, and make no changes.`
+Restart the host after changing its config, confirm the Ollama model is selected, and ask: `Check Blender bridge status, find and invoke the scene-object inspection tool, and make no changes.`
 
 ## Troubleshooting
 

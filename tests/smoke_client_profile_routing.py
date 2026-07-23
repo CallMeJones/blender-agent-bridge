@@ -172,10 +172,23 @@ def _client_discovery_contract(server, profile):
         assert required_guidance in instructions, (profile["id"], required_guidance, instructions)
 
     tools = server.tools_list({})["tools"]
-    expected_names = set(mcp_server.WRAPPER_TOOL_NAMES) | set(mcp_server.COMPACT_DIRECT_TOOL_NAMES)
+    expected_names = set(mcp_server.GATEWAY_TOOL_NAMES)
     assert {tool["name"] for tool in tools} == expected_names, profile
+    assert len(tools) == 5, profile
     assert all(str(tool.get("description") or "").strip() for tool in tools), profile
     assert all((tool.get("inputSchema") or {}).get("type") == "object" for tool in tools), profile
+    descriptions = " ".join(str(tool.get("description") or "").lower() for tool in tools)
+    for workflow_term in (
+        "scene inspection",
+        "modeling",
+        "materials",
+        "rigging",
+        "animation",
+        "rendering",
+        "trusted scripts",
+        "commit/revert",
+    ):
+        assert workflow_term in descriptions, (profile["id"], workflow_term, descriptions)
     return json.dumps(tools, separators=(",", ":"), sort_keys=True)
 
 

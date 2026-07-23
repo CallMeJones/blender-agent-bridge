@@ -36,7 +36,7 @@ On Windows the generated entry uses `command = "cmd"` and begins `args` with `"/
 
 ## Restart And Smoke Test
 
-Save the config, restart Codex/ChatGPT desktop or refresh its MCP servers, and keep Blender open. Ask: `Check Blender bridge status, list scene objects, and make no changes.`
+Save the config, restart Codex/ChatGPT desktop or refresh its MCP servers, and keep Blender open. The expected default manifest is the five status/catalog/search/schema/invoke gateway tools. Ask: `Check Blender bridge status, find and invoke the scene-object inspection tool, and make no changes.`
 
 ## Prompt Caching
 

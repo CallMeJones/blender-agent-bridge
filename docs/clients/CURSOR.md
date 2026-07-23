@@ -32,7 +32,7 @@ On Windows, use `"command": "cmd"` and prefix args with `"/c", "uvx"`. Keep all 
 
 ## Restart And Smoke Test
 
-Save the file, refresh Cursor's MCP servers or restart Cursor, and ask: `Check Blender bridge status, list scene objects, and make no changes.`
+Save the file, refresh Cursor's MCP servers or restart Cursor. The expected default manifest is the five status/catalog/search/schema/invoke gateway tools. Ask: `Check Blender bridge status, find and invoke the scene-object inspection tool, and make no changes.`
 
 ## Prompt Caching
 

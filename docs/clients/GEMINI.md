@@ -36,7 +36,7 @@ On Windows use `"command": "cmd"` and prefix args with `"/c", "uvx"`. Preserve B
 
 ## Restart And Smoke Test
 
-Restart Gemini CLI or open a new session, run `/mcp list`, then ask: `Check Blender bridge status, list scene objects, and make no changes.`
+Restart Gemini CLI or open a new session, run `/mcp list`, then ask: `Check Blender bridge status, find and invoke the scene-object inspection tool, and make no changes.`
 
 ## Troubleshooting
 

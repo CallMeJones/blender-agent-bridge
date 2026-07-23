@@ -33,7 +33,7 @@ On Windows set `command` to `cmd` and prefix args with `"/c", "uvx"`. Cline and 
 
 ## Restart And Smoke Test
 
-Use **MCP: List Servers** or the extension's MCP refresh control, then restart the agent session if needed. Ask: `Check Blender bridge status, list scene objects, and make no changes.`
+Use **MCP: List Servers** or the extension's MCP refresh control, then restart the agent session if needed. Ask: `Check Blender bridge status, find and invoke the scene-object inspection tool, and make no changes.`
 
 ## Troubleshooting
 

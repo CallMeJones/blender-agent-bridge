@@ -660,10 +660,22 @@ def _send(proc, payload):
     return json.loads(line)
 
 
-def _assert_compact_tools_visible(proc):
+def _assert_gateway_tools_visible(proc):
     listed = _send(proc, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
     names = {tool["name"] for tool in listed["result"]["tools"]}
-    expected_names = set(mcp_server.WRAPPER_TOOL_NAMES) | set(mcp_server.COMPACT_DIRECT_TOOL_NAMES)
+    assert names == set(mcp_server.GATEWAY_TOOL_NAMES), listed
+    assert len(names) == 5, listed
+    assert all("outputSchema" not in tool for tool in listed["result"]["tools"]), listed
+    assert "list_scene_objects" not in names, listed
+    assert "plan_advanced_scene_workflow" not in names, listed
+    assert "invoke_blender_tool" in names, listed
+    return listed
+
+
+def _assert_direct_tools_visible(proc):
+    listed = _send(proc, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+    names = {tool["name"] for tool in listed["result"]["tools"]}
+    expected_names = set(mcp_server.GATEWAY_TOOL_NAMES) | set(mcp_server.COMPACT_DIRECT_TOOL_NAMES)
     assert names == expected_names, listed
     assert "draft_script" not in names, listed
     assert "run_approved_script" not in names, listed
@@ -685,6 +697,7 @@ def _assert_compact_tools_visible(proc):
     assert "addon_version" in status_properties, status_tool
     assert "mcp_server_version" in status_properties, status_tool
     assert "mcp_config_version" in status_properties, status_tool
+    assert "mcp_tool_surface" in status_properties, status_tool
     assert "mcp_external_asset_auth" in status_properties, status_tool
     assert "build_diagnostics" in status_properties, status_tool
     assert "addon_source_hash" in status_properties, status_tool
@@ -978,7 +991,7 @@ def main():
     offline_proc = _start_mcp("http://127.0.0.1:1", offline_audit_path, timeout="1")
     try:
         _initialize(offline_proc)
-        offline_listed = _assert_compact_tools_visible(offline_proc)
+        offline_listed = _assert_gateway_tools_visible(offline_proc)
         offline_names = {tool["name"] for tool in offline_listed["result"]["tools"]}
         assert "invoke_blender_tool" in offline_names, offline_listed
         offline_status = _send(
@@ -1299,10 +1312,113 @@ def main():
     thread = threading.Thread(target=fake_bridge.serve_forever, daemon=True)
     thread.start()
     bridge_url = f"http://127.0.0.1:{fake_bridge.server_address[1]}"
+
+    gateway_audit_fd, gateway_audit_path = tempfile.mkstemp(
+        prefix="claude-blender-mcp-gateway-audit-",
+        suffix=".jsonl",
+    )
+    os.close(gateway_audit_fd)
+    os.remove(gateway_audit_path)
+    gateway_proc = _start_mcp(bridge_url, gateway_audit_path)
+    try:
+        _initialize(gateway_proc)
+        _assert_gateway_tools_visible(gateway_proc)
+        gateway_status = _send(
+            gateway_proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 209,
+                "method": "tools/call",
+                "params": {"name": "blender_bridge_status", "arguments": {}},
+            },
+        )
+        assert (
+            gateway_status["result"]["structuredContent"]["mcp_tool_surface"]
+            == "gateway"
+        ), gateway_status
+        gateway_search = _send(
+            gateway_proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 210,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_blender_tools",
+                    "arguments": {"query": "list inspect scene objects", "limit": 5},
+                },
+            },
+        )
+        gateway_search_names = {
+            tool["name"]
+            for tool in gateway_search["result"]["structuredContent"]["tools"]
+        }
+        assert "list_scene_objects" in gateway_search_names, gateway_search
+        gateway_schema = _send(
+            gateway_proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 211,
+                "method": "tools/call",
+                "params": {
+                    "name": "get_blender_tool_schema",
+                    "arguments": {"name": "list_scene_objects"},
+                },
+            },
+        )
+        assert (
+            gateway_schema["result"]["structuredContent"]["tool"]["name"]
+            == "list_scene_objects"
+        ), gateway_schema
+        gateway_invoke = _send(
+            gateway_proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 212,
+                "method": "tools/call",
+                "params": {
+                    "name": "invoke_blender_tool",
+                    "arguments": {
+                        "name": "list_scene_objects",
+                        "arguments": {},
+                    },
+                },
+            },
+        )
+        assert gateway_invoke["result"]["isError"] is False, gateway_invoke
+        assert (
+            gateway_invoke["result"]["structuredContent"]["invoked_tool"]
+            == "list_scene_objects"
+        ), gateway_invoke
+        hidden_direct_call = _send(
+            gateway_proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 213,
+                "method": "tools/call",
+                "params": {"name": "list_scene_objects", "arguments": {}},
+            },
+        )
+        assert hidden_direct_call["result"]["isError"] is True, hidden_direct_call
+        assert (
+            hidden_direct_call["result"]["structuredContent"]["code"]
+            == "unknown_tool"
+        ), hidden_direct_call
+    finally:
+        gateway_proc.kill()
+        gateway_proc.wait(timeout=5)
+        try:
+            os.remove(gateway_audit_path)
+        except FileNotFoundError:
+            pass
+
     audit_fd, audit_path = tempfile.mkstemp(prefix="claude-blender-mcp-audit-", suffix=".jsonl")
     os.close(audit_fd)
     os.remove(audit_path)
-    proc = _start_mcp(bridge_url, audit_path)
+    proc = _start_mcp(
+        bridge_url,
+        audit_path,
+        extra_env={"BLENDER_MCP_TOOL_SURFACE": "direct"},
+    )
     try:
         _initialize(proc)
 
@@ -1318,7 +1434,7 @@ def main():
         assert len(paged_tools["result"]["tools"]) == 1, paged_tools
         assert paged_tools["result"]["nextCursor"] == "1", paged_tools
 
-        _assert_compact_tools_visible(proc)
+        _assert_direct_tools_visible(proc)
         status_call = _send(
             proc,
             {

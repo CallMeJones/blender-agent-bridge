@@ -120,21 +120,25 @@ class MCPStdioTests(unittest.TestCase):
         self.assertEqual("0.4.0", initialized["result"]["serverInfo"]["version"])
         listed = self.rpc(2, "tools/list", {})
         names = {tool["name"] for tool in listed["result"]["tools"]}
-        self.assertIn("list_scene_objects", names)
+        self.assertEqual(set(mcp_server.GATEWAY_TOOL_NAMES), names)
         unsupported_top_level = {"oneOf", "anyOf", "allOf"}
         for tool in listed["result"]["tools"]:
             self.assertFalse(
                 unsupported_top_level.intersection(tool["inputSchema"]),
                 f"{tool['name']} exposes an incompatible top-level schema combiner",
             )
-        asset_import = next(
-            tool for tool in listed["result"]["tools"] if tool["name"] == "start_external_asset_import_job"
+        called = self.rpc(
+            3,
+            "tools/call",
+            {
+                "name": "invoke_blender_tool",
+                "arguments": {"name": "list_scene_objects", "arguments": {}},
+            },
         )
-        self.assertIn("At least one of these property sets is required", asset_import["inputSchema"]["description"])
-        called = self.rpc(3, "tools/call", {"name": "list_scene_objects", "arguments": {}})
         structured = called["result"]["structuredContent"]
         self.assertTrue(structured["ok"])
         self.assertEqual("list_scene_objects", structured["echo"]["name"])
+        self.assertEqual("list_scene_objects", structured["invoked_tool"])
 
         canonical = self.rpc(
             4,
@@ -146,7 +150,14 @@ class MCPStdioTests(unittest.TestCase):
     def test_registry_mismatch_fails_closed(self):
         FakeBridgeHandler.registry_digest = "0" * 64
         try:
-            called = self.rpc(1, "tools/call", {"name": "list_scene_objects", "arguments": {}})
+            called = self.rpc(
+                1,
+                "tools/call",
+                {
+                    "name": "invoke_blender_tool",
+                    "arguments": {"name": "list_scene_objects", "arguments": {}},
+                },
+            )
             self.assertTrue(called["result"]["isError"])
             self.assertEqual("bridge_incompatible", called["result"]["structuredContent"]["code"])
         finally:
@@ -155,7 +166,14 @@ class MCPStdioTests(unittest.TestCase):
     def test_missing_compatibility_metadata_fails_closed(self):
         FakeBridgeHandler.include_compatibility_metadata = False
         try:
-            called = self.rpc(1, "tools/call", {"name": "list_scene_objects", "arguments": {}})
+            called = self.rpc(
+                1,
+                "tools/call",
+                {
+                    "name": "invoke_blender_tool",
+                    "arguments": {"name": "list_scene_objects", "arguments": {}},
+                },
+            )
             self.assertTrue(called["result"]["isError"])
             structured = called["result"]["structuredContent"]
             self.assertEqual("bridge_incompatible", structured["code"])
@@ -196,10 +214,21 @@ class MCPClientSchemaTests(unittest.TestCase):
 
 
 class MCPRuntimeStandaloneTests(unittest.TestCase):
-    def test_malformed_bridge_url_reports_warning_without_crashing_runtime(self):
+    def test_gateway_registration_ignores_malformed_bridge_until_catalog_access(self):
         env = os.environ.copy()
         env["PYTHONPATH"] = os.path.join(ROOT, "addon")
-        request = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}})
+        requests = [
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_blender_tools",
+                    "arguments": {"query": "scene objects"},
+                },
+            },
+        ]
 
         completed = subprocess.run(
             [
@@ -209,7 +238,7 @@ class MCPRuntimeStandaloneTests(unittest.TestCase):
                 "--bridge-url",
                 "http://[",
             ],
-            input=request + "\n",
+            input="\n".join(json.dumps(request) for request in requests) + "\n",
             capture_output=True,
             text=True,
             env=env,
@@ -218,9 +247,13 @@ class MCPRuntimeStandaloneTests(unittest.TestCase):
         )
 
         self.assertEqual(0, completed.returncode)
-        response = json.loads(completed.stdout)
-        self.assertEqual(1, response["id"])
-        self.assertIn("blender_bridge_status", {tool["name"] for tool in response["result"]["tools"]})
+        responses = [json.loads(line) for line in completed.stdout.splitlines()]
+        self.assertEqual([1, 2], [response["id"] for response in responses])
+        self.assertEqual(
+            set(mcp_server.GATEWAY_TOOL_NAMES),
+            {tool["name"] for tool in responses[0]["result"]["tools"]},
+        )
+        self.assertTrue(responses[1]["result"]["structuredContent"]["tools"])
         self.assertIn("tools/list bridge warning: Invalid IPv6 URL", completed.stderr)
 
 

@@ -34,7 +34,7 @@ class ToolRegistryTests(unittest.TestCase):
         )
         self.assertEqual(
             28,
-            len(mcp_server.WRAPPER_TOOL_NAMES) + len(mcp_server.COMPACT_DIRECT_TOOL_NAMES),
+            len(mcp_server.GATEWAY_TOOL_NAMES) + len(mcp_server.COMPACT_DIRECT_TOOL_NAMES),
         )
         for module in tool_registry.DOMAIN_MODULES:
             owner = module.__name__.rsplit(".", 1)[-1]
