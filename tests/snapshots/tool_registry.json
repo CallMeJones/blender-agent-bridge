@@ -1,5 +1,5 @@
 {
-  "catalog_tool_count": 185,
+  "catalog_tool_count": 180,
   "contracts": {
     "add_action_cycles": {
       "description": "Add cycles modifiers to action f-curves so an animation loops. Applies immediately with preview revert support.",
@@ -1655,55 +1655,6 @@
       },
       "requires_live_preview": true
     },
-    "apply_character_refinement_template": {
-      "description": "Apply a bounded character presentation kit around a target mesh: body polish, simple head/neck/eyes, shoulder marker, and optional gesture guides. Applies immediately with preview revert support.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "character_style": {
-            "enum": [
-              "neutral",
-              "toon"
-            ],
-            "type": "string"
-          },
-          "create_guides": {
-            "type": "boolean"
-          },
-          "detail_level": {
-            "enum": [
-              "low",
-              "medium",
-              "high"
-            ],
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "target_name": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "mutates_scene": true,
-      "output_schema": {
-        "additionalProperties": true,
-        "properties": {
-          "message": {
-            "description": "Human-readable status or error message",
-            "type": "string"
-          },
-          "ok": {
-            "description": "Whether the tool completed successfully",
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "requires_live_preview": true
-    },
     "apply_lighting_preset": {
       "description": "Create a bounded production lighting preset around a target object. Presets include product_softbox, dramatic_rim, and gallery_even. Applies immediately with preview revert support.",
       "input_schema": {
@@ -1831,79 +1782,6 @@
             "type": "boolean"
           }
         },
-        "type": "object"
-      },
-      "requires_live_preview": true
-    },
-    "apply_product_refinement_template": {
-      "description": "Apply a bounded product presentation kit around a target: material polish, smoothing/bevels, optional studio stage, dimension callouts, and optional turntable. Applies immediately with preview revert support.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "include_callouts": {
-            "type": "boolean"
-          },
-          "include_stage": {
-            "type": "boolean"
-          },
-          "include_turntable": {
-            "type": "boolean"
-          },
-          "label": {
-            "type": "string"
-          },
-          "style": {
-            "enum": [
-              "studio",
-              "catalog",
-              "premium"
-            ],
-            "type": "string"
-          },
-          "target_name": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "mutates_scene": true,
-      "output_schema": {
-        "additionalProperties": true,
-        "properties": {
-          "created_objects": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "lighting_warning": {
-            "description": "Set when stacking lights onto an already-lit scene may over-expose the render; empty otherwise.",
-            "type": "string"
-          },
-          "lights": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "message": {
-            "description": "Human-readable status or error message",
-            "type": "string"
-          },
-          "ok": {
-            "description": "Whether the tool completed successfully",
-            "type": "boolean"
-          },
-          "warnings": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "ok"
-        ],
         "type": "object"
       },
       "requires_live_preview": true
@@ -2094,45 +1972,6 @@
         "required": [
           "armature_name"
         ],
-        "type": "object"
-      },
-      "mutates_scene": true,
-      "output_schema": {
-        "additionalProperties": true,
-        "properties": {
-          "message": {
-            "description": "Human-readable status or error message",
-            "type": "string"
-          },
-          "ok": {
-            "description": "Whether the tool completed successfully",
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "requires_live_preview": true
-    },
-    "apply_vehicle_refinement_template": {
-      "description": "Apply a bounded vehicle detail kit around a target mesh: smoothing, bevels, wheels, window panels, seams, headlights, and taillights. Applies immediately with preview revert support.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "detail_level": {
-            "enum": [
-              "low",
-              "medium",
-              "high"
-            ],
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "target_name": {
-            "type": "string"
-          }
-        },
         "type": "object"
       },
       "mutates_scene": true,
@@ -3192,94 +3031,6 @@
       },
       "requires_live_preview": true
     },
-    "create_2d_cutout_layer": {
-      "description": "Create a flat 2D cutout layer with optional transform keyframes and label text. Use for motion graphics, animatics, and cutout animation. Applies immediately with preview revert support.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "frame_end": {
-            "type": "integer"
-          },
-          "frame_start": {
-            "type": "integer"
-          },
-          "label": {
-            "type": "string"
-          },
-          "location": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "location_end": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "name": {
-            "type": "string"
-          },
-          "rotation_end": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "scale_end": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "size": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "text": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "mutates_scene": true,
-      "output_schema": {
-        "additionalProperties": true,
-        "properties": {
-          "message": {
-            "description": "Human-readable status or error message",
-            "type": "string"
-          },
-          "ok": {
-            "description": "Whether the tool completed successfully",
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "requires_live_preview": true
-    },
     "create_animation_brief": {
       "description": "Create a structured animation prompt contract with subjects, action, timing, assumptions, ambiguities, success criteria, and validation checks. Does not mutate the scene.",
       "input_schema": {
@@ -3618,115 +3369,6 @@
           "name",
           "points"
         ],
-        "type": "object"
-      },
-      "mutates_scene": true,
-      "output_schema": {
-        "additionalProperties": true,
-        "properties": {
-          "message": {
-            "description": "Human-readable status or error message",
-            "type": "string"
-          },
-          "ok": {
-            "description": "Whether the tool completed successfully",
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "requires_live_preview": true
-    },
-    "create_directed_animation_shot": {
-      "description": "Create a reversible director-style animation shot template: camera push reveal, orbit reveal, product turntable, path slide, staggered reveal, storyboard dolly, crane reveal, or truck slide.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "camera_name": {
-            "type": "string"
-          },
-          "create_camera": {
-            "type": "boolean"
-          },
-          "frame_end": {
-            "type": "integer"
-          },
-          "frame_start": {
-            "type": "integer"
-          },
-          "interpolation": {
-            "enum": [
-              "CONSTANT",
-              "LINEAR",
-              "BEZIER",
-              "SINE",
-              "QUAD",
-              "CUBIC",
-              "QUART",
-              "QUINT",
-              "EXPO",
-              "CIRC",
-              "BACK",
-              "BOUNCE",
-              "ELASTIC"
-            ],
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "lens_end": {
-            "type": "number"
-          },
-          "lens_start": {
-            "type": "number"
-          },
-          "object_names": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "rotation_revolutions": {
-            "type": "number"
-          },
-          "scale_end": {
-            "type": "number"
-          },
-          "scale_start": {
-            "type": "number"
-          },
-          "selected_only": {
-            "type": "boolean"
-          },
-          "shot_type": {
-            "enum": [
-              "camera_push_reveal",
-              "orbit_reveal",
-              "product_turntable",
-              "path_slide",
-              "staggered_reveal",
-              "storyboard_dolly",
-              "crane_reveal",
-              "truck_slide"
-            ],
-            "type": "string"
-          },
-          "target_name": {
-            "type": "string"
-          },
-          "travel_axis": {
-            "enum": [
-              "X",
-              "Y",
-              "Z"
-            ],
-            "type": "string"
-          },
-          "travel_distance": {
-            "type": "number"
-          }
-        },
         "type": "object"
       },
       "mutates_scene": true,
@@ -4394,152 +4036,6 @@
       },
       "requires_live_preview": true
     },
-    "create_procedural_object_kit": {
-      "description": "Create a reversible procedural object kit from bounded templates such as kitbash towers, radial arrays, scatter grids, product stacks, product display rigs, desk lamps, coffee machines, mechanical joints, mechanical assemblies, control panels, studio prop sets, mechanical parts, modular wall panels, or pipe runs. Supports bounded design-grammar controls for style, variant, detail level, and semantic features, so use it before custom mesh or geometry-node scripts.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "accent_color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "add_detail_modifiers": {
-            "type": "boolean"
-          },
-          "count": {
-            "maximum": 80,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "detail_level": {
-            "enum": [
-              "low",
-              "medium",
-              "high"
-            ],
-            "type": "string"
-          },
-          "features": {
-            "description": "Bounded semantic feature hints. Currently used by desk_lamp.",
-            "items": {
-              "enum": [
-                "round_base",
-                "desk_clamp",
-                "inline_switch",
-                "double_arm",
-                "single_arm",
-                "spring_arms",
-                "counterweight",
-                "open_shade",
-                "wide_shade",
-                "visible_bulb",
-                "power_cable",
-                "inspection_lights",
-                "label_parts"
-              ],
-              "type": "string"
-            },
-            "maxItems": 16,
-            "type": "array"
-          },
-          "height": {
-            "type": "number"
-          },
-          "label": {
-            "type": "string"
-          },
-          "location": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "name_prefix": {
-            "type": "string"
-          },
-          "primary_color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "radius": {
-            "type": "number"
-          },
-          "spacing": {
-            "type": "number"
-          },
-          "style": {
-            "description": "Bounded visual style palette. Explicit colors override palette defaults.",
-            "enum": [
-              "default",
-              "studio",
-              "industrial",
-              "minimal",
-              "architect",
-              "retro"
-            ],
-            "type": "string"
-          },
-          "template": {
-            "enum": [
-              "kitbash_tower",
-              "radial_array",
-              "scatter_grid",
-              "product_stack",
-              "product_display_rig",
-              "mechanical_joint",
-              "mechanical_assembly",
-              "control_panel",
-              "coffee_machine",
-              "studio_prop_set",
-              "mechanical_part",
-              "modular_wall_panel",
-              "pipe_run",
-              "desk_lamp"
-            ],
-            "type": "string"
-          },
-          "variant": {
-            "description": "Template-specific bounded design variant. Currently used by desk_lamp.",
-            "enum": [
-              "default",
-              "architect",
-              "task",
-              "studio",
-              "compact",
-              "clamp"
-            ],
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "mutates_scene": true,
-      "output_schema": {
-        "additionalProperties": true,
-        "properties": {
-          "message": {
-            "description": "Human-readable status or error message",
-            "type": "string"
-          },
-          "ok": {
-            "description": "Whether the tool completed successfully",
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "requires_live_preview": true
-    },
     "create_procedural_texture_material": {
       "description": "Create or update a bounded procedural Principled material using noise, voronoi, wave, or checker texture nodes with optional ColorRamp and bump. Use this for procedural stone, marble, wood, cellular, fabric, or musgrave-style texture requests before custom shader-node Python.",
       "input_schema": {
@@ -5046,89 +4542,6 @@
         "required": [
           "frame_start"
         ],
-        "type": "object"
-      },
-      "mutates_scene": true,
-      "output_schema": {
-        "additionalProperties": true,
-        "properties": {
-          "message": {
-            "description": "Human-readable status or error message",
-            "type": "string"
-          },
-          "ok": {
-            "description": "Whether the tool completed successfully",
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "requires_live_preview": true
-    },
-    "create_storyboard_panels": {
-      "description": "Create a reversible 2D storyboard/animatic board with panel cards, borders, shot labels, frame ranges, and optional orthographic camera. Applies immediately with preview revert support.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "background_color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "border_color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "columns": {
-            "maximum": 24,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "create_camera": {
-            "type": "boolean"
-          },
-          "frame_start": {
-            "type": "integer"
-          },
-          "frame_step": {
-            "type": "integer"
-          },
-          "gap": {
-            "type": "number"
-          },
-          "label": {
-            "type": "string"
-          },
-          "name_prefix": {
-            "type": "string"
-          },
-          "panel_count": {
-            "maximum": 24,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "panel_height": {
-            "type": "number"
-          },
-          "panel_width": {
-            "type": "number"
-          },
-          "text_color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          }
-        },
         "type": "object"
       },
       "mutates_scene": true,
@@ -5775,19 +5188,22 @@
       "timeout_seconds": 300
     },
     "draft_privileged_script": {
-      "approval_policy": "Requires an approval manifest and fresh one-time user approval; session-wide external script trust cannot auto-run privileged asset or project-file scripts.",
-      "description": "Stage custom Blender Python for external asset or project-file workflows that need declared filesystem, network, asset-import, or project-file capabilities. Requires an explicit approval manifest with paths/URLs/actions. Never auto-runs under normal external script trust; the user must run it in Blender or issue a one-time external approval token.",
-      "explicit_approval_required": true,
+      "approval_policy": "Requires the binary Blender-side Trust Agent Scripts session control.",
+      "authorization_model": "blender_run_script_equivalent",
+      "description": "Compatibility alias for draft_script. Under active Blender-side session trust it runs generated Python with the same process permissions as Blender's Run Script command; otherwise it refuses.",
+      "destructive_hint": true,
+      "duration_hint": "Synchronous trusted Python may finish in seconds or keep Blender busy indefinitely, depending on the script.",
+      "explicit_approval_required": false,
       "has_side_effects": true,
       "input_schema": {
         "additionalProperties": false,
         "properties": {
           "approval_summary": {
-            "description": "Concise approval manifest explaining why helper tools are insufficient and what the script may touch",
+            "description": "Legacy compatibility field retained as advisory context; it does not authorize execution",
             "type": "string"
           },
           "capabilities": {
-            "description": "Requested elevated capabilities. Defaults are inferred from script_kind and merged with this list.",
+            "description": "Legacy capability declaration retained as advisory context; active session trust grants full manual-script permissions.",
             "items": {
               "enum": [
                 "filesystem",
@@ -5800,7 +5216,7 @@
             "type": "array"
           },
           "code": {
-            "description": "Complete privileged Blender Python script to stage for approval",
+            "description": "Complete Blender Python script to run under active session trust",
             "maxLength": 500000,
             "type": "string"
           },
@@ -5826,7 +5242,7 @@
             "type": "array"
           },
           "expected_changes": {
-            "description": "Visible scene, file, asset-cache, or project-file changes the user should expect",
+            "description": "Visible scene, file, asset-cache, or project-file changes expected when it runs",
             "type": "string"
           },
           "intent": {
@@ -5843,7 +5259,7 @@
             "type": "string"
           },
           "script_kind": {
-            "description": "Privileged workflow class that determines default capabilities and approval checks.",
+            "description": "Legacy workflow classification retained for client compatibility and audit context.",
             "enum": [
               "external_asset",
               "project_file",
@@ -5859,19 +5275,11 @@
             "type": "array"
           }
         },
-        "required": [
-          "script_kind",
-          "intent",
-          "expected_changes",
-          "approval_summary",
-          "declared_paths",
-          "declared_urls",
-          "destructive_actions",
-          "code"
-        ],
         "type": "object"
       },
+      "long_running": true,
       "mutates_scene": true,
+      "open_world_hint": true,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -5901,7 +5309,7 @@
           "auto_run_attempted": {
             "type": "boolean"
           },
-          "auto_run_skipped_reason": {
+          "auto_run_reason": {
             "type": "string"
           },
           "declared_paths": {
@@ -5944,30 +5352,39 @@
         "type": "object"
       },
       "permissions": [
-        "scene:read",
-        "scene:mutate",
-        "script:stage",
-        "files:read",
-        "files:write",
-        "network"
+        "blender:full",
+        "filesystem:full",
+        "network:full",
+        "process:spawn"
       ],
-      "recovery_hint": "Review declared paths, URLs, destructive actions, and checkpoint status before approval. If an approved project-file script opens another .blend, trust is cleared on file load.",
-      "requires_approval": true,
-      "trust_window_auto_run_allowed": false
+      "recovery_hint": "Use checkpoints, Blender undo, or bounded structured tools when stronger recovery is needed.",
+      "requires_approval": false,
+      "timeout_recovery": {
+        "message": "If trusted Python times out, wait, call blender_bridge_status, inspect visual evidence and the audit log, and rerun only if no result or side effect appeared.",
+        "poll_after_seconds": 5,
+        "recoverable": true,
+        "resource_tool": "get_visual_evidence_resources",
+        "status_tool": "blender_bridge_status"
+      },
+      "timeout_seconds": 300,
+      "trust_window_auto_run_allowed": true
     },
     "draft_script": {
-      "description": "Stage Blender Python in a Text datablock for explicit user approval, or auto-run after static checks when external script trust is active. Use only when safe helper tools cannot express the requested scene, animation, material, or rig change. Blocked scripts are refused even while external script trust is active.",
+      "authorization_model": "blender_run_script_equivalent",
+      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. Prefer bounded helpers when they provide better recovery or progress reporting.",
+      "destructive_hint": true,
+      "duration_hint": "Synchronous trusted Python may finish in seconds or keep Blender busy indefinitely, depending on the script.",
       "has_side_effects": true,
       "input_schema": {
         "additionalProperties": false,
         "properties": {
           "code": {
-            "description": "Complete Blender Python script to stage for approval",
+            "description": "Complete Blender Python script to run under active session trust",
             "maxLength": 500000,
             "type": "string"
           },
           "expected_changes": {
-            "description": "Visible scene/data changes the user should expect if they approve it",
+            "description": "Visible scene/data changes the user should expect if it runs under active trust",
             "type": "string"
           },
           "intent": {
@@ -5999,7 +5416,9 @@
         ],
         "type": "object"
       },
+      "long_running": true,
       "mutates_scene": true,
+      "open_world_hint": true,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -6014,7 +5433,21 @@
         },
         "type": "object"
       },
-      "requires_approval": true
+      "permissions": [
+        "blender:full",
+        "filesystem:full",
+        "network:full",
+        "process:spawn"
+      ],
+      "requires_approval": false,
+      "timeout_recovery": {
+        "message": "If trusted Python times out, wait, call blender_bridge_status, inspect visual evidence and the audit log, and rerun only if no result or side effect appeared.",
+        "poll_after_seconds": 5,
+        "recoverable": true,
+        "resource_tool": "get_visual_evidence_resources",
+        "status_tool": "blender_bridge_status"
+      },
+      "timeout_seconds": 300
     },
     "duplicate_selected_objects": {
       "description": "Duplicate selected objects with optional unique data, offset, animation copy, and selecting the new duplicates. Applies immediately with preview revert support.",
@@ -7541,6 +6974,50 @@
       "supports_headless": true,
       "timeout_seconds": 30
     },
+    "list_project_files": {
+      "description": "List files and folders beneath the directory containing the current saved .blend. Hidden paths and links are not traversed; unsaved projects are refused.",
+      "has_side_effects": false,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "max_entries": {
+            "description": "Maximum entries to return, from 1 to 1000.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "recursive": {
+            "description": "Recursively list ordinary subdirectories. Defaults to false.",
+            "type": "boolean"
+          },
+          "relative_path": {
+            "description": "Optional relative project subdirectory. Absolute, parent, and hidden paths are rejected.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "path_policy": "Only relative paths contained by the directory of the current saved .blend are accepted. Absolute paths, parent traversal, hidden components, symbolic links, and reparse points are blocked.",
+      "permissions": [
+        "files:read"
+      ]
+    },
     "list_scene_objects": {
       "description": "List objects in the current scene with names, types, selection state, visibility, collections, and locations.",
       "input_schema": {
@@ -8219,60 +7696,6 @@
       },
       "supports_headless": true
     },
-    "plan_object_design": {
-      "description": "Map a natural-language object design brief to object family, creation strategy, bounded object-kit arguments, helper tools, asset-reference boundaries, and script fallback policy. Use before choosing procedural kits or custom scripts for open-ended object creation. Does not mutate the scene.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "label": {
-            "type": "string"
-          },
-          "object_family": {
-            "enum": [
-              "",
-              "lighting",
-              "furniture",
-              "appliance",
-              "vehicle",
-              "architecture",
-              "mechanical",
-              "electronics",
-              "product_display",
-              "character",
-              "abstract_prop",
-              "unknown"
-            ],
-            "type": "string"
-          },
-          "prompt": {
-            "type": "string"
-          },
-          "target_objects": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          }
-        },
-        "type": "object"
-      },
-      "mutates_scene": false,
-      "output_schema": {
-        "additionalProperties": true,
-        "properties": {
-          "message": {
-            "description": "Human-readable status or error message",
-            "type": "string"
-          },
-          "ok": {
-            "description": "Whether the tool completed successfully",
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "supports_headless": true
-    },
     "prepare_imported_asset_presentation": {
       "description": "Organize imported asset objects, fill missing mesh materials without overwriting imported materials, create a bounded studio/turntable presentation setup, and leave the result in preview. Use after an external asset import job completes.",
       "input_schema": {
@@ -8408,6 +7831,56 @@
       ],
       "risk_level": "destructive",
       "supports_headless": true
+    },
+    "read_project_file": {
+      "description": "Read a bounded UTF-8 or base64 file beneath the directory containing the current saved .blend. Reads are capped at 4 MiB and cannot follow hidden paths or links.",
+      "has_side_effects": false,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "encoding": {
+            "enum": [
+              "utf-8",
+              "base64"
+            ],
+            "type": "string"
+          },
+          "max_bytes": {
+            "description": "Maximum bytes to read, capped at 4194304.",
+            "maximum": 4194304,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "relative_path": {
+            "description": "Relative path beneath the saved .blend directory.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "required": [
+          "relative_path"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "path_policy": "Only relative paths contained by the directory of the current saved .blend are accepted. Absolute paths, parent traversal, hidden components, symbolic links, and reparse points are blocked.",
+      "permissions": [
+        "files:read"
+      ]
     },
     "render_scene_thumbnail": {
       "description": "Render a small PNG from the scene camera or a named camera, then return metadata plus exact MCP image resource URIs. Use for render evidence, thumbnails, and client-readable still output. Large synchronous renders are guarded; use start_render_job for timeout-safe high-resolution output.",
@@ -8964,20 +8437,20 @@
       }
     },
     "run_approved_script": {
-      "description": "Run a pending script with a one-time approval token or active Blender-side script trust",
+      "description": "Compatibility endpoint that refuses removed per-script approval flows.",
       "external_only": true,
-      "has_side_effects": true,
+      "has_side_effects": false,
       "input_schema": {
         "additionalProperties": false,
         "properties": {
           "approval_token": {
-            "description": "Optional one-time token copied from Blender after the user approves external execution. Omit this, or pass an empty string, only while a Blender-side external script trust grant is active.",
+            "description": "Ignored legacy field. This endpoint always returns per_script_approval_removed and never authorizes execution.",
             "type": "string"
           }
         },
         "type": "object"
       },
-      "mutates_scene": true,
+      "mutates_scene": false,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -9014,11 +8487,9 @@
         "type": "object"
       },
       "permissions": [
-        "scene:read",
-        "scene:mutate",
-        "script:run"
+        "scene:read"
       ],
-      "requires_approval": true,
+      "requires_approval": false,
       "supports_headless": false,
       "timeout_seconds": 120
     },
@@ -10425,15 +9896,18 @@
       "requires_live_preview": true
     },
     "stage_persistent_simulation_bake": {
-      "approval_policy": "Requires a fresh one-time user approval; session-wide external script trust cannot auto-run persistent simulation/cache bake or free operators.",
-      "description": "Stage a fixed-template scene-wide persistent simulation point-cache bake script for explicit user approval. Persistent bake/free operators do not auto-run under session-wide external script trust.",
-      "explicit_approval_required": true,
+      "approval_policy": "Requires active binary session trust and then runs immediately.",
+      "authorization_model": "blender_run_script_equivalent",
+      "description": "Inspect the requested simulation scope, then run a fixed-template scene-wide persistent point-cache bake when Blender-side session script trust is active. Trust off refuses without retaining script state.",
+      "destructive_hint": true,
+      "duration_hint": "Synchronous scene-wide simulation baking may take from seconds to hours and can keep Blender unavailable while it runs.",
+      "explicit_approval_required": false,
       "has_side_effects": true,
       "input_schema": {
         "additionalProperties": false,
         "properties": {
           "auto_run_if_trusted": {
-            "description": "Compatibility option only; explicit-approval-only bake/free scripts remain staged even when external script trust is active.",
+            "description": "Deprecated compatibility option. Active session trust always runs immediately; trust off always refuses.",
             "type": "boolean"
           },
           "clear_existing": {
@@ -10460,6 +9934,7 @@
         },
         "type": "object"
       },
+      "long_running": true,
       "mutates_scene": true,
       "output_schema": {
         "additionalProperties": true,
@@ -10502,16 +9977,7 @@
           "ok": {
             "type": "boolean"
           },
-          "recommended_next_step": {
-            "type": "string"
-          },
-          "requires_explicit_one_time_approval": {
-            "type": "boolean"
-          },
-          "requires_user_approval": {
-            "type": "boolean"
-          },
-          "staged": {
+          "prepared": {
             "additionalProperties": true,
             "properties": {
               "message": {
@@ -10525,6 +9991,15 @@
             },
             "type": "object"
           },
+          "recommended_next_step": {
+            "type": "string"
+          },
+          "requires_explicit_one_time_approval": {
+            "type": "boolean"
+          },
+          "requires_user_approval": {
+            "type": "boolean"
+          },
           "trust_window_auto_run_allowed": {
             "type": "boolean"
           },
@@ -10537,9 +10012,21 @@
         ],
         "type": "object"
       },
-      "recovery_hint": "If Blender becomes unreachable after an approved bake, wait, call blender_bridge_status, then use get_blend_file_diagnostics before reporting any checkpoint path.",
-      "requires_approval": true,
-      "trust_window_auto_run_allowed": false
+      "permissions": [
+        "blender:full",
+        "filesystem:full"
+      ],
+      "recovery_hint": "If Blender becomes unreachable after a trusted bake, wait, call blender_bridge_status, then use get_blend_file_diagnostics before reporting any checkpoint path.",
+      "requires_approval": false,
+      "timeout_recovery": {
+        "message": "If baking times out, wait before calling blender_bridge_status and get_blend_file_diagnostics; do not rerun while the original bake may still be active.",
+        "poll_after_seconds": 10,
+        "recoverable": true,
+        "resource_tool": "get_blend_file_diagnostics",
+        "status_tool": "blender_bridge_status"
+      },
+      "timeout_seconds": 300,
+      "trust_window_auto_run_allowed": true
     },
     "start_external_asset_download": {
       "description": "Default client path: start an asynchronous external asset download/cache job for Poly Haven or Sketchfab. Use this for any normal asset download/cache or import request. Returns immediately with a job id; poll get_external_asset_job_status until completed or failed, then queue scene import with start_external_asset_import_job.",
@@ -11021,6 +10508,65 @@
         "files:read"
       ],
       "supports_headless": true
+    },
+    "write_project_file": {
+      "description": "Create or replace a bounded UTF-8 or base64 file beneath the directory containing the current saved .blend. Parent folders may be created; executable/script/library and .blend targets are blocked.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "description": "UTF-8 text or base64 content. Decoded content is capped at 4 MiB.",
+            "maxLength": 5592408,
+            "type": "string"
+          },
+          "create_dirs": {
+            "description": "Create ordinary parent directories. Defaults to true.",
+            "type": "boolean"
+          },
+          "encoding": {
+            "enum": [
+              "utf-8",
+              "base64"
+            ],
+            "type": "string"
+          },
+          "overwrite": {
+            "description": "Replace an existing file. Defaults to false.",
+            "type": "boolean"
+          },
+          "relative_path": {
+            "description": "Relative output path beneath the saved .blend directory.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "required": [
+          "relative_path",
+          "content"
+        ],
+        "type": "object"
+      },
+      "max_output_bytes": 4194304,
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "path_policy": "Only relative paths contained by the directory of the current saved .blend are accepted. Absolute paths, parent traversal, hidden components, symbolic links, reparse points, executable or script targets, libraries, and .blend files are blocked.",
+      "permissions": [
+        "files:write"
+      ]
     }
   },
   "definitions": [
@@ -11353,6 +10899,101 @@
         "type": "object"
       },
       "name": "autosave_current_blend_file"
+    },
+    {
+      "description": "List files and folders beneath the directory containing the current saved .blend. Hidden paths and links are not traversed; unsaved projects are refused.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "max_entries": {
+            "description": "Maximum entries to return, from 1 to 1000.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "recursive": {
+            "description": "Recursively list ordinary subdirectories. Defaults to false.",
+            "type": "boolean"
+          },
+          "relative_path": {
+            "description": "Optional relative project subdirectory. Absolute, parent, and hidden paths are rejected.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_project_files"
+    },
+    {
+      "description": "Read a bounded UTF-8 or base64 file beneath the directory containing the current saved .blend. Reads are capped at 4 MiB and cannot follow hidden paths or links.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "encoding": {
+            "enum": [
+              "utf-8",
+              "base64"
+            ],
+            "type": "string"
+          },
+          "max_bytes": {
+            "description": "Maximum bytes to read, capped at 4194304.",
+            "maximum": 4194304,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "relative_path": {
+            "description": "Relative path beneath the saved .blend directory.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "required": [
+          "relative_path"
+        ],
+        "type": "object"
+      },
+      "name": "read_project_file"
+    },
+    {
+      "description": "Create or replace a bounded UTF-8 or base64 file beneath the directory containing the current saved .blend. Parent folders may be created; executable/script/library and .blend targets are blocked.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "description": "UTF-8 text or base64 content. Decoded content is capped at 4 MiB.",
+            "maxLength": 5592408,
+            "type": "string"
+          },
+          "create_dirs": {
+            "description": "Create ordinary parent directories. Defaults to true.",
+            "type": "boolean"
+          },
+          "encoding": {
+            "enum": [
+              "utf-8",
+              "base64"
+            ],
+            "type": "string"
+          },
+          "overwrite": {
+            "description": "Replace an existing file. Defaults to false.",
+            "type": "boolean"
+          },
+          "relative_path": {
+            "description": "Relative output path beneath the saved .blend directory.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "required": [
+          "relative_path",
+          "content"
+        ],
+        "type": "object"
+      },
+      "name": "write_project_file"
     },
     {
       "description": "Return JSON for Blender workspaces, windows, screens, and UI areas. Use before workspace/view navigation or UI diagnostics.",
@@ -12667,12 +12308,12 @@
       "name": "inspect_simulation_bake"
     },
     {
-      "description": "Stage a fixed-template scene-wide persistent simulation point-cache bake script for explicit user approval. Persistent bake/free operators do not auto-run under session-wide external script trust.",
+      "description": "Inspect the requested simulation scope, then run a fixed-template scene-wide persistent point-cache bake when Blender-side session script trust is active. Trust off refuses without retaining script state.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
           "auto_run_if_trusted": {
-            "description": "Compatibility option only; explicit-approval-only bake/free scripts remain staged even when external script trust is active.",
+            "description": "Deprecated compatibility option. Active session trust always runs immediately; trust off always refuses.",
             "type": "boolean"
           },
           "clear_existing": {
@@ -15784,45 +15425,6 @@
       "name": "plan_advanced_scene_workflow"
     },
     {
-      "description": "Map a natural-language object design brief to object family, creation strategy, bounded object-kit arguments, helper tools, asset-reference boundaries, and script fallback policy. Use before choosing procedural kits or custom scripts for open-ended object creation. Does not mutate the scene.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "label": {
-            "type": "string"
-          },
-          "object_family": {
-            "enum": [
-              "",
-              "lighting",
-              "furniture",
-              "appliance",
-              "vehicle",
-              "architecture",
-              "mechanical",
-              "electronics",
-              "product_display",
-              "character",
-              "abstract_prop",
-              "unknown"
-            ],
-            "type": "string"
-          },
-          "prompt": {
-            "type": "string"
-          },
-          "target_objects": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          }
-        },
-        "type": "object"
-      },
-      "name": "plan_object_design"
-    },
-    {
       "description": "Plan the async external-asset discovery, download/cache, queued import, post-import organization, staging, and visual-evidence workflow. Does not mutate the scene.",
       "input_schema": {
         "additionalProperties": false,
@@ -15898,147 +15500,6 @@
         "type": "object"
       },
       "name": "get_2d_animation_details"
-    },
-    {
-      "description": "Create a reversible 2D storyboard/animatic board with panel cards, borders, shot labels, frame ranges, and optional orthographic camera. Applies immediately with preview revert support.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "background_color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "border_color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "columns": {
-            "maximum": 24,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "create_camera": {
-            "type": "boolean"
-          },
-          "frame_start": {
-            "type": "integer"
-          },
-          "frame_step": {
-            "type": "integer"
-          },
-          "gap": {
-            "type": "number"
-          },
-          "label": {
-            "type": "string"
-          },
-          "name_prefix": {
-            "type": "string"
-          },
-          "panel_count": {
-            "maximum": 24,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "panel_height": {
-            "type": "number"
-          },
-          "panel_width": {
-            "type": "number"
-          },
-          "text_color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          }
-        },
-        "type": "object"
-      },
-      "name": "create_storyboard_panels"
-    },
-    {
-      "description": "Create a flat 2D cutout layer with optional transform keyframes and label text. Use for motion graphics, animatics, and cutout animation. Applies immediately with preview revert support.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "frame_end": {
-            "type": "integer"
-          },
-          "frame_start": {
-            "type": "integer"
-          },
-          "label": {
-            "type": "string"
-          },
-          "location": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "location_end": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "name": {
-            "type": "string"
-          },
-          "rotation_end": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "scale_end": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "size": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "text": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "name": "create_2d_cutout_layer"
     },
     {
       "description": "Apply a bounded procedural modeling stack to mesh objects: array, bevel, and optional weighted normals. Use before custom geometry-node or mesh-edit scripts. Applies immediately with preview revert support.",
@@ -16333,137 +15794,6 @@
       "name": "screw_model"
     },
     {
-      "description": "Create a reversible procedural object kit from bounded templates such as kitbash towers, radial arrays, scatter grids, product stacks, product display rigs, desk lamps, coffee machines, mechanical joints, mechanical assemblies, control panels, studio prop sets, mechanical parts, modular wall panels, or pipe runs. Supports bounded design-grammar controls for style, variant, detail level, and semantic features, so use it before custom mesh or geometry-node scripts.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "accent_color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "add_detail_modifiers": {
-            "type": "boolean"
-          },
-          "count": {
-            "maximum": 80,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "detail_level": {
-            "enum": [
-              "low",
-              "medium",
-              "high"
-            ],
-            "type": "string"
-          },
-          "features": {
-            "description": "Bounded semantic feature hints. Currently used by desk_lamp.",
-            "items": {
-              "enum": [
-                "round_base",
-                "desk_clamp",
-                "inline_switch",
-                "double_arm",
-                "single_arm",
-                "spring_arms",
-                "counterweight",
-                "open_shade",
-                "wide_shade",
-                "visible_bulb",
-                "power_cable",
-                "inspection_lights",
-                "label_parts"
-              ],
-              "type": "string"
-            },
-            "maxItems": 16,
-            "type": "array"
-          },
-          "height": {
-            "type": "number"
-          },
-          "label": {
-            "type": "string"
-          },
-          "location": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "name_prefix": {
-            "type": "string"
-          },
-          "primary_color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "radius": {
-            "type": "number"
-          },
-          "spacing": {
-            "type": "number"
-          },
-          "style": {
-            "description": "Bounded visual style palette. Explicit colors override palette defaults.",
-            "enum": [
-              "default",
-              "studio",
-              "industrial",
-              "minimal",
-              "architect",
-              "retro"
-            ],
-            "type": "string"
-          },
-          "template": {
-            "enum": [
-              "kitbash_tower",
-              "radial_array",
-              "scatter_grid",
-              "product_stack",
-              "product_display_rig",
-              "mechanical_joint",
-              "mechanical_assembly",
-              "control_panel",
-              "coffee_machine",
-              "studio_prop_set",
-              "mechanical_part",
-              "modular_wall_panel",
-              "pipe_run",
-              "desk_lamp"
-            ],
-            "type": "string"
-          },
-          "variant": {
-            "description": "Template-specific bounded design variant. Currently used by desk_lamp.",
-            "enum": [
-              "default",
-              "architect",
-              "task",
-              "studio",
-              "compact",
-              "clamp"
-            ],
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "name": "create_procedural_object_kit"
-    },
-    {
       "description": "Create a camera dolly/shot move with location keyframes, optional target tracking, and optional lens keyframes. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
@@ -16527,100 +15857,6 @@
         "type": "object"
       },
       "name": "create_camera_dolly_animation"
-    },
-    {
-      "description": "Create a reversible director-style animation shot template: camera push reveal, orbit reveal, product turntable, path slide, staggered reveal, storyboard dolly, crane reveal, or truck slide.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "camera_name": {
-            "type": "string"
-          },
-          "create_camera": {
-            "type": "boolean"
-          },
-          "frame_end": {
-            "type": "integer"
-          },
-          "frame_start": {
-            "type": "integer"
-          },
-          "interpolation": {
-            "enum": [
-              "CONSTANT",
-              "LINEAR",
-              "BEZIER",
-              "SINE",
-              "QUAD",
-              "CUBIC",
-              "QUART",
-              "QUINT",
-              "EXPO",
-              "CIRC",
-              "BACK",
-              "BOUNCE",
-              "ELASTIC"
-            ],
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "lens_end": {
-            "type": "number"
-          },
-          "lens_start": {
-            "type": "number"
-          },
-          "object_names": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "rotation_revolutions": {
-            "type": "number"
-          },
-          "scale_end": {
-            "type": "number"
-          },
-          "scale_start": {
-            "type": "number"
-          },
-          "selected_only": {
-            "type": "boolean"
-          },
-          "shot_type": {
-            "enum": [
-              "camera_push_reveal",
-              "orbit_reveal",
-              "product_turntable",
-              "path_slide",
-              "staggered_reveal",
-              "storyboard_dolly",
-              "crane_reveal",
-              "truck_slide"
-            ],
-            "type": "string"
-          },
-          "target_name": {
-            "type": "string"
-          },
-          "travel_axis": {
-            "enum": [
-              "X",
-              "Y",
-              "Z"
-            ],
-            "type": "string"
-          },
-          "travel_distance": {
-            "type": "number"
-          }
-        },
-        "type": "object"
-      },
-      "name": "create_directed_animation_shot"
     },
     {
       "description": "Add a bounded Cloth simulation modifier to selected or named mesh objects without baking caches. Inspect and bake explicitly after setup. Applies immediately with preview revert support.",
@@ -17104,97 +16340,6 @@
         "type": "object"
       },
       "name": "add_window_materials"
-    },
-    {
-      "description": "Apply a bounded vehicle detail kit around a target mesh: smoothing, bevels, wheels, window panels, seams, headlights, and taillights. Applies immediately with preview revert support.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "detail_level": {
-            "enum": [
-              "low",
-              "medium",
-              "high"
-            ],
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "target_name": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "name": "apply_vehicle_refinement_template"
-    },
-    {
-      "description": "Apply a bounded product presentation kit around a target: material polish, smoothing/bevels, optional studio stage, dimension callouts, and optional turntable. Applies immediately with preview revert support.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "include_callouts": {
-            "type": "boolean"
-          },
-          "include_stage": {
-            "type": "boolean"
-          },
-          "include_turntable": {
-            "type": "boolean"
-          },
-          "label": {
-            "type": "string"
-          },
-          "style": {
-            "enum": [
-              "studio",
-              "catalog",
-              "premium"
-            ],
-            "type": "string"
-          },
-          "target_name": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "name": "apply_product_refinement_template"
-    },
-    {
-      "description": "Apply a bounded character presentation kit around a target mesh: body polish, simple head/neck/eyes, shoulder marker, and optional gesture guides. Applies immediately with preview revert support.",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "character_style": {
-            "enum": [
-              "neutral",
-              "toon"
-            ],
-            "type": "string"
-          },
-          "create_guides": {
-            "type": "boolean"
-          },
-          "detail_level": {
-            "enum": [
-              "low",
-              "medium",
-              "high"
-            ],
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "target_name": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "name": "apply_character_refinement_template"
     },
     {
       "description": "Create a production-style product presentation stage around a target object: floor, backdrop, key/fill/rim area lights, target empty, and optional camera. Applies immediately with preview revert support.",
@@ -18454,17 +17599,17 @@
       "name": "prune_external_asset_cache"
     },
     {
-      "description": "Stage Blender Python in a Text datablock for explicit user approval, or auto-run after static checks when external script trust is active. Use only when safe helper tools cannot express the requested scene, animation, material, or rig change. Blocked scripts are refused even while external script trust is active.",
+      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. Prefer bounded helpers when they provide better recovery or progress reporting.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
           "code": {
-            "description": "Complete Blender Python script to stage for approval",
+            "description": "Complete Blender Python script to run under active session trust",
             "maxLength": 500000,
             "type": "string"
           },
           "expected_changes": {
-            "description": "Visible scene/data changes the user should expect if they approve it",
+            "description": "Visible scene/data changes the user should expect if it runs under active trust",
             "type": "string"
           },
           "intent": {
@@ -18499,16 +17644,16 @@
       "name": "draft_script"
     },
     {
-      "description": "Stage custom Blender Python for external asset or project-file workflows that need declared filesystem, network, asset-import, or project-file capabilities. Requires an explicit approval manifest with paths/URLs/actions. Never auto-runs under normal external script trust; the user must run it in Blender or issue a one-time external approval token.",
+      "description": "Compatibility alias for draft_script. Under active Blender-side session trust it runs generated Python with the same process permissions as Blender's Run Script command; otherwise it refuses.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
           "approval_summary": {
-            "description": "Concise approval manifest explaining why helper tools are insufficient and what the script may touch",
+            "description": "Legacy compatibility field retained as advisory context; it does not authorize execution",
             "type": "string"
           },
           "capabilities": {
-            "description": "Requested elevated capabilities. Defaults are inferred from script_kind and merged with this list.",
+            "description": "Legacy capability declaration retained as advisory context; active session trust grants full manual-script permissions.",
             "items": {
               "enum": [
                 "filesystem",
@@ -18521,7 +17666,7 @@
             "type": "array"
           },
           "code": {
-            "description": "Complete privileged Blender Python script to stage for approval",
+            "description": "Complete Blender Python script to run under active session trust",
             "maxLength": 500000,
             "type": "string"
           },
@@ -18547,7 +17692,7 @@
             "type": "array"
           },
           "expected_changes": {
-            "description": "Visible scene, file, asset-cache, or project-file changes the user should expect",
+            "description": "Visible scene, file, asset-cache, or project-file changes expected when it runs",
             "type": "string"
           },
           "intent": {
@@ -18564,7 +17709,7 @@
             "type": "string"
           },
           "script_kind": {
-            "description": "Privileged workflow class that determines default capabilities and approval checks.",
+            "description": "Legacy workflow classification retained for client compatibility and audit context.",
             "enum": [
               "external_asset",
               "project_file",
@@ -18580,16 +17725,6 @@
             "type": "array"
           }
         },
-        "required": [
-          "script_kind",
-          "intent",
-          "expected_changes",
-          "approval_summary",
-          "declared_paths",
-          "declared_urls",
-          "destructive_actions",
-          "code"
-        ],
         "type": "object"
       },
       "name": "draft_privileged_script"
@@ -18667,7 +17802,6 @@
       "set_pose_hold",
       "create_motion_arc",
       "create_camera_dolly_animation",
-      "create_directed_animation_shot",
       "set_scene_frame_range",
       "animate_selected_transform",
       "create_camera_orbit"
@@ -18754,8 +17888,7 @@
       "mirror_model",
       "symmetrize_model",
       "solidify_model",
-      "screw_model",
-      "create_procedural_object_kit"
+      "screw_model"
     ],
     "project_workspace": [
       "get_blend_file_diagnostics",
@@ -18763,6 +17896,9 @@
       "open_blend_file",
       "create_new_blender_project",
       "autosave_current_blend_file",
+      "list_project_files",
+      "read_project_file",
+      "write_project_file",
       "get_workspace_layout",
       "jump_to_workspace",
       "set_viewport_view",
@@ -18814,25 +17950,19 @@
     ],
     "workflows_refinement": [
       "plan_advanced_scene_workflow",
-      "plan_object_design",
       "plan_asset_import_workflow",
       "plan_director_workflow",
       "get_2d_animation_details",
-      "create_storyboard_panels",
-      "create_2d_cutout_layer",
       "shade_smooth_selected",
       "add_bevel_and_subsurf",
       "create_wheel_assembly",
       "add_panel_seams",
-      "apply_vehicle_refinement_template",
-      "apply_product_refinement_template",
-      "apply_character_refinement_template",
       "add_dimension_callouts",
       "prepare_imported_asset_presentation",
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "f9dd785705aaa070c1f73f9f710de06f3a5aeeebab8d89f23a09df03ee00d842",
+  "registry_digest": "9f92a339085bfc958a2f47c49046942523f47c66ba7c809a8225291d70cc551c",
   "schema_version": 1,
   "specs": [
     {
@@ -19836,6 +18966,189 @@
       },
       "name": "autosave_current_blend_file",
       "order": 80,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "project_workspace"
+    },
+    {
+      "contract": {
+        "has_side_effects": false,
+        "mutates_scene": false,
+        "path_policy": "Only relative paths contained by the directory of the current saved .blend are accepted. Absolute paths, parent traversal, hidden components, symbolic links, and reparse points are blocked.",
+        "permissions": [
+          "files:read"
+        ]
+      },
+      "description": "List files and folders beneath the directory containing the current saved .blend. Hidden paths and links are not traversed; unsaved projects are refused.",
+      "exposure": "catalog",
+      "groups": [
+        "project_files"
+      ],
+      "handler_key": "list_project_files",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "max_entries": {
+            "description": "Maximum entries to return, from 1 to 1000.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "recursive": {
+            "description": "Recursively list ordinary subdirectories. Defaults to false.",
+            "type": "boolean"
+          },
+          "relative_path": {
+            "description": "Optional relative project subdirectory. Absolute, parent, and hidden paths are rejected.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_project_files",
+      "order": 82,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "project_workspace"
+    },
+    {
+      "contract": {
+        "has_side_effects": false,
+        "mutates_scene": false,
+        "path_policy": "Only relative paths contained by the directory of the current saved .blend are accepted. Absolute paths, parent traversal, hidden components, symbolic links, and reparse points are blocked.",
+        "permissions": [
+          "files:read"
+        ]
+      },
+      "description": "Read a bounded UTF-8 or base64 file beneath the directory containing the current saved .blend. Reads are capped at 4 MiB and cannot follow hidden paths or links.",
+      "exposure": "catalog",
+      "groups": [
+        "project_files"
+      ],
+      "handler_key": "read_project_file",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "encoding": {
+            "enum": [
+              "utf-8",
+              "base64"
+            ],
+            "type": "string"
+          },
+          "max_bytes": {
+            "description": "Maximum bytes to read, capped at 4194304.",
+            "maximum": 4194304,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "relative_path": {
+            "description": "Relative path beneath the saved .blend directory.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "required": [
+          "relative_path"
+        ],
+        "type": "object"
+      },
+      "name": "read_project_file",
+      "order": 84,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "project_workspace"
+    },
+    {
+      "contract": {
+        "has_side_effects": true,
+        "max_output_bytes": 4194304,
+        "mutates_scene": false,
+        "path_policy": "Only relative paths contained by the directory of the current saved .blend are accepted. Absolute paths, parent traversal, hidden components, symbolic links, reparse points, executable or script targets, libraries, and .blend files are blocked.",
+        "permissions": [
+          "files:write"
+        ]
+      },
+      "description": "Create or replace a bounded UTF-8 or base64 file beneath the directory containing the current saved .blend. Parent folders may be created; executable/script/library and .blend targets are blocked.",
+      "exposure": "catalog",
+      "groups": [
+        "project_files"
+      ],
+      "handler_key": "write_project_file",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "description": "UTF-8 text or base64 content. Decoded content is capped at 4 MiB.",
+            "maxLength": 5592408,
+            "type": "string"
+          },
+          "create_dirs": {
+            "description": "Create ordinary parent directories. Defaults to true.",
+            "type": "boolean"
+          },
+          "encoding": {
+            "enum": [
+              "utf-8",
+              "base64"
+            ],
+            "type": "string"
+          },
+          "overwrite": {
+            "description": "Replace an existing file. Defaults to false.",
+            "type": "boolean"
+          },
+          "relative_path": {
+            "description": "Relative output path beneath the saved .blend directory.",
+            "maxLength": 1024,
+            "type": "string"
+          }
+        },
+        "required": [
+          "relative_path",
+          "content"
+        ],
+        "type": "object"
+      },
+      "name": "write_project_file",
+      "order": 86,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -22798,10 +22111,14 @@
     },
     {
       "contract": {
-        "approval_policy": "Requires a fresh one-time user approval; session-wide external script trust cannot auto-run persistent simulation/cache bake or free operators.",
-        "description": "Stage a fixed-template scene-wide persistent simulation point-cache bake script for explicit approval; persistent bake/free operators do not auto-run under session-wide script trust",
-        "explicit_approval_required": true,
+        "approval_policy": "Requires active binary session trust and then runs immediately.",
+        "authorization_model": "blender_run_script_equivalent",
+        "description": "Run a fixed-template scene-wide persistent point-cache bake under active binary session trust",
+        "destructive_hint": true,
+        "duration_hint": "Synchronous scene-wide simulation baking may take from seconds to hours and can keep Blender unavailable while it runs.",
+        "explicit_approval_required": false,
         "has_side_effects": true,
+        "long_running": true,
         "mutates_scene": true,
         "output_schema": {
           "additionalProperties": true,
@@ -22844,16 +22161,7 @@
             "ok": {
               "type": "boolean"
             },
-            "recommended_next_step": {
-              "type": "string"
-            },
-            "requires_explicit_one_time_approval": {
-              "type": "boolean"
-            },
-            "requires_user_approval": {
-              "type": "boolean"
-            },
-            "staged": {
+            "prepared": {
               "additionalProperties": true,
               "properties": {
                 "message": {
@@ -22867,6 +22175,15 @@
               },
               "type": "object"
             },
+            "recommended_next_step": {
+              "type": "string"
+            },
+            "requires_explicit_one_time_approval": {
+              "type": "boolean"
+            },
+            "requires_user_approval": {
+              "type": "boolean"
+            },
             "trust_window_auto_run_allowed": {
               "type": "boolean"
             },
@@ -22879,11 +22196,23 @@
           ],
           "type": "object"
         },
-        "recovery_hint": "If Blender becomes unreachable after an approved bake, wait, call blender_bridge_status, then use get_blend_file_diagnostics before reporting any checkpoint path.",
-        "requires_approval": true,
-        "trust_window_auto_run_allowed": false
+        "permissions": [
+          "blender:full",
+          "filesystem:full"
+        ],
+        "recovery_hint": "If Blender becomes unreachable after a trusted bake, wait, call blender_bridge_status, then use get_blend_file_diagnostics before reporting any checkpoint path.",
+        "requires_approval": false,
+        "timeout_recovery": {
+          "message": "If baking times out, wait before calling blender_bridge_status and get_blend_file_diagnostics; do not rerun while the original bake may still be active.",
+          "poll_after_seconds": 10,
+          "recoverable": true,
+          "resource_tool": "get_blend_file_diagnostics",
+          "status_tool": "blender_bridge_status"
+        },
+        "timeout_seconds": 300,
+        "trust_window_auto_run_allowed": true
       },
-      "description": "Stage a fixed-template scene-wide persistent simulation point-cache bake script for explicit user approval. Persistent bake/free operators do not auto-run under session-wide external script trust.",
+      "description": "Inspect the requested simulation scope, then run a fixed-template scene-wide persistent point-cache bake when Blender-side session script trust is active. Trust off refuses without retaining script state.",
       "exposure": "compact_direct",
       "groups": [
         "animation",
@@ -22896,7 +22225,7 @@
         "additionalProperties": false,
         "properties": {
           "auto_run_if_trusted": {
-            "description": "Compatibility option only; explicit-approval-only bake/free scripts remain staged even when external script trust is active.",
+            "description": "Deprecated compatibility option. Active session trust always runs immediately; trust off always refuses.",
             "type": "boolean"
           },
           "clear_existing": {
@@ -22966,16 +22295,7 @@
           "ok": {
             "type": "boolean"
           },
-          "recommended_next_step": {
-            "type": "string"
-          },
-          "requires_explicit_one_time_approval": {
-            "type": "boolean"
-          },
-          "requires_user_approval": {
-            "type": "boolean"
-          },
-          "staged": {
+          "prepared": {
             "additionalProperties": true,
             "properties": {
               "message": {
@@ -22988,6 +22308,15 @@
               }
             },
             "type": "object"
+          },
+          "recommended_next_step": {
+            "type": "string"
+          },
+          "requires_explicit_one_time_approval": {
+            "type": "boolean"
+          },
+          "requires_user_approval": {
+            "type": "boolean"
           },
           "trust_window_auto_run_allowed": {
             "type": "boolean"
@@ -27681,7 +27010,8 @@
       "groups": [
         "advanced_create",
         "character",
-        "curves_text"
+        "curves_text",
+        "two_d_storyboard"
       ],
       "handler_key": "create_text_object",
       "input_schema": {
@@ -27791,7 +27121,8 @@
       "groups": [
         "advanced_create",
         "character",
-        "curves_text"
+        "curves_text",
+        "two_d_storyboard"
       ],
       "handler_key": "create_curve_path",
       "input_schema": {
@@ -28675,109 +28006,6 @@
     },
     {
       "contract": {
-        "description": "Map a natural-language object design brief to object family, creation strategy, bounded kit arguments, helper tools, asset-reference boundaries, and script fallback policy",
-        "input_schema": {
-          "additionalProperties": false,
-          "properties": {
-            "label": {
-              "type": "string"
-            },
-            "object_family": {
-              "enum": [
-                "",
-                "lighting",
-                "furniture",
-                "appliance",
-                "vehicle",
-                "architecture",
-                "mechanical",
-                "electronics",
-                "product_display",
-                "character",
-                "abstract_prop",
-                "unknown"
-              ],
-              "type": "string"
-            },
-            "prompt": {
-              "type": "string"
-            },
-            "target_objects": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "type": "object"
-        },
-        "mutates_scene": false,
-        "supports_headless": true
-      },
-      "description": "Map a natural-language object design brief to object family, creation strategy, bounded object-kit arguments, helper tools, asset-reference boundaries, and script fallback policy. Use before choosing procedural kits or custom scripts for open-ended object creation. Does not mutate the scene.",
-      "exposure": "compact_direct",
-      "groups": [
-        "deep_inspect",
-        "advanced_create",
-        "advanced_workflow",
-        "procedural_3d"
-      ],
-      "handler_key": "plan_object_design",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "label": {
-            "type": "string"
-          },
-          "object_family": {
-            "enum": [
-              "",
-              "lighting",
-              "furniture",
-              "appliance",
-              "vehicle",
-              "architecture",
-              "mechanical",
-              "electronics",
-              "product_display",
-              "character",
-              "abstract_prop",
-              "unknown"
-            ],
-            "type": "string"
-          },
-          "prompt": {
-            "type": "string"
-          },
-          "target_objects": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          }
-        },
-        "type": "object"
-      },
-      "name": "plan_object_design",
-      "order": 1160,
-      "output_schema": {
-        "additionalProperties": true,
-        "properties": {
-          "message": {
-            "description": "Human-readable status or error message",
-            "type": "string"
-          },
-          "ok": {
-            "description": "Whether the tool completed successfully",
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "owner": "workflows_refinement"
-    },
-    {
-      "contract": {
         "description": "Plan async external-asset discovery, download/cache, queued import, post-import staging, and visual-evidence workflow",
         "input_schema": {
           "additionalProperties": false,
@@ -28978,202 +28206,6 @@
       },
       "name": "get_2d_animation_details",
       "order": 1190,
-      "output_schema": {
-        "additionalProperties": true,
-        "properties": {
-          "message": {
-            "description": "Human-readable status or error message",
-            "type": "string"
-          },
-          "ok": {
-            "description": "Whether the tool completed successfully",
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "owner": "workflows_refinement"
-    },
-    {
-      "contract": {
-        "description": "Create reversible storyboard/animatic panels with labels and optional orthographic camera",
-        "mutates_scene": true,
-        "requires_live_preview": true
-      },
-      "description": "Create a reversible 2D storyboard/animatic board with panel cards, borders, shot labels, frame ranges, and optional orthographic camera. Applies immediately with preview revert support.",
-      "exposure": "catalog",
-      "groups": [
-        "advanced_create",
-        "two_d_storyboard"
-      ],
-      "handler_key": "create_storyboard_panels",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "background_color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "border_color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "columns": {
-            "maximum": 24,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "create_camera": {
-            "type": "boolean"
-          },
-          "frame_start": {
-            "type": "integer"
-          },
-          "frame_step": {
-            "type": "integer"
-          },
-          "gap": {
-            "type": "number"
-          },
-          "label": {
-            "type": "string"
-          },
-          "name_prefix": {
-            "type": "string"
-          },
-          "panel_count": {
-            "maximum": 24,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "panel_height": {
-            "type": "number"
-          },
-          "panel_width": {
-            "type": "number"
-          },
-          "text_color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          }
-        },
-        "type": "object"
-      },
-      "name": "create_storyboard_panels",
-      "order": 1200,
-      "output_schema": {
-        "additionalProperties": true,
-        "properties": {
-          "message": {
-            "description": "Human-readable status or error message",
-            "type": "string"
-          },
-          "ok": {
-            "description": "Whether the tool completed successfully",
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "owner": "workflows_refinement"
-    },
-    {
-      "contract": {
-        "description": "Create a reversible flat 2D cutout layer with optional transform animation",
-        "mutates_scene": true,
-        "requires_live_preview": true
-      },
-      "description": "Create a flat 2D cutout layer with optional transform keyframes and label text. Use for motion graphics, animatics, and cutout animation. Applies immediately with preview revert support.",
-      "exposure": "catalog",
-      "groups": [
-        "animation",
-        "advanced_create",
-        "two_d_storyboard"
-      ],
-      "handler_key": "create_2d_cutout_layer",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "frame_end": {
-            "type": "integer"
-          },
-          "frame_start": {
-            "type": "integer"
-          },
-          "label": {
-            "type": "string"
-          },
-          "location": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "location_end": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "name": {
-            "type": "string"
-          },
-          "rotation_end": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "scale_end": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "size": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          },
-          "text": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "name": "create_2d_cutout_layer",
-      "order": 1210,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -29921,291 +28953,6 @@
     },
     {
       "contract": {
-        "description": "Create a bounded procedural object kit from reusable templates with optional design-grammar style, variant, detail, and feature controls",
-        "input_schema": {
-          "additionalProperties": false,
-          "properties": {
-            "accent_color": {
-              "items": {
-                "type": "number"
-              },
-              "maxItems": 4,
-              "minItems": 3,
-              "type": "array"
-            },
-            "add_detail_modifiers": {
-              "type": "boolean"
-            },
-            "count": {
-              "maximum": 80,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "detail_level": {
-              "enum": [
-                "low",
-                "medium",
-                "high"
-              ],
-              "type": "string"
-            },
-            "features": {
-              "description": "Bounded semantic feature hints. Currently used by desk_lamp.",
-              "items": {
-                "enum": [
-                  "round_base",
-                  "desk_clamp",
-                  "inline_switch",
-                  "double_arm",
-                  "single_arm",
-                  "spring_arms",
-                  "counterweight",
-                  "open_shade",
-                  "wide_shade",
-                  "visible_bulb",
-                  "power_cable",
-                  "inspection_lights",
-                  "label_parts"
-                ],
-                "type": "string"
-              },
-              "maxItems": 16,
-              "type": "array"
-            },
-            "height": {
-              "type": "number"
-            },
-            "label": {
-              "type": "string"
-            },
-            "location": {
-              "items": {
-                "type": "number"
-              },
-              "maxItems": 3,
-              "minItems": 3,
-              "type": "array"
-            },
-            "name_prefix": {
-              "type": "string"
-            },
-            "primary_color": {
-              "items": {
-                "type": "number"
-              },
-              "maxItems": 4,
-              "minItems": 3,
-              "type": "array"
-            },
-            "radius": {
-              "type": "number"
-            },
-            "spacing": {
-              "type": "number"
-            },
-            "style": {
-              "description": "Bounded visual style palette. Explicit colors override palette defaults.",
-              "enum": [
-                "default",
-                "studio",
-                "industrial",
-                "minimal",
-                "architect",
-                "retro"
-              ],
-              "type": "string"
-            },
-            "template": {
-              "enum": [
-                "kitbash_tower",
-                "radial_array",
-                "scatter_grid",
-                "product_stack",
-                "product_display_rig",
-                "mechanical_joint",
-                "mechanical_assembly",
-                "control_panel",
-                "coffee_machine",
-                "studio_prop_set",
-                "mechanical_part",
-                "modular_wall_panel",
-                "pipe_run",
-                "desk_lamp"
-              ],
-              "type": "string"
-            },
-            "variant": {
-              "description": "Template-specific bounded design variant. Currently used by desk_lamp.",
-              "enum": [
-                "default",
-                "architect",
-                "task",
-                "studio",
-                "compact",
-                "clamp"
-              ],
-              "type": "string"
-            }
-          },
-          "type": "object"
-        },
-        "mutates_scene": true,
-        "requires_live_preview": true
-      },
-      "description": "Create a reversible procedural object kit from bounded templates such as kitbash towers, radial arrays, scatter grids, product stacks, product display rigs, desk lamps, coffee machines, mechanical joints, mechanical assemblies, control panels, studio prop sets, mechanical parts, modular wall panels, or pipe runs. Supports bounded design-grammar controls for style, variant, detail level, and semantic features, so use it before custom mesh or geometry-node scripts.",
-      "exposure": "catalog",
-      "groups": [
-        "procedural_3d",
-        "geometry_nodes"
-      ],
-      "handler_key": "create_procedural_object_kit",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "accent_color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "add_detail_modifiers": {
-            "type": "boolean"
-          },
-          "count": {
-            "maximum": 80,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "detail_level": {
-            "enum": [
-              "low",
-              "medium",
-              "high"
-            ],
-            "type": "string"
-          },
-          "features": {
-            "description": "Bounded semantic feature hints. Currently used by desk_lamp.",
-            "items": {
-              "enum": [
-                "round_base",
-                "desk_clamp",
-                "inline_switch",
-                "double_arm",
-                "single_arm",
-                "spring_arms",
-                "counterweight",
-                "open_shade",
-                "wide_shade",
-                "visible_bulb",
-                "power_cable",
-                "inspection_lights",
-                "label_parts"
-              ],
-              "type": "string"
-            },
-            "maxItems": 16,
-            "type": "array"
-          },
-          "height": {
-            "type": "number"
-          },
-          "label": {
-            "type": "string"
-          },
-          "location": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 3,
-            "minItems": 3,
-            "type": "array"
-          },
-          "name_prefix": {
-            "type": "string"
-          },
-          "primary_color": {
-            "items": {
-              "type": "number"
-            },
-            "maxItems": 4,
-            "minItems": 3,
-            "type": "array"
-          },
-          "radius": {
-            "type": "number"
-          },
-          "spacing": {
-            "type": "number"
-          },
-          "style": {
-            "description": "Bounded visual style palette. Explicit colors override palette defaults.",
-            "enum": [
-              "default",
-              "studio",
-              "industrial",
-              "minimal",
-              "architect",
-              "retro"
-            ],
-            "type": "string"
-          },
-          "template": {
-            "enum": [
-              "kitbash_tower",
-              "radial_array",
-              "scatter_grid",
-              "product_stack",
-              "product_display_rig",
-              "mechanical_joint",
-              "mechanical_assembly",
-              "control_panel",
-              "coffee_machine",
-              "studio_prop_set",
-              "mechanical_part",
-              "modular_wall_panel",
-              "pipe_run",
-              "desk_lamp"
-            ],
-            "type": "string"
-          },
-          "variant": {
-            "description": "Template-specific bounded design variant. Currently used by desk_lamp.",
-            "enum": [
-              "default",
-              "architect",
-              "task",
-              "studio",
-              "compact",
-              "clamp"
-            ],
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "name": "create_procedural_object_kit",
-      "order": 1280,
-      "output_schema": {
-        "additionalProperties": true,
-        "properties": {
-          "message": {
-            "description": "Human-readable status or error message",
-            "type": "string"
-          },
-          "ok": {
-            "description": "Whether the tool completed successfully",
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "owner": "modeling"
-    },
-    {
-      "contract": {
         "description": "Create a reversible camera dolly move with optional target tracking and lens keyframes",
         "input_schema": {
           "additionalProperties": false,
@@ -30328,202 +29075,6 @@
       },
       "name": "create_camera_dolly_animation",
       "order": 1290,
-      "output_schema": {
-        "additionalProperties": true,
-        "properties": {
-          "message": {
-            "description": "Human-readable status or error message",
-            "type": "string"
-          },
-          "ok": {
-            "description": "Whether the tool completed successfully",
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "owner": "animation"
-    },
-    {
-      "contract": {
-        "description": "Create a reversible director-style animation shot template",
-        "input_schema": {
-          "additionalProperties": false,
-          "properties": {
-            "camera_name": {
-              "type": "string"
-            },
-            "create_camera": {
-              "type": "boolean"
-            },
-            "frame_end": {
-              "type": "integer"
-            },
-            "frame_start": {
-              "type": "integer"
-            },
-            "interpolation": {
-              "type": "string"
-            },
-            "label": {
-              "type": "string"
-            },
-            "lens_end": {
-              "type": "number"
-            },
-            "lens_start": {
-              "type": "number"
-            },
-            "object_names": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "rotation_revolutions": {
-              "type": "number"
-            },
-            "scale_end": {
-              "type": "number"
-            },
-            "scale_start": {
-              "type": "number"
-            },
-            "selected_only": {
-              "type": "boolean"
-            },
-            "shot_type": {
-              "enum": [
-                "camera_push_reveal",
-                "orbit_reveal",
-                "product_turntable",
-                "path_slide",
-                "staggered_reveal",
-                "storyboard_dolly",
-                "crane_reveal",
-                "truck_slide"
-              ],
-              "type": "string"
-            },
-            "target_name": {
-              "type": "string"
-            },
-            "travel_axis": {
-              "enum": [
-                "X",
-                "Y",
-                "Z"
-              ],
-              "type": "string"
-            },
-            "travel_distance": {
-              "type": "number"
-            }
-          },
-          "type": "object"
-        },
-        "mutates_scene": true,
-        "requires_live_preview": true
-      },
-      "description": "Create a reversible director-style animation shot template: camera push reveal, orbit reveal, product turntable, path slide, staggered reveal, storyboard dolly, crane reveal, or truck slide.",
-      "exposure": "catalog",
-      "groups": [
-        "animation",
-        "two_d_storyboard"
-      ],
-      "handler_key": "create_directed_animation_shot",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "camera_name": {
-            "type": "string"
-          },
-          "create_camera": {
-            "type": "boolean"
-          },
-          "frame_end": {
-            "type": "integer"
-          },
-          "frame_start": {
-            "type": "integer"
-          },
-          "interpolation": {
-            "enum": [
-              "CONSTANT",
-              "LINEAR",
-              "BEZIER",
-              "SINE",
-              "QUAD",
-              "CUBIC",
-              "QUART",
-              "QUINT",
-              "EXPO",
-              "CIRC",
-              "BACK",
-              "BOUNCE",
-              "ELASTIC"
-            ],
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "lens_end": {
-            "type": "number"
-          },
-          "lens_start": {
-            "type": "number"
-          },
-          "object_names": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "rotation_revolutions": {
-            "type": "number"
-          },
-          "scale_end": {
-            "type": "number"
-          },
-          "scale_start": {
-            "type": "number"
-          },
-          "selected_only": {
-            "type": "boolean"
-          },
-          "shot_type": {
-            "enum": [
-              "camera_push_reveal",
-              "orbit_reveal",
-              "product_turntable",
-              "path_slide",
-              "staggered_reveal",
-              "storyboard_dolly",
-              "crane_reveal",
-              "truck_slide"
-            ],
-            "type": "string"
-          },
-          "target_name": {
-            "type": "string"
-          },
-          "travel_axis": {
-            "enum": [
-              "X",
-              "Y",
-              "Z"
-            ],
-            "type": "string"
-          },
-          "travel_distance": {
-            "type": "number"
-          }
-        },
-        "type": "object"
-      },
-      "name": "create_directed_animation_shot",
-      "order": 1300,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -31422,243 +29973,6 @@
         "type": "object"
       },
       "owner": "materials_nodes"
-    },
-    {
-      "contract": {
-        "description": "Apply a bounded vehicle detail kit with wheels, windows, seams, lights, and smoothing",
-        "mutates_scene": true,
-        "requires_live_preview": true
-      },
-      "description": "Apply a bounded vehicle detail kit around a target mesh: smoothing, bevels, wheels, window panels, seams, headlights, and taillights. Applies immediately with preview revert support.",
-      "exposure": "catalog",
-      "groups": [
-        "vehicle"
-      ],
-      "handler_key": "apply_vehicle_refinement_template",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "detail_level": {
-            "enum": [
-              "low",
-              "medium",
-              "high"
-            ],
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "target_name": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "name": "apply_vehicle_refinement_template",
-      "order": 1440,
-      "output_schema": {
-        "additionalProperties": true,
-        "properties": {
-          "message": {
-            "description": "Human-readable status or error message",
-            "type": "string"
-          },
-          "ok": {
-            "description": "Whether the tool completed successfully",
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "owner": "workflows_refinement"
-    },
-    {
-      "contract": {
-        "description": "Apply a bounded product presentation kit with material polish, smoothing, staging, callouts, and optional turntable",
-        "mutates_scene": true,
-        "output_schema": {
-          "additionalProperties": true,
-          "properties": {
-            "created_objects": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "lighting_warning": {
-              "description": "Set when stacking lights onto an already-lit scene may over-expose the render; empty otherwise.",
-              "type": "string"
-            },
-            "lights": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "message": {
-              "description": "Human-readable status or error message",
-              "type": "string"
-            },
-            "ok": {
-              "description": "Whether the tool completed successfully",
-              "type": "boolean"
-            },
-            "warnings": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "ok"
-          ],
-          "type": "object"
-        },
-        "requires_live_preview": true
-      },
-      "description": "Apply a bounded product presentation kit around a target: material polish, smoothing/bevels, optional studio stage, dimension callouts, and optional turntable. Applies immediately with preview revert support.",
-      "exposure": "catalog",
-      "groups": [
-        "advanced_create",
-        "refinement",
-        "product"
-      ],
-      "handler_key": "apply_product_refinement_template",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "include_callouts": {
-            "type": "boolean"
-          },
-          "include_stage": {
-            "type": "boolean"
-          },
-          "include_turntable": {
-            "type": "boolean"
-          },
-          "label": {
-            "type": "string"
-          },
-          "style": {
-            "enum": [
-              "studio",
-              "catalog",
-              "premium"
-            ],
-            "type": "string"
-          },
-          "target_name": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "name": "apply_product_refinement_template",
-      "order": 1450,
-      "output_schema": {
-        "additionalProperties": true,
-        "properties": {
-          "created_objects": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "lighting_warning": {
-            "description": "Set when stacking lights onto an already-lit scene may over-expose the render; empty otherwise.",
-            "type": "string"
-          },
-          "lights": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "message": {
-            "description": "Human-readable status or error message",
-            "type": "string"
-          },
-          "ok": {
-            "description": "Whether the tool completed successfully",
-            "type": "boolean"
-          },
-          "warnings": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "ok"
-        ],
-        "type": "object"
-      },
-      "owner": "workflows_refinement"
-    },
-    {
-      "contract": {
-        "description": "Apply a bounded character blockout/detail kit with body polish, head, eyes, shoulder marker, and optional guides",
-        "mutates_scene": true,
-        "requires_live_preview": true
-      },
-      "description": "Apply a bounded character presentation kit around a target mesh: body polish, simple head/neck/eyes, shoulder marker, and optional gesture guides. Applies immediately with preview revert support.",
-      "exposure": "catalog",
-      "groups": [
-        "advanced_create",
-        "refinement",
-        "character"
-      ],
-      "handler_key": "apply_character_refinement_template",
-      "input_schema": {
-        "additionalProperties": false,
-        "properties": {
-          "character_style": {
-            "enum": [
-              "neutral",
-              "toon"
-            ],
-            "type": "string"
-          },
-          "create_guides": {
-            "type": "boolean"
-          },
-          "detail_level": {
-            "enum": [
-              "low",
-              "medium",
-              "high"
-            ],
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "target_name": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "name": "apply_character_refinement_template",
-      "order": 1460,
-      "output_schema": {
-        "additionalProperties": true,
-        "properties": {
-          "message": {
-            "description": "Human-readable status or error message",
-            "type": "string"
-          },
-          "ok": {
-            "description": "Whether the tool completed successfully",
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "owner": "workflows_refinement"
     },
     {
       "contract": {
@@ -34757,12 +33071,31 @@
     },
     {
       "contract": {
-        "description": "Stage generated Blender Python, or auto-run it after static checks when Blender-side external script trust is active",
+        "authorization_model": "blender_run_script_equivalent",
+        "description": "Run generated Blender Python with Blender Run Script-equivalent permissions only while Blender-side session script trust is active",
+        "destructive_hint": true,
+        "duration_hint": "Synchronous trusted Python may finish in seconds or keep Blender busy indefinitely, depending on the script.",
         "has_side_effects": true,
+        "long_running": true,
         "mutates_scene": true,
-        "requires_approval": true
+        "open_world_hint": true,
+        "permissions": [
+          "blender:full",
+          "filesystem:full",
+          "network:full",
+          "process:spawn"
+        ],
+        "requires_approval": false,
+        "timeout_recovery": {
+          "message": "If trusted Python times out, wait, call blender_bridge_status, inspect visual evidence and the audit log, and rerun only if no result or side effect appeared.",
+          "poll_after_seconds": 5,
+          "recoverable": true,
+          "resource_tool": "get_visual_evidence_resources",
+          "status_tool": "blender_bridge_status"
+        },
+        "timeout_seconds": 300
       },
-      "description": "Stage Blender Python in a Text datablock for explicit user approval, or auto-run after static checks when external script trust is active. Use only when safe helper tools cannot express the requested scene, animation, material, or rig change. Blocked scripts are refused even while external script trust is active.",
+      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. Prefer bounded helpers when they provide better recovery or progress reporting.",
       "exposure": "catalog",
       "groups": [],
       "handler_key": "draft_script",
@@ -34770,12 +33103,12 @@
         "additionalProperties": false,
         "properties": {
           "code": {
-            "description": "Complete Blender Python script to stage for approval",
+            "description": "Complete Blender Python script to run under active session trust",
             "maxLength": 500000,
             "type": "string"
           },
           "expected_changes": {
-            "description": "Visible scene/data changes the user should expect if they approve it",
+            "description": "Visible scene/data changes the user should expect if it runs under active trust",
             "type": "string"
           },
           "intent": {
@@ -34827,11 +33160,16 @@
     },
     {
       "contract": {
-        "approval_policy": "Requires an approval manifest and fresh one-time user approval; session-wide external script trust cannot auto-run privileged asset or project-file scripts.",
-        "description": "Stage custom asset/project-file Blender Python with declared filesystem, network, asset-import, or project-file capabilities for explicit one-time approval",
-        "explicit_approval_required": true,
+        "approval_policy": "Requires the binary Blender-side Trust Agent Scripts session control.",
+        "authorization_model": "blender_run_script_equivalent",
+        "description": "Compatibility alias that uses the same session-trusted execution path as draft_script",
+        "destructive_hint": true,
+        "duration_hint": "Synchronous trusted Python may finish in seconds or keep Blender busy indefinitely, depending on the script.",
+        "explicit_approval_required": false,
         "has_side_effects": true,
+        "long_running": true,
         "mutates_scene": true,
+        "open_world_hint": true,
         "output_schema": {
           "additionalProperties": true,
           "properties": {
@@ -34861,7 +33199,7 @@
             "auto_run_attempted": {
               "type": "boolean"
             },
-            "auto_run_skipped_reason": {
+            "auto_run_reason": {
               "type": "string"
             },
             "declared_paths": {
@@ -34904,18 +33242,24 @@
           "type": "object"
         },
         "permissions": [
-          "scene:read",
-          "scene:mutate",
-          "script:stage",
-          "files:read",
-          "files:write",
-          "network"
+          "blender:full",
+          "filesystem:full",
+          "network:full",
+          "process:spawn"
         ],
-        "recovery_hint": "Review declared paths, URLs, destructive actions, and checkpoint status before approval. If an approved project-file script opens another .blend, trust is cleared on file load.",
-        "requires_approval": true,
-        "trust_window_auto_run_allowed": false
+        "recovery_hint": "Use checkpoints, Blender undo, or bounded structured tools when stronger recovery is needed.",
+        "requires_approval": false,
+        "timeout_recovery": {
+          "message": "If trusted Python times out, wait, call blender_bridge_status, inspect visual evidence and the audit log, and rerun only if no result or side effect appeared.",
+          "poll_after_seconds": 5,
+          "recoverable": true,
+          "resource_tool": "get_visual_evidence_resources",
+          "status_tool": "blender_bridge_status"
+        },
+        "timeout_seconds": 300,
+        "trust_window_auto_run_allowed": true
       },
-      "description": "Stage custom Blender Python for external asset or project-file workflows that need declared filesystem, network, asset-import, or project-file capabilities. Requires an explicit approval manifest with paths/URLs/actions. Never auto-runs under normal external script trust; the user must run it in Blender or issue a one-time external approval token.",
+      "description": "Compatibility alias for draft_script. Under active Blender-side session trust it runs generated Python with the same process permissions as Blender's Run Script command; otherwise it refuses.",
       "exposure": "catalog",
       "groups": [],
       "handler_key": "draft_privileged_script",
@@ -34923,11 +33267,11 @@
         "additionalProperties": false,
         "properties": {
           "approval_summary": {
-            "description": "Concise approval manifest explaining why helper tools are insufficient and what the script may touch",
+            "description": "Legacy compatibility field retained as advisory context; it does not authorize execution",
             "type": "string"
           },
           "capabilities": {
-            "description": "Requested elevated capabilities. Defaults are inferred from script_kind and merged with this list.",
+            "description": "Legacy capability declaration retained as advisory context; active session trust grants full manual-script permissions.",
             "items": {
               "enum": [
                 "filesystem",
@@ -34940,7 +33284,7 @@
             "type": "array"
           },
           "code": {
-            "description": "Complete privileged Blender Python script to stage for approval",
+            "description": "Complete Blender Python script to run under active session trust",
             "maxLength": 500000,
             "type": "string"
           },
@@ -34966,7 +33310,7 @@
             "type": "array"
           },
           "expected_changes": {
-            "description": "Visible scene, file, asset-cache, or project-file changes the user should expect",
+            "description": "Visible scene, file, asset-cache, or project-file changes expected when it runs",
             "type": "string"
           },
           "intent": {
@@ -34983,7 +33327,7 @@
             "type": "string"
           },
           "script_kind": {
-            "description": "Privileged workflow class that determines default capabilities and approval checks.",
+            "description": "Legacy workflow classification retained for client compatibility and audit context.",
             "enum": [
               "external_asset",
               "project_file",
@@ -34999,16 +33343,6 @@
             "type": "array"
           }
         },
-        "required": [
-          "script_kind",
-          "intent",
-          "expected_changes",
-          "approval_summary",
-          "declared_paths",
-          "declared_urls",
-          "destructive_actions",
-          "code"
-        ],
         "type": "object"
       },
       "name": "draft_privileged_script",
@@ -35042,7 +33376,7 @@
           "auto_run_attempted": {
             "type": "boolean"
           },
-          "auto_run_skipped_reason": {
+          "auto_run_reason": {
             "type": "string"
           },
           "declared_paths": {
@@ -35165,20 +33499,20 @@
     },
     {
       "contract": {
-        "description": "Run a pending script with a one-time approval token or active Blender-side script trust",
+        "description": "Refuse removed per-script approval flows",
         "external_only": true,
-        "has_side_effects": true,
+        "has_side_effects": false,
         "input_schema": {
           "additionalProperties": false,
           "properties": {
             "approval_token": {
-              "description": "Optional one-time token copied from Blender after the user approves external execution. Omit this, or pass an empty string, only while a Blender-side external script trust grant is active.",
+              "description": "Ignored legacy field. This endpoint always returns per_script_approval_removed and never authorizes execution.",
               "type": "string"
             }
           },
           "type": "object"
         },
-        "mutates_scene": true,
+        "mutates_scene": false,
         "output_schema": {
           "additionalProperties": true,
           "properties": {
@@ -35215,15 +33549,13 @@
           "type": "object"
         },
         "permissions": [
-          "scene:read",
-          "scene:mutate",
-          "script:run"
+          "scene:read"
         ],
-        "requires_approval": true,
+        "requires_approval": false,
         "supports_headless": false,
         "timeout_seconds": 120
       },
-      "description": "Run a pending script with a one-time approval token or active Blender-side script trust",
+      "description": "Compatibility endpoint that refuses removed per-script approval flows.",
       "exposure": "internal",
       "groups": [],
       "handler_key": "run_approved_script",
@@ -35231,7 +33563,7 @@
         "additionalProperties": false,
         "properties": {
           "approval_token": {
-            "description": "Optional one-time token copied from Blender after the user approves external execution. Omit this, or pass an empty string, only while a Blender-side external script trust grant is active.",
+            "description": "Ignored legacy field. This endpoint always returns per_script_approval_removed and never authorizes execution.",
             "type": "string"
           }
         },
@@ -35277,5 +33609,5 @@
       "owner": "scripts_transactions"
     }
   ],
-  "tool_count": 186
+  "tool_count": 181
 }

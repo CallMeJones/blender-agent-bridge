@@ -20,10 +20,10 @@ class ToolRegistryReportTests(unittest.TestCase):
         report = build_registry_report(tool_registry.REGISTRY)
 
         self.assertEqual(1, report["schema_version"])
-        self.assertEqual(186, report["tool_count"])
+        self.assertEqual(181, report["tool_count"])
         self.assertEqual(tool_registry.TOOL_REGISTRY_DIGEST, report["registry_digest"])
         self.assertEqual(
-            {"catalog": 161, "compact_direct": 24, "internal": 1},
+            {"catalog": 157, "compact_direct": 23, "internal": 1},
             {row["name"]: row["tool_count"] for row in report["exposures"]},
         )
         self.assertEqual(report["tool_count"], sum(row["tool_count"] for row in report["owners"]))
@@ -81,7 +81,7 @@ class ToolRegistryReportTests(unittest.TestCase):
 
         self.assertEqual(0, completed.returncode, completed.stderr)
         payload = json.loads(completed.stdout)
-        self.assertEqual(186, payload["tool_count"])
+        self.assertEqual(181, payload["tool_count"])
 
 
 if __name__ == "__main__":

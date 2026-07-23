@@ -780,7 +780,7 @@ def _animation_hardening_summary(context, objects, subject_routing, contact_surf
         "repair_loop_limits": [
             "Automatic repair is for bounded helper operations from repair_animation_from_findings.",
             "Center-of-mass/contact/support findings may need manual re-pose planning before the loop can safely mutate.",
-            "Persistent simulation/cache bake remains explicit one-time approval work.",
+            "Persistent simulation/cache bake scripts require active session trust; inspect first because baking may block Blender.",
         ],
         "subject_count": len(subject_routing),
     }
@@ -1249,7 +1249,7 @@ def simulation_details(context, *, object_names=None, max_objects=20):
         "objects": result,
         "recommended_next_tools": sorted(recommended_next_tools),
         "cautions": cautions[:24],
-        "note": "Read-only simulation inspection; use inspect_simulation_bake for evaluated samples and stage_persistent_simulation_bake for explicit approval-gated persistent bakes.",
+        "note": "Read-only simulation inspection; use inspect_simulation_bake for evaluated samples and stage_persistent_simulation_bake for intentional persistent bakes under active session trust.",
     }
 
 

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from .. import handler_runtime as _runtime
+import bpy
 
-for _runtime_name, _runtime_value in vars(_runtime).items():
-    if not _runtime_name.startswith("__"):
-        globals()[_runtime_name] = _runtime_value
-del _runtime_name, _runtime_value
+from .. import advanced_materials as advanced_helpers, blender_compat, context_bundle, live_preview, world_model
+from ..handler_runtime import (
+    _idprops_summary,
+    _socket_summary,
+)
+from .support import _bounded_float, _bounded_int, _float_list, _name_list, _optional_float_list
 
 
 def get_material_node_details(context, args):

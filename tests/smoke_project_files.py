@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import ctypes
 import json
 import os
 import shutil
@@ -24,11 +26,20 @@ def _execute(context, name, args=None):
 
 def main():
     work_dir = tempfile.mkdtemp(prefix="claude-blender-project-files-")
+    outside_dir = tempfile.mkdtemp(prefix="claude-blender-project-files-outside-")
     checkpoint_dir = os.path.join(work_dir, "checkpoints")
     claude_blender.register()
     try:
         tool_names = {tool["name"] for tool in agent_tools.blender_tool_definitions()}
-        for name in ("save_blend_file", "open_blend_file", "create_new_blender_project", "autosave_current_blend_file"):
+        for name in (
+            "save_blend_file",
+            "open_blend_file",
+            "create_new_blender_project",
+            "autosave_current_blend_file",
+            "list_project_files",
+            "read_project_file",
+            "write_project_file",
+        ):
             assert name in tool_names, name
             assert name in bridge_protocol.TOOL_CONTRACTS, name
         assert autosave._timer_is_registered()
@@ -40,6 +51,10 @@ def main():
         autosave_unbound = _execute(bpy.context, "autosave_current_blend_file", {"force": True, "reason": "unbound smoke"})
         assert autosave_unbound["ok"] is False, autosave_unbound
         assert autosave_unbound["code"] == "user_path_required", autosave_unbound
+
+        project_files_unbound = _execute(bpy.context, "list_project_files", {})
+        assert project_files_unbound["ok"] is False, project_files_unbound
+        assert project_files_unbound["code"] == "project_filesystem_unavailable", project_files_unbound
 
         save_unbound = _execute(bpy.context, "save_blend_file", {})
         assert save_unbound["ok"] is False, save_unbound
@@ -67,6 +82,156 @@ def main():
         assert "last_checkpoint" in diagnostics["script_checkpoints"], diagnostics
         assert diagnostics["script_checkpoints"]["last_checkpoint"]["exists"] is False, diagnostics
         assert "exists=true" in diagnostics["script_checkpoints"]["path_policy"], diagnostics
+
+        text_write = _execute(
+            bpy.context,
+            "write_project_file",
+            {"relative_path": "assets/generated/notes.txt", "content": "project-only asset\n"},
+        )
+        assert text_write["ok"] is True, text_write
+        assert text_write["project_root"] == os.path.realpath(work_dir), text_write
+        assert os.path.isfile(os.path.join(work_dir, "assets", "generated", "notes.txt")), text_write
+
+        text_read = _execute(
+            bpy.context,
+            "read_project_file",
+            {"relative_path": "assets/generated/notes.txt"},
+        )
+        assert text_read["ok"] is True, text_read
+        assert text_read["content"] == "project-only asset\n", text_read
+
+        binary_payload = b"\x00\x01\x02\xff"
+        binary_write = _execute(
+            bpy.context,
+            "write_project_file",
+            {
+                "relative_path": "assets/generated/payload.bin",
+                "content": base64.b64encode(binary_payload).decode("ascii"),
+                "encoding": "base64",
+            },
+        )
+        assert binary_write["ok"] is True, binary_write
+        binary_read = _execute(
+            bpy.context,
+            "read_project_file",
+            {"relative_path": "assets/generated/payload.bin", "encoding": "base64"},
+        )
+        assert binary_read["ok"] is True, binary_read
+        assert base64.b64decode(binary_read["content"]) == binary_payload, binary_read
+
+        listed = _execute(
+            bpy.context,
+            "list_project_files",
+            {"relative_path": "assets", "recursive": True},
+        )
+        assert listed["ok"] is True, listed
+        listed_paths = {item["relative_path"].replace("\\", "/") for item in listed["entries"]}
+        assert "assets/generated/notes.txt" in listed_paths, listed
+        assert "assets/generated/payload.bin" in listed_paths, listed
+
+        overwrite_refused_project_file = _execute(
+            bpy.context,
+            "write_project_file",
+            {"relative_path": "assets/generated/notes.txt", "content": "replacement"},
+        )
+        assert overwrite_refused_project_file["ok"] is False, overwrite_refused_project_file
+        assert overwrite_refused_project_file["code"] == "project_file_exists", overwrite_refused_project_file
+        overwritten_project_file = _execute(
+            bpy.context,
+            "write_project_file",
+            {"relative_path": "assets/generated/notes.txt", "content": "replacement", "overwrite": True},
+        )
+        assert overwritten_project_file["ok"] is True, overwritten_project_file
+
+        for escaped_path in (
+            "../outside.txt",
+            os.path.join(outside_dir, "outside.txt"),
+            ".git/config",
+            "assets/NUL",
+            "assets/CON.txt",
+            "assets/generated/data.txt:stream",
+            "assets/generated/trailing.txt. ",
+        ):
+            escaped = _execute(
+                bpy.context,
+                "write_project_file",
+                {"relative_path": escaped_path, "content": "blocked"},
+            )
+            assert escaped["ok"] is False, escaped
+            assert escaped["code"] == "project_path_outside_scope", escaped
+
+        for blocked_type in ("assets/generated/tool.py", "assets/generated/other.blend", "assets/generated/tool.exe"):
+            blocked_write = _execute(
+                bpy.context,
+                "write_project_file",
+                {"relative_path": blocked_type, "content": "blocked"},
+            )
+            assert blocked_write["ok"] is False, blocked_write
+            assert blocked_write["code"] == "project_file_type_blocked", blocked_write
+
+        outside_file = os.path.join(outside_dir, "secret.txt")
+        with open(outside_file, "w", encoding="utf-8") as handle:
+            handle.write("outside")
+        linked_file = os.path.join(work_dir, "assets", "generated", "linked.txt")
+        try:
+            os.symlink(outside_file, linked_file)
+        except OSError:
+            linked_file = ""
+        if linked_file:
+            linked_read = _execute(
+                bpy.context,
+                "read_project_file",
+                {"relative_path": "assets/generated/linked.txt"},
+            )
+            assert linked_read["ok"] is False, linked_read
+            assert linked_read["code"] in {"project_path_outside_scope", "project_path_link_blocked"}, linked_read
+
+        hardlinked_file = os.path.join(work_dir, "assets", "generated", "hardlinked.txt")
+        try:
+            os.link(outside_file, hardlinked_file)
+        except OSError:
+            hardlinked_file = ""
+        if hardlinked_file:
+            hardlinked_read = _execute(
+                bpy.context,
+                "read_project_file",
+                {"relative_path": "assets/generated/hardlinked.txt"},
+            )
+            assert hardlinked_read["ok"] is False, hardlinked_read
+            assert hardlinked_read["code"] == "project_path_link_blocked", hardlinked_read
+
+        if os.name == "nt":
+            hidden_file = os.path.join(work_dir, "assets", "generated", "hidden.txt")
+            with open(hidden_file, "w", encoding="utf-8") as handle:
+                handle.write("hidden")
+            set_file_attributes = ctypes.windll.kernel32.SetFileAttributesW
+            assert set_file_attributes(hidden_file, 0x2)
+            hidden_list = _execute(
+                bpy.context,
+                "list_project_files",
+                {"relative_path": "assets/generated"},
+            )
+            assert hidden_list["ok"] is True, hidden_list
+            assert not any(item["name"] == "hidden.txt" for item in hidden_list["entries"]), hidden_list
+            hidden_read = _execute(
+                bpy.context,
+                "read_project_file",
+                {"relative_path": "assets/generated/hidden.txt"},
+            )
+            assert hidden_read["ok"] is False, hidden_read
+            assert hidden_read["code"] == "project_path_hidden_blocked", hidden_read
+            hidden_write = _execute(
+                bpy.context,
+                "write_project_file",
+                {
+                    "relative_path": "assets/generated/hidden.txt",
+                    "content": "replacement",
+                    "overwrite": True,
+                },
+            )
+            assert hidden_write["ok"] is False, hidden_write
+            assert hidden_write["code"] == "project_path_hidden_blocked", hidden_write
+            assert set_file_attributes(hidden_file, 0x80)
 
         copy_path = os.path.join(work_dir, "copy.blend")
         copy_without_user_path = _execute(bpy.context, "save_blend_file", {"filepath": copy_path, "copy": True})
@@ -215,6 +380,7 @@ def main():
             claude_blender.unregister()
         finally:
             shutil.rmtree(work_dir, ignore_errors=True)
+            shutil.rmtree(outside_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":

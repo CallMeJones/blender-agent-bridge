@@ -1,4 +1,4 @@
-"""Static analysis guardrails for approval-gated Blender Python."""
+"""Advisory static analysis for session-trusted Blender Python."""
 
 from __future__ import annotations
 
@@ -599,8 +599,8 @@ def analyze_script(source, *, privileged_capabilities=None):
                 risk_reasons.append(f"blocked_blender_file_op:{approval_call_name}")
             if _requires_explicit_approval(approval_call_name):
                 reason = (
-                    f"Line {_line(node)} persistent simulation/cache operator requires explicit "
-                    f"one-time user approval and cannot auto-run under external script trust: {approval_call_name}"
+                    f"Line {_line(node)} persistent simulation/cache operation is high risk under "
+                    f"session trust and may block Blender: {approval_call_name}"
                 )
                 warnings.append(reason)
                 explicit_approval_reasons.append(reason)

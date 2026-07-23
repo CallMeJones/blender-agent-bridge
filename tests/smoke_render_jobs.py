@@ -293,7 +293,8 @@ def main():
         )
         assert guarded["ok"] is False, guarded
         assert guarded["blocked"] is True, guarded
-        assert guarded["recommended_tool"] == "start_render_job", guarded
+        assert guarded["code"] == "script_trust_required", guarded
+        assert guarded["helper_advisory"]["recommended_tool"] == "start_render_job", guarded
 
         print("smoke_render_jobs: ok")
     finally:

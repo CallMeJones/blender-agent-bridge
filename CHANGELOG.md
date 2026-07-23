@@ -2,14 +2,26 @@
 
 ## Unreleased
 
+## 0.4.0 - 2026-07-23
+
+- Removed eight opinionated finished-content generators: procedural object kits, object-design planning, vehicle/product/character refinement templates, storyboard panels, 2D cutout layers, and directed animation shots. Broad authored-content requests now route through reusable helpers, asset import, or a trusted script.
+- Split advanced Blender helpers into cohesive animation, camera/render, materials, modeling, presentation, rigging, scene-editing, and shared-support modules; retained the old helper module as a compatibility facade; split animation orchestration from the generic handler runtime; moved planning, 2D inspection, and neutral handler arguments to focused modules; and made `tool_executor.py` the sole registry-composition owner.
+- Fixed helper-first orbit workflows and animation-review playblast capture to execute through the explicit handler lookup instead of relying on removed global injection.
+- Simplified agent guidance and updated current-facing documentation, routing fixtures, registry snapshots, and smoke coverage to match the 181-tool registry.
+
 ## 0.3.1 - 2026-07-22
 
-- Reduced Blender Agent Bridge to one compact sidebar for bridge status, start/stop, MCP config, active-trust revocation, pending approvals, and preview commit/revert; optional setup and diagnostics remain available through Preferences, operators, and contextual dialogs instead of a second panel.
+- Reduced Blender Agent Bridge to one compact sidebar for bridge status, start/stop, MCP config, binary session script trust/revocation, and preview commit/revert. Removed the per-script Run/Reject/Allow-Once UI. Trust off refuses generated Python; trust on grants the same filesystem, network, process, project-file, persistent-cache, and Blender API permissions as Blender's Run Script command.
+- Removed the underlying pending-script properties, approval tokens, staging/reject/run helpers, and legacy execution-mode preference so the per-script workflow cannot reappear through dormant state. The compatibility `run_approved_script` endpoint now only returns a permanent refusal.
+- Aligned README, security, privacy, architecture, and MCP guidance with binary trust; added documentation drift tests; replaced live `staged` response metadata with `prepared`; and made non-execution reasons report the actual invalid-payload, checkpoint, or trust failure.
+- Made script checkpoints collision-safe at sub-second frequency and blocked native Windows hidden files/directories from the bounded project-file tools in addition to dot-prefixed paths.
+- Added bounded project-directory list/read/write tools rooted at the current saved `.blend`, with traversal/link protection, hidden-path exclusion, 4 MiB limits, opt-in overwrite, and blocked executable/script/library/`.blend` targets.
 - Hardened external-asset downloads with DNS-pinned public-address connections, redirect revalidation, credential isolation, and a 4 GiB streaming limit.
 - Made PyPI publication safely resumable by comparing tested artifact hashes before upload, skipping only verified existing files, and checking the complete public artifact set afterward.
 - Made copied Bundled MCP configs use Blender's own Python interpreter and verified that exact command from a clean installed extension.
 - Made `tools/list` flatten simple top-level JSON Schema combinators for Claude-compatible MCP registration while retaining the canonical schema for bridge validation and explicit schema lookup.
 - Isolated registry metadata from caller mutation, strengthened cross-process determinism tests, and avoided redundant source-tree hashing in bridge status diagnostics.
+- Replaced broad runtime/global namespace injection in all domain handlers with explicit dependencies, and consolidated trusted-script authorization/status reporting under one pure policy module.
 - Fixed look-dev review evidence to honor the configured capture cache and isolated Blender smoke artifacts from developer home directories.
 
 ## 0.3.0 - 2026-07-20
@@ -25,8 +37,8 @@
 ## 0.2.0 - 2026-07-19
 
 - Kept the Blender sidebar lean around bridge start/stop, MCP config, script trust, pending script approval, preview commit/revert, and checkpoint restore; rich diagnostics remain available through bridge/operator responses instead of always showing in the panel.
-- Relaxed `draft_script` routing so helper-overlap scene, material, and animation scripts can stage or auto-run under trust after static checks, while external asset, project-file, and persistent simulation bake/free paths stay out of the normal script-trust lane.
-- Added `draft_privileged_script` for custom external asset and project-file lifecycle scripts with a declared path/URL/action manifest, elevated static-analysis capabilities, and mandatory one-time approval; these scripts never auto-run under normal external script trust.
+- Relaxed `draft_script` routing so helper-overlap scene, material, and animation scripts can stage or auto-run under trust after static checks, while external asset, project-file, and persistent simulation bake/free paths stayed in a separate privileged lane at the time.
+- Added the original `draft_privileged_script` manifest and one-time-approval path; it is now retained as a compatibility alias to the binary session-trust execution path.
 - Raised the approval-gated script size ceiling to 500k characters for larger procedural scene scripts and allowed safe in-memory `io` use while continuing to block file-opening aliases such as `io.open`.
 - Hardened script analysis so aliased Blender project-file/window operators such as `ops.wm.save_as_mainfile`, `wm.open_mainfile`, and assigned `save_as_mainfile` functions cannot bypass the privileged approval path.
 - Clarified that privileged script manifests are user review/audit context rather than a runtime filesystem or network sandbox.

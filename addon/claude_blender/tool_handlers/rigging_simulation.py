@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-from .. import handler_runtime as _runtime
-
-for _runtime_name, _runtime_value in vars(_runtime).items():
-    if not _runtime_name.startswith("__"):
-        globals()[_runtime_name] = _runtime_value
-del _runtime_name, _runtime_value
+from .. import advanced_rigging as advanced_helpers, live_preview, preferences, script_execution, script_runner, world_model
+from .support import _bounded_int, _float_list, _name_list, _simulation_bake_script
 
 
 def get_rigging_details(context, args):
@@ -54,12 +50,26 @@ def inspect_simulation_bake(context, args):
 
 
 def stage_persistent_simulation_bake(context, args):
+    if not script_runner.external_script_trust_active(context):
+        return {
+            "ok": False,
+            "blocked": True,
+            "code": "script_trust_required",
+            "message": "Agent script trust is off. Enable Trust Agent Scripts before running a persistent bake.",
+            "requires_user_approval": False,
+            "requires_explicit_one_time_approval": False,
+            "trust_window_auto_run_allowed": True,
+            "auto_run_attempted": False,
+            "auto_ran": False,
+            "recommended_next_step": "Inspect first, then enable session trust only if you want the bake script to run.",
+        }
+
     object_names = _name_list(args.get("object_names"))
     frame_start = _bounded_int(args.get("frame_start"), context.scene.frame_start, minimum=-100000, maximum=100000)
     frame_end = _bounded_int(args.get("frame_end"), context.scene.frame_end, minimum=-100000, maximum=100000)
     if frame_end < frame_start:
         frame_start, frame_end = frame_end, frame_start
-    sample = world_model.inspect_simulation_bake(
+    inspection = world_model.inspect_simulation_bake(
         context,
         object_names=object_names,
         frame_start=frame_start,
@@ -67,20 +77,21 @@ def stage_persistent_simulation_bake(context, args):
         sample_count=2,
         max_objects=_bounded_int(args.get("max_objects"), 20, maximum=80),
     )
-    if object_names and not sample.get("object_names"):
+    if object_names and not inspection.get("object_names"):
         return {
             "ok": False,
             "message": "No requested simulation-capable objects were found to bake",
-            "inspection": sample,
+            "inspection": inspection,
             "requires_user_approval": False,
         }
-    if not sample.get("object_names") and not ((sample.get("bake_status") or {}).get("rigid_body_world_cache")):
+    if not inspection.get("object_names") and not ((inspection.get("bake_status") or {}).get("rigid_body_world_cache")):
         return {
             "ok": False,
             "message": "No simulation caches were found to bake",
-            "inspection": sample,
+            "inspection": inspection,
             "requires_user_approval": False,
         }
+
     include_world = bool(args.get("include_scene_rigid_body_world", True))
     clear_existing = bool(args.get("clear_existing", False))
     code = _simulation_bake_script(
@@ -91,83 +102,50 @@ def stage_persistent_simulation_bake(context, args):
         include_scene_rigid_body_world=include_world,
     )
     range_scope = "requested objects plus scene rigid-body world" if object_names else "all simulation caches in the active scene"
-    scope_warning = (
-        "Blender's bpy.ops.ptcache.bake_all operator is scene-wide; object_names limit inspection "
-        "and cache-range preparation, not the bake operator scope."
-    )
-    staged = script_runner.stage_script(
+    prefs = preferences.get_preferences(context)
+    run_result = script_runner.run_trusted_script(
         context,
         code=code,
         intent="Bake persistent Blender simulation point caches with a fixed Agent Bridge template.",
         expected_changes=(
             f"Sets point-cache ranges to frames {frame_start}-{frame_end} for {range_scope}, "
-            "then runs the scene-wide bpy.ops.ptcache.bake_all(bake=True) operator. "
-            "This can take time and writes persistent cache state."
+            "then runs the scene-wide bpy.ops.ptcache.bake_all(bake=True) operator."
         ),
         risk_level="high",
         target_objects=object_names,
+        checkpoint_enabled=bool(getattr(prefs, "checkpoints_enabled", True)),
+        checkpoint_dir=getattr(prefs, "checkpoint_dir", None),
     )
-    result = {
-        "ok": bool(staged.get("ok")),
-        "message": "Persistent simulation bake script staged for explicit approval",
-        "inspection": sample,
-        "staged": staged,
+    execution_status = script_execution.status_fields(run_result)
+    return {
+        "ok": bool(run_result.get("ok")),
+        "message": (
+            "Persistent simulation bake ran with Blender Run Script permissions"
+            if run_result.get("ok")
+            else run_result.get("message", "Persistent simulation bake did not run")
+        ),
+        "code": run_result.get("code"),
+        "inspection": inspection,
+        "prepared": run_result.get("prepared"),
+        "run_result": run_result,
         "frame_range": [frame_start, frame_end],
         "range_preparation_scope": range_scope,
         "bake_operator_scope": "scene_wide_ptcache_bake_all",
-        "scope_warning": scope_warning,
+        "scope_warning": (
+            "Blender's bpy.ops.ptcache.bake_all operator is scene-wide; object_names limit inspection "
+            "and cache-range preparation, not the bake operator scope."
+        ),
         "clear_existing": clear_existing,
         "include_scene_rigid_body_world": include_world,
-        "requires_user_approval": bool(staged.get("requires_user_approval", True)),
-        "requires_explicit_one_time_approval": True,
-        "trust_window_auto_run_allowed": False,
-        "approval_policy": (
-            "Persistent simulation/cache bake and free operators require a fresh one-time user approval; "
-            "session-wide external script trust cannot auto-run them."
-        ),
-        "user_action_required": "Approve the staged script with a one-time external run approval in Blender before baking.",
-        "recommended_next_step": "Wait for explicit user approval; do not poll bridge recovery or rerun the bake yet.",
-        "auto_run_attempted": False,
-        "auto_ran": False,
+        "requires_user_approval": False,
+        "requires_explicit_one_time_approval": False,
+        "trust_window_auto_run_allowed": True,
+        "approval_policy": "Requires active binary session trust and then runs immediately.",
+        "auto_run_attempted": execution_status["auto_run_attempted"],
+        "auto_run_skipped_reason": execution_status["auto_run_skipped_reason"],
+        "auto_ran": execution_status["auto_ran"],
+        "authorization_model": execution_status["authorization_model"],
     }
-    if not staged.get("ok") or staged.get("analysis", {}).get("blocked"):
-        return result
-    analysis = staged.get("analysis") or {}
-    if bool(args.get("auto_run_if_trusted", True)) and script_runner.external_script_trust_active(context):
-        if analysis.get("explicit_approval_required"):
-            result.update(
-                {
-                    "message": "Persistent simulation bake script staged; explicit one-time approval is required",
-                    "auto_run_attempted": False,
-                    "auto_ran": False,
-                    "auto_run_skipped_reason": "explicit_approval_required",
-                    "requires_user_approval": True,
-                }
-            )
-            return result
-        prefs = preferences.get_preferences(context)
-        run_result = script_runner.run_externally_approved_script(
-            context,
-            "",
-            checkpoint_enabled=bool(getattr(prefs, "checkpoints_enabled", True)),
-            checkpoint_dir=getattr(prefs, "checkpoint_dir", None),
-        )
-        result.update(
-            {
-                "ok": bool(run_result.get("ok")),
-                "message": (
-                    "Persistent simulation bake script staged and auto-ran under active external script trust"
-                    if run_result.get("ok")
-                    else "Persistent simulation bake script staged but auto-run failed under active external script trust"
-                ),
-                "run_result": run_result,
-                "auto_run_attempted": True,
-                "auto_ran": bool(run_result.get("ok")),
-                "auto_run_reason": "external_script_trust_active",
-                "requires_user_approval": False,
-            }
-        )
-    return result
 
 
 def set_rig_pose_hold(context, args):

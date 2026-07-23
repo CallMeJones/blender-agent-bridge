@@ -14,7 +14,7 @@ Live preview should feel like this:
 4. Blender's viewport, timeline, and relevant UI redraw.
 5. The sidebar shows a compact pending summary with `Commit` and `Revert`; Blender's normal undo remains available through Blender itself.
 
-This is different from risky generated Python. Arbitrary scripts should still go through code preview and explicit approval unless the user intentionally changes the execution mode.
+This is separate from generated Python. With **Trust Agent Scripts** off, arbitrary scripts are refused without retaining script state. With trust on, they run immediately with Blender **Run Script**-equivalent permissions and use checkpoints/undo for recovery.
 
 ## Preview Transactions
 
@@ -72,12 +72,12 @@ Current implemented helper actions:
 - Commit preview.
 - Revert preview.
 
-These should generally require approval before mutating:
+These should not use the live-preview helper path unless a bounded, reversible tool exists:
 
 - Deleting data-blocks.
 - Renaming many objects.
 - Applying destructive mesh operations.
-- Running arbitrary generated Python.
+- Running arbitrary generated Python, which instead requires active binary session trust.
 - Importing/exporting files.
 - Editing linked library data.
 - Adding drivers or modal handlers.
@@ -113,4 +113,4 @@ The sidebar exposes only the current preview summary, `Commit`, full `Revert`, a
 
 ## Safety Boundary
 
-Live preview does not mean unchecked autonomy. It means safe, typed changes can be applied visibly and reversibly. Generated Python remains approval-gated by default.
+Live preview does not mean unchecked autonomy. It means safe, typed changes can be applied visibly and reversibly. Generated Python is controlled by the separate binary, runtime-only **Trust Agent Scripts** switch.

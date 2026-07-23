@@ -19,8 +19,8 @@ SNAPSHOT_PATH = os.path.join(ROOT, "tests", "snapshots", "tool_registry.json")
 class ToolRegistryTests(unittest.TestCase):
     def test_inventory_is_complete_and_domain_owned(self):
         specs = tool_registry.REGISTRY.specs()
-        self.assertEqual(186, len(specs))
-        self.assertEqual(185, len(tool_registry.definitions()))
+        self.assertEqual(181, len(specs))
+        self.assertEqual(180, len(tool_registry.definitions()))
         self.assertEqual(11, len(tool_registry.DOMAIN_MODULES))
         self.assertEqual({spec.name for spec in specs}, set(bridge_protocol.TOOL_CONTRACTS))
         self.assertEqual(
@@ -33,7 +33,7 @@ class ToolRegistryTests(unittest.TestCase):
             mcp_server.COMPACT_DIRECT_TOOL_NAMES,
         )
         self.assertEqual(
-            29,
+            28,
             len(mcp_server.WRAPPER_TOOL_NAMES) + len(mcp_server.COMPACT_DIRECT_TOOL_NAMES),
         )
         for module in tool_registry.DOMAIN_MODULES:

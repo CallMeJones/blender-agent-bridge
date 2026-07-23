@@ -206,12 +206,11 @@ def main():
                 },
             )
         )
-        assert advised_script["ok"] is True, advised_script
-        assert advised_script["requires_user_approval"] is True, advised_script
+        assert advised_script["ok"] is False, advised_script
+        assert advised_script["code"] == "script_trust_required", advised_script
+        assert advised_script["requires_user_approval"] is False, advised_script
         assert advised_script["helper_advisory"]["code"] == "animation_workflow_advised", advised_script
         assert "run_animation_workflow" in advised_script["helper_advisory"]["recommended_tools"], advised_script
-        rejected_advised_script = script_runner.reject_pending_script(context)
-        assert rejected_advised_script["ok"], rejected_advised_script
 
         explicit_gap_script = json.loads(
             tool_dispatcher.execute_tool(
@@ -221,14 +220,13 @@ def main():
                     "intent": "Animate the cube with a custom helper gap; helper tools cannot express this diagnostic fallback.",
                     "expected_changes": "A diagnostic custom property is set; no animation helper can express the exact test condition.",
                     "risk_level": "low",
-                    "code": "scene['claude_animation_helper_gap_smoke'] = 'staged'",
+                    "code": "scene['claude_animation_helper_gap_smoke'] = 'allowed'",
                 },
             )
         )
-        assert explicit_gap_script["ok"], explicit_gap_script
-        assert explicit_gap_script["requires_user_approval"] is True, explicit_gap_script
-        rejected_gap_script = script_runner.reject_pending_script(context)
-        assert rejected_gap_script["ok"], rejected_gap_script
+        assert not explicit_gap_script["ok"], explicit_gap_script
+        assert explicit_gap_script["code"] == "script_trust_required", explicit_gap_script
+        assert explicit_gap_script["requires_user_approval"] is False, explicit_gap_script
 
         preflight_brief = _execute(
             context,
@@ -364,28 +362,26 @@ def main():
         )
         move_plan = move_workflow["workflow"]
         move_call_names = [call["name"] for call in move_plan["next_tool_calls"]]
-        assert "create_directed_animation_shot" in move_call_names, move_plan
-        assert not move_plan["generation_blockers"], move_plan
+        assert "create_camera_orbit" not in move_call_names, move_plan
+        assert move_plan["generation_blockers"], move_plan
 
-        move_run = _execute(
+        orbit_run = _execute(
             context,
             "run_animation_workflow",
             {
-                "prompt": "Move the cube across the frame over 48 frames with a camera shot.",
+                "prompt": "Create a camera orbit around Cube.",
                 "subject_names": ["Cube"],
                 "frame_start": 1,
-                "frame_end": 48,
+                "frame_end": 36,
                 "mode": "full",
                 "run_review": False,
                 "capture_playblast": False,
                 "apply_repairs": False,
             },
         )
-        assert any(item["tool"] == "create_directed_animation_shot" and item["ok"] for item in move_run["executed"]), move_run
-        assert move_run["pending_preview"] is True, move_run
-        reverted_move_run = _execute(context, "revert_preview", {})
-        assert not reverted_move_run.get("rollback_warnings"), reverted_move_run
-        assert not scene.claude_blender.pending_preview
+        orbit_execution = next(item for item in orbit_run["executed"] if item["tool"] == "create_camera_orbit")
+        assert orbit_execution["ok"] is True, orbit_run
+        _execute(context, "revert_preview", {})
         _select_object(context, cube)
 
         assert animation_brief._infer_action("Animate the truck moving forward over 48 frames.") == "move"
@@ -415,9 +411,8 @@ def main():
             },
         )
         crane_plan = crane_workflow["workflow"]
-        crane_call = next(call for call in crane_plan["next_tool_calls"] if call["name"] == "create_directed_animation_shot")
         assert crane_plan["brief"]["action"] == "crane", crane_plan
-        assert crane_call["input"]["shot_type"] == "crane_reveal", crane_plan
+        assert crane_plan["generation_blockers"], crane_plan
 
         truck_workflow = _execute(
             context,
@@ -431,9 +426,8 @@ def main():
             },
         )
         truck_plan = truck_workflow["workflow"]
-        truck_call = next(call for call in truck_plan["next_tool_calls"] if call["name"] == "create_directed_animation_shot")
         assert truck_plan["brief"]["action"] == "truck", truck_plan
-        assert truck_call["input"]["shot_type"] == "truck_slide", truck_plan
+        assert truck_plan["generation_blockers"], truck_plan
 
         workflow_run = _execute(
             context,
@@ -444,7 +438,7 @@ def main():
                 "frame_start": 1,
                 "frame_end": 72,
                 "mode": "full",
-                "capture_playblast": False,
+                "capture_playblast": True,
                 "apply_repairs": False,
             },
         )
@@ -523,12 +517,11 @@ def main():
                 },
             )
         )
-        assert advised_after_ambiguous["ok"] is True, advised_after_ambiguous
-        assert advised_after_ambiguous["requires_user_approval"] is True, advised_after_ambiguous
+        assert advised_after_ambiguous["ok"] is False, advised_after_ambiguous
+        assert advised_after_ambiguous["code"] == "script_trust_required", advised_after_ambiguous
+        assert advised_after_ambiguous["requires_user_approval"] is False, advised_after_ambiguous
         assert advised_after_ambiguous["helper_advisory"]["code"] == "animation_workflow_advised", advised_after_ambiguous
         assert advised_after_ambiguous["helper_advisory"]["animation_workflow_seen"] is True, advised_after_ambiguous
-        rejected_ambiguous_script = script_runner.reject_pending_script(context)
-        assert rejected_ambiguous_script["ok"], rejected_ambiguous_script
 
         no_count = _execute(
             context,
@@ -1144,7 +1137,7 @@ def main():
         repair_tools = [item["tool"] for item in repair_plan["repair_operations"]]
         assert "get_simulation_details" in repair_tools, repair_plan
         simulation_bake = next(item for item in repair_plan["repair_operations"] if item["tool"] == "inspect_simulation_bake")
-        assert simulation_bake["metadata"]["persistent_bake_requires_approval"] is True, repair_plan
+        assert simulation_bake["metadata"]["persistent_bake_requires_session_trust"] is True, repair_plan
         assert "get_shape_key_details" in repair_tools, repair_plan
         shape_repair = next(item for item in repair_plan["repair_operations"] if item["tool"] == "animate_shape_key")
         assert shape_repair["arguments"]["object_name"] == "Cube", repair_plan

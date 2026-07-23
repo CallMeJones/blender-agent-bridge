@@ -1,14 +1,13 @@
-"""Adversarial smoke test for the static script-analysis denylist.
+"""Adversarial smoke test for static script-risk classification.
 
-The recent trust-gate work (commits a1196be / 0c110c6) lets external clients
-auto-run staged scripts once external script trust is active, gated only by
-``script_analysis.analyze_script``. That makes the static denylist the sole
-barrier in the trust path, so this test pins two things:
+Session trust intentionally grants Blender Run Script-equivalent permissions;
+``script_analysis.analyze_script`` is advisory and is not an execution sandbox.
+This test keeps its high-risk classifications useful without claiming that they
+block session-trusted Python:
 
-* GUARDS  - adversarial variants the analyzer already catches. Locking these in
-            prevents the hardening from regressing.
-* BYPASSES - previously reachable sandbox-escape patterns. Each must remain
-             blocked and ineligible for trust-window execution.
+* GUARDS  - adversarial variants the raw analyzer already classifies as blocked.
+* GAPS    - reflection and indirection variants that must remain visible to the
+            advisory layer instead of silently appearing clean.
 
 Run:  python tests/smoke_script_analysis_bypass.py
 """
@@ -28,8 +27,9 @@ import script_analysis  # noqa: E402
 # --- Adversarial variants the analyzer must keep rejecting (regression locks) ---
 # Each guard is (source, capabilities). Note: the `filesystem` capability
 # intentionally unblocks `open`/`pathlib`, so `open`-based guards run with no
-# privilege. The MAX_CAPS guards assert that even a fully trusted client can
-# never reach a process-spawning primitive.
+# privilege. The MAX_CAPS guards keep the raw analyzer conservative when legacy
+# capability hints are supplied; the trusted runner converts these findings to
+# advisory warnings and still allows execution under active session trust.
 MAX_CAPS = ["filesystem", "network", "project_file"]
 
 GUARDS = {
@@ -41,17 +41,17 @@ GUARDS = {
     "subscript_eval": ("__builtins__['eval']('1+1')", []),
     "getattr_const_name_open": ("n = 'open'\ngetattr(__builtins__, n)('x', 'w')", []),
     "quit_blender_aliased": ("import bpy\nops = bpy.ops\nops.wm.quit_blender()", []),
-    # Even max privilege cannot import or reach a process-spawning module:
+    # The raw analyzer keeps imports/process exit classified as high risk even
+    # when every legacy capability hint is supplied:
     "privileged_import_still_blocked": ("__import__('os').system('echo nope')", MAX_CAPS),
     "privileged_subprocess_still_blocked": ("import subprocess\nsubprocess.run(['x'])", MAX_CAPS),
     "privileged_quit_still_blocked": ("import bpy\nbpy.ops.wm.quit_blender()", MAX_CAPS),
 }
 
 
-# --- Former bypasses that must remain blocked ---
-# Keys map to the bypass classes called out in the P0 note: object-graph
-# escape, computed attribute names, container indirection, and the
-# sys.modules registry (sys is not in BLOCKED_MODULES).
+# --- Former analyzer gaps that must remain classified ---
+# Keys cover object-graph escape, computed attribute names, container
+# indirection, and the sys.modules registry.
 GAPS = {
     # 1. Object-graph escape: walk type() -> __subclasses__ to reach Popen,
     #    never naming a blocked module or builtin.
@@ -97,13 +97,13 @@ def _check_gaps():
         if not result["blocked"]:
             still_open.append((name, result["trust_window_allowed"]))
     if still_open:
-        print(f"smoke_script_analysis_bypass: {len(still_open)} known bypass gap(s) still open:")
+        print(f"smoke_script_analysis_bypass: {len(still_open)} advisory classification gap(s) still open:")
         for name, auto_run in still_open:
-            flag = " [AUTO-RUNS under trust window]" if auto_run else ""
+            flag = " [AUTO-RUNS under binary session trust]" if auto_run else ""
             print(f"  - {name}{flag}")
-        raise AssertionError(f"{len(still_open)} denylist bypass(es) are reachable")
+        raise AssertionError(f"{len(still_open)} advisory classification gap(s) remain")
     else:
-        print("smoke_script_analysis_bypass: all known bypass gaps are now closed.")
+        print("smoke_script_analysis_bypass: all known high-risk variants are classified.")
 
 
 def main():

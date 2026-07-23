@@ -73,7 +73,7 @@ def _permissions(contract):
     if configured:
         return [str(item) for item in configured]
     if contract.get("requires_approval"):
-        return ["scene:read", "script:stage"]
+        return ["scene:read", "script:trusted_run"]
     if contract.get("mutates_scene"):
         permissions = ["scene:read", "scene:mutate"]
         if contract.get("requires_live_preview"):

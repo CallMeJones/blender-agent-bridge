@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-from .. import handler_runtime as _runtime
-
-for _runtime_name, _runtime_value in vars(_runtime).items():
-    if not _runtime_name.startswith("__"):
-        globals()[_runtime_name] = _runtime_value
-del _runtime_name, _runtime_value
+from .. import autosave, lab_parity, project_files
+from .support import _bounded_int
 
 
 def get_blend_file_diagnostics(context, args):
@@ -67,6 +63,32 @@ def autosave_current_blend_file(context, args):
         force=bool(args.get("force", False)),
         reason=str(args.get("reason") or "manual"),
         respect_enabled=bool(args.get("respect_enabled", False)),
+    )
+
+
+def list_project_files(context, args):
+    return project_files.list_project_files(
+        relative_path=str(args.get("relative_path") or ""),
+        recursive=bool(args.get("recursive", False)),
+        max_entries=_bounded_int(args.get("max_entries"), 200, minimum=1, maximum=1000),
+    )
+
+
+def read_project_file(context, args):
+    return project_files.read_project_file(
+        relative_path=str(args.get("relative_path") or ""),
+        encoding=str(args.get("encoding") or "utf-8"),
+        max_bytes=_bounded_int(args.get("max_bytes"), 1_048_576, minimum=1, maximum=project_files.MAX_PROJECT_FILE_BYTES),
+    )
+
+
+def write_project_file(context, args):
+    return project_files.write_project_file(
+        relative_path=str(args.get("relative_path") or ""),
+        content=args.get("content") or "",
+        encoding=str(args.get("encoding") or "utf-8"),
+        overwrite=bool(args.get("overwrite", False)),
+        create_dirs=bool(args.get("create_dirs", True)),
     )
 
 

@@ -321,20 +321,19 @@ def main():
         assert simulation_bake["simulation_details"]["summary"]["rigid_body_object_count"] >= 1, simulation_bake
         assert scene.frame_current == frame_before_simulation_inspect, simulation_bake
 
-        staged_bake = _execute(
-            context,
-            "stage_persistent_simulation_bake",
-            {"object_names": ["Cube"], "frame_start": 1, "frame_end": 12, "auto_run_if_trusted": False},
+        trust_off_bake = json.loads(
+            tool_dispatcher.execute_tool(
+                context,
+                "stage_persistent_simulation_bake",
+                {"object_names": ["Cube"], "frame_start": 1, "frame_end": 12, "auto_run_if_trusted": False},
+            )
         )
-        assert staged_bake["requires_user_approval"] is True, staged_bake
-        assert staged_bake["auto_ran"] is False, staged_bake
-        assert staged_bake["bake_operator_scope"] == "scene_wide_ptcache_bake_all", staged_bake
-        assert "scene-wide" in staged_bake["scope_warning"], staged_bake
-        assert staged_bake["staged"]["analysis"]["explicit_approval_required"], staged_bake
-        assert not staged_bake["staged"]["analysis"]["trust_window_allowed"], staged_bake
-        script_text = bpy.data.texts[staged_bake["staged"]["text_datablock"]].as_string()
-        assert "bpy.ops.ptcache.bake_all" in script_text, staged_bake
-        assert "scope_warning" in script_text, staged_bake
+        assert not trust_off_bake["ok"], trust_off_bake
+        assert trust_off_bake["code"] == "script_trust_required", trust_off_bake
+        assert trust_off_bake["requires_user_approval"] is False, trust_off_bake
+        assert trust_off_bake["requires_explicit_one_time_approval"] is False, trust_off_bake
+        assert trust_off_bake["auto_ran"] is False, trust_off_bake
+        assert "enable session trust" in trust_off_bake["recommended_next_step"], trust_off_bake
 
         bpy.ops.mesh.primitive_cube_add(size=0.25, location=(3.0, 3.0, 0.0))
         plain_object = context.object

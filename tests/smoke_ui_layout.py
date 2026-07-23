@@ -63,7 +63,6 @@ def main():
         context = bpy.context
         state = context.scene.claude_blender
         state.bridge_source_status = ""
-        state.pending_script = False
         state.pending_preview = False
         state.last_script_error_summary = ""
         state.last_checkpoint_path = ""
@@ -73,6 +72,13 @@ def main():
         panels = [cls for cls in ui.classes if issubclass(cls, bpy.types.Panel)]
         assert panels == [ui.CLAUDEBLENDER_PT_sidebar], panels
         assert not hasattr(ui, "CLAUDEBLENDER_PT_advanced")
+        for removed_operator in (
+            "CLAUDEBLENDER_OT_run_approved_script",
+            "CLAUDEBLENDER_OT_approve_external_script_run",
+            "CLAUDEBLENDER_OT_reject_script",
+        ):
+            assert not hasattr(ui, removed_operator), removed_operator
+        assert not hasattr(ui, "_draw_pending_script_review")
         globally_discoverable = {
             ui.CLAUDEBLENDER_OT_commit_preview,
             ui.CLAUDEBLENDER_OT_revert_preview,
@@ -97,11 +103,37 @@ def main():
         ):
             assert not hasattr(ui, removed_renderer), removed_renderer
 
+        trust_dialog_layout = _FakeLayout()
+        trust_dialog = type("_TrustDialog", (), {"layout": trust_dialog_layout})()
+        ui.CLAUDEBLENDER_OT_approve_external_script_trust.draw(trust_dialog, context)
+        assert trust_dialog_layout.labels == [
+            "Trust agent-generated Python for this Blender session?",
+            "Equivalent to Blender Run Script: files, network, and processes are allowed.",
+            "Any client connected to this local bridge can use these permissions.",
+            "Runs with Blender's OS permissions until Revoke, file load, reload, or exit.",
+        ], trust_dialog_layout.labels
+
         # The exact operator sets are a product boundary: adding setup or
         # diagnostics to the default panel must require an intentional test change.
         for running, expected_status, expected_operators in (
-            (False, "Bridge is offline", ["claude_blender.start_bridge", "claude_blender.copy_mcp_config"]),
-            (True, "Bridge is ready", ["claude_blender.stop_bridge", "claude_blender.copy_mcp_config"]),
+            (
+                False,
+                "Bridge is offline",
+                [
+                    "claude_blender.start_bridge",
+                    "claude_blender.copy_mcp_config",
+                    "claude_blender.approve_external_script_trust",
+                ],
+            ),
+            (
+                True,
+                "Bridge is ready",
+                [
+                    "claude_blender.stop_bridge",
+                    "claude_blender.copy_mcp_config",
+                    "claude_blender.approve_external_script_trust",
+                ],
+            ),
         ):
             bridge_server.is_running = lambda running=running: running
             layout = _FakeLayout()
@@ -109,6 +141,15 @@ def main():
             ui.CLAUDEBLENDER_PT_sidebar.draw(panel, context)
             assert layout.labels == [expected_status], layout.labels
             assert layout.operators == expected_operators, layout.operators
+
+        ready_layout = _FakeLayout()
+        ready_panel = type("_Sidebar", (), {"layout": ready_layout})()
+        ui.CLAUDEBLENDER_PT_sidebar.draw(ready_panel, context)
+        trust_operator = ready_layout.operators.index("claude_blender.approve_external_script_trust")
+        assert ready_layout.operator_enabled[trust_operator] == (
+            "claude_blender.approve_external_script_trust",
+            True,
+        )
 
         trusted = script_runner.approve_external_script_trust_window(context, session=True)
         assert trusted["ok"] and trusted["session"], trusted
@@ -133,61 +174,37 @@ def main():
         assert history_layout.operators == [
             "claude_blender.start_bridge",
             "claude_blender.copy_mcp_config",
+            "claude_blender.approve_external_script_trust",
         ], history_layout.operators
 
         state.last_script_error_summary = ""
         state.last_checkpoint_status = "No script checkpoint yet"
 
-        staged = script_runner.stage_script(
-            context,
-            code="value = 1",
-            intent="Create a test value",
-            expected_changes="No scene changes",
-            risk_level="low",
-        )
-        assert staged["ok"], staged
+        # The removed per-script workflow has no state properties or execution
+        # helpers left that a later panel edit could accidentally expose.
+        for removed_property in (
+            "pending_script",
+            "pending_script_blocked",
+            "pending_script_text_name",
+            "pending_script_external_approval_hash",
+        ):
+            assert not hasattr(state, removed_property), removed_property
+        for removed_helper in (
+            "approve_pending_script_for_external_run",
+            "reject_pending_script",
+            "run_pending_script",
+            "stage_script",
+        ):
+            assert not hasattr(script_runner, removed_helper), removed_helper
         script_layout = _FakeLayout()
         script_panel = type("_Sidebar", (), {"layout": script_layout})()
         ui.CLAUDEBLENDER_PT_sidebar.draw(script_panel, context)
-        assert script_layout.labels == [
-            "Bridge is offline",
-            "Pending",
-            "Create a test value",
-            "Risk: low / detected low",
-        ], script_layout.labels
+        assert script_layout.labels == ["Bridge is offline"], script_layout.labels
         assert script_layout.operators == [
             "claude_blender.start_bridge",
             "claude_blender.copy_mcp_config",
-            "claude_blender.run_approved_script",
-            "claude_blender.reject_script",
-            "claude_blender.approve_external_script_run",
             "claude_blender.approve_external_script_trust",
         ], script_layout.operators
-        review_layout = _FakeLayout()
-        review_dialog = type("_RunReview", (), {"layout": review_layout})()
-        ui.CLAUDEBLENDER_OT_run_approved_script.draw(review_dialog, context)
-        assert "Review before running" in review_layout.labels, review_layout.labels
-        assert f"Script text: {state.pending_script_text_name}" in review_layout.labels, review_layout.labels
-        assert "Expected:" in review_layout.labels, review_layout.labels
-        assert "No scene changes" in review_layout.labels, review_layout.labels
-        assert script_runner.reject_pending_script(context)["ok"]
-
-        blocked = script_runner.stage_script(
-            context,
-            code="import subprocess",
-            intent="Blocked test script",
-            risk_level="high",
-        )
-        assert blocked["ok"] and blocked["analysis"]["blocked"], blocked
-        blocked_layout = _FakeLayout()
-        blocked_panel = type("_Sidebar", (), {"layout": blocked_layout})()
-        ui.CLAUDEBLENDER_PT_sidebar.draw(blocked_panel, context)
-        enabled = dict(blocked_layout.operator_enabled)
-        assert not enabled["claude_blender.run_approved_script"], enabled
-        assert enabled["claude_blender.reject_script"], enabled
-        assert "claude_blender.approve_external_script_run" not in enabled, enabled
-        assert "claude_blender.approve_external_script_trust" not in enabled, enabled
-        assert script_runner.reject_pending_script(context)["ok"]
 
         bridge_server.is_running = lambda: False
         state.pending_preview = True
@@ -206,6 +223,7 @@ def main():
         assert preview_layout.operators == [
             "claude_blender.start_bridge",
             "claude_blender.copy_mcp_config",
+            "claude_blender.approve_external_script_trust",
             "claude_blender.commit_preview",
             "claude_blender.revert_preview",
         ], preview_layout.operators
@@ -240,13 +258,13 @@ def main():
         preferences.CLAUDEBLENDER_AP_preferences.draw(prefs_panel, context)
         assert prefs_layout.labels == ["Safety", "Connection"], prefs_layout.labels
         assert prefs_layout.properties == [
-            "execution_mode",
             "checkpoints_enabled",
             "autosave_enabled",
             "bridge_port",
             "bridge_auth_token",
             "mcp_launch_mode",
         ], prefs_layout.properties
+        assert not hasattr(preferences.CLAUDEBLENDER_AP_preferences, "execution_mode")
 
         print("smoke_ui_layout: ok")
     finally:

@@ -22,6 +22,6 @@ The included images have a restricted documentation-only licensing boundary beca
 - Remove API keys, bridge tokens, private paths, proprietary source files, and personal data.
 - Disclose external models, textures, HDRIs, and their licenses.
 - State the Blender, extension, MCP client, and runtime versions.
-- Describe whether changes were previewed, committed, reverted, or approval-gated.
+- Describe whether changes were previewed, committed, reverted, or run under session trust.
 
 Submission does not guarantee inclusion. Maintainers may request smaller files, clearer provenance, accessibility text, or removal of unsafe instructions before publication.

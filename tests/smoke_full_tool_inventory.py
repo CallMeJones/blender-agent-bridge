@@ -41,10 +41,20 @@ def main():
             handler = tool_dispatcher.TOOL_FUNCTIONS[spec.name]
             assert handler.__module__.endswith(f"tool_handlers.{spec.owner}"), (spec.name, handler.__module__)
 
-        for tool_name in ("create_procedural_object_kit", "create_directed_animation_shot"):
-            assert tool_name in catalog_names, tool_name
-            assert tool_name in dispatcher_names, tool_name
-            assert tool_name in bridge_names, tool_name
+        retired_generators = {
+            "create_procedural_object_kit",
+            "plan_object_design",
+            "create_storyboard_panels",
+            "create_2d_cutout_layer",
+            "create_directed_animation_shot",
+            "apply_vehicle_refinement_template",
+            "apply_product_refinement_template",
+            "apply_character_refinement_template",
+        }
+        assert not retired_generators.intersection(catalog_names), catalog_names
+        assert not retired_generators.intersection(dispatcher_names), dispatcher_names
+        assert not retired_generators.intersection(bridge_names), bridge_names
+        for tool_name in ("apply_procedural_array_stack", "create_camera_orbit"):
             assert bridge_protocol.normalized_tool_contract(tool_name)["requires_live_preview"] is True
 
         original_handler = tool_dispatcher.TOOL_FUNCTIONS["inspect_scene"]

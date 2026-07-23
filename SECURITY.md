@@ -22,15 +22,16 @@ Do not include API keys, bridge tokens, proprietary `.blend` files, or private s
 
 ## Security Model
 
-- Generated arbitrary Python must be staged with `draft_script` and approved inside Blender before execution.
-- The MCP bridge binds to `127.0.0.1` only and can require a bearer token.
+- Generated Python has a binary Blender-side trust boundary. With **Trust Agent Scripts** off, `draft_script` is refused without retaining script state or showing a pending-script dialog.
+- With trust on, generated Python runs immediately with the same process permissions as Blender's **Run Script** command, including Blender API, filesystem, network, subprocess, project-file, and persistent-cache access.
+- Trust is runtime-only and session-scoped. It is cleared by **Revoke**, add-on reload, file load, or Blender exit. Starting or stopping the bridge does not silently change it.
+- The MCP bridge is off by default, binds to `127.0.0.1` only, and can require a bearer token. If no token is configured, any local client that can reach the bridge may call its tools; the trust confirmation states this before enabling generated Python.
 - Live helper tools are bounded and should use reversible preview transactions.
-- Checkpoints are saved before approved scripts when enabled.
-- Runtime external script trust presets allow iterative tokenless script runs only for staged scripts that still pass static checks. Trust is cleared by revoke, add-on reload, file load, or bridge restart depending on the preset.
+- Checkpoints are saved before trusted scripts when enabled. Checkpoint failure blocks execution.
 - MCP capture resources expose local viewport screenshots and sampled playblast frames to connected MCP clients. Keep screenshots and playblast capture off when visual context is not needed, and treat project-local `.claude_blender/captures/` folders as generated artifacts.
 - Audit events are written locally to `~/.claude_blender/audit.jsonl` by default. Script/code-like arguments, tokens, keys, and passwords are redacted before logging.
-- Static script checks are guardrails, not a sandbox. Blender Python can still access local files, network, and process state if the user approves it.
-- Static checks reject dynamic builtin and Blender-operator reflection, dangerous Python object-graph introspection, indirect container calls, module-registry access, and references to blocked callables before trust-window execution.
+- Static script checks are advisory guardrails under active trust, not a sandbox or permission filter. Only malformed Python and payloads above the 500k operational ceiling are refused.
+- Bounded project-file, asset, render, capture, save, and cache tools remain preferable when their containment, provenance, rollback, polling, or recovery is useful. Their restrictions do not constrain trusted Python.
 
 ## Hardening Checklist Before Release
 

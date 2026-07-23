@@ -99,7 +99,7 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                         {
                             "name": "draft_script",
                             "title": "Draft Script",
-                            "description": "Stage script for approval",
+                            "description": "Run generated Python under active binary session trust",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -116,7 +116,7 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                         {
                             "name": "draft_privileged_script",
                             "title": "Draft Privileged Script",
-                            "description": "Stage privileged asset/project-file script for approval",
+                            "description": "Compatibility alias for session-trusted generated Python",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
@@ -149,7 +149,7 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                         {
                             "name": "run_approved_script",
                             "title": "Run Approved Script",
-                            "description": "Run a user-approved pending script with a Blender-issued token",
+                            "description": "Compatibility endpoint that refuses removed per-script approval flows",
                             "inputSchema": bridge_protocol.normalized_tool_contract("run_approved_script")["input_schema"],
                             "annotations": bridge_protocol.mcp_annotations_for_tool("run_approved_script"),
                         }
@@ -244,15 +244,15 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
                                     },
                                     {
                                         "name": "draft_script",
-                                        "risk_level": "approval",
-                                        "permissions": ["script:stage"],
-                                        "requires_approval": True,
+                                        "risk_level": "destructive",
+                                        "permissions": ["blender:full", "filesystem:full", "network:full", "process:spawn"],
+                                        "requires_approval": False,
                                     },
                                     {
                                         "name": "draft_privileged_script",
-                                        "risk_level": "approval",
-                                        "permissions": ["script:stage", "files:write", "network"],
-                                        "requires_approval": True,
+                                        "risk_level": "destructive",
+                                        "permissions": ["blender:full", "filesystem:full", "network:full", "process:spawn"],
+                                        "requires_approval": False,
                                     },
                                 ],
                                 "full_contracts_resource": "blender://tools/contracts",
@@ -695,9 +695,17 @@ def _assert_compact_tools_visible(proc):
     assert search_tool["annotations"]["readOnlyHint"] is True, search_tool
     advanced_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "plan_advanced_scene_workflow")
     assert advanced_tool["annotations"]["readOnlyHint"] is True, advanced_tool
-    object_design_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "plan_object_design")
-    assert object_design_tool["annotations"]["readOnlyHint"] is True, object_design_tool
-    assert "object_family" in object_design_tool["inputSchema"]["properties"], object_design_tool
+    retired_generators = {
+        "create_procedural_object_kit",
+        "plan_object_design",
+        "create_storyboard_panels",
+        "create_2d_cutout_layer",
+        "create_directed_animation_shot",
+        "apply_vehicle_refinement_template",
+        "apply_product_refinement_template",
+        "apply_character_refinement_template",
+    }
+    assert not retired_generators.intersection(tool["name"] for tool in listed["result"]["tools"]), listed
     two_d_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "get_2d_animation_details")
     assert two_d_tool["annotations"]["readOnlyHint"] is True, two_d_tool
     task_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "run_animation_task")
@@ -726,11 +734,11 @@ def _assert_compact_tools_visible(proc):
     assert "import_poly_haven_asset" not in names, listed
     assert "import_sketchfab_model" not in names, listed
     bake_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "stage_persistent_simulation_bake")
-    assert bake_tool["annotations"]["requiresApproval"] is True, bake_tool
-    assert bake_tool["annotations"]["requiresExplicitOneTimeApproval"] is True, bake_tool
-    assert bake_tool["annotations"]["trustWindowAutoRunAllowed"] is False, bake_tool
-    assert "one-time" in bake_tool["annotations"]["approvalPolicy"], bake_tool
-    assert "get_blend_file_diagnostics" in bake_tool["annotations"]["recoveryHint"], bake_tool
+    assert bake_tool["annotations"]["requiresApproval"] is False, bake_tool
+    assert bake_tool["annotations"]["requiresExplicitOneTimeApproval"] is False, bake_tool
+    assert bake_tool["annotations"]["trustWindowAutoRunAllowed"] is True, bake_tool
+    assert "active binary session trust" in bake_tool["annotations"]["approvalPolicy"], bake_tool
+    assert bake_tool["annotations"]["readOnlyHint"] is False, bake_tool
     assert "requires_explicit_one_time_approval" in bake_tool["outputSchema"]["properties"], bake_tool
     assemble_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "assemble_render_job_video")
     assert assemble_tool["inputSchema"]["required"] == ["job_id"], assemble_tool
@@ -762,16 +770,23 @@ def _assert_full_tools_visible(proc):
     draft_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "draft_script")
     assert draft_tool["annotations"]["mutatesScene"] is True, draft_tool
     assert draft_tool["annotations"]["hasSideEffects"] is True, draft_tool
+    assert draft_tool["annotations"]["requiresApproval"] is False, draft_tool
     assert draft_tool["annotations"]["readOnlyHint"] is False, draft_tool
     privileged_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "draft_privileged_script")
-    assert privileged_tool["annotations"]["requiresApproval"] is True, privileged_tool
-    assert privileged_tool["annotations"]["requiresExplicitOneTimeApproval"] is True, privileged_tool
-    assert privileged_tool["annotations"]["trustWindowAutoRunAllowed"] is False, privileged_tool
-    assert {"files:read", "files:write", "network"}.issubset(set(privileged_tool["annotations"]["permissions"])), privileged_tool
+    assert privileged_tool["annotations"]["requiresApproval"] is False, privileged_tool
+    assert privileged_tool["annotations"]["requiresExplicitOneTimeApproval"] is False, privileged_tool
+    assert privileged_tool["annotations"]["trustWindowAutoRunAllowed"] is True, privileged_tool
+    assert privileged_tool["annotations"]["permissions"] == [
+        "blender:full",
+        "filesystem:full",
+        "network:full",
+        "process:spawn",
+    ], privileged_tool
+    assert privileged_tool["annotations"]["readOnlyHint"] is False, privileged_tool
     run_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "run_approved_script")
-    assert run_tool["annotations"]["requiresApproval"] is True, run_tool
-    assert run_tool["annotations"]["hasSideEffects"] is True, run_tool
-    assert run_tool["annotations"]["readOnlyHint"] is False, run_tool
+    assert run_tool["annotations"]["requiresApproval"] is False, run_tool
+    assert run_tool["annotations"]["hasSideEffects"] is False, run_tool
+    assert run_tool["annotations"]["readOnlyHint"] is True, run_tool
     open_tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "open_blend_file")
     assert open_tool["annotations"]["destructiveHint"] is True, open_tool
     assert open_tool["annotations"]["humanInLoopRequired"] is True, open_tool
@@ -875,7 +890,10 @@ def _assert_advanced_search_routes_first(response, *, query, expected):
     for tool_name in expected:
         assert tool_name in names[:6], (query, tool_name, names)
     if "draft_script" in names:
-        assert names.index("draft_script") > 5, (query, names)
+        if "draft_script" in expected:
+            assert names.index("draft_script") > 0, (query, names)
+        else:
+            assert names.index("draft_script") > 5, (query, names)
 
 
 def _assert_material_texture_search_avoids_asset_route(response, *, query):
@@ -958,7 +976,7 @@ def main():
                 "jsonrpc": "2.0",
                 "id": 89,
                 "method": "tools/call",
-                "params": {"name": "search_blender_tools", "arguments": {"query": "approved script", "limit": 5}},
+                "params": {"name": "search_blender_tools", "arguments": {"query": "trusted script", "limit": 5}},
             },
         )
         offline_found = {tool["name"] for tool in offline_search["result"]["structuredContent"]["tools"]}
@@ -984,7 +1002,7 @@ def main():
                 "method": "tools/call",
                 "params": {
                     "name": "blender_tool_catalog",
-                    "arguments": {"action": "search", "query": "approved script", "limit": 5},
+                    "arguments": {"action": "search", "query": "trusted script", "limit": 5},
                 },
             },
         )
@@ -1014,7 +1032,7 @@ def main():
         advanced_queries = (
             (
                 "Create a 2D storyboard animatic with panels, cutout layers, and a camera dolly.",
-                {"get_2d_animation_details", "create_storyboard_panels", "create_2d_cutout_layer"},
+                {"get_2d_animation_details", "create_camera_dolly_animation", "draft_script"},
             ),
             (
                 "Make an advanced procedural 3D hard-surface array stack with bevels.",
@@ -1033,8 +1051,8 @@ def main():
                 {"inspect_modeling_quality"},
             ),
             (
-                "Create an advanced procedural object kit with a kitbash scatter grid.",
-                {"create_procedural_object_kit"},
+                "Create an advanced procedural hard-surface array with a geometry-nodes scatter grid.",
+                {"apply_procedural_array_stack", "add_geometry_nodes_modifier"},
             ),
             (
                 "Create a lookdev turntable review with Cycles denoise, inspection stills, and artifact validation.",
@@ -1054,23 +1072,23 @@ def main():
             ),
             (
                 "Design a futuristic wall-mounted coffee machine with chrome pipes, a small display, buttons, and beveled body.",
-                {"plan_object_design", "create_procedural_object_kit", "create_shader_material"},
+                {"draft_script", "create_shader_material", "apply_procedural_array_stack"},
             ),
             (
                 "Create a control panel with buttons and a display.",
-                {"plan_object_design", "create_procedural_object_kit"},
+                {"draft_script", "apply_procedural_array_stack"},
             ),
             (
                 "Create a believable architect desk lamp product prop with spring arms, counterweight, wide shade, bulb, and cable.",
-                {"plan_object_design", "create_procedural_object_kit"},
+                {"draft_script", "screw_model", "apply_procedural_array_stack"},
             ),
             (
-                "Create a modular wall panel object kit with pipe run details and geometry nodes.",
-                {"create_procedural_object_kit", "add_geometry_nodes_modifier"},
+                "Create a modular wall-panel system with pipe-run details and geometry nodes.",
+                {"apply_procedural_array_stack", "add_geometry_nodes_modifier"},
             ),
             (
-                "Create a directed shot template with a camera push reveal.",
-                {"create_directed_animation_shot"},
+                "Create an advanced camera push and orbit reveal.",
+                {"create_camera_dolly_animation", "create_camera_orbit"},
             ),
             (
                 "Add cloth simulation setup and inspect it before any bake.",
@@ -1432,9 +1450,9 @@ def main():
             assert full_empty_approval["result"]["structuredContent"]["tool"] == "run_approved_script", full_empty_approval
             full_approval_warning_codes = {
                 warning["code"]
-                for warning in full_empty_approval["result"]["structuredContent"]["guardrail_warnings"]
+                for warning in full_empty_approval["result"]["structuredContent"].get("guardrail_warnings", [])
             }
-            assert "approval_required" in full_approval_warning_codes, full_empty_approval
+            assert "approval_required" not in full_approval_warning_codes, full_empty_approval
         finally:
             full_proc.kill()
             full_proc.wait(timeout=5)
@@ -1449,14 +1467,14 @@ def main():
                 "jsonrpc": "2.0",
                 "id": 21,
                 "method": "tools/call",
-                "params": {"name": "search_blender_tools", "arguments": {"query": "approved script", "limit": 5}},
+                "params": {"name": "search_blender_tools", "arguments": {"query": "trusted script", "limit": 5}},
             },
         )
         searched_names = {tool["name"] for tool in searched["result"]["structuredContent"]["tools"]}
         assert {"draft_script", "run_approved_script"}.issubset(searched_names), searched
         searched_tools = searched["result"]["structuredContent"]["tools"]
         run_script_summary = next(tool for tool in searched_tools if tool["name"] == "run_approved_script")
-        assert run_script_summary["guardrail_warnings"][0]["code"] == "approval_required", searched
+        assert not run_script_summary.get("guardrail_warnings", []), searched
         assert searched["result"]["structuredContent"]["include_schemas"] is False, searched
         assert searched["result"]["structuredContent"]["schema_lookup_tool"] == "get_blender_tool_schema", searched
         assert "input_schema" not in searched_tools[0], searched
@@ -1469,7 +1487,7 @@ def main():
                 "method": "tools/call",
                 "params": {
                     "name": "search_blender_tools",
-                    "arguments": {"query": "approved script", "limit": 5, "include_schemas": True},
+                    "arguments": {"query": "trusted script", "limit": 5, "include_schemas": True},
                 },
             },
         )
@@ -1729,13 +1747,13 @@ def main():
             },
         )
         bake_catalog_tool = bake_catalog_schema["result"]["structuredContent"]["tool"]
-        assert bake_catalog_tool["annotations"]["requiresExplicitOneTimeApproval"] is True, bake_catalog_schema
-        assert bake_catalog_tool["annotations"]["trustWindowAutoRunAllowed"] is False, bake_catalog_schema
+        assert bake_catalog_tool["annotations"]["requiresExplicitOneTimeApproval"] is False, bake_catalog_schema
+        assert bake_catalog_tool["annotations"]["trustWindowAutoRunAllowed"] is True, bake_catalog_schema
         assert "requires_explicit_one_time_approval" in bake_catalog_tool["outputSchema"]["properties"], bake_catalog_schema
         bake_warning_codes = {
-            warning["code"] for warning in bake_catalog_tool["guardrail_warnings"]
+            warning["code"] for warning in bake_catalog_tool.get("guardrail_warnings", [])
         }
-        assert "explicit_one_time_approval_required" in bake_warning_codes, bake_catalog_schema
+        assert "explicit_one_time_approval_required" not in bake_warning_codes, bake_catalog_schema
 
         simulation_catalog_search = _send(
             proc,
@@ -1751,8 +1769,8 @@ def main():
         )
         simulation_catalog_tools = simulation_catalog_search["result"]["structuredContent"]["tools"]
         bake_summary = next(tool for tool in simulation_catalog_tools if tool["name"] == "stage_persistent_simulation_bake")
-        assert bake_summary["requires_explicit_one_time_approval"] is True, simulation_catalog_search
-        assert bake_summary["trust_window_auto_run_allowed"] is False, simulation_catalog_search
+        assert bake_summary["requires_explicit_one_time_approval"] is False, simulation_catalog_search
+        assert bake_summary["trust_window_auto_run_allowed"] is True, simulation_catalog_search
 
         schema = _send(
             proc,
@@ -1947,9 +1965,9 @@ def main():
         assert empty_approval_invoke["result"]["structuredContent"]["invoked_tool"] == "run_approved_script", empty_approval_invoke
         approval_warning_codes = {
             warning["code"]
-            for warning in empty_approval_invoke["result"]["structuredContent"]["guardrail_warnings"]
+            for warning in empty_approval_invoke["result"]["structuredContent"].get("guardrail_warnings", [])
         }
-        assert "approval_required" in approval_warning_codes, empty_approval_invoke
+        assert "approval_required" not in approval_warning_codes, empty_approval_invoke
 
         destructive_invoke = _send(
             proc,
@@ -2127,6 +2145,8 @@ def main():
         assert "advanced_scene_workflow" in prompt_names, prompts
         assert "advanced_animation_workflow" in prompt_names, prompts
         assert "external_asset_workflow" in prompt_names, prompts
+        assert "trusted_script" in prompt_names, prompts
+        assert "draft_approved_script" not in prompt_names, prompts
 
         prompt = _send(
             proc,
@@ -2179,13 +2199,27 @@ def main():
         )
         advanced_prompt_text = advanced_prompt["result"]["messages"][0]["content"]["text"]
         assert "plan_advanced_scene_workflow" in advanced_prompt_text, advanced_prompt
-        assert "create_storyboard_panels" in advanced_prompt_text, advanced_prompt
+        assert "get_2d_animation_details" in advanced_prompt_text, advanced_prompt
         assert "apply_procedural_array_stack" in advanced_prompt_text, advanced_prompt
-        assert "create_procedural_object_kit" in advanced_prompt_text, advanced_prompt
-        assert "create_directed_animation_shot" in advanced_prompt_text, advanced_prompt
+        assert "compose text, curve, camera, and visual-review helpers" in advanced_prompt_text, advanced_prompt
         assert "create_lookdev_turntable_review" in advanced_prompt_text, advanced_prompt
         assert "configure_render_outputs" in advanced_prompt_text, advanced_prompt
         assert "add_cloth_simulation_to_selected" in advanced_prompt_text, advanced_prompt
+        assert "persistent bake/free scripts are disabled" not in advanced_prompt_text, advanced_prompt
+        assert "Persistent bake/free scripts may run under active trust" in advanced_prompt_text, advanced_prompt
+        trusted_prompt = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 47,
+                "method": "prompts/get",
+                "params": {"name": "trusted_script", "arguments": {"goal": "build a procedural set"}},
+            },
+        )
+        trusted_prompt_text = trusted_prompt["result"]["messages"][0]["content"]["text"]
+        assert "Trust Agent Scripts" in trusted_prompt_text, trusted_prompt
+        assert "runs it immediately" in trusted_prompt_text, trusted_prompt
+        assert "auto_ran=true" in trusted_prompt_text, trusted_prompt
         asset_prompt = _send(
             proc,
             {

@@ -23,24 +23,23 @@ def main():
     for tool_name in EXTERNAL_ONLY_TOOLS:
         assert tool_name in contract_names, tool_name
         assert tool_name not in catalog_names, tool_name
-    for tool_name in ("create_procedural_object_kit", "create_directed_animation_shot"):
-        assert tool_name in catalog_names, tool_name
+    retired_generators = {
+        "create_procedural_object_kit",
+        "plan_object_design",
+        "create_storyboard_panels",
+        "create_2d_cutout_layer",
+        "create_directed_animation_shot",
+        "apply_vehicle_refinement_template",
+        "apply_product_refinement_template",
+        "apply_character_refinement_template",
+    }
+    assert not retired_generators.intersection(catalog_names), catalog_names
+    assert not retired_generators.intersection(contract_names), contract_names
+    for tool_name in ("apply_procedural_array_stack", "create_camera_orbit"):
         contract = bridge_protocol.normalized_tool_contract(tool_name)
         assert contract["mutates_scene"] is True, contract
         assert contract["requires_live_preview"] is True, contract
         assert contract["input_schema"].get("additionalProperties") is False, contract
-    object_design_contract = bridge_protocol.normalized_tool_contract("plan_object_design")
-    assert "plan_object_design" in catalog_names, catalog_names
-    assert object_design_contract["mutates_scene"] is False, object_design_contract
-    assert object_design_contract["supports_headless"] is True, object_design_contract
-    assert "object_family" in object_design_contract["input_schema"]["properties"], object_design_contract
-    kit_templates = bridge_protocol.normalized_tool_contract("create_procedural_object_kit")["input_schema"]["properties"]["template"]["enum"]
-    assert "desk_lamp" in kit_templates, kit_templates
-    assert "coffee_machine" in kit_templates, kit_templates
-    kit_props = bridge_protocol.normalized_tool_contract("create_procedural_object_kit")["input_schema"]["properties"]
-    assert {"style", "variant", "detail_level", "features"}.issubset(kit_props), kit_props
-    assert "architect" in kit_props["style"]["enum"], kit_props["style"]
-    assert "spring_arms" in kit_props["features"]["items"]["enum"], kit_props["features"]
     parent_contract = bridge_protocol.normalized_tool_contract("parent_selected_to_empty")
     assert parent_contract["requires_selection"] is False, parent_contract
     assert {"object_names", "selected_only"}.issubset(parent_contract["input_schema"]["properties"]), parent_contract

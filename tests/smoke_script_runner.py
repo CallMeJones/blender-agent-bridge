@@ -1,9 +1,9 @@
-"""Blender background smoke test for approval-gated script execution."""
+"""Blender background smoke test for binary session-trusted script execution."""
 
 from __future__ import annotations
 
-import os
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -32,6 +32,10 @@ OBJECT_NAME = "Agent Bridge Script Smoke Object"
 MESH_NAME = "Agent Bridge Script Smoke Mesh"
 
 
+def _execute(context, name, args=None):
+    return json.loads(tool_dispatcher.execute_tool(context, name, args or {}))
+
+
 def _cleanup():
     obj = bpy.data.objects.get(OBJECT_NAME)
     if obj is not None:
@@ -44,154 +48,139 @@ def _cleanup():
 def main():
     checkpoint_dir = tempfile.mkdtemp(prefix="claude-blender-checkpoints-")
     old_audit_path = os.environ.get("CLAUDE_BLENDER_AUDIT_LOG")
-    registered = False
     audit_path = os.path.join(checkpoint_dir, "audit.jsonl")
     os.environ["CLAUDE_BLENDER_AUDIT_LOG"] = audit_path
-    claude_blender.register()
-    registered = True
+    registered = False
+    original_get_preferences = preferences.get_preferences
     smoke_preferences = type(
         "_SmokePreferences",
         (),
         {"checkpoint_dir": checkpoint_dir, "checkpoints_enabled": True},
     )()
-    session_get_preferences = preferences.get_preferences
-    preferences.get_preferences = lambda _context: smoke_preferences
     try:
+        claude_blender.register()
+        registered = True
+        preferences.get_preferences = lambda _context: smoke_preferences
         context = bpy.context
         state = context.scene.claude_blender
         _cleanup()
 
+        for removed_name in (
+            "approve_pending_script_for_external_run",
+            "discard_pending_script",
+            "pending_script_source",
+            "reject_pending_script",
+            "repair_context_text",
+            "run_externally_approved_script",
+            "run_pending_script",
+            "stage_script",
+            "validate_external_script_approval",
+        ):
+            assert not hasattr(script_runner, removed_name), removed_name
+        for removed_property in (
+            "pending_script",
+            "pending_script_blocked",
+            "pending_script_text_name",
+            "pending_script_external_approval_hash",
+        ):
+            assert not hasattr(state, removed_property), removed_property
+
         copied = bpy.ops.claude_blender.copy_mcp_config()
         assert "FINISHED" in copied, copied
         clipboard = context.window_manager.clipboard.strip()
-        if clipboard:
-            copied_config = json.loads(clipboard)
-        else:
-            copied_config = build_info.mcp_config(
+        copied_config = (
+            json.loads(clipboard)
+            if clipboard
+            else build_info.mcp_config(
                 f"http://127.0.0.1:{bridge_server.DEFAULT_PORT}",
                 command=build_info.bundled_python_executable(),
             )
+        )
         server_config = copied_config["mcpServers"]["blender"]
         assert server_config["command"] == build_info.bundled_python_executable(), server_config
         assert server_config["args"][0].endswith("mcp_server.py"), server_config
-        assert "--bridge-url" in server_config["args"], server_config
-        env = server_config["env"]
-        assert env["CLAUDE_BLENDER_ADDON_ID"] == build_info.ADDON_ID, env
-        assert env["CLAUDE_BLENDER_ADDON_VERSION"] == build_info.ADDON_VERSION, env
-        assert env["CLAUDE_BLENDER_BRIDGE_VERSION"] == bridge_protocol.BRIDGE_VERSION, env
-        assert env["CLAUDE_BLENDER_MCP_SERVER_VERSION"] == build_info.MCP_SERVER_VERSION, env
-        assert env["CLAUDE_BLENDER_MCP_CONFIG_VERSION"] == build_info.MCP_CONFIG_VERSION, env
-        assert "MCP client" in env["CLAUDE_BLENDER_MCP_CONFIG_NOTE"], env
-        assert "SKETCHFAB_API_TOKEN" in env["BLENDER_AGENT_BRIDGE_EXTERNAL_AUTH_NOTE"], env
-        assert "Poly Haven needs no API key" in env["BLENDER_AGENT_BRIDGE_EXTERNAL_AUTH_NOTE"], env
-        assert env["SKETCHFAB_API_TOKEN"] == "", env
-        assert "BLENDER_BRIDGE_TOKEN" not in env, env
-        assert f"MCP config v{build_info.MCP_CONFIG_VERSION}" in state.status, state.status
-
-        copied_with_auth = bpy.ops.claude_blender.copy_mcp_config_with_sketchfab(
-            sketchfab_api_token="smoke-token-not-a-secret"
-        )
-        assert "FINISHED" in copied_with_auth, copied_with_auth
-        auth_clipboard = context.window_manager.clipboard.strip()
-        if auth_clipboard:
-            auth_config = json.loads(auth_clipboard)
-        else:
-            auth_config = build_info.mcp_config(
-                f"http://127.0.0.1:{bridge_server.DEFAULT_PORT}",
-                sketchfab_api_token="smoke-token-not-a-secret",
-            )
-        auth_env = auth_config["mcpServers"]["blender"]["env"]
-        assert auth_env["SKETCHFAB_API_TOKEN"] == "smoke-token-not-a-secret", auth_env
-        assert "one-time Sketchfab auth" in state.status, state.status
-        context.window_manager.clipboard = ""
-
-        audit_log.append_event("ui_audit_smoke", tool_name="copy_mcp_config", ok=True)
-        refreshed_audit = bpy.ops.claude_blender.refresh_audit_log()
-        assert "FINISHED" in refreshed_audit, refreshed_audit
-        assert audit_log.AUDIT_LOG_TEXT_NAME in bpy.data.texts
-        audit_text = bpy.data.texts[audit_log.AUDIT_LOG_TEXT_NAME].as_string()
-        assert "ui_audit_smoke" in audit_text, audit_text
-        assert state.audit_log_text_name == audit_log.AUDIT_LOG_TEXT_NAME, state.audit_log_text_name
-        assert "event(s)" in state.audit_log_status, state.audit_log_status
-
-        refreshed_preview = bpy.ops.claude_blender.refresh_preview_manifest()
-        assert "FINISHED" in refreshed_preview, refreshed_preview
-        assert "Claude Preview Manifest" in bpy.data.texts
-        assert "No preview transaction" in state.preview_manifest_status, state.preview_manifest_status
-
-        refreshed_visual = bpy.ops.claude_blender.refresh_visual_evidence()
-        assert "FINISHED" in refreshed_visual, refreshed_visual
-        assert "Claude Visual Evidence" in bpy.data.texts
-        assert "tracked resource" in state.visual_evidence_status or "available" in state.visual_evidence_status, state.visual_evidence_status
-
-        refreshed_center = bpy.ops.claude_blender.refresh_control_center()
-        assert "FINISHED" in refreshed_center, refreshed_center
-        assert "Claude Bridge Control Center" in bpy.data.texts
-        center_text = bpy.data.texts["Claude Bridge Control Center"].as_string()
-        assert "bridge" in center_text and "visual_evidence" in center_text, center_text
-        assert "MCP" in state.bridge_diagnostics_status, state.bridge_diagnostics_status
+        assert server_config["env"]["CLAUDE_BLENDER_BRIDGE_VERSION"] == bridge_protocol.BRIDGE_VERSION
 
         internal_tool_names = {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "run_approved_script" not in internal_tool_names
-        bridge_tools = {tool["name"]: tool for tool in bridge_server._tool_definitions()}
-        external_tool = bridge_tools["run_approved_script"]
-        assert "approval_token" not in external_tool["inputSchema"].get("required", []), external_tool
-        assert "minLength" not in external_tool["inputSchema"]["properties"]["approval_token"], external_tool
-        assert external_tool["annotations"]["requiresApproval"] is True, external_tool
+        removed_approval = _execute(context, "run_approved_script", {"approval_token": "legacy-token"})
+        assert not removed_approval["ok"], removed_approval
+        assert removed_approval["code"] == "per_script_approval_removed", removed_approval
 
-        blocked = script_runner.stage_script(
-            context,
-            intent="Try a blocked filesystem operation",
-            expected_changes="No scene changes should occur",
-            risk_level="high",
-            target_objects=[],
-            code="import os\nos.remove('example.blend')",
+        advisory = script_runner.analyze_trusted_script(
+            "import os\nimport socket\nimport subprocess\nopen('example.txt', 'w').write('ok')"
         )
-        assert blocked["ok"], blocked
-        assert blocked["analysis"]["blocked"], blocked
-        assert state.pending_script
-        assert state.pending_script_blocked
-        assert state.pending_script_issues
+        assert advisory["ok"] and not advisory["blocked"], advisory
+        assert advisory["advisory_findings"], advisory
+        assert "static_advisory_unavailable" not in advisory["risk_reasons"], advisory
+        invalid = script_runner.analyze_trusted_script("if True print('broken')")
+        assert not invalid["ok"] and invalid["blocked"], invalid
+        oversized = script_runner.analyze_trusted_script("x" * (script_runner.MAX_SCRIPT_CHARS + 1))
+        assert not oversized["ok"] and oversized["blocked"], oversized
 
-        blocked_run = script_runner.run_pending_script(context, checkpoint_enabled=False)
-        assert not blocked_run["ok"], blocked_run
-        assert state.pending_script_blocked
-
-        rejected = script_runner.reject_pending_script(context)
-        assert rejected["ok"], rejected
-        assert not state.pending_script
-
-        missing = script_runner.stage_script(
+        trust_off_direct = script_runner.run_trusted_script(
             context,
-            intent="Missing code",
-            expected_changes="No changes",
-            risk_level="low",
-            target_objects=[],
-            code="",
+            code="scene['trust_off_direct'] = True",
+            checkpoint_enabled=False,
         )
-        assert not missing["ok"], missing
-        assert missing["missing_code"], missing
-        assert "code field" in missing["message"], missing
-
-        failing = script_runner.stage_script(
+        assert not trust_off_direct["ok"], trust_off_direct
+        assert trust_off_direct["code"] == "script_trust_required", trust_off_direct
+        trust_off_tool = _execute(
             context,
-            intent="Trigger a runtime failure",
-            expected_changes="No scene changes should remain",
-            risk_level="low",
-            target_objects=[],
-            code="raise RuntimeError('intentional smoke failure')",
+            "draft_script",
+            {
+                "intent": "Prove trust-off refusal",
+                "expected_changes": "Nothing runs",
+                "risk_level": "low",
+                "code": "scene['trust_off_tool'] = True",
+            },
         )
-        assert failing["analysis"]["ok"], failing
-        failed_run = script_runner.run_pending_script(context, checkpoint_enabled=False)
-        assert not failed_run["ok"], failed_run
-        assert state.pending_script
-        assert state.pending_script_status == "Script failed"
-        assert "RuntimeError" in state.last_script_error_summary
-        repair_context = script_runner.repair_context_text(context)
-        assert "intentional smoke failure" in repair_context
-        assert "Checkpoint status:" in repair_context
-        assert "Prepare a corrected draft only" in repair_context
-        assert script_runner.SCRIPT_FAILURE_PROMPT_NAME in bpy.data.texts
+        assert not trust_off_tool["ok"], trust_off_tool
+        assert trust_off_tool["code"] == "script_trust_required", trust_off_tool
+        assert "trust is off" in trust_off_tool["message"].lower(), trust_off_tool
+        assert trust_off_tool["auto_run_reason"] == "external_script_trust_required", trust_off_tool
+        assert "trust_off_direct" not in context.scene
+        assert "trust_off_tool" not in context.scene
+        assert script_runner.TRUSTED_SCRIPT_NAME not in bpy.data.texts
+
+        timed = script_runner.approve_external_script_trust_window(context, ttl_seconds=900)
+        assert timed["ok"] and timed["ttl_seconds"] == 900, timed
+        timed_snapshot = script_runner.external_script_trust_snapshot(context, state=state)
+        assert timed_snapshot["active"] and 1 <= timed_snapshot["seconds_remaining"] <= 900, timed_snapshot
+        script_runner._runtime_external_trust_expires_at = time.time() - 1
+        assert not script_runner.external_script_trust_active(context, state=state)
+        assert script_runner.expire_external_script_trust_if_needed(context, state=state)
+        assert state.external_script_trust_status == script_runner.EXTERNAL_TRUST_EXPIRED_STATUS
+
+        trusted = script_runner.approve_external_script_trust_window(context, session=True)
+        assert trusted["ok"] and trusted["session"], trusted
+        session_snapshot = script_runner.external_script_trust_snapshot(context, state=state)
+        assert session_snapshot["active"] and session_snapshot["session"], session_snapshot
+        bridge_status = bridge_server._scene_status()
+        assert bridge_status["external_script_trust"] is True, bridge_status
+        assert "pending_script" not in bridge_status, bridge_status
+        invalid_tool = _execute(
+            context,
+            "draft_script",
+            {
+                "intent": "Prove invalid payload reporting under active trust",
+                "expected_changes": "Nothing runs",
+                "risk_level": "low",
+                "code": "if True print('broken')",
+            },
+        )
+        assert not invalid_tool["ok"], invalid_tool
+        assert invalid_tool["code"] == "invalid_script_payload", invalid_tool
+        assert invalid_tool["auto_run_reason"] == "invalid_script_payload", invalid_tool
+        assert invalid_tool["prepared"] is None, invalid_tool
+        assert "staged" not in invalid_tool, invalid_tool
+
+        first_checkpoint = script_runner.create_checkpoint(context, checkpoint_dir=checkpoint_dir)
+        second_checkpoint = script_runner.create_checkpoint(context, checkpoint_dir=checkpoint_dir)
+        assert first_checkpoint["ok"] and second_checkpoint["ok"], (first_checkpoint, second_checkpoint)
+        assert first_checkpoint["path"] != second_checkpoint["path"], (first_checkpoint, second_checkpoint)
+        assert first_checkpoint["restorable"] and second_checkpoint["restorable"]
+        assert os.path.isfile(first_checkpoint["path"]) and os.path.isfile(second_checkpoint["path"])
 
         safe_code = f"""
 import bpy
@@ -208,495 +197,124 @@ scene.collection.objects.link(obj)
 obj.location = (1.0, 2.0, 3.0)
 print("created", obj.name)
 """
-        staged = script_runner.stage_script(
+        run = _execute(
             context,
-            intent="Create a simple smoke-test mesh object",
-            expected_changes="A triangle mesh object appears at location 1, 2, 3",
-            risk_level="low",
-            target_objects=[OBJECT_NAME],
-            code=safe_code,
+            "draft_script",
+            {
+                "intent": "Create a smoke-test mesh",
+                "expected_changes": f"Creates {OBJECT_NAME}",
+                "risk_level": "low",
+                "target_objects": [OBJECT_NAME],
+                "code": safe_code,
+            },
         )
-        assert staged["ok"], staged
-        assert staged["analysis"]["ok"], staged
-        assert state.pending_script
-        assert not state.pending_script_blocked
-
-        rejected = script_runner.reject_pending_script(context)
-        assert rejected["ok"], rejected
-        alternate_field = json.loads(
-            tool_dispatcher.execute_tool(
-                context,
-                "draft_script",
-                {
-                    "intent": "Stage from alternate field",
-                    "expected_changes": "A harmless print script is staged",
-                    "risk_level": "low",
-                    "script": "print('alternate field staged')",
-                },
-            )
-        )
-        assert alternate_field["ok"], alternate_field
-        assert state.pending_script
-        assert not state.pending_script_blocked
-
-        rejected = script_runner.reject_pending_script(context)
-        assert rejected["ok"], rejected
-        staged = script_runner.stage_script(
-            context,
-            intent="Create a simple smoke-test mesh object",
-            expected_changes="A triangle mesh object appears at location 1, 2, 3",
-            risk_level="low",
-            target_objects=[OBJECT_NAME],
-            code=safe_code,
-        )
-        assert staged["ok"], staged
-        assert staged["analysis"]["ok"], staged
-        assert state.pending_script
-        assert not state.pending_script_blocked
-
-        missing_external = script_runner.run_externally_approved_script(context, "", checkpoint_enabled=False)
-        assert not missing_external["ok"], missing_external
-        assert "approval token" in missing_external["message"], missing_external
-
-        trusted = script_runner.approve_external_script_trust_window(context, ttl_seconds=900)
-        assert trusted["ok"], trusted
-        assert trusted["ttl_seconds"] == 900, trusted
-        assert script_runner.external_script_trust_active(context, state=state)
-        trust_snapshot = script_runner.external_script_trust_snapshot(context, state=state)
-        assert trust_snapshot["active"], trust_snapshot
-        assert trust_snapshot["can_run_without_token"], trust_snapshot
-        assert 1 <= trust_snapshot["seconds_remaining"] <= 900, trust_snapshot
-        assert "remaining" in trust_snapshot["status"], trust_snapshot
-        bridge_status = bridge_server._scene_status()
-        assert bridge_status["external_script_trust"] is True, bridge_status
-        assert bridge_status["external_script_trust_can_run_without_token"] is True, bridge_status
-        assert 1 <= bridge_status["external_script_trust_seconds_remaining"] <= 900, bridge_status
-        assert "MCP client" in bridge_status["mcp_client_refresh_hint"], bridge_status
-
-        script_runner._runtime_external_trust_expires_at = time.time() - 1
-        assert not script_runner.external_script_trust_active(context, state=state)
-        expired_snapshot = script_runner.external_script_trust_snapshot(context, state=state)
-        assert expired_snapshot["expired"], expired_snapshot
-        assert expired_snapshot["seconds_remaining"] == 0, expired_snapshot
-        assert "expired" in script_runner.external_script_trust_status(context, state=state).lower()
-        expired = script_runner.expire_external_script_trust_if_needed(context, state=state)
-        assert expired
-        assert state.external_script_trust_status == script_runner.EXTERNAL_TRUST_EXPIRED_STATUS
-        post_expire_snapshot = script_runner.external_script_trust_snapshot(context, state=state)
-        assert post_expire_snapshot["expired"], post_expire_snapshot
-        assert not post_expire_snapshot["active"], post_expire_snapshot
-        assert post_expire_snapshot["status"] == script_runner.EXTERNAL_TRUST_EXPIRED_STATUS, post_expire_snapshot
-        post_expire_bridge_status = bridge_server._scene_status()
-        assert post_expire_bridge_status["external_script_trust"] is False, post_expire_bridge_status
-        assert post_expire_bridge_status["external_script_trust_status"] == script_runner.EXTERNAL_TRUST_EXPIRED_STATUS, post_expire_bridge_status
-
-        cleared_expired = script_runner.clear_external_script_trust_for_all_scenes()
-        assert cleared_expired >= 1
-        state.external_script_trust_status = "External script trust active: 15m 00s remaining"
-        state.external_script_trust_expires_at = f"{time.time() + 900:.6f}"
-        assert not script_runner.external_script_trust_active(context, state=state)
-        stale_snapshot = script_runner.external_script_trust_snapshot(context, state=state)
-        assert stale_snapshot["stale_scene_state"], stale_snapshot
-        assert stale_snapshot["status"] == script_runner.NO_EXTERNAL_TRUST_STATUS
-        assert script_runner.external_script_trust_status(context, state=state) == script_runner.NO_EXTERNAL_TRUST_STATUS
-        cleared_stale = script_runner.clear_external_script_trust_for_all_scenes()
-        assert cleared_stale >= 1
-
-        session_trusted = script_runner.approve_external_script_trust_window(context, session=True)
-        assert session_trusted["ok"], session_trusted
-        assert session_trusted["session"], session_trusted
-        session_snapshot = script_runner.external_script_trust_snapshot(context, state=state)
-        assert session_snapshot["active"], session_snapshot
-        assert session_snapshot["session"], session_snapshot
-        assert session_snapshot["seconds_remaining"] == 0, session_snapshot
-        assert "session" in session_snapshot["status"].lower(), session_snapshot
-        session_bridge_status = bridge_server._scene_status()
-        assert session_bridge_status["external_script_trust"] is True, session_bridge_status
-        assert session_bridge_status["external_script_trust_session"] is True, session_bridge_status
-        session_script = script_runner.stage_script(
-            context,
-            intent="Run through session trust",
-            expected_changes="A scene custom property is set",
-            risk_level="low",
-            target_objects=[],
-            code="scene['claude_session_trust_smoke'] = 'ok'\nprint(scene['claude_session_trust_smoke'])",
-        )
-        assert session_script["ok"], session_script
-        session_result = script_runner.run_externally_approved_script(context, "", checkpoint_enabled=False)
-        assert session_result["ok"], session_result
-        assert context.scene["claude_session_trust_smoke"] == "ok"
-        assert script_runner.external_script_trust_active(context, state=state)
-        session_revoked = script_runner.revoke_external_script_trust_window(context)
-        assert session_revoked["ok"], session_revoked
-        assert not script_runner.external_script_trust_active(context, state=state)
-
-        pending_before_trust = script_runner.stage_script(
-            context,
-            intent="Run automatically when session trust is approved after staging",
-            expected_changes="A scene custom property is set without pressing Run or Approve External",
-            risk_level="medium",
-            target_objects=[],
-            code="scene['claude_session_trust_button_smoke'] = 'ok'\nprint(scene['claude_session_trust_button_smoke'])",
-        )
-        assert pending_before_trust["ok"], pending_before_trust
-        assert state.pending_script
-        original_get_preferences = preferences.get_preferences
-        try:
-            preferences.get_preferences = lambda _context: smoke_preferences
-            trust_button = bpy.ops.claude_blender.approve_external_script_trust(
-                ttl_seconds=900,
-                session_trust=True,
-            )
-        finally:
-            preferences.get_preferences = original_get_preferences
-        assert "FINISHED" in trust_button, trust_button
-        assert context.scene["claude_session_trust_button_smoke"] == "ok"
-        assert not state.pending_script
-        assert script_runner.external_script_trust_active(context, state=state)
-        assert "ran automatically" in state.last_response, state.last_response
-        trust_button_checkpoint = os.path.abspath(state.last_checkpoint_path)
-        assert os.path.commonpath([os.path.abspath(checkpoint_dir), trust_button_checkpoint]) == os.path.abspath(
-            checkpoint_dir
-        ), state.last_checkpoint_path
-        session_revoked = script_runner.revoke_external_script_trust_window(context)
-        assert session_revoked["ok"], session_revoked
-        assert not script_runner.external_script_trust_active(context, state=state)
-
-        staged = script_runner.stage_script(
-            context,
-            intent="Create a harmless object while script trust is active",
-            expected_changes=f"Creates mesh object {OBJECT_NAME}",
-            risk_level="low",
-            target_objects=[OBJECT_NAME],
-            code=safe_code,
-        )
-        assert staged["ok"], staged
-        assert staged["analysis"]["ok"], staged
-        assert state.pending_script
-        assert not state.pending_script_blocked
-
-        trusted = script_runner.approve_external_script_trust_window(context, ttl_seconds=900)
-        assert trusted["ok"], trusted
-        assert script_runner.external_script_trust_active(context, state=state)
-        bad_token_during_trust = script_runner.run_externally_approved_script(
-            context,
-            "wrong-token",
-            checkpoint_enabled=False,
-        )
-        assert not bad_token_during_trust["ok"], bad_token_during_trust
-        assert script_runner.external_script_trust_active(context, state=state)
-        trusted_result = script_runner.run_externally_approved_script(context, "", checkpoint_enabled=False)
-        assert trusted_result["ok"], trusted_result
+        assert run["ok"] and run["auto_ran"], run
+        assert run["authorization_model"] == "blender_run_script_equivalent", run
+        assert run["run_result"]["checkpoint"]["ok"], run
+        assert run["run_result"]["checkpoint"]["path"] not in {
+            first_checkpoint["path"],
+            second_checkpoint["path"],
+        }, run
         assert OBJECT_NAME in bpy.data.objects
-        assert not state.pending_script
-        assert script_runner.external_script_trust_active(context, state=state)
-        _cleanup()
+        assert tuple(round(value, 4) for value in bpy.data.objects[OBJECT_NAME].location) == (1.0, 2.0, 3.0)
+        assert script_runner.TRUSTED_SCRIPT_NAME in bpy.data.texts
+        assert script_runner.TRUSTED_SCRIPT_METADATA_NAME in bpy.data.texts
+        assert script_runner.SCRIPT_LOG_NAME in bpy.data.texts
 
-        original_get_preferences = preferences.get_preferences
-        try:
-            preferences.get_preferences = lambda _context: smoke_preferences
-            auto_run = json.loads(
-                tool_dispatcher.execute_tool(
-                    context,
-                    "draft_script",
-                    {
-                        "intent": "Auto-run through active trust",
-                        "expected_changes": "A scene custom property is set",
-                        "risk_level": "low",
-                        "code": "scene['claude_auto_trust_smoke'] = 'ok'\nprint(scene['claude_auto_trust_smoke'])",
-                    },
-                )
-            )
-        finally:
-            preferences.get_preferences = original_get_preferences
-        assert auto_run["ok"], auto_run
-        assert auto_run["auto_ran"] is True, auto_run
-        assert auto_run["auto_run_attempted"] is True, auto_run
-        assert auto_run["requires_user_approval"] is False, auto_run
-        assert auto_run["run_result"]["ok"] is True, auto_run
-        assert auto_run["run_result"]["checkpoint"]["ok"], auto_run
-        auto_checkpoint_path = os.path.abspath(auto_run["run_result"]["checkpoint"]["path"])
-        assert os.path.commonpath([os.path.abspath(checkpoint_dir), auto_checkpoint_path]) == os.path.abspath(
-            checkpoint_dir
-        ), auto_run
-        assert context.scene["claude_auto_trust_smoke"] == "ok"
-        assert not state.pending_script
-        assert script_runner.external_script_trust_active(context, state=state)
-
-        bake_guarded_under_trust = script_runner.stage_script(
+        failure = _execute(
             context,
-            intent="Bake persistent simulation cache while script trust is active",
-            expected_changes="Runs a point-cache bake",
-            risk_level="high",
-            target_objects=[],
-            code="import bpy\nbpy.ops.ptcache.bake_all(bake=True)",
+            "draft_script",
+            {
+                "intent": "Exercise trusted runtime failure",
+                "expected_changes": "The failure is logged",
+                "risk_level": "low",
+                "code": "raise RuntimeError('intentional trusted failure')",
+            },
         )
-        assert bake_guarded_under_trust["ok"], bake_guarded_under_trust
-        assert bake_guarded_under_trust["analysis"]["explicit_approval_required"], bake_guarded_under_trust
-        assert not bake_guarded_under_trust["analysis"]["trust_window_allowed"], bake_guarded_under_trust
-        bake_guarded_result = script_runner.run_externally_approved_script(context, "", checkpoint_enabled=False)
-        assert not bake_guarded_result["ok"], bake_guarded_result
-        assert "explicit one-time user approval" in bake_guarded_result["message"], bake_guarded_result
-        assert state.pending_script
-        assert script_runner.external_script_trust_active(context, state=state)
-        rejected = script_runner.reject_pending_script(context)
-        assert rejected["ok"], rejected
+        assert not failure["ok"], failure
+        assert failure["run_result"]["auto_run_attempted"], failure
+        assert not failure["run_result"]["auto_ran"], failure
+        assert "RuntimeError" in state.last_script_error_summary
 
-        animation_allowed_under_trust = json.loads(
-            tool_dispatcher.execute_tool(
-                context,
-                "draft_script",
-                {
-                    "intent": "Animate the cube with a two-bounce keyframe script.",
-                    "expected_changes": "Cube bounces twice and gets smaller each bounce.",
-                    "risk_level": "low",
-                    "code": "scene['claude_animation_trust_bypass_smoke'] = 'should_not_run'",
-                },
-            )
-        )
-        assert animation_allowed_under_trust["ok"], animation_allowed_under_trust
-        assert animation_allowed_under_trust["auto_ran"] is True, animation_allowed_under_trust
-        assert animation_allowed_under_trust["helper_advisory"]["code"] == "animation_workflow_advised", animation_allowed_under_trust
-        assert not state.pending_script
-        assert context.scene["claude_animation_trust_bypass_smoke"] == "should_not_run"
-        assert script_runner.external_script_trust_active(context, state=state)
-
-        material_allowed_under_trust = json.loads(
-            tool_dispatcher.execute_tool(
-                context,
-                "draft_script",
-                {
-                    "intent": "Make the selected cube red with a Python material script.",
-                    "expected_changes": "Cube gets a red material.",
-                    "risk_level": "low",
-                    "code": (
-                        "import bpy\n"
-                        "obj = bpy.data.objects.get('Cube')\n"
-                        "mat = bpy.data.materials.new('Should Not Stage Red')\n"
-                        "obj.data.materials.append(mat)\n"
-                    ),
-                },
-            )
-        )
-        assert material_allowed_under_trust["ok"], material_allowed_under_trust
-        assert material_allowed_under_trust["auto_ran"] is True, material_allowed_under_trust
-        assert material_allowed_under_trust["helper_advisory"]["code"] == "material_helper_required", material_allowed_under_trust
-        assert "create_shader_material" in material_allowed_under_trust["helper_advisory"]["recommended_tools"], material_allowed_under_trust
-        assert not state.pending_script
-        assert "Should Not Stage Red" in bpy.data.materials
-        assert script_runner.external_script_trust_active(context, state=state)
-
-        asset_guarded_under_trust = json.loads(
-            tool_dispatcher.execute_tool(
-                context,
-                "draft_script",
-                {
-                    "intent": "Download and import a Poly Haven sunset HDRI with Python.",
-                    "expected_changes": "A downloaded HDRI is imported into the world.",
-                    "risk_level": "medium",
-                    "code": "print('poly haven asset import should use jobs first')",
-                },
-            )
-        )
-        assert not asset_guarded_under_trust["ok"], asset_guarded_under_trust
-        assert asset_guarded_under_trust["code"] == "external_asset_workflow_required", asset_guarded_under_trust
-        assert "start_external_asset_download" in asset_guarded_under_trust["recommended_tools"], asset_guarded_under_trust
-        assert "start_external_asset_import_job" in asset_guarded_under_trust["recommended_tools"], asset_guarded_under_trust
-        assert "auto_ran" not in asset_guarded_under_trust, asset_guarded_under_trust
-        assert not state.pending_script
-        assert script_runner.external_script_trust_active(context, state=state)
-
-        project_file_guarded_under_trust = json.loads(
-            tool_dispatcher.execute_tool(
-                context,
-                "draft_script",
-                {
-                    "intent": "Save this blend file as a new .blend path with Python.",
-                    "expected_changes": "The current project is saved to a new file.",
-                    "risk_level": "medium",
-                    "code": "import bpy\nbpy.ops.wm.save_as_mainfile(filepath='C:/tmp/should-not-stage.blend')",
-                },
-            )
-        )
-        assert not project_file_guarded_under_trust["ok"], project_file_guarded_under_trust
-        assert project_file_guarded_under_trust["code"] == "project_file_helper_required", project_file_guarded_under_trust
-        assert "get_blend_file_diagnostics" in project_file_guarded_under_trust["recommended_tools"], project_file_guarded_under_trust
-        assert "save_blend_file" in project_file_guarded_under_trust["recommended_tools"], project_file_guarded_under_trust
-        assert "auto_ran" not in project_file_guarded_under_trust, project_file_guarded_under_trust
-        assert not state.pending_script
-        assert script_runner.external_script_trust_active(context, state=state)
-
-        missing_privileged_manifest = json.loads(
-            tool_dispatcher.execute_tool(
-                context,
-                "draft_privileged_script",
-                {
-                    "script_kind": "external_asset",
-                    "intent": "Download a custom asset with Python.",
-                    "expected_changes": "No script should stage without URL/source manifest.",
-                    "approval_summary": "Try missing URLs.",
-                    "declared_paths": [tempfile.gettempdir()],
-                    "declared_urls": [],
-                    "destructive_actions": [],
-                    "code": "print('missing manifest should not stage')",
-                },
-            )
-        )
-        assert not missing_privileged_manifest["ok"], missing_privileged_manifest
-        assert missing_privileged_manifest["code"] == "privileged_manifest_required", missing_privileged_manifest
-        assert not state.pending_script
-
-        privileged_output_path = os.path.join(tempfile.gettempdir(), "claude_privileged_script_smoke.txt")
-        try:
-            os.remove(privileged_output_path)
-        except FileNotFoundError:
-            pass
-        privileged_under_trust = json.loads(
-            tool_dispatcher.execute_tool(
-                context,
-                "draft_privileged_script",
-                {
-                    "script_kind": "external_asset",
-                    "intent": "Write a custom external asset cache marker with Python.",
-                    "expected_changes": "A marker file is written only after explicit one-time approval.",
-                    "approval_summary": "Allows filesystem write for a declared cache marker and names the external source.",
-                    "declared_paths": [privileged_output_path],
-                    "declared_urls": ["https://example.com/custom-asset.zip"],
-                    "destructive_actions": [],
-                    "risk_level": "high",
-                    "code": f"open({privileged_output_path!r}, 'w').write('ok')",
-                },
-            )
-        )
-        assert privileged_under_trust["ok"], privileged_under_trust
-        assert privileged_under_trust["privileged"] is True, privileged_under_trust
-        assert privileged_under_trust["requires_explicit_one_time_approval"] is True, privileged_under_trust
-        assert privileged_under_trust["trust_window_auto_run_allowed"] is False, privileged_under_trust
-        assert privileged_under_trust["auto_run_attempted"] is False, privileged_under_trust
-        assert privileged_under_trust["manifest_enforcement"] == "review_context_only", privileged_under_trust
-        assert "not a filesystem or network sandbox" in privileged_under_trust["manifest_notice"], privileged_under_trust
-        assert state.pending_script
-        assert state.pending_script_privileged
-        assert "filesystem" in state.pending_script_privileged_capabilities
-        assert not os.path.exists(privileged_output_path), privileged_under_trust
-        privileged_trust_run = script_runner.run_externally_approved_script(context, "", checkpoint_enabled=False)
-        assert not privileged_trust_run["ok"], privileged_trust_run
-        assert "one-time user approval" in privileged_trust_run["message"], privileged_trust_run
-        assert state.pending_script
-        assert not os.path.exists(privileged_output_path), privileged_trust_run
-        privileged_token = script_runner.approve_pending_script_for_external_run(context, ttl_seconds=60)
-        assert privileged_token["ok"], privileged_token
-        privileged_run = script_runner.run_externally_approved_script(
+        marker_path = os.path.join(checkpoint_dir, "trusted-filesystem-marker.txt")
+        filesystem_run = _execute(
             context,
-            privileged_token["approval_token"],
+            "draft_script",
+            {
+                "intent": "Exercise trusted OS permissions",
+                "expected_changes": "Writes one temporary marker",
+                "risk_level": "high",
+                "code": (
+                    "import os\n"
+                    "import socket\n"
+                    "import subprocess\n"
+                    f"open({marker_path!r}, 'w').write(os.path.basename({marker_path!r}))\n"
+                ),
+            },
+        )
+        assert filesystem_run["ok"] and filesystem_run["auto_ran"], filesystem_run
+        assert os.path.isfile(marker_path), filesystem_run
+
+        privileged_alias = _execute(
+            context,
+            "draft_privileged_script",
+            {
+                "script_kind": "project_file",
+                "intent": "Exercise the legacy compatibility alias",
+                "expected_changes": "Sets one scene marker",
+                "approval_summary": "Legacy fields are advisory only",
+                "declared_paths": [],
+                "declared_urls": [],
+                "destructive_actions": [],
+                "code": "scene['legacy_privileged_alias'] = 'ok'",
+            },
+        )
+        assert privileged_alias["ok"] and privileged_alias["auto_ran"], privileged_alias
+        assert privileged_alias["compatibility_alias"] == "draft_script", privileged_alias
+        assert context.scene["legacy_privileged_alias"] == "ok"
+
+        bake_semantics = _execute(
+            context,
+            "draft_script",
+            {
+                "intent": "Exercise persistent bake syntax under trust",
+                "expected_changes": "Sets one marker without performing a real bake",
+                "risk_level": "high",
+                "code": (
+                    "import bpy\n"
+                    "if False:\n"
+                    "    bpy.ops.ptcache.bake_all(bake=True)\n"
+                    "scene['trusted_bake_semantics'] = 'allowed'\n"
+                ),
+            },
+        )
+        assert bake_semantics["ok"] and bake_semantics["auto_ran"], bake_semantics
+        assert bake_semantics["prepared"]["analysis"]["advisory_findings"], bake_semantics
+        assert context.scene["trusted_bake_semantics"] == "allowed"
+
+        restored = script_runner.restore_checkpoint(context, run["run_result"]["checkpoint"]["path"])
+        assert restored["ok"], restored
+        context = bpy.context
+        state = context.scene.claude_blender
+        assert OBJECT_NAME not in bpy.data.objects, restored
+        assert restored["checkpoint"]["restorable"], restored
+
+        non_checkpoint_path = os.path.join(checkpoint_dir, "manual.blend")
+        with open(non_checkpoint_path, "wb") as handle:
+            handle.write(b"not really a blend")
+        refused_restore = script_runner.restore_checkpoint(context, non_checkpoint_path)
+        assert not refused_restore["ok"], refused_restore
+        assert not refused_restore["checkpoint"]["restorable"], refused_restore
+
+        assert script_runner.revoke_external_script_trust_window(context)["ok"]
+        revoked_direct = script_runner.run_trusted_script(
+            context,
+            code="scene['revoked_direct'] = True",
             checkpoint_enabled=False,
         )
-        assert privileged_run["ok"], privileged_run
-        assert os.path.exists(privileged_output_path), privileged_run
-        with open(privileged_output_path, "r", encoding="utf-8") as handle:
-            assert handle.read() == "ok"
-        assert not state.pending_script
-        assert script_runner.external_script_trust_active(context, state=state)
-        os.remove(privileged_output_path)
+        assert not revoked_direct["ok"] and revoked_direct["code"] == "script_trust_required", revoked_direct
+        assert "revoked_direct" not in context.scene
 
-        privileged_project_path = os.path.join(tempfile.gettempdir(), "claude-privileged-project-smoke.blend")
-        privileged_project_stage = json.loads(
-            tool_dispatcher.execute_tool(
-                context,
-                "draft_privileged_script",
-                {
-                    "script_kind": "project_file",
-                    "intent": "Save this project through a custom Python project-file script.",
-                    "expected_changes": "A .blend file would be saved at the declared path after approval.",
-                    "approval_summary": "Allows Blender project-file save to one declared path.",
-                    "declared_paths": [privileged_project_path],
-                    "declared_urls": [],
-                    "destructive_actions": ["save_as_mainfile"],
-                    "risk_level": "high",
-                    "code": f"import bpy\nbpy.ops.wm.save_as_mainfile(filepath={privileged_project_path!r})",
-                },
-            )
-        )
-        assert privileged_project_stage["ok"], privileged_project_stage
-        assert privileged_project_stage["analysis"]["ok"], privileged_project_stage
-        assert privileged_project_stage["analysis"]["trust_window_allowed"] is False, privileged_project_stage
-        assert state.pending_script
-        assert state.pending_script_privileged_kind == "project_file"
-        rejected_privileged_project = script_runner.reject_pending_script(context)
-        assert rejected_privileged_project["ok"], rejected_privileged_project
-        assert not state.pending_script
-
-        custom_helper_gap_allowed = json.loads(
-            tool_dispatcher.execute_tool(
-                context,
-                "draft_script",
-                {
-                    "intent": "Custom procedural material node network that helpers cannot express.",
-                    "expected_changes": "A custom material-node workflow marker is set.",
-                    "risk_level": "low",
-                    "code": "scene['claude_custom_helper_gap_smoke'] = 'ok'",
-                },
-            )
-        )
-        assert custom_helper_gap_allowed["ok"], custom_helper_gap_allowed
-        assert custom_helper_gap_allowed["auto_ran"] is True, custom_helper_gap_allowed
-        assert context.scene["claude_custom_helper_gap_smoke"] == "ok"
-        assert not state.pending_script
-        assert script_runner.external_script_trust_active(context, state=state)
-
-        trusted_blocked = script_runner.stage_script(
-            context,
-            intent="Try blocked code while script trust is active",
-            expected_changes="No scene changes should occur",
-            risk_level="high",
-            target_objects=[],
-            code="import os\nos.remove('still_blocked.blend')",
-        )
-        assert trusted_blocked["ok"], trusted_blocked
-        trusted_blocked_run = script_runner.run_externally_approved_script(context, "", checkpoint_enabled=False)
-        assert not trusted_blocked_run["ok"], trusted_blocked_run
-        assert "blocked" in trusted_blocked_run["message"].lower(), trusted_blocked_run
-        assert script_runner.external_script_trust_active(context, state=state)
-        rejected = script_runner.reject_pending_script(context)
-        assert rejected["ok"], rejected
-
-        auto_blocked = json.loads(
-            tool_dispatcher.execute_tool(
-                context,
-                "draft_script",
-                {
-                    "intent": "Try blocked code through active trust",
-                    "expected_changes": "No scene changes should occur",
-                    "risk_level": "high",
-                    "code": "import os\nos.remove('auto_trust_blocked.blend')",
-                },
-            )
-        )
-        assert auto_blocked["ok"], auto_blocked
-        assert auto_blocked["analysis"]["blocked"], auto_blocked
-        assert "auto_ran" not in auto_blocked, auto_blocked
-        assert state.pending_script
-        assert state.pending_script_blocked
-        rejected = script_runner.reject_pending_script(context)
-        assert rejected["ok"], rejected
-
-        trusted_second = script_runner.stage_script(
-            context,
-            intent="Run a second script through active script trust",
-            expected_changes="A scene custom property is set",
-            risk_level="low",
-            target_objects=[],
-            code="scene['claude_trust_smoke'] = 'second'\nprint(scene['claude_trust_smoke'])",
-        )
-        assert trusted_second["ok"], trusted_second
-        trusted_second_result = script_runner.run_externally_approved_script(context, "", checkpoint_enabled=False)
-        assert trusted_second_result["ok"], trusted_second_result
-        assert context.scene["claude_trust_smoke"] == "second"
-        assert script_runner.external_script_trust_active(context, state=state)
-
-        revoked = script_runner.revoke_external_script_trust_window(context)
-        assert revoked["ok"], revoked
-        assert not script_runner.external_script_trust_active(context, state=state)
         with open(audit_path, "r", encoding="utf-8") as handle:
             trust_events = [
                 json.loads(line)
@@ -705,101 +323,11 @@ print("created", obj.name)
             ]
         trust_actions = {event.get("action") for event in trust_events}
         assert {"grant", "expire", "revoke"}.issubset(trust_actions), trust_events
-        needs_approval = script_runner.stage_script(
-            context,
-            intent="Require explicit approval after trust revocation",
-            expected_changes="No scene changes should occur without approval",
-            risk_level="low",
-            target_objects=[],
-            code="print('approval required')",
-        )
-        assert needs_approval["ok"], needs_approval
-        missing_after_revoke = script_runner.run_externally_approved_script(context, "", checkpoint_enabled=False)
-        assert not missing_after_revoke["ok"], missing_after_revoke
-        assert "script trust" in missing_after_revoke["message"], missing_after_revoke
-
-        approval = script_runner.approve_pending_script_for_external_run(context, ttl_seconds=60)
-        assert approval["ok"], approval
-        assert approval["approval_token"], approval
-        assert approval["approval_token"] not in state.pending_script_external_approval_hash
-        assert approval["approval_token"] not in state.pending_script_external_approval_status
-
-        wrong_token = script_runner.run_externally_approved_script(context, "wrong-token", checkpoint_enabled=False)
-        assert not wrong_token["ok"], wrong_token
-        assert "did not match" in wrong_token["message"], wrong_token
-        assert state.pending_script
-
-        text = bpy.data.texts[state.pending_script_text_name]
-        text.write("\n# edited after external approval")
-        stale = script_runner.run_externally_approved_script(
-            context,
-            approval["approval_token"],
-            checkpoint_enabled=False,
-        )
-        assert not stale["ok"], stale
-        assert "stale" in stale["message"], stale
-
-        staged = script_runner.stage_script(
-            context,
-            intent="Create a simple smoke-test mesh object",
-            expected_changes="A triangle mesh object appears at location 1, 2, 3",
-            risk_level="low",
-            target_objects=[OBJECT_NAME],
-            code=safe_code,
-        )
-        assert staged["ok"], staged
-        approval = script_runner.approve_pending_script_for_external_run(context, ttl_seconds=60)
-        assert approval["ok"], approval
-
-        result = script_runner.run_externally_approved_script(
-            context,
-            approval["approval_token"],
-            checkpoint_enabled=True,
-            checkpoint_dir=checkpoint_dir,
-        )
-        assert result["ok"], result
-        assert result["checkpoint"]["ok"], result
-        assert os.path.exists(result["checkpoint"]["path"]), result
-        assert state.last_checkpoint_path == result["checkpoint"]["path"]
-        assert result["checkpoint"]["exists"], result
-        assert result["checkpoint"]["restorable"], result
-        assert result["checkpoint"]["size_bytes"] > 0, result
-        assert OBJECT_NAME in bpy.data.objects
-        assert tuple(round(value, 4) for value in bpy.data.objects[OBJECT_NAME].location) == (1.0, 2.0, 3.0)
-        assert script_runner.SCRIPT_LOG_NAME in bpy.data.texts
-        assert not state.pending_script
-        assert not state.pending_script_external_approval_hash
-        replay = script_runner.run_externally_approved_script(
-            context,
-            approval["approval_token"],
-            checkpoint_enabled=False,
-        )
-        assert not replay["ok"], replay
-
-        non_checkpoint_path = os.path.join(checkpoint_dir, "manual.blend")
-        with open(non_checkpoint_path, "wb") as handle:
-            handle.write(b"not really a blend")
-        refused = script_runner.restore_checkpoint(context, non_checkpoint_path)
-        assert not refused["ok"], refused
-        assert not refused["checkpoint"]["ok"], refused
-        assert refused["checkpoint"]["exists"], refused
-        assert not refused["checkpoint"]["restorable"], refused
-
-        restored = script_runner.restore_checkpoint(context, result["checkpoint"]["path"])
-        assert restored["ok"], restored
-        assert restored["checkpoint"]["exists"], restored
-        assert restored["checkpoint"]["restorable"], restored
-        context = bpy.context
-        state = context.scene.claude_blender
-        assert OBJECT_NAME not in bpy.data.objects, restored
-        assert state.last_checkpoint_path == result["checkpoint"]["path"], state.last_checkpoint_path
-        assert state.last_checkpoint_restored_path == result["checkpoint"]["path"], state.last_checkpoint_restored_path
-        assert "Checkpoint restored" in state.last_checkpoint_restored_status, state.last_checkpoint_restored_status
 
         _cleanup()
         print("smoke_script_runner: ok")
     finally:
-        preferences.get_preferences = session_get_preferences
+        preferences.get_preferences = original_get_preferences
         if registered:
             claude_blender.unregister()
         if old_audit_path is None:

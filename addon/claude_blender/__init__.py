@@ -23,6 +23,7 @@ _TOOL_REGISTRY_RELOAD_ORDER = (
 )
 
 _TOOL_HANDLER_RELOAD_ORDER = (
+    "tool_handlers.support",
     "tool_handlers.inspection_docs",
     "tool_handlers.project_workspace",
     "tool_handlers.scene_editing",
@@ -51,6 +52,17 @@ _MODULE_NAMES = (
     "helper_routing",
     "animation_brief",
     "animation_analysis",
+    "presentation_support",
+    "workflow_planning",
+    "two_d_inspection",
+    "advanced_support",
+    "advanced_animation",
+    "advanced_materials",
+    "advanced_modeling",
+    "advanced_rigging",
+    "advanced_scene_editing",
+    "advanced_camera_render",
+    "advanced_presentation",
     "advanced_helpers",
     "viewport_capture",
     "playblast_capture",
@@ -67,6 +79,8 @@ _MODULE_NAMES = (
     "transcript",
     "live_preview",
     "script_templates",
+    "handler_runtime",
+    "animation_runtime",
     "tool_dispatcher",
     "script_runner",
     "ui",
@@ -86,12 +100,18 @@ def _reload_modular_tool_runtime(package):
     runtime = sys.modules.get(f"{package}.handler_runtime")
     if runtime is None:
         return
-    # First refresh shared helpers, then domain function bodies, then rebuild
-    # the dispatch table from those fresh functions. This makes Blender's
-    # Reload Scripts path effective for the modular v0.3 tool implementation.
+    # Refresh shared helpers and domain function bodies, then let the executor
+    # rebuild the dispatch table and re-inject its lookup into the runtime.
+    # This makes Blender's Reload Scripts path effective without a registry
+    # import cycle or stale hidden globals.
     importlib.reload(runtime)
+    animation_runtime = sys.modules.get(f"{package}.animation_runtime")
+    if animation_runtime is not None:
+        importlib.reload(animation_runtime)
     _reload_loaded(package, _TOOL_HANDLER_RELOAD_ORDER)
-    importlib.reload(runtime)
+    executor = sys.modules.get(f"{package}.tool_executor")
+    if executor is not None:
+        importlib.reload(executor)
 
 
 def _load_modules():

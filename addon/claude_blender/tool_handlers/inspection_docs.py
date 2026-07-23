@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from .. import handler_runtime as _runtime
-
-for _runtime_name, _runtime_value in vars(_runtime).items():
-    if not _runtime_name.startswith("__"):
-        globals()[_runtime_name] = _runtime_value
-del _runtime_name, _runtime_value
+from .. import context_bundle, docs_index, preferences, world_model
+from ..handler_runtime import _idprops_summary, _mesh_data_layers
+from .support import _bounded_int, _resolve_objects
 
 
 def inspect_scene(context, args):

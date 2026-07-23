@@ -6,7 +6,7 @@ Blender Agent Bridge
 
 ## North Star
 
-Make Blender Agent Bridge the safe, production-shaped bridge between Blender and external AI agents. Blender should provide structured scene inspection, viewport/render/playblast evidence, Blender Python staging, documentation lookup, safe editing helpers, preview rollback, approvals, checkpoints, and MCP resources. External clients should host the model/provider and decide what to send to their own LLMs.
+Make Blender Agent Bridge the safe, production-shaped bridge between Blender and external AI agents. Blender should provide structured scene inspection, viewport/render/playblast evidence, session-trusted Blender Python, documentation lookup, safe editing helpers, preview rollback, checkpoints, and MCP resources. External clients should host the model/provider and decide what to send to their own LLMs.
 
 ## Evidence From Current Docs
 
@@ -21,14 +21,14 @@ Make Blender Agent Bridge the safe, production-shaped bridge between Blender and
 
 The first milestone should be useful but controlled:
 
-- One compact 3D View sidebar panel for bridge status, MCP config, contextual script approvals, active-trust revocation, and preview commit/revert.
+- One compact 3D View sidebar panel for bridge status, MCP config, binary script trust/revocation, and preview commit/revert.
 - Minimal Add-on Preferences for connection and safety defaults; operational detail remains in bridge/tool responses.
 - No in-add-on LLM provider transport; external MCP clients host Anthropic/OpenAI/Gemini/etc. connections.
 - Scene summary generation for selected objects and overall scene state.
 - Layered context bundles that describe Blender version, mode, scene graph, selection, render settings, and animation state before external agents choose helpers or scripts.
 - Optional viewport screenshot exposed as local metadata/resources.
 - Live preview mode for approved low-risk helper changes, with immediate viewport/timeline redraw and revert/commit controls.
-- Script proposal flow where external agents draft Blender Python through `draft_script`, but the user approves before execution unless session script trust is active.
+- Binary script flow where `draft_script` is refused while trust is off and runs immediately with Blender Run Script-equivalent permissions while session trust is active.
 - Undo/checkpoint support before running generated scripts.
 - Version-aware docs search tool pointed at official Blender Python docs.
 - Simple editing helpers/templates for common object, material, camera, light, and keyframe changes.
@@ -50,15 +50,15 @@ User asks, "What is in this scene and how can I improve the lighting?" An extern
 
 2. Make A Small Change
 
-User asks, "Add a warm key light and a cool rim light." An external agent uses safe helper tools when possible, or stages a script for approval when helper tools are not expressive enough. The add-on saves an undo point/checkpoint before risky execution.
+User asks, "Add a warm key light and a cool rim light." An external agent uses safe helper tools when possible, or uses session-trusted Python when helper tools are not expressive enough. The add-on saves an undo point/checkpoint before risky execution.
 
 3. Create An Object
 
-User asks, "Make a stylized low-poly spaceship from primitives." An external agent inspects units, selection, and collections, then uses bounded creation helpers or stages approved Python. The user can undo or restore checkpointed work.
+User asks, "Make a stylized low-poly spaceship from primitives." An external agent inspects units, selection, and collections, then uses bounded creation helpers or session-trusted Python. The user can undo or restore checkpointed work.
 
 4. Build An Animation
 
-User asks, "Animate the camera orbiting this product over 120 frames." An external agent reads selected object bounds and timeline settings, then uses camera/path/keyframe helpers before considering approved Python.
+User asks, "Animate the camera orbiting this product over 120 frames." An external agent reads selected object bounds and timeline settings, then uses camera/path/keyframe helpers before considering session-trusted Python.
 
 5. Use Blender Docs
 
@@ -66,7 +66,7 @@ User asks for a geometry nodes or modifier workflow. The external agent calls `s
 
 6. Make Safe Scripted Changes
 
-User asks for a change. The external agent first inspects context, retrieves docs for unfamiliar APIs, drafts a change plan, then uses either safe helper tools or a proposed script. The add-on checks the proposal, shows the expected changes, saves recovery state, and runs only after approval or active script trust.
+User asks for a change. The external agent first inspects context, retrieves docs for unfamiliar APIs, drafts a change plan, then uses either safe helper tools or a complete script. The add-on validates the payload, records advisory findings, saves recovery state, and runs only while binary session trust is active.
 
 7. See Changes Immediately
 
@@ -113,7 +113,7 @@ Expose external agents to narrow client tools rather than raw Python first:
 - `get_curve_text_details`: returns curve/text object properties and spline/text summaries.
 - `get_simulation_details`: returns rigid-body, particle, point-cache, and simulation bake summaries.
 - `inspect_simulation_bake`: samples evaluated simulation state across a bounded frame range and reports cache/bake readiness without persistent cache mutation.
-- `stage_persistent_simulation_bake`: stages a fixed-template scene-wide persistent point-cache bake script for explicit Blender-side approval or active script trust.
+- `stage_persistent_simulation_bake`: refuses while trust is off and runs a fixed-template scene-wide persistent point-cache bake script immediately while active script trust is on.
 - `get_collection_layer_details`: returns collection tree, collection visibility, and view-layer summaries.
 - `get_render_camera_compositor_details`: returns render settings, active camera, world settings, and compositor nodes.
 - `capture_viewport`: captures the interactive viewport/window when available and returns metadata plus a local PNG artifact path.
@@ -164,9 +164,6 @@ Expose external agents to narrow client tools rather than raw Python first:
 - `create_wheel_assembly`: creates tire/rim wheel assemblies from primitives.
 - `add_panel_seams`: adds simple dark curve seams around a mesh body's bounds.
 - `add_window_materials`: creates/assigns blue glass and optional window panels.
-- `apply_vehicle_refinement_template`: applies a bounded vehicle detail kit with smoothing, wheels, glass, seams, headlights, and taillights.
-- `apply_product_refinement_template`: applies a bounded product presentation kit with material polish, smoothing, staging, callouts, and optional turntable setup.
-- `apply_character_refinement_template`: applies a bounded character blockout/detail kit with body polish, head/neck/eyes, shoulder marker, and optional gesture guides.
 - `create_studio_product_stage`: creates a bounded floor/backdrop/key-fill-rim-light/camera presentation setup around a target.
 - `add_dimension_callouts`: adds width/depth/height curve and text callouts around a target's bounds.
 - `apply_lighting_preset`: creates bounded product/gallery/dramatic area-light rigs around a target.
@@ -183,8 +180,8 @@ Expose external agents to narrow client tools rather than raw Python first:
 - `create_camera_orbit`: creates a keyframed camera orbit rig around a target object.
 - `commit_preview`: accepts the current live preview changes.
 - `revert_preview`: rolls back the current live preview changes.
-- `draft_script`: stores proposed code without running it by default; auto-runs after static checks while external script trust is active.
-- `run_approved_script`: only runs code after explicit user approval.
+- `draft_script`: refuses while trust is off and auto-runs with Blender Run Script-equivalent permissions while binary session trust is active.
+- `run_approved_script`: compatibility endpoint that refuses the removed per-script approval flow.
 - `undo_last_action`: calls Blender undo for the last approved execution.
 - `save_checkpoint`: saves a copy of the current `.blend` before risky work.
 ## Milestones
@@ -231,19 +228,19 @@ Acceptance:
 
 Status: Viewport screenshot attachment is implemented with a user toggle, project/session-scoped capture storage, maximum byte limit, API-only image blocks, transcript-safe metadata, MCP capture resources for external clients, and explicit PNG downscaling/re-save when a capture exceeds the request byte budget. Initial animation playblast frame capture is now scaffolded as sampled viewport PNG resources for MCP clients. Broader visual QA and automated animation review remain later work.
 
-### Milestone 3: Approved Script Execution
+### Milestone 3: Session-Trusted Script Execution
 
-- Add script preview, approval, execution, logs, and undo.
-- Add static checks and blocked operation warnings.
+- Add binary trust/refusal, immediate execution, logs, and undo.
+- Add syntax/size validation and advisory static warnings.
 - Save checkpoint before high-risk execution.
 
 Acceptance:
 
-- User can inspect generated Python before running.
+- Trust off creates no pending script; trust on runs the submitted Python immediately.
 - Add-on can create and modify Blender objects.
 - Failures show readable errors and do not silently corrupt state.
 
-Status: Initial approval-gated script flow is implemented. External agents can stage generated Python with `draft_script`; custom external asset and project-file lifecycle scripts use `draft_privileged_script` with a declared capability/path/URL/action manifest and mandatory one-time approval. The lean sidebar exposes bridge/trust controls plus pending script Run/Reject controls when needed; static checks block obvious risky imports/calls; execution pushes a Blender undo point when possible, saves a timestamped `.blend` checkpoint when enabled, and records stdout/errors in a local Text datablock. Failed scripts expose traceback/log context locally so external clients can draft a corrected script. When the user turns on runtime external script trust, `draft_script` auto-runs non-privileged staged scripts that pass static checks, and `run_approved_script` remains available for already staged scripts. Privileged asset/project-file scripts never auto-run under broad trust.
+Status: Binary runtime script trust is implemented. With trust off, `draft_script` is refused without pending state; with trust on, generated Python runs immediately with Blender Run Script-equivalent filesystem, network, process, project-file, cache, and Blender API access. The lean sidebar exposes one **Trust Agent Scripts**/**Revoke** control plus preview **Commit**/**Revert**. Per-script Run/Reject/token operators are not registered. Static findings are advisory under trust. Execution still pushes undo when possible, checkpoints when enabled, and records stdout/errors locally.
 Tool-loop calls now have a larger output budget for complete `draft_script.code` payloads, and the dispatcher tolerates common alternate script field names before reporting missing code.
 
 ### Milestone 3.5: Live Preview Transactions
@@ -257,11 +254,11 @@ Acceptance:
 
 - Low-risk material, transform, light, camera, and keyframe changes visibly update the scene as soon as the helper call executes.
 - Users can revert the preview without manually unwinding each change.
-- Riskier generated scripts still require explicit approval before mutating the scene.
+- Generated scripts are refused while binary session trust is off and run immediately with Blender Run Script-equivalent permissions while trust is active.
 
 Status: Initial tool loop implemented for scene object listing, object selection, playhead changes, selected-object movement, absolute transform edits, primitive creation, material assignment, emission material assignment, collection creation/linking, bounded modifier creation, Track To constraints, timeline setup, active camera selection, selected-object transform keyframes, light creation, camera creation, camera orbit creation, scene inspection, docs lookup scaffold, commit, and revert.
-Advanced helper coverage is now implemented for Principled shader material setup, local image/PBR texture material wiring with packed ARM/ORM channels, AO multiply, bump maps, displacement warnings, UV-map selection, material setup inspection/repair for texture files, color spaces, shader links, and UV-vector links, bounded AO/normal/base-color map baking to PNG artifacts, bounded procedural texture materials, UV unwrap/seam/layout inspection helpers, Geometry Nodes starter modifiers, the read-only `plan_object_design` object-family mapper, procedural object-kit templates including bounded desk-lamp, coffee-machine, and product-prop design grammars with style, variant, detail-level, and semantic feature controls, bounded Phase 1 modeling helpers (`edit_mesh`, `inspect_modeling_quality`, `curve_to_mesh`, Booleans, mirror/symmetry, solidify, and screw depth), shape key creation/animation, text objects, curve paths, bounded particles, basic armatures, copy-transform constraints, render settings, focused render-engine/look-dev controls, render passes/AOVs, camera settings, and world background colors. Render controls include quality presets, samples, denoise, color management, ViewLayer pass toggles, cryptomatte/alpha settings, and shader AOVs with preview rollback; `create_lookdev_turntable_review` composes stage/turntable setup, render controls, inspection still capture, and image-artifact validation without `draft_script`. These tools still use the reversible live-preview transaction; complex custom shader graphs, production rigs, high-to-low bake workflows, and simulation setups remain approval-gated Python.
-Model refinement helpers are now implemented for shade smoothing, bevel/subdivision stacks, wheel assemblies, panel seams, window/glass panels, and bounded vehicle, product, and character refinement templates.
+Advanced helper coverage is implemented for Principled shader materials, image/PBR and procedural textures, material inspection/repair, UV and map-baking workflows, reusable Geometry Nodes starters, bounded modeling operations (`edit_mesh`, `inspect_modeling_quality`, `curve_to_mesh`, Booleans, mirror/symmetry, solidify, screw, and procedural arrays), shape keys, text, curves, particles, basic armatures, constraints, render/look-dev controls, passes/AOVs, cameras, staging, and visual evidence. The bridge intentionally omits style-specific finished-content generators; open-ended props, products, characters, storyboards, cutouts, and designed shots use composable helpers, asset import, or one session-trusted script.
+Reusable refinement helpers remain available for shade smoothing, bevel/subdivision stacks, wheel assemblies, panel seams, window/glass panels, staging, callouts, lighting, palettes, turntables, and scene organization.
 The bridge now uses request-specific tool schema selection so external agents receive a compact task-relevant subset instead of the whole growing toolbox.
 
 ### Milestone 4: Docs-Aware Coding
@@ -291,7 +288,7 @@ Acceptance:
 - Simple object, material, transform, camera, light, and keyframe changes do not require arbitrary generated Python.
 - Helper calls are reversible through undo/checkpoint flow.
 
-Status: Safe editing helpers now cover the original simple edits plus advanced bounded helpers, refinement helpers, vehicle/product/character production kits, object visibility/display, animation controls, rollback manifests, and domain-aware preview change reports that summarize expected live-helper changes and rollback coverage. Optional visual QA is covered by a background render smoke for the product and character refinement kits, with keepable artifacts via `CLAUDE_BLENDER_VISUAL_QA_DIR`.
+Status: Safe editing helpers cover the original simple edits plus bounded modeling, material, staging, scene-organization, object visibility/display, and animation operations. Rollback manifests and domain-aware preview reports summarize expected changes and restoration coverage. The former vehicle/product/character refinement kits and other opinionated finished-content generators were removed from the v0.4.0 public surface; authored content now composes reusable helpers or uses one session-trusted script.
 
 ### Milestone 5: Animation Workflows
 
@@ -312,7 +309,7 @@ Status: Baseline animation workflows are implemented for transforms, object boun
 - Add a dependency-free stdio MCP server that forwards tools/resources to the running bridge.
 - Expose scene status/context, transcript, and tool contracts as resources.
 - Add sidebar controls to start/stop the bridge and copy MCP client config.
-- Keep generated Python approval-gated inside Blender even when requested by an external client.
+- Keep generated Python behind Blender's binary, runtime-only **Trust Agent Scripts** control even when requested by an external client.
 
 Acceptance:
 
@@ -435,7 +432,7 @@ Acceptance:
 - Physics-heavy prompts can use Blender simulation when helper-generated keyframes are not enough.
 - Validation results are structured enough to drive targeted repairs.
 
-Status: Stronger partial. Existing read-only validators cover sampled animation state, contact sliding against a contact plane, sampled bounding-box penetration, camera framing, brief comparison, sampled speed/acceleration spikes through `analyze_motion_physics`, center-of-mass/support footprint checks through `analyze_center_of_mass`, requested repeated-action count estimation, secondary scale-change checks, keyframe frame-range checks, and final settle diagnostics. `compare_animation_to_brief` now runs contact, motion-physics, and center/support checks when the brief requests contact validation, and emits repairable findings for wrong count, missing scale change, missing settle, and weak frame-range coverage. Simulation bake inspection is now surfaced through richer `get_simulation_details` output for rigid-body worlds, rigid bodies, particle systems, simulation modifiers, point-cache frame ranges, baked/unbaked cache counts, and repair-oriented cautions. `inspect_simulation_bake` now samples evaluated simulation state across a bounded frame range, restores the original frame, and reports cache/bake readiness without mutating persistent point caches. `stage_persistent_simulation_bake` now provides the explicit user-approved persistent bake path by staging a fixed-template scene-wide point-cache bake script that cannot auto-run under normal external script trust; requested object names limit inspection and range preparation, not Blender's bake-all operator scope. `analyze_center_of_mass` now prefers convex-hull support footprints from support objects' world-space bounds and can use weighted child-mesh bounds for rig/character subjects, so rotated supports, narrow supports, and articulated body-part layouts are not overestimated by a single axis-aligned object box. `review_playblast_against_brief` now adds conservative visual repeated-action count evidence from foreground subject center extrema when playblast samples are dense enough, and mismatches feed the same repair-planning path as data-level count findings. Remaining 7E work is richer biomechanical COM heuristics for production rigs and real-client smoke on the persistent bake approval path.
+Status: Stronger partial. Existing read-only validators cover sampled animation state, contact sliding against a contact plane, sampled bounding-box penetration, camera framing, brief comparison, sampled speed/acceleration spikes through `analyze_motion_physics`, center-of-mass/support footprint checks through `analyze_center_of_mass`, requested repeated-action count estimation, secondary scale-change checks, keyframe frame-range checks, and final settle diagnostics. `compare_animation_to_brief` now runs contact, motion-physics, and center/support checks when the brief requests contact validation, and emits repairable findings for wrong count, missing scale change, missing settle, and weak frame-range coverage. Simulation bake inspection is now surfaced through richer `get_simulation_details` output for rigid-body worlds, rigid bodies, particle systems, simulation modifiers, point-cache frame ranges, baked/unbaked cache counts, and repair-oriented cautions. `inspect_simulation_bake` now samples evaluated simulation state across a bounded frame range, restores the original frame, and reports cache/bake readiness without mutating persistent point caches. `stage_persistent_simulation_bake` refuses while trust is off and runs its fixed-template scene-wide point-cache bake immediately while session trust is active; requested object names limit inspection and range preparation, not Blender's bake-all operator scope. `analyze_center_of_mass` now prefers convex-hull support footprints from support objects' world-space bounds and can use weighted child-mesh bounds for rig/character subjects, so rotated supports, narrow supports, and articulated body-part layouts are not overestimated by a single axis-aligned object box. `review_playblast_against_brief` now adds conservative visual repeated-action count evidence from foreground subject center extrema when playblast samples are dense enough, and mismatches feed the same repair-planning path as data-level count findings. Remaining 7E work is richer biomechanical COM heuristics and real-client smoke on the persistent bake trust path.
 
 #### Milestone 7F: Playblast Review And Repair Loop
 
@@ -479,11 +476,11 @@ Status: NOT IMPLEMENTED — deferred by design. The add-on stays a provider-neut
 
 #### Milestone 7H: Animation Workflow Orchestration And MCP Client Guidance
 
-Real-client testing showed that a connected MCP client can successfully inspect Blender and iterate with the user, but may still skip the intended Milestone 7 helper workflow and fall back to `draft_script` / `run_approved_script` too early. This produces useful Blender edits, but it bypasses animation briefs, timing charts, preview-safe helper transactions, structured validation, and repair loops.
+Real-client testing showed that a connected MCP client can successfully inspect Blender and iterate with the user, but may still skip the intended Milestone 7 helper workflow and fall back to `draft_script` too early. This can produce useful Blender edits under session trust, but it bypasses animation briefs, timing charts, preview-safe helper transactions, structured validation, and repair loops. The old `run_approved_script` fallback now permanently refuses.
 
 - Add stronger agent and MCP guidance: for animation requests, prefer `plan_animation_workflow`, `get_animation_scene_context`, `create_animation_brief`, `create_timing_chart`, `block_key_poses`, evaluator tools, and repair-loop tools before `draft_script`.
 - Add a higher-level orchestration tool for common animation workflows, such as `plan_animation_workflow`, `create_animation_from_brief`, or a focused `create_progressive_bounce_animation`, that runs or plans the brief -> timing chart -> helper blocking -> validation -> repair planning path.
-- Make the orchestrator report whether changes are true live-preview helper edits, checkpoint-backed script edits, or read-only plans, so the client cannot incorrectly claim "commit/revert preview" for arbitrary approved scripts.
+- Make the orchestrator report whether changes are true live-preview helper edits, checkpoint-backed trusted-script edits, or read-only plans, so the client cannot incorrectly claim "commit/revert preview" for arbitrary scripts.
 - Add real-client smoke prompts that verify Claude/Codex-style MCP clients choose the helper workflow for common animation requests instead of script-first execution.
 - Use the real bounce test as a fixture: "Make the cube bounce twice over 72 frames, getting smaller each bounce. Check it against the brief and leave it as a preview."
 - Use the aircraft underside/landing-gear inspection case as a visual-evidence fixture: the client should call `capture_object_inspection_renders` for diagnostic renders instead of drafting temporary camera/render Python.
@@ -495,14 +492,14 @@ Acceptance:
 - The orchestrator can produce a pending preview for at least one full start-to-finish animation workflow, then run structured validation and return commit/revert guidance.
 - Real-client testing demonstrates that model behavior matches the intended workflow, not just that individual tools exist.
 
-Status: Orchestration, guidance, and routing reliability are implemented in code and smoke tests. `plan_animation_workflow` is a read-only Milestone 7 entry point that creates the animation brief, animation-aware scene context, timing chart, ordered helper/evaluator/repair tool-call payloads, and `draft_script` fallback guidance. `run_animation_workflow` executes common helper-backed workflows such as bounce/turntable/reveal/pulse and now routes move/path/orbit/fall prompts through `create_directed_animation_shot` when a bounded director-style shot fits. It runs structured evaluator review, optionally captures playblast evidence, optionally applies bounded repair operations, and reports live-preview state, helper gaps, skipped calls, findings, and repair plans. `run_animation_task` is the compact one-input MCP wrapper for common animation prompts. Compact MCP mode exposes the animation planner/runner/task tools directly; catalog ranking boosts animation workflow tools for bounce, jump, keyframe, pose, timing, arc, settle, squash/stretch, playblast, f-curve, spacing, contact, and directed-shot prompts; `draft_script` remains available when the prompt explicitly asks for script/Python/custom code. `draft_script` now returns helper advice for animation-like scripts instead of refusing them solely for helper overlap. The real bounce fixture routes through `create_progressive_bounce_animation`, which keys repeated bounce motion plus decreasing scale in a live-preview transaction. A first-class `capture_object_inspection_renders` plus `review_inspection_renders_against_brief` path covers diagnostic render-to-inspect behavior that real clients previously handled with ad hoc scripts, and rig repair findings now route to `get_rigging_details` plus `set_rig_pose_hold` instead of generic object-transform holds. Async render jobs now include `assemble_render_job_video` and `validate_render_job_output`, so clients can turn completed PNG sequences into MP4s and verify outputs without shell/imageio fallback. The fresh GitHub Pages extension install path is verified, and `scripts/installed_extension_live_smoke.py` now covers the installed ZIP plus live bridge plus MCP stdio path from a clean temporary profile. The only remaining 7H caveat is optional manual external-client UI refresh testing, because clients may cache older tool lists or configs outside the bridge.
+Status: Orchestration, guidance, and routing reliability are implemented in code and smoke tests. `plan_animation_workflow` creates the animation brief, scene context, timing chart, ordered helper/evaluator/repair calls, and trusted-script fallback guidance. `run_animation_workflow` executes supported helper-backed bounce, turntable, reveal, pulse, and orbit workflows; camera dolly/orbit helpers cover reusable camera motion, while underspecified custom moves return an explicit blocker requesting coordinates or a path instead of guessing a shot design. It runs structured review, can capture playblast evidence, can apply bounded repairs, and reports preview state, helper gaps, skipped calls, findings, and repair plans. `run_animation_task` is the compact one-input wrapper. A first-class inspection-render/review path covers diagnostic visual evidence, rig findings route through rig-specific inspection and pose helpers, and asynchronous render jobs can assemble and validate output. The installed-extension live smoke verifies the clean ZIP, live bridge, and MCP stdio path; optional manual external-client refresh testing remains useful because clients may cache older tool lists or configs.
 
 ## Open Questions
 
 - Which client-host integrations should be documented first after MCP: Claude Desktop, Claude Code, Codex, Cursor, or a small standalone example?
-- How much autonomy should the default mode allow: suggest-only, approval-required, or limited autonomous tools?
+- Which additional operations should receive bounded, reversible helper tools instead of requiring session-trusted Python?
 - How strict should the default docs-first rule be before external agents are allowed to generate Blender Python?
-- Which changes are safe enough for immediate live preview, and which must stay preview-only until explicit approval?
+- Which changes belong in reversible live preview, and which require the separate session-trusted Python path?
 
 ## User Decisions Captured
 
@@ -510,10 +507,10 @@ Status: Orchestration, guidance, and routing reliability are implemented in code
 - Use a Blender extension plus local companion bridge/MCP surface over time.
 - Keep LLM provider clients and API keys out of the production add-on.
 - Apply safe helper changes immediately in the live Blender scene.
-- Generated arbitrary Python always requires approval.
+- Generated arbitrary Python is refused while trust is off and runs with Blender Run Script-equivalent permissions while binary session trust is active.
 - Save checkpoints before risky changes when enabled.
 - Deletes may happen through helper/script flows, with undo/revert support.
-- Import/export requires approval.
+- Import/export should prefer bounded tools; custom import/export Python requires active session trust.
 - Docs lookup should use local cache first, official web docs second.
 - Screenshot context is controlled by a toggle.
 - User should be able to choose sidebar or floating UI eventually.
