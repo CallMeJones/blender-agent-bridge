@@ -23,6 +23,7 @@ CHANGELOG_PATH = os.path.join(ROOT, "CHANGELOG.md")
 README_PATH = os.path.join(ROOT, "README.md")
 INSTALL_PATH = os.path.join(ROOT, "docs", "INSTALL_FROM_GITHUB.md")
 WORKFLOW_PATH = os.path.join(ROOT, ".github", "workflows", "mcp-smoke.yml")
+RECOVERY_WORKFLOW_PATH = os.path.join(ROOT, ".github", "workflows", "resume-release.yml")
 PYPROJECT_PATH = os.path.join(ROOT, "pyproject.toml")
 REGISTRY_SNAPSHOT_PATH = os.path.join(ROOT, "tests", "snapshots", "tool_registry.json")
 CLIENT_GUIDE_DIR = os.path.join(ROOT, "docs", "clients")
@@ -125,6 +126,7 @@ def _assert_local_release_metadata():
     assert f"Install Blender `{blender_min}` or newer" in install, "Install guide minimum drifted"
 
     workflow = _read_text(WORKFLOW_PATH)
+    recovery_workflow = _read_text(RECOVERY_WORKFLOW_PATH)
     assert "needs: [mcp-smoke, blender-smoke]" in workflow, "Tag artifact preparation must wait for both test jobs"
     assert "smoke_release_artifact_identity.py" in workflow, "Tag publication must verify archive identity"
     assert "smoke_published_release_identity.py" in workflow, "Tag publication must verify both public endpoints"
@@ -135,6 +137,23 @@ def _assert_local_release_metadata():
     assert "--require-complete" in workflow, "PyPI publication must verify the complete artifact set"
     assert "python scripts/check_pypi_name.py" in workflow, "PyPI name ownership must be checked immediately before publish"
     assert "python -m unittest discover" in workflow, "CI must run the conventional unittest lane"
+    assert "workflow_dispatch:" in recovery_workflow, "Release recovery must require an explicit manual dispatch"
+    assert "source_run_id:" in recovery_workflow, "Release recovery must identify the retained artifact run"
+    assert "test \"$source_sha\" = \"$expected_sha\"" in recovery_workflow, (
+        "Release recovery must bind retained artifacts to the immutable tag commit"
+    )
+    assert "--require-complete" in recovery_workflow, "Release recovery must verify exact published PyPI hashes"
+    assert "smoke_release_artifact_identity.py" in recovery_workflow, (
+        "Release recovery must verify extension and Pages archive identity before deployment"
+    )
+    assert "run-id: ${{ inputs.source_run_id }}" in recovery_workflow, (
+        "Release recovery must reuse retained tested artifacts instead of rebuilding them"
+    )
+    assert "uses: actions/deploy-pages@v5" in recovery_workflow, "Release recovery must deploy Pages"
+    assert "uses: softprops/action-gh-release@v3" in recovery_workflow, "Release recovery must publish the GitHub Release"
+    assert "smoke_published_release_identity.py" in recovery_workflow, (
+        "Release recovery must verify both public extension archives"
+    )
 
     github_ref = str(os.environ.get("GITHUB_REF") or "")
     if github_ref.startswith("refs/tags/"):
