@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-from .. import handler_runtime as _runtime
-
-for _runtime_name, _runtime_value in vars(_runtime).items():
-    if not _runtime_name.startswith("__"):
-        globals()[_runtime_name] = _runtime_value
-del _runtime_name, _runtime_value
+from .. import advanced_helpers, live_preview, preferences, script_execution, script_runner, world_model
+from ..handler_runtime import _bounded_int, _float_list, _name_list, _simulation_bake_script
 
 
 def get_rigging_details(context, args):
@@ -120,6 +116,7 @@ def stage_persistent_simulation_bake(context, args):
         checkpoint_enabled=bool(getattr(prefs, "checkpoints_enabled", True)),
         checkpoint_dir=getattr(prefs, "checkpoint_dir", None),
     )
+    execution_status = script_execution.status_fields(run_result)
     return {
         "ok": bool(run_result.get("ok")),
         "message": (
@@ -144,14 +141,10 @@ def stage_persistent_simulation_bake(context, args):
         "requires_explicit_one_time_approval": False,
         "trust_window_auto_run_allowed": True,
         "approval_policy": "Requires active binary session trust and then runs immediately.",
-        "auto_run_attempted": bool(run_result.get("auto_run_attempted")),
-        "auto_run_skipped_reason": (
-            ""
-            if run_result.get("auto_run_attempted")
-            else str(run_result.get("code") or "not_attempted")
-        ),
-        "auto_ran": bool(run_result.get("auto_ran")),
-        "authorization_model": "blender_run_script_equivalent",
+        "auto_run_attempted": execution_status["auto_run_attempted"],
+        "auto_run_skipped_reason": execution_status["auto_run_skipped_reason"],
+        "auto_ran": execution_status["auto_ran"],
+        "authorization_model": execution_status["authorization_model"],
     }
 
 

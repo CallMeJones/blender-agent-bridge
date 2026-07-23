@@ -12,7 +12,7 @@ import time
 import bpy
 from mathutils import Vector
 
-from . import blender_compat, inspection_render, live_preview, viewport_capture
+from . import blender_compat, inspection_render, live_preview, script_execution, viewport_capture
 
 
 KEYFRAME_INTERPOLATIONS = {
@@ -8058,7 +8058,7 @@ def plan_director_workflow(
         "script_fallback_policy": {
             "helper_first": True,
             "draft_script_allowed_after_helper_gap_when_session_trusted": True,
-            "trusted_script_authorization_model": "blender_run_script_equivalent",
+            "trusted_script_authorization_model": script_execution.AUTHORIZATION_MODEL,
             "privileged_generated_scripts_allowed_when_session_trusted": True,
             "persistent_bake_scripts_allowed_when_session_trusted": True,
         },

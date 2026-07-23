@@ -15,7 +15,7 @@ import traceback
 import bpy
 from bpy.app.handlers import persistent
 
-from . import audit_log, script_analysis, transcript, user_paths
+from . import audit_log, script_analysis, script_execution, transcript, user_paths
 
 TRUSTED_SCRIPT_NAME = "Agent Bridge Trusted Script"
 TRUSTED_SCRIPT_METADATA_NAME = "Agent Bridge Trusted Script Metadata"
@@ -83,7 +83,7 @@ def analyze_trusted_script(source):
             "privileged_capabilities": [],
             "trust_window_allowed": False,
             "trusted_manual_mode": True,
-            "authorization_model": "blender_run_script_equivalent",
+            "authorization_model": script_execution.AUTHORIZATION_MODEL,
         }
     try:
         ast.parse(source)
@@ -101,7 +101,7 @@ def analyze_trusted_script(source):
             "privileged_capabilities": [],
             "trust_window_allowed": False,
             "trusted_manual_mode": True,
-            "authorization_model": "blender_run_script_equivalent",
+            "authorization_model": script_execution.AUTHORIZATION_MODEL,
         }
     try:
         advisory = script_analysis.analyze_script(source)
@@ -142,7 +142,7 @@ def analyze_trusted_script(source):
             "explicit_approval_reasons": [],
             "trust_window_allowed": True,
             "trusted_manual_mode": True,
-            "authorization_model": "blender_run_script_equivalent",
+            "authorization_model": script_execution.AUTHORIZATION_MODEL,
         }
     )
     return result
@@ -572,7 +572,7 @@ def run_trusted_script(
         "analysis": analysis,
         "requires_user_approval": False,
         "trusted_manual_mode": True,
-        "authorization_model": "blender_run_script_equivalent",
+        "authorization_model": script_execution.AUTHORIZATION_MODEL,
     }
 
     checkpoint = {"ok": False, "message": "Checkpoint disabled", "path": ""}
@@ -596,7 +596,7 @@ def run_trusted_script(
                 "checkpoint": checkpoint,
                 "analysis": analysis,
                 "prepared": prepared,
-                "authorization_model": "blender_run_script_equivalent",
+                "authorization_model": script_execution.AUTHORIZATION_MODEL,
                 "requires_user_approval": False,
                 "auto_run_attempted": False,
                 "auto_ran": False,
@@ -662,7 +662,7 @@ def run_trusted_script(
             "checkpoint": checkpoint,
             "analysis": analysis,
             "prepared": prepared,
-            "authorization_model": "blender_run_script_equivalent",
+            "authorization_model": script_execution.AUTHORIZATION_MODEL,
             "auto_run_attempted": True,
             "auto_ran": False,
         }
@@ -692,7 +692,7 @@ def run_trusted_script(
         "checkpoint": checkpoint,
         "analysis": analysis,
         "prepared": prepared,
-        "authorization_model": "blender_run_script_equivalent",
+        "authorization_model": script_execution.AUTHORIZATION_MODEL,
         "auto_run_attempted": True,
         "auto_ran": True,
     }

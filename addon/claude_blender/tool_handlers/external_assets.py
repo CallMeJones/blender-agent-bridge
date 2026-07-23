@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-from .. import handler_runtime as _runtime
-
-for _runtime_name, _runtime_value in vars(_runtime).items():
-    if not _runtime_name.startswith("__"):
-        globals()[_runtime_name] = _runtime_value
-del _runtime_name, _runtime_value
+from .. import asset_jobs, external_assets, preferences
+from ..handler_runtime import _bounded_int, _name_list
 
 
 def list_poly_haven_categories(context, args):

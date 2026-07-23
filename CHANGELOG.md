@@ -14,6 +14,7 @@
 - Made copied Bundled MCP configs use Blender's own Python interpreter and verified that exact command from a clean installed extension.
 - Made `tools/list` flatten simple top-level JSON Schema combinators for Claude-compatible MCP registration while retaining the canonical schema for bridge validation and explicit schema lookup.
 - Isolated registry metadata from caller mutation, strengthened cross-process determinism tests, and avoided redundant source-tree hashing in bridge status diagnostics.
+- Replaced broad runtime/global namespace injection in all domain handlers with explicit dependencies, and consolidated trusted-script authorization/status reporting under one pure policy module.
 - Fixed look-dev review evidence to honor the configured capture cache and isolated Blender smoke artifacts from developer home directories.
 
 ## 0.3.0 - 2026-07-20

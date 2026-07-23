@@ -43,7 +43,7 @@ The server can run from the extension's bundled source or from the zero-dependen
 
 This keeps the important boundary clean: MCP clients never import Blender Python and never touch `bpy` directly. Blender remains the authority for scene state, preview rollback, binary script trust, and UI status.
 
-Tool metadata is owned by the eleven deterministic modules under `tool_registry/domains/`. Blender-only callables register through the matching modules under `tool_handlers/`; `tool_dispatcher.py` is only the stable execution facade. Shared implementation details that still span several domains live in `handler_runtime.py`, keeping `bpy` completely outside the import path used by the packaged stdio runtime.
+Tool metadata is owned by the eleven deterministic modules under `tool_registry/domains/`. Blender-only callables register through the matching modules under `tool_handlers/`; each handler module declares its runtime dependencies explicitly, and `tool_dispatcher.py` is only the stable execution facade. Shared implementation details that still span several domains live in `handler_runtime.py`, keeping `bpy` completely outside the import path used by the packaged stdio runtime. Pure trusted-script result policy lives in `script_execution.py`, so the Blender runner, handlers, and helper metadata use one authorization model and status mapping while the standalone registry retains its serialized contract defaults.
 
 ## Blender Extension Layer
 

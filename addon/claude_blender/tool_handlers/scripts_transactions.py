@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from .. import handler_runtime as _runtime
-
-for _runtime_name, _runtime_value in vars(_runtime).items():
-    if not _runtime_name.startswith("__"):
-        globals()[_runtime_name] = _runtime_value
-del _runtime_name, _runtime_value
+from .. import helper_routing, live_preview, preferences, script_execution, script_runner
+from ..handler_runtime import (
+    _animation_script_fallback_recently_allowed,
+    _animation_workflow_recently_seen,
+    _extract_script_code,
+    _looks_like_animation_intent,
+    _looks_like_render_job_intent,
+)
 
 
 def draft_privileged_script(context, args):
@@ -89,15 +91,7 @@ def draft_script(context, args):
             "Agent script trust is off. Start the bridge and select Trust Agent Scripts in Blender, "
             "or complete the task with bounded structured tools."
         )
-    run_code = str(run_result.get("code") or "")
-    if run_result.get("auto_run_attempted"):
-        auto_run_reason = "external_script_trust_active"
-    elif run_code == "script_trust_required":
-        auto_run_reason = "external_script_trust_required"
-    elif run_code:
-        auto_run_reason = run_code
-    else:
-        auto_run_reason = "not_attempted"
+    execution_status = script_execution.status_fields(run_result)
     return {
         "ok": bool(run_result.get("ok")),
         "message": (
@@ -105,10 +99,10 @@ def draft_script(context, args):
             if run_result.get("ok")
             else run_result.get("message", "Trusted script did not run")
         ),
-        "auto_ran": bool(run_result.get("auto_ran")),
-        "auto_run_attempted": bool(run_result.get("auto_run_attempted")),
-        "auto_run_reason": auto_run_reason,
-        "authorization_model": "blender_run_script_equivalent",
+        "auto_ran": execution_status["auto_ran"],
+        "auto_run_attempted": execution_status["auto_run_attempted"],
+        "auto_run_reason": execution_status["auto_run_reason"],
+        "authorization_model": execution_status["authorization_model"],
         "blocked": bool(run_result.get("blocked")),
         "code": run_result.get("code"),
         "analysis": run_result.get("analysis"),

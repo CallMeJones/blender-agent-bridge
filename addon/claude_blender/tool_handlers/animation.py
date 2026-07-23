@@ -2,12 +2,47 @@
 
 from __future__ import annotations
 
-from .. import handler_runtime as _runtime
+import bpy
 
-for _runtime_name, _runtime_value in vars(_runtime).items():
-    if not _runtime_name.startswith("__"):
-        globals()[_runtime_name] = _runtime_value
-del _runtime_name, _runtime_value
+from .. import (
+    advanced_helpers,
+    animation_analysis,
+    animation_brief,
+    animation_workflow,
+    blender_compat,
+    context_bundle,
+    live_preview,
+    world_model,
+)
+from ..handler_runtime import (
+    _REPAIR_LOOP_DEFAULT_TOOLS,
+    _WORKFLOW_GENERATION_TOOLS,
+    _action_summary,
+    _animation_data_summary,
+    _append_action,
+    _bounded_float,
+    _bounded_int,
+    _brief_frame_range,
+    _constraint_summary,
+    _driver_summary,
+    _execute_repair_tool,
+    _execute_workflow_tool,
+    _float_list,
+    _mark_animation_workflow_seen,
+    _name_list,
+    _object_related_actions,
+    _optional_float,
+    _optional_float_list,
+    _repair_loop_brief_text,
+    _repair_loop_review,
+    _repair_operation_blocker,
+    _repair_operation_key,
+    _repair_operation_mutates,
+    _repair_operation_parts,
+    _resolve_objects,
+    _workflow_review,
+    _workflow_tool_parts,
+)
 
 
 def get_animation_details(context, args):

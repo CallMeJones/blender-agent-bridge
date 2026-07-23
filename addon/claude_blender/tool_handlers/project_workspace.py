@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-from .. import handler_runtime as _runtime
-
-for _runtime_name, _runtime_value in vars(_runtime).items():
-    if not _runtime_name.startswith("__"):
-        globals()[_runtime_name] = _runtime_value
-del _runtime_name, _runtime_value
+from .. import autosave, lab_parity, project_files
+from ..handler_runtime import _bounded_int
 
 
 def get_blend_file_diagnostics(context, args):

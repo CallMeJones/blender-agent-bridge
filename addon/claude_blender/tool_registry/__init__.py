@@ -62,11 +62,6 @@ def build_handlers():
         module.register_handlers(registry)
     handlers = registry.as_dict()
     REGISTRY.validate_handlers(handlers)
-    # Domain functions intentionally share a small cross-domain helper surface.
-    # Wire canonical handler names only after every module has registered, which
-    # avoids import-order coupling while keeping their implementations domain-owned.
-    for handler in handlers.values():
-        handler.__globals__.update(handlers)
     return handlers
 
 
