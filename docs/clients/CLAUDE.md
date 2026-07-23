@@ -8,12 +8,12 @@ Install and enable Blender Agent Bridge, start it in Blender, and install Claude
 
 ## Configuration
 
-The safest path is **Copy MCP Config** in Blender and replacing the complete `blender_agent_bridge` entry. A bundled entry has this shape:
+The safest path is **Copy MCP Config** in Blender and replacing the complete `blender` entry. A bundled entry has this shape:
 
 ```json
 {
   "mcpServers": {
-    "blender_agent_bridge": {
+    "blender": {
       "command": "<python-executable>",
       "args": ["<installed-extension>/claude_blender/mcp_server.py", "--bridge-url", "http://127.0.0.1:<port>"],
       "env": {"BLENDER_BRIDGE_TOKEN": "<bridge-token>"}
@@ -28,7 +28,7 @@ Pinned `uvx` mode on macOS/Linux changes the command to `uvx` and args to:
 ["--from", "blender-bridge==0.4.0", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
 ```
 
-On Windows use `"command": "cmd"` and prefix the args with `"/c", "uvx"`. Claude Code can also register the copied JSON with `claude mcp add-json blender_agent_bridge '<json>'`. Preserve the generated environment values and optional Sketchfab token.
+On Windows use `"command": "cmd"` and prefix the args with `"/c", "uvx"`. Claude Code can also register the object inside `mcpServers.blender` at user scope with `claude mcp add-json --scope user blender '<server-object-json>'`. Preserve the generated environment values and optional Sketchfab token.
 
 ## Restart And Smoke Test
 

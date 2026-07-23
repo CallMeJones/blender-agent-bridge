@@ -13,22 +13,22 @@ Use Blender's **Copy MCP Config** button whenever possible. Codex reads user con
 Bundled mode launches the `mcp_server.py` shipped inside the installed extension:
 
 ```toml
-[mcp_servers.blender_agent_bridge]
+[mcp_servers.blender]
 command = "<python-executable>"
 args = ["<installed-extension>/claude_blender/mcp_server.py", "--bridge-url", "http://127.0.0.1:<port>"]
 
-[mcp_servers.blender_agent_bridge.env]
+[mcp_servers.blender.env]
 BLENDER_BRIDGE_TOKEN = "<bridge-token>"
 ```
 
 Pinned `uvx` mode on macOS or Linux:
 
 ```toml
-[mcp_servers.blender_agent_bridge]
+[mcp_servers.blender]
 command = "uvx"
 args = ["--from", "blender-bridge==0.4.0", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
 
-[mcp_servers.blender_agent_bridge.env]
+[mcp_servers.blender.env]
 BLENDER_BRIDGE_TOKEN = "<bridge-token>"
 ```
 

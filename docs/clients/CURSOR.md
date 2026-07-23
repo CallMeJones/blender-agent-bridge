@@ -13,7 +13,7 @@ Put the server in the Cursor MCP settings UI or `.cursor/mcp.json`. Prefer the c
 ```json
 {
   "mcpServers": {
-    "blender_agent_bridge": {
+    "blender": {
       "command": "<python-executable>",
       "args": ["<installed-extension>/claude_blender/mcp_server.py", "--bridge-url", "http://127.0.0.1:<port>"],
       "env": {"BLENDER_BRIDGE_TOKEN": "<bridge-token>"}
