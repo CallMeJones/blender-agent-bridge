@@ -78,9 +78,12 @@ Recommended user-facing release flow:
 
 ```powershell
 $Version = python -c "import tomllib; print(tomllib.load(open('addon/claude_blender/blender_manifest.toml','rb'))['version'])"
+python tests\smoke_release_consistency.py
 git tag -a "v$Version" -m "Blender Agent Bridge $Version"
 git push origin "v$Version"
 ```
+
+Before running these commands, move the Unreleased changelog entries into the versioned section, set `release_state.toml` `publication_version` to `$Version`, and update every tracked client install pin. The consistency gate intentionally uses this tracked release-control file; `public/index.json` is an ignored, generated artifact and is verified later against the exact candidate ZIP.
 
 After the workflow completes, users can either install through the remote repository URL above or download `claude_blender-<version>.zip` from the GitHub Release and install it in Blender with `Edit > Preferences > Get Extensions > Install from Disk`. Tell users not to install GitHub's generated "Source code" ZIP, because it is the repository checkout and not the packaged Blender extension.
 
@@ -127,7 +130,7 @@ After building a release zip, install `dist/claude_blender-<version>.zip` in a c
 - `blender_bridge_status` shows matching add-on, bridge, MCP, config, and source versions.
 - `Start` enables the bridge without console errors.
 - `Copy MCP Config` includes the current config metadata.
-- The MCP client sees `blender_bridge_status`, `list_scene_objects`, `run_animation_task`, and `draft_script`, or can reach them through the compact catalog surface. The internal `run_approved_script` compatibility endpoint remains permanently refusing.
+- The MCP client sees exactly the five default gateways: `blender_bridge_status`, `blender_tool_catalog`, `search_blender_tools`, `get_blender_tool_schema`, and `invoke_blender_tool`. Search must find non-planner helpers such as `list_scene_objects`; schema lookup and invocation must then succeed through the gateways. The internal `run_approved_script` compatibility endpoint remains permanently refusing.
 - `blender_bridge_status` reports matching add-on/bridge/MCP versions.
 - `resources/list` includes capture, playblast, inspection-render, render-thumbnail, and async render-job resources, and `resources/read` can read `blender://captures/latest/metadata` after a capture, `blender://playblasts/latest/metadata` after a playblast capture, `blender://inspection-renders/latest/metadata` after diagnostic object renders, `blender://render-thumbnails/latest/metadata` after thumbnail renders, plus `blender://render-jobs/latest/metadata` after background render jobs.
 - External script trust can be turned on/off, persists across bridge stop/start, and clears on add-on reload or file load.

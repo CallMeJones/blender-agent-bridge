@@ -149,7 +149,7 @@ The search tool returns only top matching snippets and URLs. It never exposes th
 
 This keeps the local docs cache, screenshots, and large Blender scenes from killing the LLM request with oversized context.
 
-`agent_tools.select_blender_tool_definitions()` remains available to embedded callers that already have the user prompt and applies a tool-schema budget there. Standard MCP discovery cannot use that selector because `tools/list` does not receive the prompt. MCP therefore exposes a stable compact surface and protects context by omitting optional output schemas from discovery, sparsifying default-valued annotations, returning compact catalog summaries, and retrieving the complete canonical schema only for the selected tool.
+`agent_tools.select_blender_tool_definitions()` remains available to embedded callers that already have the user prompt and applies a tool-schema budget there. Standard MCP discovery cannot use that selector because `tools/list` does not receive the prompt. MCP therefore exposes a stable five-gateway surface and protects context by omitting optional output schemas from discovery, sparsifying default-valued annotations, returning compact catalog summaries, and retrieving the complete canonical schema only for the selected tool.
 
 The stable MCP initialization text, tool order, and definitions contain no request-specific scene data or timestamps. This makes them eligible for provider prompt-prefix caching without moving cache policy into Blender. Payload telemetry is process-local and content-free: it aggregates only tool identifiers and response byte counts so maintainers can find real hotspots without retaining scene output.
 

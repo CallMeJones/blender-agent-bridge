@@ -25,8 +25,7 @@ INSTALL_PATH = os.path.join(ROOT, "docs", "INSTALL_FROM_GITHUB.md")
 WORKFLOW_PATH = os.path.join(ROOT, ".github", "workflows", "mcp-smoke.yml")
 RECOVERY_WORKFLOW_PATH = os.path.join(ROOT, ".github", "workflows", "resume-release.yml")
 PYPROJECT_PATH = os.path.join(ROOT, "pyproject.toml")
-PUBLISHED_INDEX_PATH = os.path.join(ROOT, "public", "index.json")
-PUBLISHED_INDEX_HTML_PATH = os.path.join(ROOT, "public", "index.html")
+RELEASE_STATE_PATH = os.path.join(ROOT, "release_state.toml")
 EXTERNAL_MCP_GUIDE_PATH = os.path.join(ROOT, "docs", "EXTERNAL_BRIDGE_MCP.md")
 REGISTRY_SNAPSHOT_PATH = os.path.join(ROOT, "tests", "snapshots", "tool_registry.json")
 CLIENT_GUIDE_DIR = os.path.join(ROOT, "docs", "clients")
@@ -56,13 +55,10 @@ def _version_tuple(value):
     return tuple(int(part) for part in parts)
 
 
-def _published_version():
-    with open(PUBLISHED_INDEX_PATH, "r", encoding="utf-8") as handle:
-        payload = json.load(handle)
-    entries = payload.get("data") if isinstance(payload.get("data"), list) else []
-    matches = [entry for entry in entries if entry.get("id") == build_info.ADDON_ID]
-    assert len(matches) == 1, payload
-    version = str(matches[0].get("version") or "")
+def _publication_version():
+    with open(RELEASE_STATE_PATH, "rb") as handle:
+        payload = tomllib.load(handle)
+    version = str(payload.get("publication_version") or "")
     _version_tuple(version)
     return version
 
@@ -80,7 +76,7 @@ def _assert_release_state(source_version, published_version, unreleased_body, gi
     if is_release_tag:
         assert github_ref == f"refs/tags/v{source_version}", (github_ref, source_version)
         assert source_version == published_version, (
-            "A release tag must publish the same version recorded in public/index.json",
+            "A release tag must match release_state.toml publication_version",
             source_version,
             published_version,
         )
@@ -155,13 +151,13 @@ def _assert_local_release_metadata():
     generated_server = generated_uvx["mcpServers"]["blender"]
     assert f"{build_info.MCP_DISTRIBUTION_NAME}=={version}" in generated_server["args"], generated_server
     assert generated_server["env"]["CLAUDE_BLENDER_TOOL_REGISTRY_DIGEST"] == build_info.TOOL_REGISTRY_DIGEST
-    published_version = _published_version()
+    published_version = _publication_version()
     published_install_surfaces = [
         os.path.join(CLIENT_GUIDE_DIR, filename)
         for filename in os.listdir(CLIENT_GUIDE_DIR)
         if filename.endswith(".md") and filename != "README.md"
     ]
-    published_install_surfaces.extend((EXTERNAL_MCP_GUIDE_PATH, PUBLISHED_INDEX_HTML_PATH))
+    published_install_surfaces.append(EXTERNAL_MCP_GUIDE_PATH)
     for path in published_install_surfaces:
         document = _read_text(path)
         relative = os.path.relpath(path, ROOT)

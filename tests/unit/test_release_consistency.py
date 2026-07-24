@@ -21,8 +21,8 @@ class ReleaseConsistencyPolicyTests(unittest.TestCase):
             "- changed behavior",
         )
 
-    def test_tag_requires_public_index_and_empty_unreleased_section(self):
-        with self.assertRaisesRegex(AssertionError, "public/index.json"):
+    def test_tag_requires_publication_version_and_empty_unreleased_section(self):
+        with self.assertRaisesRegex(AssertionError, "release_state.toml"):
             smoke_release_consistency._assert_release_state(
                 "0.4.1",
                 "0.4.0",

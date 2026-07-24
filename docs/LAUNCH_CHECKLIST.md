@@ -15,7 +15,7 @@ The completed dashboard and evidence below are historical proof for the immutabl
 - [ ] **Required** — Run the complete unit, pure-Python, supported-Blender, packaging, and clean installed-extension gates against the final 0.4.1 candidate commit.
 - [ ] **Required** — Verify the five-gateway surface in a fresh normal Claude chat, Codex session, and Cursor session. Each client must discover schemas and invoke non-planner helpers through the gateway; an offline routing fixture or Claude Code process is supporting evidence, not a substitute.
 - [ ] **Required** — Build one candidate artifact set, record its commit and SHA-256, and verify the installed add-on, bundled MCP runtime, wheel, sdist, Pages archive, and release archive all identify that same candidate.
-- [ ] **Required** — Move every Unreleased changelog item into a 0.4.1 section, update public install pins and `public/index.json`, and rerun release consistency before creating `v0.4.1`.
+- [ ] **Required** — Move every Unreleased changelog item into a 0.4.1 section, advance `release_state.toml`, update every tracked public install pin, and rerun release consistency before creating `v0.4.1`. The workflow generates and identity-checks `public/index.json` from the candidate artifact.
 - [ ] **Manual** — Do not tag, publish, deploy, or announce 0.4.1 until the required gates above are complete and explicitly approved.
 
 ## Published v0.4.0 Dashboard
