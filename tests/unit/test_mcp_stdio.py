@@ -117,7 +117,7 @@ class MCPStdioTests(unittest.TestCase):
 
     def test_initialize_list_and_read_only_call(self):
         initialized = self.rpc(1, "initialize", {"protocolVersion": "2025-06-18"})
-        self.assertEqual("0.4.0", initialized["result"]["serverInfo"]["version"])
+        self.assertEqual(build_info.MCP_SERVER_VERSION, initialized["result"]["serverInfo"]["version"])
         listed = self.rpc(2, "tools/list", {})
         names = {tool["name"] for tool in listed["result"]["tools"]}
         self.assertEqual(set(mcp_server.GATEWAY_TOOL_NAMES), names)

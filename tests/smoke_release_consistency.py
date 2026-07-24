@@ -25,6 +25,9 @@ INSTALL_PATH = os.path.join(ROOT, "docs", "INSTALL_FROM_GITHUB.md")
 WORKFLOW_PATH = os.path.join(ROOT, ".github", "workflows", "mcp-smoke.yml")
 RECOVERY_WORKFLOW_PATH = os.path.join(ROOT, ".github", "workflows", "resume-release.yml")
 PYPROJECT_PATH = os.path.join(ROOT, "pyproject.toml")
+PUBLISHED_INDEX_PATH = os.path.join(ROOT, "public", "index.json")
+PUBLISHED_INDEX_HTML_PATH = os.path.join(ROOT, "public", "index.html")
+EXTERNAL_MCP_GUIDE_PATH = os.path.join(ROOT, "docs", "EXTERNAL_BRIDGE_MCP.md")
 REGISTRY_SNAPSHOT_PATH = os.path.join(ROOT, "tests", "snapshots", "tool_registry.json")
 CLIENT_GUIDE_DIR = os.path.join(ROOT, "docs", "clients")
 PAGES_INDEX_URL = "https://callmejones.github.io/blender-agent-bridge/index.json"
@@ -45,6 +48,51 @@ def _read_manifest():
 def _read_pyproject():
     with open(PYPROJECT_PATH, "rb") as handle:
         return tomllib.load(handle)
+
+
+def _version_tuple(value):
+    parts = str(value or "").split(".")
+    assert len(parts) == 3 and all(part.isdigit() for part in parts), value
+    return tuple(int(part) for part in parts)
+
+
+def _published_version():
+    with open(PUBLISHED_INDEX_PATH, "r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    entries = payload.get("data") if isinstance(payload.get("data"), list) else []
+    matches = [entry for entry in entries if entry.get("id") == build_info.ADDON_ID]
+    assert len(matches) == 1, payload
+    version = str(matches[0].get("version") or "")
+    _version_tuple(version)
+    return version
+
+
+def _unreleased_body(changelog):
+    match = re.search(r"^## Unreleased\s*$([\s\S]*?)(?=^## |\Z)", changelog, re.MULTILINE)
+    assert match, "CHANGELOG.md is missing an Unreleased section"
+    return match.group(1).strip()
+
+
+def _assert_release_state(source_version, published_version, unreleased_body, github_ref=""):
+    source_parts = _version_tuple(source_version)
+    published_parts = _version_tuple(published_version)
+    is_release_tag = str(github_ref or "").startswith("refs/tags/")
+    if is_release_tag:
+        assert github_ref == f"refs/tags/v{source_version}", (github_ref, source_version)
+        assert source_version == published_version, (
+            "A release tag must publish the same version recorded in public/index.json",
+            source_version,
+            published_version,
+        )
+        assert not unreleased_body, "Move Unreleased entries into the tagged version before publication"
+    elif unreleased_body:
+        assert source_parts > published_parts, (
+            "Unreleased behavior changes must use a version newer than the published artifact",
+            source_version,
+            published_version,
+        )
+    else:
+        assert source_parts >= published_parts, (source_version, published_version)
 
 
 def _enabled(name):
@@ -91,7 +139,7 @@ def _assert_local_release_metadata():
     assert version, manifest
     assert manifest.get("id") == build_info.ADDON_ID, manifest
     assert version == build_info.ADDON_VERSION, (version, build_info.ADDON_VERSION)
-    assert tuple(int(part) for part in version.split(".")) == build_info.ADDON_VERSION_TUPLE, build_info.ADDON_VERSION_TUPLE
+    assert _version_tuple(version) == build_info.ADDON_VERSION_TUPLE, build_info.ADDON_VERSION_TUPLE
     assert build_info.MCP_SERVER_VERSION == build_info.ADDON_VERSION, build_info.MCP_SERVER_VERSION
     pyproject = _read_pyproject()
     project = pyproject.get("project") or {}
@@ -107,17 +155,28 @@ def _assert_local_release_metadata():
     generated_server = generated_uvx["mcpServers"]["blender"]
     assert f"{build_info.MCP_DISTRIBUTION_NAME}=={version}" in generated_server["args"], generated_server
     assert generated_server["env"]["CLAUDE_BLENDER_TOOL_REGISTRY_DIGEST"] == build_info.TOOL_REGISTRY_DIGEST
-    for filename in os.listdir(CLIENT_GUIDE_DIR):
-        if filename.endswith(".md") and filename != "README.md":
-            guide = _read_text(os.path.join(CLIENT_GUIDE_DIR, filename))
-            assert f"blender-bridge=={version}" in guide, filename
+    published_version = _published_version()
+    published_install_surfaces = [
+        os.path.join(CLIENT_GUIDE_DIR, filename)
+        for filename in os.listdir(CLIENT_GUIDE_DIR)
+        if filename.endswith(".md") and filename != "README.md"
+    ]
+    published_install_surfaces.extend((EXTERNAL_MCP_GUIDE_PATH, PUBLISHED_INDEX_HTML_PATH))
+    for path in published_install_surfaces:
+        document = _read_text(path)
+        relative = os.path.relpath(path, ROOT)
+        assert f"blender-bridge=={published_version}" in document, relative
     blender_min = str(manifest.get("blender_version_min") or "")
     assert blender_min == build_info.BLENDER_VERSION_MIN, (blender_min, build_info.BLENDER_VERSION_MIN)
     assert tuple(int(part) for part in blender_min.split(".")) == build_info.BLENDER_VERSION_MIN_TUPLE
 
     changelog = _read_text(CHANGELOG_PATH)
-    assert "## Unreleased" in changelog, "CHANGELOG.md is missing an Unreleased section"
-    assert f"## {version}" in changelog, f"CHANGELOG.md is missing ## {version}"
+    unreleased_body = _unreleased_body(changelog)
+    github_ref = str(os.environ.get("GITHUB_REF") or "")
+    is_release_tag = github_ref.startswith("refs/tags/")
+    _assert_release_state(version, published_version, unreleased_body, github_ref)
+    if is_release_tag:
+        assert f"## {version}" in changelog, f"CHANGELOG.md is missing ## {version}"
 
     readme = _read_text(README_PATH)
     install = _read_text(INSTALL_PATH)
@@ -158,10 +217,6 @@ def _assert_local_release_metadata():
     assert "smoke_published_release_identity.py" in recovery_workflow, (
         "Release recovery must verify both public extension archives"
     )
-
-    github_ref = str(os.environ.get("GITHUB_REF") or "")
-    if github_ref.startswith("refs/tags/"):
-        assert github_ref == f"refs/tags/v{version}", (github_ref, version)
 
     _assert_no_hardcoded_release_examples(version)
     return version

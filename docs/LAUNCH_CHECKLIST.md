@@ -2,13 +2,23 @@
 
 This is the single source of truth for launching Blender Agent Bridge. Detailed commands live in [TESTING_GUIDE.md](TESTING_GUIDE.md) and [RELEASE.md](RELEASE.md); security policy lives in [SECURITY.md](../SECURITY.md).
 
-Target: **v0.4.0 public beta**. Version 0.3.0 proved the distribution pipeline. Version 0.4.0 intentionally removes eight opinionated public generators, keeps the compact sidebar and binary trust model, and uses a pre-1.0 minor version because the public tool surface changes.
+Published release: **v0.4.0 public beta**. Version 0.3.0 proved the distribution pipeline. Version 0.4.0 intentionally removes eight opinionated public generators, keeps the compact sidebar and binary trust model, and uses a pre-1.0 minor version because the public tool surface changes.
 
 Status keys: **Done** has current release evidence, **Done locally** records completed local evidence, **Monitoring** is an active time-bound post-launch gate, **Required** blocks launch, **Manual** needs a maintainer or provider action, and **Optional** may follow the launch.
 
 Any source, workflow, packaging, or user-facing documentation change after candidate evidence is collected invalidates the affected evidence. Rebuild from the final reviewed commit and record that commit SHA plus artifact SHA-256 before tagging.
 
-## Launch Dashboard
+## Current Main / Next Patch Gates
+
+The completed dashboard and evidence below are historical proof for the immutable v0.4.0 artifacts. Current `main` is the unreleased 0.4.1 working line and is **not** covered by that release evidence.
+
+- [ ] **Required** — Run the complete unit, pure-Python, supported-Blender, packaging, and clean installed-extension gates against the final 0.4.1 candidate commit.
+- [ ] **Required** — Verify the five-gateway surface in a fresh normal Claude chat, Codex session, and Cursor session. Each client must discover schemas and invoke non-planner helpers through the gateway; an offline routing fixture or Claude Code process is supporting evidence, not a substitute.
+- [ ] **Required** — Build one candidate artifact set, record its commit and SHA-256, and verify the installed add-on, bundled MCP runtime, wheel, sdist, Pages archive, and release archive all identify that same candidate.
+- [ ] **Required** — Move every Unreleased changelog item into a 0.4.1 section, update public install pins and `public/index.json`, and rerun release consistency before creating `v0.4.1`.
+- [ ] **Manual** — Do not tag, publish, deploy, or announce 0.4.1 until the required gates above are complete and explicitly approved.
+
+## Published v0.4.0 Dashboard
 
 | Gate | Status | Exit condition |
 | --- | --- | --- |

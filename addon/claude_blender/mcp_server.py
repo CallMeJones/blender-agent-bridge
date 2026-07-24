@@ -65,12 +65,11 @@ DEFAULT_BRIDGE_URL = "http://127.0.0.1:8765"
 DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 100
 TOOL_SURFACE_ENV = tool_surface.TOOL_SURFACE_ENV
-FULL_TOOL_LIST_ENV = tool_surface.LEGACY_FULL_TOOL_LIST_ENV
 DEFAULT_BRIDGE_MAIN_THREAD_TIMEOUT_SECONDS = max(10.0, _env_float("BLENDER_AGENT_BRIDGE_REQUEST_TIMEOUT", "90"))
 BRIDGE_MAIN_THREAD_TIMEOUT_GRACE_SECONDS = 10.0
 MCP_TIMEOUT_GRACE_SECONDS = 15.0
 SKETCHFAB_AUTH_FORWARD_TOOLS = {"download_sketchfab_model", "import_sketchfab_model", "start_external_asset_download"}
-COMPACT_DIRECT_TOOL_NAMES = tuple(
+DIRECT_TOOL_NAMES = tuple(
     spec.name for spec in tool_registry.REGISTRY.specs() if spec.exposure == "compact_direct"
 )
 CATALOG_TOOL_NAME = "blender_tool_catalog"
@@ -82,6 +81,9 @@ GATEWAY_TOOL_NAMES = (
     "invoke_blender_tool",
 )
 WRAPPER_TOOL_NAMES = frozenset(GATEWAY_TOOL_NAMES)
+TELEMETRY_TOOL_NAMES = frozenset(
+    (*GATEWAY_TOOL_NAMES, *(spec.name for spec in tool_registry.REGISTRY.specs() if spec.exposure != "internal"))
+)
 
 ANIMATION_ROUTE_TERMS = {
     "animate",
@@ -518,6 +520,44 @@ BACKGROUND_JOB_STATUS_TOOLS = {
     "start_external_asset_download": "get_external_asset_job_status",
     "start_external_asset_import_job": "get_external_asset_import_job_status",
 }
+
+INSPECTION_INTENT_TERMS = {
+    "diagnostic",
+    "diagnostics",
+    "inspect",
+    "inspection",
+    "list",
+    "show",
+    "status",
+}
+MUTATION_INTENT_TERMS = {
+    "add",
+    "animate",
+    "apply",
+    "bake",
+    "build",
+    "commit",
+    "create",
+    "delete",
+    "download",
+    "edit",
+    "fix",
+    "import",
+    "make",
+    "model",
+    "modify",
+    "repair",
+    "revert",
+    "run",
+    "save",
+    "set",
+    "stage",
+    "write",
+}
+WORKFLOW_CREATION_TERMS = {"build", "create", "design", "make", "model"}
+WORKFLOW_MATERIAL_TERMS = {"material", "materials", "shader", "texture"}
+WORKFLOW_CAMERA_TERMS = {"camera", "light", "lighting", "render", "screenshot", "viewport"}
+WORKFLOW_PREVIEW_TERMS = {"commit", "preview", "revert"}
 
 TOOL_CATEGORY_LABELS = {
     "inspect": "Scene Inspection",
@@ -1139,7 +1179,7 @@ def _read_only_annotations(permissions=None):
     }
 
 
-def _compact_tool_definitions():
+def _gateway_tool_definitions():
     return [
         {
             "name": CATALOG_TOOL_NAME,
@@ -1657,6 +1697,23 @@ def _score_tool_match(tool, query):
     authored_content_query = agent_tools.is_open_ended_authored_content(normalized_query)
     external_asset_query = _is_external_asset_route_query(normalized_query)
     explicit_direct_asset_query = _contains_any_phrase(normalized_query, EXTERNAL_ASSET_DIRECT_TERMS)
+    leading_term = terms[0].strip(".,:;!?") if terms else ""
+    inspection_only_query = (
+        leading_term in INSPECTION_INTENT_TERMS
+        and not _contains_any_phrase(normalized_query, MUTATION_INTENT_TERMS)
+    )
+    workflow_domain_count = sum(
+        (
+            _contains_any_phrase(normalized_query, WORKFLOW_MATERIAL_TERMS),
+            animation_query,
+            _contains_any_phrase(normalized_query, WORKFLOW_CAMERA_TERMS),
+            _contains_any_phrase(normalized_query, WORKFLOW_PREVIEW_TERMS),
+        )
+    )
+    broad_workflow_query = (
+        _contains_any_phrase(normalized_query, WORKFLOW_CREATION_TERMS)
+        and workflow_domain_count >= 3
+    )
     matched_terms = [term for term in terms if term in text]
     if not matched_terms:
         if animation_query and (name in ANIMATION_ROUTE_TOOLS or category == "animation"):
@@ -1664,6 +1721,8 @@ def _score_tool_match(tool, query):
         elif advanced_query and (name in ADVANCED_ROUTE_TOOLS or category in {"two_d", "geometry", "simulation", "camera_render"}):
             score = 25
         elif authored_content_query and name == "draft_script":
+            score = 25
+        elif broad_workflow_query and name in {"plan_director_workflow", "plan_advanced_scene_workflow"}:
             score = 25
         elif external_asset_query and (name in EXTERNAL_ASSET_WORKFLOW_TOOLS or category == "external_assets"):
             score = 25
@@ -1682,6 +1741,20 @@ def _score_tool_match(tool, query):
         score += 500
     elif title.startswith(normalized_query):
         score += 100
+    if inspection_only_query:
+        if bool(_tool_annotations(tool).get("mutatesScene", False)):
+            score -= 2500
+        if name == "get_blend_file_diagnostics" and "blend file" in normalized_query:
+            score += 3500
+        elif name == "list_scene_objects" and "scene" in normalized_query and "list" in normalized_query:
+            score += 3000
+        elif name == "inspect_scene" and "inspect scene" in normalized_query:
+            score += 2500
+    if broad_workflow_query:
+        if name == "plan_director_workflow":
+            score += 5000
+        elif name == "plan_advanced_scene_workflow":
+            score += 4000
     if uv_unwrap_query:
         if name == "uv_unwrap":
             score += 1400
@@ -2083,10 +2156,11 @@ def _audit_tool_call(name, arguments, result, *, tool=None):
     try:
         structured = result.get("structuredContent") if isinstance(result, dict) else {}
         annotations = _tool_annotations(tool or {"name": str(name or "")})
+        tool_name = _bounded_tool_identifier(name)
         audit_log.append_event(
             "mcp_tool_call",
             source="mcp",
-            tool_name=str(name or ""),
+            tool_name=tool_name,
             ok=bool(structured.get("ok", False)) if isinstance(structured, dict) else False,
             is_error=bool(result.get("isError", True)) if isinstance(result, dict) else True,
             code=structured.get("code", "") if isinstance(structured, dict) else "",
@@ -2097,6 +2171,11 @@ def _audit_tool_call(name, arguments, result, *, tool=None):
         )
     except Exception as exc:
         _stderr(f"audit warning: {exc}")
+
+
+def _bounded_tool_identifier(name):
+    requested_name = str(name or "")
+    return requested_name if requested_name in TELEMETRY_TOOL_NAMES else "(unknown)"
 
 
 class BridgeTimeoutError(RuntimeError):
@@ -2317,7 +2396,7 @@ class BlenderMCPServer:
     def _load_tools(self):
         definitions = {
             tool["name"]: _normalize_tool_definition(tool)
-            for tool in _compact_tool_definitions()
+            for tool in _gateway_tool_definitions()
         }
         definitions["blender_bridge_status"] = self._bridge_status_tool()
         full_tools = []
@@ -2330,7 +2409,7 @@ class BlenderMCPServer:
         advertised = tool_surface.advertised_names(
             self._tool_surface,
             GATEWAY_TOOL_NAMES,
-            COMPACT_DIRECT_TOOL_NAMES,
+            DIRECT_TOOL_NAMES,
             tuple(tool["name"] for tool in full_tools),
         )
         tools = [definitions[name] for name in advertised if name in definitions]
@@ -2373,7 +2452,7 @@ class BlenderMCPServer:
         return result
 
     def _record_payload_size(self, name, result):
-        tool_name = str(name or "(unknown)")
+        tool_name = _bounded_tool_identifier(name)
         size_bytes = len(_json_text(result).encode("utf-8"))
         entry = self._payload_telemetry.setdefault(
             tool_name,

@@ -3,7 +3,9 @@ from __future__ import annotations
 import copy
 import os
 import sys
+import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -192,6 +194,32 @@ class ResponseControlTests(unittest.TestCase):
         self.assertGreater(telemetry["tools"][0]["last_response_bytes"], 0)
         self.assertNotIn("get_animation_details", text)
         self.assertNotIn("arguments", text)
+
+    def test_payload_telemetry_collapses_unknown_names_into_one_bounded_bucket(self):
+        server = mcp_server.BlenderMCPServer(_StaticBridge())
+        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.dict(
+            os.environ,
+            {"CLAUDE_BLENDER_AUDIT_LOG": os.path.join(temp_dir, "audit.jsonl")},
+        ):
+            for index in range(250):
+                attempted_name = f"secret scene text {index}"
+                server.tools_call({"name": attempted_name, "arguments": {}})
+            with open(os.path.join(temp_dir, "audit.jsonl"), "r", encoding="utf-8") as handle:
+                audit_text = handle.read()
+            self.assertNotIn("secret scene text", audit_text)
+            self.assertIn('\"tool_name\":\"(unknown)\"', audit_text)
+        telemetry = server._payload_telemetry_summary()
+        self.assertEqual(1, telemetry["tool_count"])
+        self.assertEqual(250, telemetry["call_count"])
+        self.assertEqual("(unknown)", telemetry["tools"][0]["tool_name"])
+        self.assertNotIn("secret scene text", __import__("json").dumps(telemetry))
+
+    def test_response_control_schema_bounds_agent_supplied_projection_metadata(self):
+        schema = tool_registry.REGISTRY.get("list_scene_objects").input_schema
+        fields = schema["properties"]["fields"]
+        self.assertEqual(32, fields["maxItems"])
+        self.assertEqual(128, fields["items"]["maxLength"])
+        self.assertEqual(64, schema["properties"]["known_digest"]["minLength"])
 
     def test_initialize_and_tool_definitions_are_byte_stable_for_prompt_caching(self):
         profiles = [

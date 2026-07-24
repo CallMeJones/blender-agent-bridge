@@ -17,10 +17,30 @@ import mcp_server  # noqa: E402
 
 
 class OfflineBridge:
+    base_url = "http://127.0.0.1:8765"
+
     def get(self, path, params=None):
         if path == "/tools":
             return {"ok": True, "tools": mcp_server._static_tool_definitions()}
+        if path == "/health":
+            return {
+                "ok": True,
+                "bridge_version": mcp_server.bridge_protocol.BRIDGE_VERSION,
+                "addon_version": mcp_server.build_info.ADDON_VERSION,
+                "tool_registry_digest": mcp_server.build_info.TOOL_REGISTRY_DIGEST,
+            }
         raise RuntimeError("offline routing smoke uses static tool contracts")
+
+    def post(self, path, payload, timeout=None):
+        assert path == "/tool", (path, payload)
+        return {
+            "ok": True,
+            "result": {
+                "ok": True,
+                "executed_tool": payload["name"],
+                "arguments": payload["arguments"],
+            },
+        }
 
 
 CLIENT_PROFILES = [
@@ -131,6 +151,27 @@ ROUTING_FIXTURES = [
         "search_contains": ["draft_script", "run_approved_script"],
         "search_before": [],
     },
+    {
+        "id": "gateway_inspection_reachability",
+        "prompt": "Inspect the scene, list its objects, and check blend-file diagnostics before changing anything.",
+        "must_select": ["list_scene_objects", "get_blend_file_diagnostics"],
+        "must_not_select": [],
+        "search": "inspect scene list objects blend file diagnostics",
+        "search_limit": 5,
+        "search_contains": ["get_blend_file_diagnostics", "list_scene_objects"],
+        "search_not_contains": ["stage_persistent_simulation_bake"],
+        "search_before": [],
+    },
+    {
+        "id": "gateway_broad_workflow_reachability",
+        "prompt": "Build a named-part robot with materials, wave animation, lights, an orbit camera, screenshots, and preview commit or revert.",
+        "must_select": [],
+        "must_not_select": [],
+        "search": "build named primitives materials wave animation three-point lights platform orbit camera screenshots preview commit revert",
+        "search_limit": 5,
+        "search_contains": ["plan_director_workflow", "plan_advanced_scene_workflow"],
+        "search_before": [("plan_director_workflow", "run_animation_workflow")],
+    },
 ]
 
 
@@ -189,6 +230,21 @@ def _client_discovery_contract(server, profile):
         "commit/revert",
     ):
         assert workflow_term in descriptions, (profile["id"], workflow_term, descriptions)
+    for helper_name in (
+        "list_scene_objects",
+        "get_blend_file_diagnostics",
+        "run_animation_workflow",
+        "capture_viewport",
+        "draft_script",
+        "commit_preview",
+        "revert_preview",
+    ):
+        schema = server._get_blender_tool_schema({"name": helper_name})["structuredContent"]
+        assert schema["ok"] is True and schema["tool"]["name"] == helper_name, (profile["id"], helper_name, schema)
+    invoked = server._invoke_blender_tool(
+        {"name": "list_scene_objects", "arguments": {}}
+    )["structuredContent"]
+    assert invoked["ok"] is True and invoked["invoked_tool"] == "list_scene_objects", (profile["id"], invoked)
     return json.dumps(tools, separators=(",", ":"), sort_keys=True)
 
 
@@ -211,9 +267,15 @@ def main():
             assert name not in selected, (fixture["id"], name, meta)
 
         for profile in CLIENT_PROFILES:
-            search_names, search = _search_names(servers[profile["id"]], fixture["search"])
+            search_names, search = _search_names(
+                servers[profile["id"]],
+                fixture["search"],
+                limit=fixture.get("search_limit", 12),
+            )
             for name in fixture.get("search_contains", []):
                 assert name in search_names, (profile["id"], fixture["id"], name, search_names)
+            for name in fixture.get("search_not_contains", []):
+                assert name not in search_names, (profile["id"], fixture["id"], name, search_names)
             for earlier, later in fixture["search_before"]:
                 _assert_before(search_names, earlier, later, f"{profile['id']}:{fixture['id']}")
             assert search["count"] > 0, (profile["id"], fixture["id"], search)

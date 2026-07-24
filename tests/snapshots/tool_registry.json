@@ -5691,8 +5691,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -5700,7 +5703,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_items": {
@@ -5713,6 +5716,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -5765,8 +5770,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -5774,7 +5782,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_actions": {
@@ -5799,6 +5807,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -5843,8 +5853,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -5852,7 +5865,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -5873,6 +5886,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -5949,8 +5964,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -5958,7 +5976,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_depth": {
@@ -5971,6 +5989,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -6015,8 +6035,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -6024,7 +6047,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -6043,6 +6066,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -6189,8 +6214,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -6198,7 +6226,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -6217,6 +6245,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -6261,8 +6291,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -6270,7 +6303,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "material_names": {
@@ -6295,6 +6328,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -6343,8 +6378,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -6352,7 +6390,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -6373,6 +6411,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -6489,8 +6529,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -6498,7 +6541,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_actions": {
@@ -6511,6 +6554,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -6571,8 +6616,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -6580,7 +6628,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -6599,6 +6647,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -6643,8 +6693,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -6652,7 +6705,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "material_names": {
@@ -6671,6 +6724,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -6718,8 +6773,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -6727,7 +6785,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -6746,6 +6804,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -6790,8 +6850,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -6799,7 +6862,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -6818,6 +6881,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -7139,8 +7204,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -7148,7 +7216,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "material_names": {
@@ -7173,6 +7241,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -7311,8 +7381,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -7324,7 +7397,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "page": {
@@ -7334,6 +7407,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -7378,8 +7453,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -7393,7 +7471,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -7412,6 +7490,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -7459,8 +7539,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -7471,7 +7554,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -7493,6 +7576,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -7698,8 +7783,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -7707,7 +7795,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -7721,6 +7809,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -11289,8 +11379,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -11302,7 +11395,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "page": {
@@ -11312,6 +11405,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -12059,8 +12154,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -12068,7 +12166,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -12089,6 +12187,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -12123,8 +12223,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -12132,7 +12235,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -12146,6 +12249,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -12187,8 +12292,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -12196,7 +12304,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_actions": {
@@ -12221,6 +12329,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -12251,8 +12361,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -12260,7 +12373,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -12281,6 +12394,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -13047,8 +13162,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -13056,7 +13174,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "material_names": {
@@ -13081,6 +13199,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -13115,8 +13235,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -13124,7 +13247,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -13143,6 +13266,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -13173,8 +13298,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -13182,7 +13310,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "material_names": {
@@ -13201,6 +13329,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -13234,8 +13364,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -13243,7 +13376,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -13262,6 +13395,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -13292,8 +13427,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -13301,7 +13439,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -13320,6 +13458,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -13350,8 +13490,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -13359,7 +13502,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -13378,6 +13521,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -13408,8 +13553,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -13417,7 +13565,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -13436,6 +13584,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -13466,8 +13616,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -13481,7 +13634,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -13500,6 +13653,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -13568,8 +13723,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -13577,7 +13735,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_depth": {
@@ -13590,6 +13748,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -14302,8 +14462,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -14311,7 +14474,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "material_names": {
@@ -14336,6 +14499,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -14667,8 +14832,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -14679,7 +14847,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -14701,6 +14869,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -15924,8 +16094,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -15933,7 +16106,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_actions": {
@@ -15946,6 +16119,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -16870,8 +17045,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -16879,7 +17057,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_items": {
@@ -16892,6 +17070,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -19366,7 +19546,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "889ce43e3587f6f605449cad228393cf1ff33f041d1c9c8008819af08668d140",
+  "registry_digest": "51883ccc40a244837db7d536a660c103c5a06b5ddcd2b17b12e8dbc1a242cb9c",
   "schema_version": 1,
   "specs": [
     {
@@ -19393,8 +19573,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -19406,7 +19589,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "page": {
@@ -19416,6 +19599,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -21549,8 +21734,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -21558,7 +21746,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -21579,6 +21767,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -21636,8 +21826,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -21645,7 +21838,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -21659,6 +21852,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -21725,8 +21920,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -21734,7 +21932,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_actions": {
@@ -21759,6 +21957,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -21815,8 +22015,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -21824,7 +22027,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -21845,6 +22048,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -23348,8 +23553,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -23357,7 +23565,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "material_names": {
@@ -23382,6 +23590,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -23444,8 +23654,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -23453,7 +23666,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -23472,6 +23685,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -23528,8 +23743,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -23537,7 +23755,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "material_names": {
@@ -23556,6 +23774,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -23615,8 +23835,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -23624,7 +23847,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -23643,6 +23866,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -23698,8 +23923,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -23707,7 +23935,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -23726,6 +23954,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -23782,8 +24012,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -23791,7 +24024,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -23810,6 +24043,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -23868,8 +24103,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -23877,7 +24115,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -23896,6 +24134,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -23954,8 +24194,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -23969,7 +24212,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -23988,6 +24231,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -24269,8 +24514,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -24278,7 +24526,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_depth": {
@@ -24291,6 +24539,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -25809,8 +26059,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -25818,7 +26071,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "material_names": {
@@ -25843,6 +26096,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -26640,8 +26895,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -26652,7 +26910,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_objects": {
@@ -26674,6 +26932,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -28551,8 +28811,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -28560,7 +28823,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_actions": {
@@ -28573,6 +28836,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {
@@ -30277,8 +30542,11 @@
           "fields": {
             "description": "Optional dotted response fields to return, such as objects.name or materials.nodes. Status and response metadata are always retained.",
             "items": {
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
+            "maxItems": 32,
             "minItems": 1,
             "type": "array",
             "uniqueItems": true
@@ -30286,7 +30554,7 @@
           "known_digest": {
             "description": "Optional digest from a previous complete response. A match returns not_modified; a mismatch returns the complete current result.",
             "maxLength": 64,
-            "minLength": 8,
+            "minLength": 64,
             "type": "string"
           },
           "max_items": {
@@ -30299,6 +30567,8 @@
           },
           "page_field": {
             "description": "Optional top-level array field to paginate, such as objects, materials, or actions. The tool's primary collection is used when omitted.",
+            "maxLength": 64,
+            "minLength": 1,
             "type": "string"
           },
           "page_size": {

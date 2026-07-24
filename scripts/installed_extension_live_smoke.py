@@ -26,12 +26,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
-DEFAULT_REQUIRED_TOOLS = (
+DEFAULT_GATEWAY_TOOLS = (
     "blender_bridge_status",
-    "plan_director_workflow",
-    "plan_asset_import_workflow",
-    "plan_advanced_scene_workflow",
-    "run_animation_workflow",
+    "blender_tool_catalog",
+    "search_blender_tools",
+    "get_blender_tool_schema",
     "invoke_blender_tool",
 )
 
@@ -510,6 +509,36 @@ def _mcp_stdio_smoke(
             "method": "tools/call",
             "params": {"name": "blender_bridge_status", "arguments": {}},
         },
+        {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "search_blender_tools",
+                "arguments": {
+                    "query": "inspect scene list objects blend file diagnostics",
+                    "limit": 5,
+                },
+            },
+        },
+        {
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {
+                "name": "get_blender_tool_schema",
+                "arguments": {"name": "list_scene_objects"},
+            },
+        },
+        {
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "tools/call",
+            "params": {
+                "name": "invoke_blender_tool",
+                "arguments": {"name": "list_scene_objects", "arguments": {}},
+            },
+        },
     ]
     result = _run(
         [python_command, str(mcp_path), "--bridge-url", bridge_url, "--timeout", str(int(timeout))],
@@ -519,24 +548,36 @@ def _mcp_stdio_smoke(
         show_output=False,
     )
     responses = json.loads(result.stdout)
-    if len(responses) != 3:
-        raise RuntimeError(f"Expected 3 MCP responses, got {len(responses)}")
+    if len(responses) != 6:
+        raise RuntimeError(f"Expected 6 MCP responses, got {len(responses)}")
     errors = [response for response in responses if "error" in response]
     if errors:
         raise RuntimeError(f"MCP responses contained errors: {errors}")
     tool_names = [tool["name"] for tool in responses[1]["result"]["tools"]]
-    missing = [name for name in DEFAULT_REQUIRED_TOOLS if name not in tool_names]
-    if missing:
-        raise RuntimeError(f"Missing compact MCP tools: {', '.join(missing)}")
-    status_text = "\n".join(part.get("text", "") for part in responses[2]["result"]["content"])
-    status = json.loads(status_text)
+    if set(tool_names) != set(DEFAULT_GATEWAY_TOOLS) or len(tool_names) != len(DEFAULT_GATEWAY_TOOLS):
+        raise RuntimeError(f"Unexpected default MCP gateway tools: {tool_names}")
+    status = responses[2]["result"]["structuredContent"]
     if not status.get("ok"):
         raise RuntimeError("blender_bridge_status did not return ok")
     if status.get("addon_runtime_source_status") != "current":
         raise RuntimeError(f"Unexpected MCP source status: {status.get('addon_runtime_source_status')}")
+    if status.get("mcp_tool_surface") != "gateway":
+        raise RuntimeError(f"Unexpected installed MCP tool surface: {status.get('mcp_tool_surface')}")
+    search = responses[3]["result"]["structuredContent"]
+    search_names = [tool["name"] for tool in search.get("tools") or []]
+    for required in ("get_blend_file_diagnostics", "list_scene_objects"):
+        if required not in search_names:
+            raise RuntimeError(f"Installed gateway search could not find {required}: {search_names}")
+    schema = responses[4]["result"]["structuredContent"]
+    if not schema.get("ok") or (schema.get("tool") or {}).get("name") != "list_scene_objects":
+        raise RuntimeError(f"Installed gateway schema lookup failed: {schema}")
+    invoked = responses[5]["result"]["structuredContent"]
+    if not invoked.get("ok") or invoked.get("invoked_tool") != "list_scene_objects":
+        raise RuntimeError(f"Installed gateway invocation failed: {invoked}")
     print(
         "mcp installed smoke ok:",
-        f"{len(tool_names)} compact tools,",
+        f"{len(tool_names)} gateway tools,",
+        "search/schema/invoke reachable,",
         f"addon {status.get('addon_version')},",
         f"source {status.get('addon_runtime_source_status')}",
     )

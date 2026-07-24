@@ -38,8 +38,9 @@ CONTROL_SCHEMA_PROPERTIES = {
     },
     "fields": {
         "type": "array",
-        "items": {"type": "string"},
+        "items": {"type": "string", "minLength": 1, "maxLength": 128},
         "minItems": 1,
+        "maxItems": 32,
         "uniqueItems": True,
         "description": (
             "Optional dotted response fields to return, such as objects.name or materials.nodes. "
@@ -59,6 +60,8 @@ CONTROL_SCHEMA_PROPERTIES = {
     },
     "page_field": {
         "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
         "description": (
             "Optional top-level array field to paginate, such as objects, materials, or actions. "
             "The tool's primary collection is used when omitted."
@@ -66,7 +69,7 @@ CONTROL_SCHEMA_PROPERTIES = {
     },
     "known_digest": {
         "type": "string",
-        "minLength": 8,
+        "minLength": 64,
         "maxLength": 64,
         "description": (
             "Optional digest from a previous complete response. A match returns not_modified; "

@@ -285,6 +285,20 @@ def main():
         assert invalid_args["result"]["ok"] is False, invalid_args
         assert "Invalid arguments" in invalid_args["result"]["message"], invalid_args
         assert any("job_id" in item for item in invalid_args["result"]["schema_errors"]), invalid_args
+        unknown_name = "secret scene text must not persist"
+        unknown_tool = _request_with_pump(
+            lambda: _post(base + "/tool", {"name": unknown_name, "arguments": {}})
+        )
+        assert unknown_tool == {
+            "ok": False,
+            "result": {
+                "ok": False,
+                "code": "unknown_tool",
+                "message": "Unknown Blender tool",
+            },
+        }, unknown_tool
+        assert unknown_name not in json.dumps(bridge_server._active_operation_status()), unknown_tool
+        assert unknown_name not in json.dumps(bridge_server._last_operation_status()), unknown_tool
         too_large_status, too_large_body = _post_declared_too_large(base + "/tool")
         assert too_large_status == 413, (too_large_status, too_large_body)
 

@@ -43,7 +43,7 @@ class ToolSurfaceTests(unittest.TestCase):
         server = self._server(**{tool_surface.TOOL_SURFACE_ENV: tool_surface.DIRECT})
         self.assertEqual(tool_surface.DIRECT, server._tool_surface)
         self.assertEqual(
-            set(mcp_server.GATEWAY_TOOL_NAMES) | set(mcp_server.COMPACT_DIRECT_TOOL_NAMES),
+            set(mcp_server.GATEWAY_TOOL_NAMES) | set(mcp_server.DIRECT_TOOL_NAMES),
             {tool["name"] for tool in server.tools_list({})["tools"]},
         )
 

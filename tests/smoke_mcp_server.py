@@ -675,7 +675,7 @@ def _assert_gateway_tools_visible(proc):
 def _assert_direct_tools_visible(proc):
     listed = _send(proc, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
     names = {tool["name"] for tool in listed["result"]["tools"]}
-    expected_names = set(mcp_server.GATEWAY_TOOL_NAMES) | set(mcp_server.COMPACT_DIRECT_TOOL_NAMES)
+    expected_names = set(mcp_server.GATEWAY_TOOL_NAMES) | set(mcp_server.DIRECT_TOOL_NAMES)
     assert names == expected_names, listed
     assert "draft_script" not in names, listed
     assert "run_approved_script" not in names, listed

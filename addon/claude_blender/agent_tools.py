@@ -5,11 +5,10 @@ from __future__ import annotations
 import json
 
 try:
-    from . import bridge_protocol, helper_routing, script_analysis, tool_registry
+    from . import helper_routing, response_controls, tool_registry
 except ImportError:  # Allows direct imports from addon/claude_blender.
-    import bridge_protocol
     import helper_routing
-    import script_analysis
+    import response_controls
     import tool_registry
 
 
@@ -236,7 +235,14 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         selected.update({"select_objects"})
 
     ordered_names = [name for name in _tool_order() if name in selected and name in full_map]
-    tools = [full_map[name] for name in ordered_names]
+    tools = []
+    for name in ordered_names:
+        tool = dict(full_map[name])
+        tool["input_schema"] = response_controls.discovery_input_schema(
+            name,
+            tool.get("input_schema"),
+        )
+        tools.append(tool)
 
     budget = max(4000, int(max_schema_chars or TOOL_SCHEMA_CHAR_BUDGET))
     protected = set(_CORE_TOOL_NAMES)

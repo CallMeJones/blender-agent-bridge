@@ -691,6 +691,15 @@ def _execute_tool(payload):
         args = payload.get("input")
     if not isinstance(args, dict):
         args = {}
+    if name not in bridge_protocol.TOOL_CONTRACTS:
+        return {
+            "ok": False,
+            "result": {
+                "ok": False,
+                "code": "unknown_tool",
+                "message": "Unknown Blender tool",
+            },
+        }
     # Defense-in-depth: enforce the tool contract on the raw HTTP path too, not just
     # on the MCP path, so malformed arguments are rejected before dispatch.
     input_schema = bridge_protocol.normalized_tool_contract(name).get("input_schema")

@@ -2,8 +2,10 @@
 
 ## Unreleased
 
+- Advanced the working source identity to 0.4.1 while public install guides remain pinned to the published 0.4.0 artifact, and strengthened the release-consistency gate so new Unreleased behavior cannot pass under an already-published version.
 - Replaced the competing 28-tool default MCP manifest with five stable gateway tools so retrieval-based clients cannot load planners while omitting the catalog execution path. Every canonical helper remains searchable, schema-addressable, and invokable; `BLENDER_MCP_TOOL_SURFACE=direct` restores the former curated surface, `full` exposes every helper, and the legacy full-list flag remains supported.
 - Made gateway registration independent of Blender/bridge availability, added explicit `mcp_tool_surface` diagnostics, enriched gateway descriptions for cross-client retrieval, and added default-gateway execution plus Claude/Codex/Cursor five-result reachability regressions.
+- Hardened gateway search for read-only inspection and broad multi-domain builds, bounded response-control projection metadata, and collapsed arbitrary unknown tool names into a single content-free telemetry/audit identifier.
 
 ## 0.4.0 - 2026-07-23
 

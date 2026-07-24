@@ -30,11 +30,11 @@ class ToolRegistryTests(unittest.TestCase):
         self.assertTrue(all(spec.owner for spec in specs))
         self.assertEqual(
             tuple(spec.name for spec in specs if spec.exposure == "compact_direct"),
-            mcp_server.COMPACT_DIRECT_TOOL_NAMES,
+            mcp_server.DIRECT_TOOL_NAMES,
         )
         self.assertEqual(
             28,
-            len(mcp_server.GATEWAY_TOOL_NAMES) + len(mcp_server.COMPACT_DIRECT_TOOL_NAMES),
+            len(mcp_server.GATEWAY_TOOL_NAMES) + len(mcp_server.DIRECT_TOOL_NAMES),
         )
         for module in tool_registry.DOMAIN_MODULES:
             owner = module.__name__.rsplit(".", 1)[-1]
