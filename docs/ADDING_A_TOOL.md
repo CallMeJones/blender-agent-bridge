@@ -28,7 +28,7 @@ Never copy the definition into `agent_tools.py`, `bridge_protocol.py`, or a rout
 
 Implement Blender-dependent behavior in the dispatcher/handler layer, not in registry metadata. Importing `claude_blender.tool_registry` under ordinary Python must never import `bpy`. The domain's `register_handlers()` binds `handler_key` values after Blender handlers are available and registry parity rejects missing, extra, or non-callable entries.
 
-Prefer an existing bounded helper and preview transaction over generated Python. Mutating tools must preserve commit/revert/undo semantics where practical. New file, network, subprocess, script, project, or asset capabilities need explicit contract metadata, redaction, refusal tests, and documentation.
+Add a bounded helper only for a reusable operational capability or an isolated edit that benefits from a stable schema. Under active runtime trust, bespoke authored object generation, modeling, animation, materials, custom nodes, rigging, and look development remain script-first. Mutating helpers must preserve commit/revert/undo semantics where practical. New file, network, subprocess, script, project, or asset capabilities need explicit contract metadata, redaction, refusal tests, and documentation.
 
 ## 4. Test The Contract
 

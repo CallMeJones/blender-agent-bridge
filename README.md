@@ -113,9 +113,9 @@ AI agents are getting good at using tools, but Blender needs guardrails. This br
 
 - Blender stays the execution layer: scene state, viewport evidence, preview changes, binary script trust, checkpoints, and local resources.
 - The external client stays the agent host: model connection, conversation memory, provider account, planning, and user chat.
-- Generated Python is not the default path. Agents get structured helpers first; arbitrary scripts are refused while trust is off and run immediately after the user grants runtime session trust.
+- With runtime script trust active, authored object generation, modeling, animation, materials, custom nodes, rigging, and look development default to one cohesive generated Python script unless the user requests helpers or no Python. Trust-off sessions use bounded helpers instead; generated scripts are refused until trust is granted.
 - Blender has one deliberately small sidebar panel: bridge status/start-stop, `Copy MCP Config`, **Trust Agent Scripts**/**Revoke**, and pending preview **Commit**/**Revert**. Diagnostics, manifests, audit state, captures, and asset configuration stay in bridge/tool responses instead of returning as sidebar sections.
-- Advanced work uses composable modeling, material, staging, animation, evidence, and asset-import helpers. Bespoke authored content uses one trusted script when those reusable operations are not expressive enough.
+- Bounded helpers handle inspection, project files, external assets, long jobs, persistent bakes, evidence, preview decisions, and deliberately isolated edits. Operational clauses remain separate from, and do not demote, the trusted script used for authored work.
 
 ## Showcase: Egypt Dogfight
 
