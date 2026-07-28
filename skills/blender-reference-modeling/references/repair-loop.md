@@ -20,8 +20,9 @@ Repair the smallest set of named forms that can improve the weakest score. Avoid
 3. Fetch the selected execution schema and apply one coherent repair batch.
 4. Refresh object names after creation, deletion, join, separation, or rename.
 5. Recapture the same reference-aligned and diagnostic views.
-6. Rescore every affected criterion.
-7. Continue only while a concrete below-floor finding remains and the pass limit is not exhausted.
+6. Invoke `record_model_quality_repair` with completed repairs and the recaptured evidence URIs.
+7. Rescore every applicable criterion from the returned fresh blind packet.
+8. Continue only while a concrete below-floor finding remains and the durable pass limit is not exhausted.
 
 Do not rely on current selection as the target contract.
 

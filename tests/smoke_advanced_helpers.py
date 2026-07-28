@@ -697,6 +697,7 @@ def main():
         assert "head volume" in quality_plan["reference_breakdown"]["main_masses"], quality_plan
         quality_phase_names = [phase["name"] for phase in quality_plan["phases"]]
         assert quality_phase_names == [
+            "execution_trace",
             "reference_decomposition",
             "inspect_scene",
             "block_major_masses",
@@ -715,6 +716,14 @@ def main():
         assert "enum_items" in quality_plan["script_fallback_policy"]["script_preflight"]["enum_check"], quality_plan
         assert any(item["criterion"] == "silhouette_match" for item in quality_plan["quality_rubric"]), quality_plan
         assert quality_plan["completion_contract"]["must_not_stop_after_planning"] is True, quality_plan
+        assert quality_plan["completion_contract"]["durable_quality_review_required"] is True, quality_plan
+        assert quality_plan["completion_contract"]["quality_terminal_statuses"] == [
+            "ready_for_user_review",
+            "blocked_quality_floor",
+        ], quality_plan
+        assert quality_plan["construction_strategy"]["long_running_script_path"]["start"] == (
+            "start_trusted_script_job"
+        ), quality_plan
         assert quality_plan["target_objects"] == ["Cube"], quality_plan
         assert quality_plan["missing_target_objects"] == ["PlannedDetail"], quality_plan
         refresh_phase = next(phase for phase in quality_plan["phases"] if phase["name"] == "refresh_targets")
@@ -743,6 +752,22 @@ def main():
             assert planned_call["gateway_call_template"]["arguments"]["arguments"]["object_names"] == (
                 "<resolved_target_objects>"
             ), planned_call
+        durable_quality_calls = {
+            call["name"]
+            for call in quality_plan["deferred_tool_calls"]
+            if call["phase"] == "evidence_score_repair"
+        }
+        assert {
+            "start_model_quality_review",
+            "get_model_quality_review_packet",
+            "submit_model_quality_evaluation",
+        }.issubset(durable_quality_calls), quality_plan
+        evidence_phase = next(
+            phase for phase in quality_plan["phases"] if phase["name"] == "evidence_score_repair"
+        )
+        assert evidence_phase["repair_gate"]["repair_tool_call"]["name"] == (
+            "record_model_quality_repair"
+        ), quality_plan
 
         human_plan = _execute(
             context,

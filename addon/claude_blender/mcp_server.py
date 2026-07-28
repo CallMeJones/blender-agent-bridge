@@ -19,6 +19,7 @@ try:
         audit_log,
         bridge_protocol,
         build_info,
+        execution_traces,
         external_assets,
         helper_routing,
         response_controls,
@@ -35,6 +36,7 @@ except ImportError:  # Allows direct execution as addon/claude_blender/mcp_serve
             audit_log,
             bridge_protocol,
             build_info,
+            execution_traces,
             external_assets,
             helper_routing,
             response_controls,
@@ -45,6 +47,7 @@ except ImportError:  # Allows direct execution as addon/claude_blender/mcp_serve
         import agent_tools
         import audit_log
         import build_info
+        import execution_traces
         import bridge_protocol
         import external_assets
         import helper_routing
@@ -844,7 +847,9 @@ PROMPTS = {
             "cohesive draft_script as the default authored-mutation path for object generation, modeling, animation, "
             "materials, nodes, rigging, and look development unless the user explicitly requests helpers, a helper path, "
             "or no Python. Do not let render, capture, save, or import clauses suppress the script path for separate "
-            "authored work in the same request. Use bounded helpers for "
+            "authored work in the same request. Use start_trusted_script_job for cohesive scripts likely to exceed the "
+            "bridge timeout, poll status, and apply the copied-file result only after explicit user approval. For "
+            "substantial work, start and finalize a compact execution trace. Use bounded helpers for "
             "inspection, project files, external assets, long jobs, evidence, and preview decisions. Treat bridge_timeout as recoverable: wait the returned interval, "
             "check status and evidence, then retry only when the prior operation is no longer running. Leave changes in "
             "preview until the user explicitly chooses commit_preview or revert_preview."
@@ -952,8 +957,10 @@ PROMPTS = {
             "later inspections and evidence calls. Gate surface detail behind silhouette, proportion, landmark, and form "
             "scores at or above the quality floor. Capture a reference-matched viewport plus stable front and side/profile "
             "views, repair the weakest failed criteria for no more than the planner's bounded pass limit, and recapture "
-            "the same evidence after each pass. Apply only surface treatments visible in the reference. Passing every "
-            "gate means ready_for_user_review, not committed or saved. Leave the final preview pending until the user "
+            "the same evidence after each pass. Create durable quality state with start_model_quality_review, request "
+            "blind packets, submit complete scorecards, and record each repair before rescoring. Apply only surface "
+            "treatments visible in the reference. Passing every gate means ready_for_user_review, not committed or "
+            "saved. Leave the final preview pending until the user "
             "explicitly chooses commit_preview or revert_preview."
         ),
     },
@@ -995,10 +1002,12 @@ PROMPTS = {
         ],
         "template": (
             "Run Blender Python for this task only after the user enables Trust Agent Scripts: {goal}\n\n"
-            "Search Blender docs before unfamiliar APIs. Prefer bounded helpers when their validation, recovery, or "
-            "progress reporting helps. Otherwise call draft_script with complete code, intent, expected_changes, "
-            "risk_level, and target_objects. Trust off refuses the request; trust on runs it immediately with Blender "
-            "Run Script-equivalent permissions. Do not claim success unless draft_script returns auto_ran=true."
+            "Search Blender docs before unfamiliar APIs. Call draft_script with complete code, intent, expected_changes, "
+            "risk_level, and target_objects for normal authored work. For a cohesive script likely to exceed the bridge "
+            "timeout or benefit from isolated execution, call start_trusted_script_job, poll "
+            "get_trusted_script_job_status, and apply the result only after explicit user approval. Trust off refuses "
+            "the request; trust on grants Blender Run Script-equivalent permissions. Do not claim success from job "
+            "submission or unless synchronous draft_script confirms execution."
         ),
     },
 }
@@ -2098,6 +2107,20 @@ def _score_tool_match(tool, query):
             score -= 900
     elif category == "external_assets" and not explicit_direct_asset_query:
         score -= 120
+    if explicit_script_query and not helper_preference_query:
+        if name == "draft_script":
+            score += 3200
+        elif name == "start_trusted_script_job":
+            score += (
+                2400
+                if _contains_any_phrase(
+                    normalized_query,
+                    {"async", "background", "job", "long", "timeout"},
+                )
+                else 1800
+            )
+        elif name == "draft_privileged_script":
+            score -= 500
     if not animation_query and category == "animation":
         return None
     if (
@@ -2339,6 +2362,13 @@ def _audit_tool_call(name, arguments, result, *, tool=None):
             requires_approval=bool(annotations.get("requiresApproval", False)),
             arguments=audit_log.summarize_arguments(arguments),
         )
+        execution_traces.record_tool_call(
+            layer="mcp",
+            tool_name=tool_name,
+            arguments=arguments,
+            result=result,
+            contract=annotations,
+        )
     except Exception as exc:
         _stderr(f"audit warning: {exc}")
 
@@ -2514,6 +2544,11 @@ class BlenderMCPServer:
                 "requests helpers, a helper path, or no Python. For mixed requests, keep the authored script path and "
                 "route project files, external assets, long jobs, evidence, and preview decisions through bounded "
                 "helpers; those operational clauses do not demote the authored work. "
+                "For cohesive scripts likely to exceed the bridge timeout, use start_trusted_script_job, poll "
+                "get_trusted_script_job_status, and apply the copied-file result only after explicit user approval. "
+                "For substantial authored runs, start and finalize an execution trace. Reference-model workflows must "
+                "advance durable blind scoring and bounded repair state to ready_for_user_review or "
+                "blocked_quality_floor. "
                 "For external asset downloads/imports, use the async path by default after discovery selects a concrete "
                 "asset_id or uid: start_external_asset_download, poll get_external_asset_job_status, then start_external_asset_import_job and poll "
                 "get_external_asset_import_job_status, then call prepare_imported_asset_presentation for cleanup/staging. Treat direct provider download/import tools as synchronous "

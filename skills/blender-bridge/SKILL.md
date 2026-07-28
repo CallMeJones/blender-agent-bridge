@@ -30,6 +30,9 @@ Read [references/gateway.md](references/gateway.md) for discovery, schema, invoc
 - Do not let operational suffixes such as "render frames," "capture evidence," "save the blend," or "import an asset" suppress the script-first path for separate authored work in the same request.
 - Honor a planner's `execution_strategy`: do not execute `helper_fallback_tool_calls` merely because they are listed when the selected path is `cohesive_trusted_script`.
 - Replace a deferred `draft_script` code placeholder only after its input handoff and completion gate are satisfied.
+- For substantial work, start an execution trace and finalize it with the observed outcome and provider-reported token usage. Reuse an active trace instead of replacing it.
+- Use `start_trusted_script_job` for a cohesive script likely to exceed the bridge timeout or benefit from isolated execution. Poll it, inspect the completed result, and apply it only after explicit user approval.
+- A background trusted-script job runs against a copied `.blend`; it must not mutate the live scene before confirmed apply.
 - Prefer bounded helpers for inspection, project files, external assets, long jobs, persistent bakes, evidence, preview decisions, or explicitly requested isolated edits.
 - When trust is off, use a bounded helper path or ask the user to enable trust before authored work that would materially benefit from a cohesive script.
 - Do not claim a script ran unless its result confirms execution.
@@ -54,4 +57,4 @@ Report:
 - unresolved blockers;
 - whether preview changes remain pending.
 
-Do not infer success from a planner response, a submitted job, or a timed-out call.
+Do not infer success from a planner response, a submitted job, a trace entry, or a timed-out call.

@@ -114,6 +114,9 @@ AI agents are getting good at using tools, but Blender needs guardrails. This br
 - Blender stays the execution layer: scene state, viewport evidence, preview changes, binary script trust, checkpoints, and local resources.
 - The external client stays the agent host: model connection, conversation memory, provider account, planning, and user chat.
 - With runtime script trust active, authored object generation, modeling, animation, materials, custom nodes, rigging, and look development default to one cohesive generated Python script unless the user requests helpers or no Python. Trust-off sessions use bounded helpers instead; generated scripts are refused until trust is granted.
+- Long cohesive scripts can run in an isolated background Blender process against a copied `.blend`, with polling, cancellation, and an explicitly confirmed apply step that checkpoints the live file.
+- Replayable execution traces record compact gateway activity, local generated-script artifacts, timings, outcomes, and reported token usage without expanding the five-tool MCP manifest.
+- Reference-model workflows persist blind evidence scorecards and bounded repair passes until they reach `ready_for_user_review` or `blocked_quality_floor`.
 - Blender has one deliberately small sidebar panel: bridge status/start-stop, `Copy MCP Config`, **Trust Agent Scripts**/**Revoke**, and pending preview **Commit**/**Revert**. Diagnostics, manifests, audit state, captures, and asset configuration stay in bridge/tool responses instead of returning as sidebar sections.
 - Bounded helpers handle inspection, project files, external assets, long jobs, persistent bakes, evidence, preview decisions, and deliberately isolated edits. Operational clauses remain separate from, and do not demote, the trusted script used for authored work.
 
@@ -185,6 +188,8 @@ flowchart LR
 ```
 
 The default MCP surface exposes exactly five stable gateway tools. Every Blender helper remains searchable, schema-addressable, and executable through that gateway, so clients that retrieve only a handful of tools cannot strand themselves with planners but no execution path. An opt-in `direct` surface restores the previous curated direct helpers, while `full` is reserved for compatibility and debugging. Initialization and tool definitions are deterministic for provider prompt-cache reuse, and content-free payload telemetry identifies response-size hotspots without storing scene output. Blender owns the open scene, previews, evidence, and trusted execution; the external MCP client owns the model, conversation, provider account, and provider cache policy.
+
+The gateway catalog also includes versioned quality benchmark tasks, durable model-review state, execution traces, and async trusted-script jobs. These are discovered and invoked on demand, so quality and observability improve without paying the token cost of more top-level tools.
 
 See [docs/EXTERNAL_BRIDGE_MCP.md](docs/EXTERNAL_BRIDGE_MCP.md) for setup and troubleshooting.
 

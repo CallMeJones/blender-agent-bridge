@@ -26,6 +26,16 @@ Prefer asynchronous helpers for downloads, imports, and final or long renders:
 
 A submitted job is not a completed job.
 
+For a long cohesive authored script, use the trusted-script job sequence:
+
+1. Invoke `start_trusted_script_job` while runtime script trust is active.
+2. Poll `get_trusted_script_job_status`; use the returned log and progress rather than rerunning.
+3. Cancel with `cancel_trusted_script_job` when the user requests cancellation or the job is known to be stuck.
+4. Inspect the completed result metadata.
+5. Invoke `apply_trusted_script_job_result` only after explicit user approval to replace the live file.
+
+The job edits a copied `.blend`. Applying the result first checkpoints the live file and preserves active runtime trust across the file change.
+
 ## Scene And File Diagnostics
 
 Use `get_blend_file_diagnostics` before risky work or when save, dependency, checkpoint, or recovery state matters. Use targeted inspectors for scene objects, materials, modeling quality, simulations, renders, and evidence resources.

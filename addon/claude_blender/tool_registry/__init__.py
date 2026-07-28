@@ -13,6 +13,7 @@ from .domains import (
     rigging_simulation,
     camera_render_evidence,
     workflows_refinement,
+    quality_observability,
     external_assets,
     scripts_transactions,
 )
@@ -28,6 +29,7 @@ DOMAIN_MODULES = (
     rigging_simulation,
     camera_render_evidence,
     workflows_refinement,
+    quality_observability,
     external_assets,
     scripts_transactions,
 )

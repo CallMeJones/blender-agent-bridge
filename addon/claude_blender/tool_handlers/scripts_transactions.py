@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from .. import helper_routing, live_preview, preferences, script_execution, script_runner
+from .. import (
+    helper_routing,
+    live_preview,
+    preferences,
+    script_execution,
+    script_runner,
+    trusted_script_jobs,
+)
 from ..animation_runtime import (
     _animation_script_fallback_recently_allowed,
     _animation_workflow_recently_seen,
@@ -131,6 +138,57 @@ def run_approved_script(context, args):
         ),
         "requires_user_approval": False,
     }
+
+
+def start_trusted_script_job(context, args):
+    result = trusted_script_jobs.start_job(
+        context,
+        code=_extract_script_code(args),
+        intent=str(args.get("intent") or ""),
+        expected_changes=str(args.get("expected_changes") or ""),
+        risk_level=str(args.get("risk_level") or "medium"),
+        target_objects=args.get("target_objects") or [],
+        job_name=str(args.get("job_name") or ""),
+    )
+    if result.get("code") == "script_trust_required":
+        result["message"] = (
+            "Agent script trust is off. Enable Trust Agent Scripts in Blender before starting a background "
+            "trusted-script job."
+        )
+    return result
+
+
+def get_trusted_script_job_status(context, args):
+    status = trusted_script_jobs.job_status(str(args.get("job_id") or ""))
+    return {
+        "ok": bool(status.get("available", True)),
+        "message": status.get("message", "Trusted script job status"),
+        "trusted_script_job": status,
+    }
+
+
+def cancel_trusted_script_job(context, args):
+    return trusted_script_jobs.cancel_job(str(args.get("job_id") or ""))
+
+
+def apply_trusted_script_job_result(context, args):
+    prefs = preferences.get_preferences(context)
+    return trusted_script_jobs.apply_job_result(
+        context,
+        str(args.get("job_id") or ""),
+        confirm_replace_current_scene=bool(args.get("confirm_replace_current_scene", False)),
+        checkpoint_enabled=bool(getattr(prefs, "checkpoints_enabled", True)),
+        checkpoint_dir=getattr(prefs, "checkpoint_dir", None),
+    )
+
+
+def list_trusted_script_jobs(context, args):
+    try:
+        limit = max(1, min(100, int(args.get("limit", 20))))
+    except (TypeError, ValueError):
+        limit = 20
+    jobs = trusted_script_jobs.list_jobs(limit)
+    return {"ok": True, "message": f"Found {len(jobs)} trusted script job(s)", "jobs": jobs}
 
 
 def commit_preview(context, args):

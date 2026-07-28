@@ -60,6 +60,15 @@ def _assert_package_clean(path):
     assert "blender_manifest.toml" in names, sorted(names)[:20]
     assert "__init__.py" in names, sorted(names)[:20]
     assert "build_info.py" in names, sorted(names)[:20]
+    for runtime_module in (
+        "execution_traces.py",
+        "quality_benchmarks.py",
+        "quality_reviews.py",
+        "trusted_script_jobs.py",
+        "tool_handlers/quality_observability.py",
+        "tool_registry/domains/quality_observability.py",
+    ):
+        assert runtime_module in names, runtime_module
     assert "LICENSE" in names, sorted(names)[:20]
     assert not any(name.lower().endswith(EXCLUDED_SUFFIXES) for name in names), sorted(names)
     return names

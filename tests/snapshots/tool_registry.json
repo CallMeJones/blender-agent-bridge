@@ -1,5 +1,5 @@
 {
-  "catalog_tool_count": 181,
+  "catalog_tool_count": 200,
   "contracts": {
     "add_action_cycles": {
       "description": "Add cycles modifiers to action f-curves so an animation loops. Applies immediately with preview revert support.",
@@ -1991,6 +1991,51 @@
       },
       "requires_live_preview": true
     },
+    "apply_trusted_script_job_result": {
+      "description": "Checkpoint the current live file, then open a completed trusted-script job result. Requires an explicit true confirmation that the user approved replacing the live Blender file. Active runtime script trust is preserved across the file change.",
+      "destructive_hint": true,
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "confirm_replace_current_scene": {
+            "description": "Must be true only after explicit user approval.",
+            "type": "boolean"
+          },
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "confirm_replace_current_scene"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": true,
+      "open_world_hint": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:mutate",
+        "project:open",
+        "filesystem:write"
+      ],
+      "requires_approval": true,
+      "timeout_seconds": 120
+    },
     "assemble_render_job_video": {
       "description": "Assemble a completed PNG frame-sequence render job into an MP4 in a background Blender process, then poll get_render_job_status for completion.",
       "duration_hint": "Returns quickly after starting MP4 assembly in a background Blender process. Poll get_render_job_status until the render job returns to a terminal state with video availability.",
@@ -2560,6 +2605,42 @@
         "process:terminate"
       ],
       "supports_headless": true
+    },
+    "cancel_trusted_script_job": {
+      "description": "Cancel a running background trusted-script job and preserve the unchanged live Blender scene.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "process:terminate",
+        "filesystem:write"
+      ],
+      "risk_level": "preview"
     },
     "capture_animation_playblast": {
       "description": "Capture sampled low-resolution viewport frames across an animation range and return playblast metadata plus MCP frame resource URIs for visual animation review. Defaults to preview quality capped at 640x360; request quality/max_width/max_height only when higher fidelity is needed. Requires an interactive Blender window and fails soft in background mode. This is synchronous and roughly 1 second per sampled frame; if it times out, wait and check blender_bridge_status/latest playblast metadata before recapturing.",
@@ -5634,6 +5715,155 @@
       },
       "requires_live_preview": true
     },
+    "finalize_execution_trace": {
+      "description": "Finalize the active or named execution trace with an outcome, notes, and optional provider-reported token usage. Estimated trace payload tokens remain separate from reported model tokens.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "notes": {
+            "maxLength": 8000,
+            "type": "string"
+          },
+          "outcome": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "token_usage": {
+            "additionalProperties": false,
+            "properties": {
+              "cache_creation_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "cache_read_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "cached_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "output_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "total_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "filesystem:write"
+      ],
+      "supports_headless": true
+    },
+    "finish_quality_benchmark_run": {
+      "description": "Finish a benchmark run, evaluate observed routing/tool expectations, link its quality review, record reported token usage, and finalize the execution trace.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "notes": {
+            "maxLength": 8000,
+            "type": "string"
+          },
+          "outcome": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "quality_review_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "token_usage": {
+            "additionalProperties": false,
+            "properties": {
+              "cache_creation_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "cache_read_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "cached_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "output_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "total_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "run_id",
+          "outcome"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "filesystem:write"
+      ],
+      "supports_headless": true
+    },
     "focus_object_in_viewport": {
       "description": "Frame a named object in the first 3D viewport and optionally select it. Requires an interactive Blender UI and fails soft in background mode.",
       "has_side_effects": true,
@@ -6095,6 +6325,41 @@
         "type": "object"
       }
     },
+    "get_execution_trace": {
+      "description": "Return one execution-trace manifest and optionally its ordered bounded events.",
+      "has_side_effects": false,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_events": {
+            "type": "boolean"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read"
+      ],
+      "supports_headless": true
+    },
     "get_external_asset_cache_diagnostics": {
       "description": "Report cached/imported external assets, providers, licenses, source URLs, files, and imported Blender data-block names.",
       "input_schema": {
@@ -6361,6 +6626,76 @@
         "type": "object"
       }
     },
+    "get_model_quality_review": {
+      "description": "Return a named model-quality review with score and repair history, or the latest review.",
+      "has_side_effects": false,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "review_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read"
+      ],
+      "supports_headless": true
+    },
+    "get_model_quality_review_packet": {
+      "description": "Return a scoring packet for one model-quality review. Prior scores and repairs are excluded by default so a separate evaluator can score the current evidence blindly.",
+      "has_side_effects": false,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_prior_scores": {
+            "type": "boolean"
+          },
+          "review_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "review_id"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read"
+      ],
+      "supports_headless": true
+    },
     "get_object_details": {
       "description": "Fetch deeper read-only details for named objects, selected objects, or the active object.",
       "input_schema": {
@@ -6443,6 +6778,38 @@
         },
         "type": "object"
       }
+    },
+    "get_quality_benchmark_run": {
+      "description": "Return a named benchmark run, or the latest run when run_id is omitted.",
+      "has_side_effects": false,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read"
+      ],
+      "supports_headless": true
     },
     "get_render_camera_compositor_details": {
       "description": "Fetch read-only render settings, active camera settings, world settings, and compositor node summaries.",
@@ -6909,6 +7276,41 @@
         },
         "type": "object"
       }
+    },
+    "get_trusted_script_job_status": {
+      "description": "Poll a background trusted-script job for progress, status, logs, and result .blend availability.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "filesystem:read"
+      ],
+      "supports_headless": true
     },
     "get_visual_evidence_resources": {
       "description": "Return a compact inventory of latest MCP-readable viewport captures, playblasts, inspection renders, render thumbnails, and render jobs. Use when an agent needs to know what visual/render evidence exists and which resource URIs can be read.",
@@ -7680,6 +8082,40 @@
       },
       "requires_live_preview": true
     },
+    "list_execution_traces": {
+      "description": "List recent local execution traces without loading their events or script artifacts.",
+      "has_side_effects": false,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read"
+      ],
+      "supports_headless": true
+    },
     "list_poly_haven_categories": {
       "description": "List Poly Haven catalog categories for HDRIs, textures, and models. Returns metadata only; it does not download or import assets.",
       "input_schema": {
@@ -7766,6 +8202,34 @@
         "files:read"
       ]
     },
+    "list_quality_benchmark_tasks": {
+      "description": "List versioned quality benchmark tasks for animal, human, hard-surface, negative animation routing, and fresh five-tool gateway behavior.",
+      "has_side_effects": false,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read"
+      ],
+      "supports_headless": true
+    },
     "list_scene_objects": {
       "description": "List objects in the current scene with names, types, selection state, visibility, collections, and locations.",
       "input_schema": {
@@ -7841,6 +8305,39 @@
         },
         "type": "object"
       }
+    },
+    "list_trusted_script_jobs": {
+      "description": "List recent background trusted-script jobs without returning stored generated Python.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "filesystem:read"
+      ],
+      "supports_headless": true
     },
     "mark_uv_seams": {
       "description": "Mark or clear preview-safe UV seams on mesh objects using bounded boundary and face-angle rules. Use before uv_unwrap when the user asks for seams, hard-edge seams, or texture-ready unwrap preparation.",
@@ -8626,6 +9123,48 @@
       },
       "supports_headless": true
     },
+    "prepare_execution_trace_replay": {
+      "description": "Prepare an ordered gateway-ready dry-run replay plan from a trace. Mutations are never executed automatically; credential blockers must be resolved and stored script code is withheld by default.",
+      "has_side_effects": false,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_read_only": {
+            "type": "boolean"
+          },
+          "include_script_code": {
+            "description": "Resolve locally stored script artifacts into the replay packet. Defaults to false.",
+            "type": "boolean"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "trace_id"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read"
+      ],
+      "supports_headless": true
+    },
     "prepare_imported_asset_presentation": {
       "description": "Organize imported asset objects, fill missing mesh materials without overwriting imported materials, create a bounded studio/turntable presentation setup, and leave the result in preview. Use after an external asset import job completes.",
       "input_schema": {
@@ -8811,6 +9350,85 @@
       "permissions": [
         "files:read"
       ]
+    },
+    "record_model_quality_repair": {
+      "description": "Record one completed bounded repair pass, update evidence URIs, and return a fresh blind scoring packet. The repair limit is enforced.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_uris": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "notes": {
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "repairs": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                "criterion": {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "result": {
+                  "maxLength": 2000,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "criterion",
+                "action"
+              ],
+              "type": "object"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "type": "array"
+          },
+          "review_id": {
+            "type": "string"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "review_id",
+          "repairs",
+          "evidence_uris"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "filesystem:write"
+      ],
+      "supports_headless": true
     },
     "render_scene_thumbnail": {
       "description": "Render a small PNG from the scene camera or a named camera, then return metadata plus exact MCP image resource URIs. Use for render evidence, thumbnails, and client-readable still output. Large synchronous renders are guarded; use start_render_job for timeout-safe high-resolution output.",
@@ -10958,6 +11576,58 @@
       "timeout_seconds": 300,
       "trust_window_auto_run_allowed": true
     },
+    "start_execution_trace": {
+      "description": "Start a local replay-oriented execution trace. Subsequent MCP and Blender helper calls record ordered arguments, bounded results, timing where available, evidence URIs, and generated scripts as local artifacts. Credential-like arguments are redacted.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "name": {
+            "maxLength": 160,
+            "type": "string"
+          },
+          "prompt": {
+            "maxLength": 16000,
+            "type": "string"
+          },
+          "replace_active": {
+            "type": "boolean"
+          },
+          "trace_id": {
+            "maxLength": 100,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "filesystem:write"
+      ],
+      "supports_headless": true
+    },
     "start_external_asset_download": {
       "description": "Default client path: start an asynchronous external asset download/cache job for Poly Haven or Sketchfab. Use this for any normal asset download/cache or import request. Returns immediately with a job id; poll get_external_asset_job_status until completed or failed, then queue scene import with start_external_asset_import_job.",
       "duration_hint": "Returns quickly; the background asset job may continue downloading, extracting, and validating cache files. Poll get_external_asset_job_status until completed or failed before starting a queued import.",
@@ -11171,6 +11841,231 @@
       },
       "timeout_seconds": 30
     },
+    "start_model_quality_review": {
+      "description": "Create durable model-quality state from an actual reference brief, applicable rubric, matched evidence URIs, quality floor, and bounded repair limit.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "benchmark_run_id": {
+            "type": "string"
+          },
+          "evidence_uris": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "max_repair_passes": {
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "quality_floor": {
+            "maximum": 5,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "reference_brief": {
+            "additionalProperties": false,
+            "description": "LLM-authored observations from the actual reference image. Supply concrete forms and ratios; do not infer a category template.",
+            "properties": {
+              "inspection_views": {
+                "items": {
+                  "enum": [
+                    "front_below",
+                    "underside",
+                    "side",
+                    "front",
+                    "rear",
+                    "top"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 6,
+                "type": "array"
+              },
+              "landmarks": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "negative_constraints": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "primary_masses": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "proportion_checks": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "secondary_forms": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "silhouette": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "source_notes": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "subject": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "surface_cues": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "reference_description": {
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "target_objects": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference_brief",
+          "evidence_uris"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "filesystem:write"
+      ],
+      "supports_headless": true
+    },
+    "start_quality_benchmark_run": {
+      "description": "Start a versioned benchmark run and its execution trace. Reference-model tasks require an explicit reference URI or local path.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "client_name": {
+            "maxLength": 160,
+            "type": "string"
+          },
+          "model_name": {
+            "maxLength": 160,
+            "type": "string"
+          },
+          "notes": {
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "reference_sha256": {
+            "description": "Optional SHA-256 for a non-local reference. Local files are fingerprinted automatically.",
+            "pattern": "^[0-9a-fA-F]{64}$",
+            "type": "string"
+          },
+          "reference_uri": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "replace_active_trace": {
+            "type": "boolean"
+          },
+          "task_id": {
+            "enum": [
+              "reference_cartoon_animal",
+              "reference_human_character",
+              "reference_hard_surface_product",
+              "animation_wave_negative_routing",
+              "fresh_gateway_execution"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "filesystem:write"
+      ],
+      "supports_headless": true
+    },
     "start_render_job": {
       "description": "Start a long-running render or playblast job in a background Blender process and return immediately with a job id, rough ETA, and polling guidance. Auto quality keeps final renders high quality but defaults playblast/preview/review/draft jobs to low resolution unless quality or resolution is specified. Use for 1080p/4K, high-sample, full-frame-range renders, frame sequences, or MP4 quality checks instead of blocking render tools or draft_script.",
       "duration_hint": "Returns quickly, then the background render may run from seconds to hours. Use the returned estimated_duration and poll_after_seconds.",
@@ -11272,6 +12167,186 @@
         "status_tool": "blender_bridge_status"
       },
       "timeout_seconds": 30
+    },
+    "start_trusted_script_job": {
+      "authorization_model": "blender_run_script_equivalent",
+      "description": "Start long generated Blender Python in a background Blender process under active runtime script trust. The job edits a copied .blend and returns immediately with a job id; it cannot replace the live scene until apply_trusted_script_job_result receives explicit user confirmation.",
+      "destructive_hint": true,
+      "duration_hint": "Returns after starting a background Blender process; poll job status.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "Complete Blender Python. It may call agent_job_report_progress(progress, message, details) and agent_job_cancel_requested().",
+            "maxLength": 500000,
+            "type": "string"
+          },
+          "expected_changes": {
+            "type": "string"
+          },
+          "intent": {
+            "type": "string"
+          },
+          "job_name": {
+            "maxLength": 160,
+            "type": "string"
+          },
+          "risk_level": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "type": "string"
+          },
+          "target_objects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "intent",
+          "expected_changes",
+          "risk_level",
+          "code"
+        ],
+        "type": "object"
+      },
+      "long_running": false,
+      "mutates_scene": false,
+      "open_world_hint": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "blender:full",
+        "filesystem:full",
+        "network:full",
+        "process:spawn"
+      ],
+      "requires_approval": false,
+      "returns_background_job": true,
+      "risk_level": "preview",
+      "timeout_recovery": {
+        "message": "Poll the returned trusted script job id before retrying.",
+        "poll_after_seconds": 2,
+        "recoverable": true,
+        "status_tool": "get_trusted_script_job_status"
+      },
+      "timeout_seconds": 60
+    },
+    "submit_model_quality_evaluation": {
+      "description": "Submit one complete evidence-backed 1-5 scorecard. The tool validates every applicable criterion and returns ready_for_user_review, repair_required, or blocked_quality_floor.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "blind": {
+            "type": "boolean"
+          },
+          "evaluator": {
+            "maxLength": 240,
+            "type": "string"
+          },
+          "evidence_uris": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "notes": {
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "review_id": {
+            "type": "string"
+          },
+          "scores": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "criterion": {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "evidence": {
+                  "items": {
+                    "maxLength": 1000,
+                    "type": "string"
+                  },
+                  "maxItems": 20,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "finding": {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                "repair_action": {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                "score": {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "criterion",
+                "score",
+                "evidence",
+                "finding",
+                "repair_action"
+              ],
+              "type": "object"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "review_id",
+          "scores"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "filesystem:write"
+      ],
+      "supports_headless": true
     },
     "symmetrize_model": {
       "description": "Add a non-destructive symmetry Mirror modifier to selected or named mesh objects on one axis. Use for quick left/right, front/back, or top/bottom symmetry before destructive mesh scripts. Applies immediately with preview revert support.",
@@ -17347,6 +18422,38 @@
       "name": "get_2d_animation_details"
     },
     {
+      "description": "Start a local replay-oriented execution trace. Subsequent MCP and Blender helper calls record ordered arguments, bounded results, timing where available, evidence URIs, and generated scripts as local artifacts. Credential-like arguments are redacted.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "name": {
+            "maxLength": 160,
+            "type": "string"
+          },
+          "prompt": {
+            "maxLength": 16000,
+            "type": "string"
+          },
+          "replace_active": {
+            "type": "boolean"
+          },
+          "trace_id": {
+            "maxLength": 100,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "name": "start_execution_trace"
+    },
+    {
       "description": "Apply a bounded procedural modeling stack to mesh objects: array, bevel, and optional weighted normals. Use when helpers were requested or this isolated stack exactly fits the task. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
@@ -17396,6 +18503,22 @@
       "name": "apply_procedural_array_stack"
     },
     {
+      "description": "Return one execution-trace manifest and optionally its ordered bounded events.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_events": {
+            "type": "boolean"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_execution_trace"
+    },
+    {
       "description": "Add non-destructive Boolean modifiers to a target mesh using named cutter meshes or selected cutters. Use for an explicitly isolated difference, union, or intersect operation. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
@@ -17436,6 +18559,72 @@
         "type": "object"
       },
       "name": "boolean_op"
+    },
+    {
+      "description": "List recent local execution traces without loading their events or script artifacts.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_execution_traces"
+    },
+    {
+      "description": "Finalize the active or named execution trace with an outcome, notes, and optional provider-reported token usage. Estimated trace payload tokens remain separate from reported model tokens.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "notes": {
+            "maxLength": 8000,
+            "type": "string"
+          },
+          "outcome": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "token_usage": {
+            "additionalProperties": false,
+            "properties": {
+              "cache_creation_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "cache_read_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "cached_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "output_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "total_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "finalize_execution_trace"
     },
     {
       "description": "Add non-destructive Mirror modifiers to selected or named mesh objects, with optional mirror object, bisect axes, clipping, and merge settings. Applies immediately with preview revert support.",
@@ -17499,6 +18688,29 @@
       "name": "mirror_model"
     },
     {
+      "description": "Prepare an ordered gateway-ready dry-run replay plan from a trace. Mutations are never executed automatically; credential blockers must be resolved and stored script code is withheld by default.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_read_only": {
+            "type": "boolean"
+          },
+          "include_script_code": {
+            "description": "Resolve locally stored script artifacts into the replay packet. Defaults to false.",
+            "type": "boolean"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "trace_id"
+        ],
+        "type": "object"
+      },
+      "name": "prepare_execution_trace_replay"
+    },
+    {
       "description": "Add a non-destructive symmetry Mirror modifier to selected or named mesh objects on one axis. Use for quick left/right, front/back, or top/bottom symmetry before destructive mesh scripts. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
@@ -17540,6 +18752,15 @@
         "type": "object"
       },
       "name": "symmetrize_model"
+    },
+    {
+      "description": "List versioned quality benchmark tasks for animal, human, hard-surface, negative animation routing, and fresh five-tool gateway behavior.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_quality_benchmark_tasks"
     },
     {
       "description": "Add non-destructive Solidify modifiers to selected or named mesh objects for wall thickness, shells, panels, or flat cutout depth. Applies immediately with preview revert support.",
@@ -17639,6 +18860,66 @@
       "name": "screw_model"
     },
     {
+      "description": "Start a versioned benchmark run and its execution trace. Reference-model tasks require an explicit reference URI or local path.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "client_name": {
+            "maxLength": 160,
+            "type": "string"
+          },
+          "model_name": {
+            "maxLength": 160,
+            "type": "string"
+          },
+          "notes": {
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "reference_sha256": {
+            "description": "Optional SHA-256 for a non-local reference. Local files are fingerprinted automatically.",
+            "pattern": "^[0-9a-fA-F]{64}$",
+            "type": "string"
+          },
+          "reference_uri": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "replace_active_trace": {
+            "type": "boolean"
+          },
+          "task_id": {
+            "enum": [
+              "reference_cartoon_animal",
+              "reference_human_character",
+              "reference_hard_surface_product",
+              "animation_wave_negative_routing",
+              "fresh_gateway_execution"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id"
+        ],
+        "type": "object"
+      },
+      "name": "start_quality_benchmark_run"
+    },
+    {
+      "description": "Return a named benchmark run, or the latest run when run_id is omitted.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_quality_benchmark_run"
+    },
+    {
       "description": "Create a camera dolly/shot move with location keyframes, optional target tracking, and optional lens keyframes. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
@@ -17704,6 +18985,202 @@
       "name": "create_camera_dolly_animation"
     },
     {
+      "description": "Finish a benchmark run, evaluate observed routing/tool expectations, link its quality review, record reported token usage, and finalize the execution trace.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "notes": {
+            "maxLength": 8000,
+            "type": "string"
+          },
+          "outcome": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "quality_review_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "token_usage": {
+            "additionalProperties": false,
+            "properties": {
+              "cache_creation_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "cache_read_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "cached_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "output_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "total_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "run_id",
+          "outcome"
+        ],
+        "type": "object"
+      },
+      "name": "finish_quality_benchmark_run"
+    },
+    {
+      "description": "Create durable model-quality state from an actual reference brief, applicable rubric, matched evidence URIs, quality floor, and bounded repair limit.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "benchmark_run_id": {
+            "type": "string"
+          },
+          "evidence_uris": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "max_repair_passes": {
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "quality_floor": {
+            "maximum": 5,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "reference_brief": {
+            "additionalProperties": false,
+            "description": "LLM-authored observations from the actual reference image. Supply concrete forms and ratios; do not infer a category template.",
+            "properties": {
+              "inspection_views": {
+                "items": {
+                  "enum": [
+                    "front_below",
+                    "underside",
+                    "side",
+                    "front",
+                    "rear",
+                    "top"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 6,
+                "type": "array"
+              },
+              "landmarks": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "negative_constraints": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "primary_masses": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "proportion_checks": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "secondary_forms": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "silhouette": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "source_notes": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "subject": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "surface_cues": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "reference_description": {
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "target_objects": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference_brief",
+          "evidence_uris"
+        ],
+        "type": "object"
+      },
+      "name": "start_model_quality_review"
+    },
+    {
       "description": "Add a bounded Cloth simulation modifier to selected or named mesh objects without baking caches. Inspect and bake explicitly after setup. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
@@ -17747,6 +19224,25 @@
         "type": "object"
       },
       "name": "add_cloth_simulation_to_selected"
+    },
+    {
+      "description": "Return a scoring packet for one model-quality review. Prior scores and repairs are excluded by default so a separate evaluator can score the current evidence blindly.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_prior_scores": {
+            "type": "boolean"
+          },
+          "review_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "review_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_model_quality_review_packet"
     },
     {
       "description": "Create an empty helper object with transform and display settings. Applies immediately with preview revert support.",
@@ -17812,6 +19308,144 @@
       "name": "create_empty"
     },
     {
+      "description": "Submit one complete evidence-backed 1-5 scorecard. The tool validates every applicable criterion and returns ready_for_user_review, repair_required, or blocked_quality_floor.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "blind": {
+            "type": "boolean"
+          },
+          "evaluator": {
+            "maxLength": 240,
+            "type": "string"
+          },
+          "evidence_uris": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "notes": {
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "review_id": {
+            "type": "string"
+          },
+          "scores": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "criterion": {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "evidence": {
+                  "items": {
+                    "maxLength": 1000,
+                    "type": "string"
+                  },
+                  "maxItems": 20,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "finding": {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                "repair_action": {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                "score": {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "criterion",
+                "score",
+                "evidence",
+                "finding",
+                "repair_action"
+              ],
+              "type": "object"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "review_id",
+          "scores"
+        ],
+        "type": "object"
+      },
+      "name": "submit_model_quality_evaluation"
+    },
+    {
+      "description": "Record one completed bounded repair pass, update evidence URIs, and return a fresh blind scoring packet. The repair limit is enforced.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_uris": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "notes": {
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "repairs": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                "criterion": {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "result": {
+                  "maxLength": 2000,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "criterion",
+                "action"
+              ],
+              "type": "object"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "type": "array"
+          },
+          "review_id": {
+            "type": "string"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "review_id",
+          "repairs",
+          "evidence_uris"
+        ],
+        "type": "object"
+      },
+      "name": "record_model_quality_repair"
+    },
+    {
       "description": "Set viewport, render, or selection visibility flags for named or selected objects. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
@@ -17841,6 +19475,19 @@
         "type": "object"
       },
       "name": "set_object_visibility"
+    },
+    {
+      "description": "Return a named model-quality review with score and repair history, or the latest review.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "review_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_model_quality_review"
     },
     {
       "description": "Set object viewport display type, name/wire/in-front flags, display color, and empty display settings. Applies immediately with preview revert support.",
@@ -19575,6 +21222,119 @@
       "name": "draft_privileged_script"
     },
     {
+      "description": "Start long generated Blender Python in a background Blender process under active runtime script trust. The job edits a copied .blend and returns immediately with a job id; it cannot replace the live scene until apply_trusted_script_job_result receives explicit user confirmation.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "Complete Blender Python. It may call agent_job_report_progress(progress, message, details) and agent_job_cancel_requested().",
+            "maxLength": 500000,
+            "type": "string"
+          },
+          "expected_changes": {
+            "type": "string"
+          },
+          "intent": {
+            "type": "string"
+          },
+          "job_name": {
+            "maxLength": 160,
+            "type": "string"
+          },
+          "risk_level": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "type": "string"
+          },
+          "target_objects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "intent",
+          "expected_changes",
+          "risk_level",
+          "code"
+        ],
+        "type": "object"
+      },
+      "name": "start_trusted_script_job"
+    },
+    {
+      "description": "Poll a background trusted-script job for progress, status, logs, and result .blend availability.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_trusted_script_job_status"
+    },
+    {
+      "description": "Cancel a running background trusted-script job and preserve the unchanged live Blender scene.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "name": "cancel_trusted_script_job"
+    },
+    {
+      "description": "Checkpoint the current live file, then open a completed trusted-script job result. Requires an explicit true confirmation that the user approved replacing the live Blender file. Active runtime script trust is preserved across the file change.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "confirm_replace_current_scene": {
+            "description": "Must be true only after explicit user approval.",
+            "type": "boolean"
+          },
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "confirm_replace_current_scene"
+        ],
+        "type": "object"
+      },
+      "name": "apply_trusted_script_job_result"
+    },
+    {
+      "description": "List recent background trusted-script jobs without returning stored generated Python.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_trusted_script_jobs"
+    },
+    {
       "description": "Commit the current live preview transaction.",
       "input_schema": {
         "additionalProperties": false,
@@ -19749,6 +21509,22 @@
       "set_viewport_view",
       "focus_object_in_viewport"
     ],
+    "quality_observability": [
+      "start_execution_trace",
+      "get_execution_trace",
+      "list_execution_traces",
+      "finalize_execution_trace",
+      "prepare_execution_trace_replay",
+      "list_quality_benchmark_tasks",
+      "start_quality_benchmark_run",
+      "get_quality_benchmark_run",
+      "finish_quality_benchmark_run",
+      "start_model_quality_review",
+      "get_model_quality_review_packet",
+      "submit_model_quality_evaluation",
+      "record_model_quality_repair",
+      "get_model_quality_review"
+    ],
     "rigging_simulation": [
       "get_rigging_details",
       "get_shape_key_details",
@@ -19789,6 +21565,11 @@
     "scripts_transactions": [
       "draft_script",
       "draft_privileged_script",
+      "start_trusted_script_job",
+      "get_trusted_script_job_status",
+      "cancel_trusted_script_job",
+      "apply_trusted_script_job_result",
+      "list_trusted_script_jobs",
       "commit_preview",
       "revert_preview",
       "run_approved_script"
@@ -19808,7 +21589,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "32ef7bcac1d468ca94b6e417e729e74dc027223bad4f614e61daa127b0c50c84",
+  "registry_digest": "a4d96b1b85e4cc17b4230ff17f94fa4ab8d5c76427efef0f1aec98885799ae33",
   "schema_version": 1,
   "specs": [
     {
@@ -31130,6 +32911,71 @@
     },
     {
       "contract": {
+        "description": "Start a durable local execution trace",
+        "has_side_effects": true,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read",
+          "filesystem:write"
+        ],
+        "supports_headless": true
+      },
+      "description": "Start a local replay-oriented execution trace. Subsequent MCP and Blender helper calls record ordered arguments, bounded results, timing where available, evidence URIs, and generated scripts as local artifacts. Credential-like arguments are redacted.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "advanced_workflow",
+        "observability"
+      ],
+      "handler_key": "start_execution_trace",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "name": {
+            "maxLength": 160,
+            "type": "string"
+          },
+          "prompt": {
+            "maxLength": 16000,
+            "type": "string"
+          },
+          "replace_active": {
+            "type": "boolean"
+          },
+          "trace_id": {
+            "maxLength": 100,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "name": "start_execution_trace",
+      "order": 1210,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "quality_observability"
+    },
+    {
+      "contract": {
         "description": "Apply a bounded procedural array, bevel, and weighted-normal modeling stack",
         "input_schema": {
           "additionalProperties": false,
@@ -31253,6 +33099,54 @@
     },
     {
       "contract": {
+        "description": "Read one local execution trace",
+        "has_side_effects": false,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read"
+        ],
+        "supports_headless": true
+      },
+      "description": "Return one execution-trace manifest and optionally its ordered bounded events.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "advanced_workflow",
+        "observability"
+      ],
+      "handler_key": "get_execution_trace",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_events": {
+            "type": "boolean"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_execution_trace",
+      "order": 1220,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "quality_observability"
+    },
+    {
+      "contract": {
         "description": "Add non-destructive Boolean modifiers to a target mesh using cutter meshes",
         "input_schema": {
           "additionalProperties": false,
@@ -31358,6 +33252,137 @@
         "type": "object"
       },
       "owner": "modeling"
+    },
+    {
+      "contract": {
+        "description": "List local execution traces",
+        "has_side_effects": false,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read"
+        ],
+        "supports_headless": true
+      },
+      "description": "List recent local execution traces without loading their events or script artifacts.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "advanced_workflow",
+        "observability"
+      ],
+      "handler_key": "list_execution_traces",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_execution_traces",
+      "order": 1230,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "quality_observability"
+    },
+    {
+      "contract": {
+        "description": "Finalize a durable local execution trace",
+        "has_side_effects": true,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read",
+          "filesystem:write"
+        ],
+        "supports_headless": true
+      },
+      "description": "Finalize the active or named execution trace with an outcome, notes, and optional provider-reported token usage. Estimated trace payload tokens remain separate from reported model tokens.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "advanced_workflow",
+        "observability"
+      ],
+      "handler_key": "finalize_execution_trace",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "notes": {
+            "maxLength": 8000,
+            "type": "string"
+          },
+          "outcome": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "token_usage": {
+            "additionalProperties": false,
+            "properties": {
+              "cache_creation_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "cache_read_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "cached_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "output_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "total_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "finalize_execution_trace",
+      "order": 1240,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "quality_observability"
     },
     {
       "contract": {
@@ -31507,6 +33532,61 @@
     },
     {
       "contract": {
+        "description": "Prepare a non-executing replay plan from a local trace",
+        "has_side_effects": false,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read"
+        ],
+        "supports_headless": true
+      },
+      "description": "Prepare an ordered gateway-ready dry-run replay plan from a trace. Mutations are never executed automatically; credential blockers must be resolved and stored script code is withheld by default.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "advanced_workflow",
+        "observability"
+      ],
+      "handler_key": "prepare_execution_trace_replay",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_read_only": {
+            "type": "boolean"
+          },
+          "include_script_code": {
+            "description": "Resolve locally stored script artifacts into the replay packet. Defaults to false.",
+            "type": "boolean"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "trace_id"
+        ],
+        "type": "object"
+      },
+      "name": "prepare_execution_trace_replay",
+      "order": 1250,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "quality_observability"
+    },
+    {
+      "contract": {
         "description": "Add a non-destructive symmetry Mirror modifier on one axis",
         "input_schema": {
           "additionalProperties": false,
@@ -31614,6 +33694,47 @@
         "type": "object"
       },
       "owner": "modeling"
+    },
+    {
+      "contract": {
+        "description": "List built-in versioned quality benchmark tasks",
+        "has_side_effects": false,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read"
+        ],
+        "supports_headless": true
+      },
+      "description": "List versioned quality benchmark tasks for animal, human, hard-surface, negative animation routing, and fresh five-tool gateway behavior.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "advanced_workflow",
+        "observability"
+      ],
+      "handler_key": "list_quality_benchmark_tasks",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_quality_benchmark_tasks",
+      "order": 1260,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "quality_observability"
     },
     {
       "contract": {
@@ -31859,6 +33980,131 @@
     },
     {
       "contract": {
+        "description": "Start a versioned quality benchmark run and execution trace",
+        "has_side_effects": true,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read",
+          "filesystem:write"
+        ],
+        "supports_headless": true
+      },
+      "description": "Start a versioned benchmark run and its execution trace. Reference-model tasks require an explicit reference URI or local path.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "advanced_workflow",
+        "observability"
+      ],
+      "handler_key": "start_quality_benchmark_run",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "client_name": {
+            "maxLength": 160,
+            "type": "string"
+          },
+          "model_name": {
+            "maxLength": 160,
+            "type": "string"
+          },
+          "notes": {
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "reference_sha256": {
+            "description": "Optional SHA-256 for a non-local reference. Local files are fingerprinted automatically.",
+            "pattern": "^[0-9a-fA-F]{64}$",
+            "type": "string"
+          },
+          "reference_uri": {
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "replace_active_trace": {
+            "type": "boolean"
+          },
+          "task_id": {
+            "enum": [
+              "reference_cartoon_animal",
+              "reference_human_character",
+              "reference_hard_surface_product",
+              "animation_wave_negative_routing",
+              "fresh_gateway_execution"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id"
+        ],
+        "type": "object"
+      },
+      "name": "start_quality_benchmark_run",
+      "order": 1270,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "quality_observability"
+    },
+    {
+      "contract": {
+        "description": "Read one local quality benchmark run",
+        "has_side_effects": false,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read"
+        ],
+        "supports_headless": true
+      },
+      "description": "Return a named benchmark run, or the latest run when run_id is omitted.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "advanced_workflow",
+        "observability"
+      ],
+      "handler_key": "get_quality_benchmark_run",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_quality_benchmark_run",
+      "order": 1280,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "quality_observability"
+    },
+    {
+      "contract": {
         "description": "Create a reversible camera dolly move with optional target tracking and lens keyframes",
         "input_schema": {
           "additionalProperties": false,
@@ -31999,6 +34245,268 @@
     },
     {
       "contract": {
+        "description": "Finish a quality benchmark run and its execution trace",
+        "has_side_effects": true,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read",
+          "filesystem:write"
+        ],
+        "supports_headless": true
+      },
+      "description": "Finish a benchmark run, evaluate observed routing/tool expectations, link its quality review, record reported token usage, and finalize the execution trace.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "advanced_workflow",
+        "observability"
+      ],
+      "handler_key": "finish_quality_benchmark_run",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "notes": {
+            "maxLength": 8000,
+            "type": "string"
+          },
+          "outcome": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "quality_review_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "token_usage": {
+            "additionalProperties": false,
+            "properties": {
+              "cache_creation_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "cache_read_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "cached_input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "input_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "output_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "total_tokens": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "run_id",
+          "outcome"
+        ],
+        "type": "object"
+      },
+      "name": "finish_quality_benchmark_run",
+      "order": 1290,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "quality_observability"
+    },
+    {
+      "contract": {
+        "description": "Start durable model-quality evaluation and repair state",
+        "has_side_effects": true,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read",
+          "filesystem:write"
+        ],
+        "supports_headless": true
+      },
+      "description": "Create durable model-quality state from an actual reference brief, applicable rubric, matched evidence URIs, quality floor, and bounded repair limit.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "advanced_workflow",
+        "observability"
+      ],
+      "handler_key": "start_model_quality_review",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "benchmark_run_id": {
+            "type": "string"
+          },
+          "evidence_uris": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "max_repair_passes": {
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "quality_floor": {
+            "maximum": 5,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "reference_brief": {
+            "additionalProperties": false,
+            "description": "LLM-authored observations from the actual reference image. Supply concrete forms and ratios; do not infer a category template.",
+            "properties": {
+              "inspection_views": {
+                "items": {
+                  "enum": [
+                    "front_below",
+                    "underside",
+                    "side",
+                    "front",
+                    "rear",
+                    "top"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 6,
+                "type": "array"
+              },
+              "landmarks": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "negative_constraints": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "primary_masses": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "proportion_checks": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "secondary_forms": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "silhouette": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "source_notes": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "subject": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "surface_cues": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "reference_description": {
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "target_objects": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference_brief",
+          "evidence_uris"
+        ],
+        "type": "object"
+      },
+      "name": "start_model_quality_review",
+      "order": 1300,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "quality_observability"
+    },
+    {
+      "contract": {
         "description": "Add a bounded Cloth simulation modifier without baking caches",
         "mutates_scene": true,
         "requires_live_preview": true
@@ -32069,6 +34577,57 @@
         "type": "object"
       },
       "owner": "rigging_simulation"
+    },
+    {
+      "contract": {
+        "description": "Read a blind or history-inclusive model-quality scoring packet",
+        "has_side_effects": false,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read"
+        ],
+        "supports_headless": true
+      },
+      "description": "Return a scoring packet for one model-quality review. Prior scores and repairs are excluded by default so a separate evaluator can score the current evidence blindly.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "advanced_workflow",
+        "observability"
+      ],
+      "handler_key": "get_model_quality_review_packet",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_prior_scores": {
+            "type": "boolean"
+          },
+          "review_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "review_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_model_quality_review_packet",
+      "order": 1310,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "quality_observability"
     },
     {
       "contract": {
@@ -32162,6 +34721,210 @@
     },
     {
       "contract": {
+        "description": "Validate and store one model-quality scorecard",
+        "has_side_effects": true,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read",
+          "filesystem:write"
+        ],
+        "supports_headless": true
+      },
+      "description": "Submit one complete evidence-backed 1-5 scorecard. The tool validates every applicable criterion and returns ready_for_user_review, repair_required, or blocked_quality_floor.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "advanced_workflow",
+        "observability"
+      ],
+      "handler_key": "submit_model_quality_evaluation",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "blind": {
+            "type": "boolean"
+          },
+          "evaluator": {
+            "maxLength": 240,
+            "type": "string"
+          },
+          "evidence_uris": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "notes": {
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "review_id": {
+            "type": "string"
+          },
+          "scores": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "criterion": {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "evidence": {
+                  "items": {
+                    "maxLength": 1000,
+                    "type": "string"
+                  },
+                  "maxItems": 20,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "finding": {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                "repair_action": {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                "score": {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "criterion",
+                "score",
+                "evidence",
+                "finding",
+                "repair_action"
+              ],
+              "type": "object"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "review_id",
+          "scores"
+        ],
+        "type": "object"
+      },
+      "name": "submit_model_quality_evaluation",
+      "order": 1320,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "quality_observability"
+    },
+    {
+      "contract": {
+        "description": "Record a bounded model-quality repair pass",
+        "has_side_effects": true,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read",
+          "filesystem:write"
+        ],
+        "supports_headless": true
+      },
+      "description": "Record one completed bounded repair pass, update evidence URIs, and return a fresh blind scoring packet. The repair limit is enforced.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "advanced_workflow",
+        "observability"
+      ],
+      "handler_key": "record_model_quality_repair",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_uris": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "notes": {
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "repairs": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                "criterion": {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "result": {
+                  "maxLength": 2000,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "criterion",
+                "action"
+              ],
+              "type": "object"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "type": "array"
+          },
+          "review_id": {
+            "type": "string"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "review_id",
+          "repairs",
+          "evidence_uris"
+        ],
+        "type": "object"
+      },
+      "name": "record_model_quality_repair",
+      "order": 1330,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "quality_observability"
+    },
+    {
+      "contract": {
         "description": "Set viewport, render, or selection visibility flags for named or selected objects",
         "mutates_scene": true,
         "requires_live_preview": true
@@ -32216,6 +34979,51 @@
         "type": "object"
       },
       "owner": "scene_editing"
+    },
+    {
+      "contract": {
+        "description": "Read durable model-quality score and repair state",
+        "has_side_effects": false,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read"
+        ],
+        "supports_headless": true
+      },
+      "description": "Return a named model-quality review with score and repair history, or the latest review.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "advanced_workflow",
+        "observability"
+      ],
+      "handler_key": "get_model_quality_review",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "review_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_model_quality_review",
+      "order": 1340,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "quality_observability"
     },
     {
       "contract": {
@@ -36328,6 +39136,296 @@
     },
     {
       "contract": {
+        "authorization_model": "blender_run_script_equivalent",
+        "description": "Start timeout-safe trusted Python against a copied .blend in background Blender",
+        "destructive_hint": true,
+        "duration_hint": "Returns after starting a background Blender process; poll job status.",
+        "has_side_effects": true,
+        "long_running": false,
+        "mutates_scene": false,
+        "open_world_hint": true,
+        "permissions": [
+          "blender:full",
+          "filesystem:full",
+          "network:full",
+          "process:spawn"
+        ],
+        "requires_approval": false,
+        "returns_background_job": true,
+        "risk_level": "preview",
+        "timeout_recovery": {
+          "message": "Poll the returned trusted script job id before retrying.",
+          "poll_after_seconds": 2,
+          "recoverable": true,
+          "status_tool": "get_trusted_script_job_status"
+        },
+        "timeout_seconds": 60
+      },
+      "description": "Start long generated Blender Python in a background Blender process under active runtime script trust. The job edits a copied .blend and returns immediately with a job id; it cannot replace the live scene until apply_trusted_script_job_result receives explicit user confirmation.",
+      "exposure": "catalog",
+      "groups": [
+        "advanced_workflow",
+        "model_quality"
+      ],
+      "handler_key": "start_trusted_script_job",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "Complete Blender Python. It may call agent_job_report_progress(progress, message, details) and agent_job_cancel_requested().",
+            "maxLength": 500000,
+            "type": "string"
+          },
+          "expected_changes": {
+            "type": "string"
+          },
+          "intent": {
+            "type": "string"
+          },
+          "job_name": {
+            "maxLength": 160,
+            "type": "string"
+          },
+          "risk_level": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "type": "string"
+          },
+          "target_objects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "intent",
+          "expected_changes",
+          "risk_level",
+          "code"
+        ],
+        "type": "object"
+      },
+      "name": "start_trusted_script_job",
+      "order": 1822,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "scripts_transactions"
+    },
+    {
+      "contract": {
+        "description": "Poll one background trusted-script job",
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read",
+          "filesystem:read"
+        ],
+        "supports_headless": true
+      },
+      "description": "Poll a background trusted-script job for progress, status, logs, and result .blend availability.",
+      "exposure": "catalog",
+      "groups": [
+        "advanced_workflow",
+        "model_quality"
+      ],
+      "handler_key": "get_trusted_script_job_status",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_trusted_script_job_status",
+      "order": 1824,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "scripts_transactions"
+    },
+    {
+      "contract": {
+        "description": "Cancel one background trusted-script process",
+        "has_side_effects": true,
+        "mutates_scene": false,
+        "permissions": [
+          "process:terminate",
+          "filesystem:write"
+        ],
+        "risk_level": "preview"
+      },
+      "description": "Cancel a running background trusted-script job and preserve the unchanged live Blender scene.",
+      "exposure": "catalog",
+      "groups": [
+        "advanced_workflow",
+        "model_quality"
+      ],
+      "handler_key": "cancel_trusted_script_job",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "name": "cancel_trusted_script_job",
+      "order": 1826,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "scripts_transactions"
+    },
+    {
+      "contract": {
+        "description": "Checkpoint and replace the live file with a completed trusted-script job result",
+        "destructive_hint": true,
+        "has_side_effects": true,
+        "mutates_scene": true,
+        "open_world_hint": false,
+        "permissions": [
+          "scene:mutate",
+          "project:open",
+          "filesystem:write"
+        ],
+        "requires_approval": true,
+        "timeout_seconds": 120
+      },
+      "description": "Checkpoint the current live file, then open a completed trusted-script job result. Requires an explicit true confirmation that the user approved replacing the live Blender file. Active runtime script trust is preserved across the file change.",
+      "exposure": "catalog",
+      "groups": [
+        "advanced_workflow",
+        "model_quality"
+      ],
+      "handler_key": "apply_trusted_script_job_result",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "confirm_replace_current_scene": {
+            "description": "Must be true only after explicit user approval.",
+            "type": "boolean"
+          },
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "confirm_replace_current_scene"
+        ],
+        "type": "object"
+      },
+      "name": "apply_trusted_script_job_result",
+      "order": 1828,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "scripts_transactions"
+    },
+    {
+      "contract": {
+        "description": "List recent background trusted-script jobs",
+        "mutates_scene": false,
+        "permissions": [
+          "filesystem:read"
+        ],
+        "supports_headless": true
+      },
+      "description": "List recent background trusted-script jobs without returning stored generated Python.",
+      "exposure": "catalog",
+      "groups": [
+        "advanced_workflow",
+        "model_quality"
+      ],
+      "handler_key": "list_trusted_script_jobs",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_trusted_script_jobs",
+      "order": 1829,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "scripts_transactions"
+    },
+    {
+      "contract": {
         "description": "Commit the current live preview transaction",
         "mutates_scene": true
       },
@@ -36515,5 +39613,5 @@
       "owner": "scripts_transactions"
     }
   ],
-  "tool_count": 182
+  "tool_count": 201
 }

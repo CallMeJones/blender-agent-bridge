@@ -368,6 +368,14 @@ def _reapply_external_script_trust_after_file_load(snapshot, *, audit_action):
     }
 
 
+def preserve_external_script_trust_after_file_load(snapshot, *, audit_action):
+    """Public file-lifecycle hook for preserving the current runtime grant."""
+    return _reapply_external_script_trust_after_file_load(
+        snapshot,
+        audit_action=audit_action,
+    )
+
+
 def approve_external_script_trust_window(context, *, ttl_seconds=EXTERNAL_TRUST_TTL_SECONDS, session=False):
     global _runtime_external_trust_expires_at, _runtime_external_trust_session
     state = _scene_state(context)

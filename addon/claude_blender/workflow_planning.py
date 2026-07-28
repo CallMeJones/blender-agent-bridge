@@ -297,6 +297,17 @@ def _authored_construction_strategy(context, prompt):
             "evidence_capture",
             "preview_commit_or_revert",
         ],
+        "long_running_script_path": {
+            "selection_rule": (
+                "Use a background trusted-script job when the cohesive script is likely to exceed the bridge timeout "
+                "or benefits from isolated execution; this is still the primary script path, not a helper fallback."
+            ),
+            "start": "start_trusted_script_job",
+            "poll": "get_trusted_script_job_status",
+            "cancel": "cancel_trusted_script_job",
+            "apply": "apply_trusted_script_job_result",
+            "live_scene_unchanged_until_confirmed_apply": True,
+        },
         "script_preflight": helper_routing.script_authoring_preflight(),
     }
 
@@ -446,7 +457,116 @@ def plan_model_quality_workflow(
         },
         gateway_ready=True,
     )
+    trace_call = _planned_tool_call(
+        "start_execution_trace",
+        {
+            "name": f"Reference model: {subject}",
+            "prompt": prompt or reference_text,
+            "metadata": {
+                "workflow": "plan_model_quality_workflow",
+                "subject": subject,
+                "quality_floor": floor,
+            },
+        },
+        reason="Create a replayable record of tool calls, generated scripts, evidence, repairs, and token usage.",
+        gateway_ready=True,
+    )
+    trace_call["conditional"] = "invoke only when no execution trace is already active; otherwise reuse the active trace"
+    quality_review_start_call = _planned_tool_call(
+        "start_model_quality_review",
+        {},
+        reason="Create durable score and repair state from the reference brief and final matched evidence.",
+        deferred=True,
+        input_handoff={
+            "arguments_template": {
+                "reference_brief": brief,
+                "target_objects": "<resolved_target_objects>",
+                "evidence_uris": "<current_reference_aligned_evidence_uris>",
+                "quality_floor": floor,
+                "max_repair_passes": 3,
+                "trace_id": "<active_trace_id_or_empty>",
+                "benchmark_run_id": "<active_benchmark_run_id_or_empty>",
+            },
+            "resolve_from": [
+                "reference_decomposition.outputs.reference_brief",
+                "refresh_targets.target_resolution",
+                "evidence_score_repair.get_visual_evidence_resources result",
+                "active execution trace",
+                "active quality benchmark run, when present",
+            ],
+            "block_if_empty": ["resolved_target_objects", "current_reference_aligned_evidence_uris"],
+            "client_must_replace_placeholders": True,
+        },
+        gateway_ready=True,
+    )
+    quality_review_packet_call = _planned_tool_call(
+        "get_model_quality_review_packet",
+        {},
+        reason="Request a blind packet so the current evidence is scored without anchoring on prior scores.",
+        deferred=True,
+        depends_on="start_model_quality_review",
+        input_handoff={
+            "arguments_template": {
+                "review_id": "<start_model_quality_review.review.review_id>",
+                "include_prior_scores": False,
+            },
+            "resolve_from": "start_model_quality_review result",
+            "block_if_empty": True,
+        },
+        gateway_ready=True,
+    )
+    quality_evaluation_call = _planned_tool_call(
+        "submit_model_quality_evaluation",
+        {},
+        reason="Validate and persist one complete evidence-backed scorecard for every applicable criterion.",
+        deferred=True,
+        depends_on="get_model_quality_review_packet",
+        input_handoff={
+            "arguments_template": {
+                "review_id": "<model_quality_review_packet.review_id>",
+                "scores": "<complete_scores_for_every_applicable_criterion>",
+                "evaluator": "<client_and_model_identifier>",
+                "evidence_uris": "<current_reference_aligned_evidence_uris>",
+                "blind": True,
+            },
+            "resolve_from": [
+                "get_model_quality_review_packet result",
+                "actual reference image",
+                "current captured evidence",
+            ],
+            "client_must_replace_placeholders": True,
+            "block_if_empty": True,
+        },
+        gateway_ready=True,
+    )
+    quality_repair_call = _planned_tool_call(
+        "record_model_quality_repair",
+        {},
+        reason="Record completed repairs and obtain a fresh blind packet before rescoring.",
+        deferred=True,
+        depends_on="submit_model_quality_evaluation returns repair_required",
+        input_handoff={
+            "arguments_template": {
+                "review_id": "<model_quality_review_id>",
+                "repairs": "<completed_repairs_for_failed_criteria>",
+                "evidence_uris": "<recaptured_reference_aligned_evidence_uris>",
+                "trace_id": "<active_trace_id_or_empty>",
+            },
+            "resolve_from": [
+                "submit_model_quality_evaluation failed_criteria",
+                "completed repair script or helper results",
+                "recaptured evidence",
+            ],
+            "client_must_replace_placeholders": True,
+            "block_if_empty": True,
+        },
+        gateway_ready=True,
+    )
     phases = [
+        {
+            "name": "execution_trace",
+            "tool_calls": [trace_call],
+        },
         {
             "name": "reference_decomposition",
             "goal": "Convert the visual request into explicit form, proportion, surface, and must-not-do constraints before building.",
@@ -494,6 +614,18 @@ def plan_model_quality_workflow(
                     "requires_session_script_trust": True,
                     "one_cohesive_script": True,
                     "script_preflight": construction_strategy["script_preflight"],
+                },
+                "long_running_alternative": {
+                    "selection_rule": (
+                        "Use start_trusted_script_job when the cohesive script is likely to exceed the bridge timeout "
+                        "or benefits from isolated background execution."
+                    ),
+                    "start_tool": "start_trusted_script_job",
+                    "status_tool": "get_trusted_script_job_status",
+                    "cancel_tool": "cancel_trusted_script_job",
+                    "apply_tool": "apply_trusted_script_job_result",
+                    "apply_requires_explicit_user_confirmation": True,
+                    "live_scene_unchanged_until_apply": True,
                 },
             },
         },
@@ -581,6 +713,9 @@ def plan_model_quality_workflow(
                     reason="Collect current evidence resources for scoring and repair decisions.",
                     gateway_ready=True,
                 ),
+                quality_review_start_call,
+                quality_review_packet_call,
+                quality_evaluation_call,
             ],
             "scorecard": rubric,
             "repair_gate": {
@@ -593,6 +728,12 @@ def plan_model_quality_workflow(
                 ],
                 "max_repair_passes": 3,
                 "recapture_after_each_pass": True,
+                "repair_tool_call": quality_repair_call,
+                "after_repair": [
+                    "recapture the same evidence views",
+                    "invoke record_model_quality_repair",
+                    "score the returned fresh blind packet with submit_model_quality_evaluation",
+                ],
             },
         },
         {
@@ -672,12 +813,20 @@ def plan_model_quality_workflow(
                 "construction or repair pass unless the user requested helpers."
             ),
             (
+                "For a long cohesive script, invoke start_trusted_script_job, poll its status, inspect its result, "
+                "and apply it only after explicit user approval; this remains the script-first path."
+            ),
+            (
                 "Resolve the deferred construction script after brief and inspection inputs are ready; resolve "
                 "target-dependent inspection and evidence calls only after refresh_targets is non-empty."
             ),
             "Use the actual reference image and captured evidence to score every applicable criterion; the planner does not infer visual anatomy or surface treatment.",
             "Do not begin surface detail until every applicable form_evidence_gate score meets the quality floor.",
             "Repair scores below the quality floor and recapture evidence, up to the bounded repair-pass limit.",
+            (
+                "Advance the durable model-quality review through start, blind packet, evaluation, repair record, "
+                "and re-evaluation until it reports ready_for_user_review or blocked_quality_floor."
+            ),
             "Leave the final preview pending until the user explicitly chooses commit or revert.",
         ],
         "completion_contract": {
@@ -692,6 +841,8 @@ def plan_model_quality_workflow(
             "inspection_render_required": True,
             "commit_requires_explicit_user_approval": True,
             "must_not_stop_after_planning": True,
+            "durable_quality_review_required": True,
+            "quality_terminal_statuses": ["ready_for_user_review", "blocked_quality_floor"],
         },
         "script_fallback_policy": {
             "legacy_field_name": True,
@@ -709,12 +860,19 @@ def plan_model_quality_workflow(
                 brief["primary_masses"] + brief["secondary_forms"] + brief["landmarks"]
             ),
             "must_leave_preview_pending": True,
+            "long_running_script_path": {
+                "start": "start_trusted_script_job",
+                "poll": "get_trusted_script_job_status",
+                "apply": "apply_trusted_script_job_result",
+                "live_scene_unchanged_until_confirmed_apply": True,
+            },
         },
         "token_policy": {
             "keep_gateway_surface": True,
             "fetch_schemas_on_demand": True,
             "spend_tokens_on_reference_breakdown_and_repair_critique": True,
             "do_not_reduce_default_model_quality_outputs": True,
+            "execution_trace_uses_compact_results_and_local_script_artifacts": True,
         },
     }
 

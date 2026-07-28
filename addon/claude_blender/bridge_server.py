@@ -21,15 +21,19 @@ from . import (
     bridge_protocol,
     build_info,
     context_bundle,
+    execution_traces,
     inspection_render,
     lab_parity,
     playblast_capture,
     preferences,
+    quality_benchmarks,
+    quality_reviews,
     render_jobs,
     response_controls,
     script_runner,
     tool_dispatcher,
     transcript,
+    trusted_script_jobs,
     viewport_capture,
 )
 
@@ -476,6 +480,34 @@ def _resources():
             "description": "Status, progress, output paths, and resource URIs for the latest async render job",
             "mimeType": "application/json",
         },
+        {
+            "uri": execution_traces.LATEST_TRACE_RESOURCE_URI,
+            "name": "latest-execution-trace",
+            "title": "Latest Execution Trace",
+            "description": "Latest replay-oriented trace manifest, event counts, and token estimates",
+            "mimeType": "application/json",
+        },
+        {
+            "uri": quality_reviews.LATEST_REVIEW_RESOURCE_URI,
+            "name": "latest-model-quality-review",
+            "title": "Latest Model Quality Review",
+            "description": "Latest structured quality scores, repair state, and completion gate",
+            "mimeType": "application/json",
+        },
+        {
+            "uri": quality_benchmarks.LATEST_BENCHMARK_RESOURCE_URI,
+            "name": "latest-quality-benchmark",
+            "title": "Latest Quality Benchmark Run",
+            "description": "Latest versioned benchmark run and routing expectation result",
+            "mimeType": "application/json",
+        },
+        {
+            "uri": trusted_script_jobs.LATEST_JOB_RESOURCE_URI,
+            "name": "latest-trusted-script-job",
+            "title": "Latest Trusted Script Job",
+            "description": "Latest background trusted-script status and result availability",
+            "mimeType": "application/json",
+        },
     ]
 
 
@@ -681,6 +713,37 @@ def _read_resource(uri):
                 context=bpy.context,
                 preferred_dir=_capture_cache_dir(),
             )
+    trace_id = execution_traces.parse_trace_resource_uri(uri)
+    if trace_id:
+        trace = (
+            execution_traces.latest_trace_manifest()
+            if trace_id == "latest"
+            else execution_traces.trace_status(trace_id)
+        )
+        if not trace.get("available", True):
+            return None
+        return {"mimeType": "application/json", "text": _json_text(trace)}
+    review_id = quality_reviews.parse_review_resource_uri(uri)
+    if review_id:
+        review = quality_reviews.latest_review() if review_id == "latest" else quality_reviews.get_review(review_id)
+        if not review.get("available", True):
+            return None
+        return {"mimeType": "application/json", "text": _json_text(review)}
+    benchmark_id = quality_benchmarks.parse_benchmark_resource_uri(uri)
+    if benchmark_id:
+        run = quality_benchmarks.latest_run() if benchmark_id == "latest" else quality_benchmarks.get_run(benchmark_id)
+        if not run.get("available", True):
+            return None
+        return {"mimeType": "application/json", "text": _json_text(run)}
+    script_job_id, script_job_kind = trusted_script_jobs.parse_job_resource_uri(uri)
+    if script_job_id:
+        job = trusted_script_jobs.latest_job() if script_job_id == "latest" else None
+        if script_job_id == "latest" and job.get("available", True):
+            script_job_id = str(job.get("job_id") or "")
+        if script_job_kind == "metadata":
+            return trusted_script_jobs.metadata_resource(script_job_id)
+        if script_job_kind == "log":
+            return trusted_script_jobs.log_resource(script_job_id)
     return None
 
 
@@ -717,6 +780,7 @@ def _execute_tool(payload):
             }
     ok = False
     result = {}
+    started_at = time.perf_counter()
     _begin_active_operation(name, args, _tool_timeout_seconds(name))
     try:
         result_text = tool_dispatcher.execute_tool(bpy.context, name, args)
@@ -737,6 +801,17 @@ def _execute_tool(payload):
                 mutates_scene=bool(contract.get("mutates_scene", False)),
                 requires_approval=bool(contract.get("requires_approval", False)),
                 arguments=audit_log.summarize_arguments(args),
+            )
+        except Exception:
+            pass
+        try:
+            execution_traces.record_tool_call(
+                layer="bridge",
+                tool_name=name,
+                arguments=args,
+                result=result,
+                duration_ms=(time.perf_counter() - started_at) * 1000.0,
+                contract=bridge_protocol.normalized_tool_contract(name),
             )
         except Exception:
             pass

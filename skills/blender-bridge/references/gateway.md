@@ -40,6 +40,18 @@ Planner results may include helper names, `next_tool_calls`, `deferred_tool_call
 - Fetch the current schema even when a planner supplied likely arguments.
 - Continue after planning when the user requested execution.
 
+## Replayable Runs
+
+For substantial modeling, animation, material, rigging, or look-development work:
+
+1. Discover and invoke `start_execution_trace` unless a trace is already active.
+2. Run normal gateway discovery and invocation. The bridge records compact arguments, results, durations, and contracts. The starting prompt is hashed and counted, not stored verbatim.
+3. Keep generated Python in local trace artifacts; do not paste it into repeated status calls.
+4. Invoke `finalize_execution_trace` with the observed outcome and provider-reported token usage.
+5. Use `prepare_execution_trace_replay` only as a dry-run plan. Mutation and stored script code remain withheld until explicitly requested and approved.
+
+Traces improve reproducibility without expanding top-level `tools/list`.
+
 ## Token Discipline
 
 - Keep search results compact.

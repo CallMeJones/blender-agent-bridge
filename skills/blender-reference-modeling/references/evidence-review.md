@@ -11,6 +11,15 @@ Use the smallest set that proves the brief:
 
 Do not score from text alone when image evidence is available. Do not use surface detail as evidence that silhouette or proportions are correct.
 
+After the evidence set is current:
+
+1. Invoke `start_model_quality_review` with the resolved targets, evidence URIs, reference brief, floor, and repair limit.
+2. Invoke `get_model_quality_review_packet` with `include_prior_scores=false`.
+3. Score only that packet and the actual visual evidence.
+4. Invoke `submit_model_quality_evaluation` with every applicable criterion.
+
+The blind packet avoids anchoring a new evaluation on prior scores. Durable review state, rather than prose in the chat, owns the completion gate.
+
 ## Scorecard
 
 Score each applicable criterion from 1 to 5 and attach concrete evidence:

@@ -17,6 +17,7 @@ For every live reference-modeling build, comparison, review, or repair:
 2. Fetch its current schema.
 3. Invoke it with the image-derived `reference_brief`.
 4. Follow its executable and deferred calls through evidence and repair.
+5. Advance its durable quality review to `ready_for_user_review` or `blocked_quality_floor`.
 
 Do not substitute a standalone modeling recipe or `plan_advanced_scene_workflow` for this required entry point. The advanced planner may appear inside the returned workflow.
 
@@ -34,6 +35,7 @@ Passing the quality gates means `ready_for_user_review`, not committed or saved.
 6. Build primary masses and silhouette before landmarks or surface detail.
 7. Refresh scene objects and resolve the union of existing targets, construction-returned names, and new scene-diff objects.
 8. Pass resolved names into every later inspection, surface, and evidence call.
+9. Start durable scoring only after current target names and matched evidence URIs are available.
 
 Read [references/reference-brief.md](references/reference-brief.md) before invoking the planner.
 
@@ -66,4 +68,6 @@ Add materials, textures, hair, fibers, particles, or finish only when explicit `
 
 ## Finish In Preview
 
-Capture final reference-aligned evidence and score every applicable criterion. Report `ready_for_user_review`, leave the preview pending, and ask the user to choose commit or revert. Do not stop after planning, initial construction, or an unscored screenshot.
+Capture final reference-aligned evidence, invoke `start_model_quality_review`, request a blind packet with `get_model_quality_review_packet`, and submit every applicable score with `submit_model_quality_evaluation`. When repair is required, repair and recapture first, then invoke `record_model_quality_repair` to obtain a fresh blind packet before rescoring.
+
+Report the durable terminal status, leave the preview pending, and ask the user to choose commit or revert. Do not stop after planning, initial construction, an unscored screenshot, or an in-memory scorecard.

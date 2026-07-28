@@ -19,9 +19,9 @@ SNAPSHOT_PATH = os.path.join(ROOT, "tests", "snapshots", "tool_registry.json")
 class ToolRegistryTests(unittest.TestCase):
     def test_inventory_is_complete_and_domain_owned(self):
         specs = tool_registry.REGISTRY.specs()
-        self.assertEqual(182, len(specs))
-        self.assertEqual(181, len(tool_registry.definitions()))
-        self.assertEqual(11, len(tool_registry.DOMAIN_MODULES))
+        self.assertEqual(201, len(specs))
+        self.assertEqual(200, len(tool_registry.definitions()))
+        self.assertEqual(12, len(tool_registry.DOMAIN_MODULES))
         self.assertEqual({spec.name for spec in specs}, set(bridge_protocol.TOOL_CONTRACTS))
         self.assertEqual(
             {spec.name for spec in specs if spec.exposure != "internal"},

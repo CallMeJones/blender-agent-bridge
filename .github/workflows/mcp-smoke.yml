@@ -208,6 +208,8 @@ jobs:
             smoke_advanced_helpers
             smoke_presentation_helpers
             smoke_script_runner
+            smoke_quality_observability
+            smoke_trusted_script_jobs
             smoke_context_docs
             smoke_ui_layout
           )
@@ -228,6 +230,8 @@ jobs:
               smoke_render_jobs
               smoke_safe_editing_helpers
               smoke_script_runner
+              smoke_quality_observability
+              smoke_trusted_script_jobs
               smoke_tool_selection
               smoke_ui_layout
               smoke_world_model

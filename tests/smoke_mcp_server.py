@@ -1031,7 +1031,7 @@ def main():
             },
         )
         offline_found = {tool["name"] for tool in offline_search["result"]["structuredContent"]["tools"]}
-        assert {"draft_script", "run_approved_script"}.issubset(offline_found), offline_search
+        assert {"draft_script", "start_trusted_script_job"}.issubset(offline_found), offline_search
         offline_simulation_search = _send(
             offline_proc,
             {
@@ -1060,7 +1060,9 @@ def main():
         offline_catalog_found = {
             tool["name"] for tool in offline_catalog_search["result"]["structuredContent"]["tools"]
         }
-        assert {"draft_script", "run_approved_script"}.issubset(offline_catalog_found), offline_catalog_search
+        assert {"draft_script", "start_trusted_script_job"}.issubset(
+            offline_catalog_found
+        ), offline_catalog_search
         for query, script_first in (
             ("Make the selected cube bounce twice and get smaller each bounce.", True),
             ("Block a jump animation with anticipation, contact, apex, settle.", True),
@@ -1698,10 +1700,16 @@ def main():
             },
         )
         searched_names = {tool["name"] for tool in searched["result"]["structuredContent"]["tools"]}
-        assert {"draft_script", "run_approved_script"}.issubset(searched_names), searched
+        assert {"draft_script", "start_trusted_script_job"}.issubset(
+            searched_names
+        ), searched
         searched_tools = searched["result"]["structuredContent"]["tools"]
-        run_script_summary = next(tool for tool in searched_tools if tool["name"] == "run_approved_script")
-        assert not run_script_summary.get("guardrail_warnings", []), searched
+        job_script_summary = next(
+            tool for tool in searched_tools if tool["name"] == "start_trusted_script_job"
+        )
+        assert job_script_summary["timeout_recovery"]["status_tool"] == (
+            "get_trusted_script_job_status"
+        ), searched
         assert searched["result"]["structuredContent"]["include_schemas"] is False, searched
         assert searched["result"]["structuredContent"]["schema_lookup_tool"] == "get_blender_tool_schema", searched
         assert "input_schema" not in searched_tools[0], searched
@@ -2559,8 +2567,9 @@ def main():
         )
         trusted_prompt_text = trusted_prompt["result"]["messages"][0]["content"]["text"]
         assert "Trust Agent Scripts" in trusted_prompt_text, trusted_prompt
-        assert "runs it immediately" in trusted_prompt_text, trusted_prompt
-        assert "auto_ran=true" in trusted_prompt_text, trusted_prompt
+        assert "Call draft_script" in trusted_prompt_text, trusted_prompt
+        assert "start_trusted_script_job" in trusted_prompt_text, trusted_prompt
+        assert "explicit user approval" in trusted_prompt_text, trusted_prompt
         asset_prompt = _send(
             proc,
             {

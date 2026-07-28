@@ -110,10 +110,14 @@ class RepositorySkillTests(unittest.TestCase):
             bridge_text,
         )
         self.assertIn("do not fragment the retry into primitive helpers", bridge_text)
+        self.assertIn("start_trusted_script_job", bridge_text)
+        self.assertIn("start an execution trace", bridge_text)
         self.assertNotIn("fallback after a concrete helper gap", bridge_text)
         self.assertIn("one cohesive reference-derived script", reference_text)
         self.assertIn("does not change the repair execution strategy", reference_text)
         self.assertIn("not an automatic downgrade to primitive-only construction", reference_text)
+        self.assertIn("start_model_quality_review", reference_text)
+        self.assertIn("fresh blind packet", reference_text)
 
     def test_skill_references_are_one_level_and_resolve(self):
         for skill_file in SKILLS_ROOT.glob("*/SKILL.md"):
