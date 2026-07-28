@@ -171,6 +171,7 @@ Operational changes should use typed helpers when validation, rollback, provenan
 - `animate_shape_key`
 - `create_text_object`
 - `create_curve_path`
+- `create_reference_modeling_guides`
 - `add_particle_system_to_selected`
 - `create_basic_armature`
 - `add_copy_transform_constraint`

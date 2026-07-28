@@ -796,6 +796,7 @@ HELPER_FIRST_SCRIPT_RULES = (
             "plan_advanced_scene_workflow",
             "get_geometry_nodes_details",
             "inspect_modeling_quality",
+            "create_reference_modeling_guides",
             "apply_procedural_array_stack",
             "edit_mesh",
             "curve_to_mesh",
@@ -969,6 +970,7 @@ HELPER_FIRST_SCRIPT_RULES = (
             "add_camera",
             "create_text_object",
             "create_curve_path",
+            "create_reference_modeling_guides",
         ],
     },
     {

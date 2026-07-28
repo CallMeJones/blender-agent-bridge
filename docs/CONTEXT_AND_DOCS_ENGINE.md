@@ -229,6 +229,7 @@ Initial helpers:
 - `animate_shape_key(object_name, key_name, frame_start, frame_end, value_start, value_end)`
 - `create_text_object(name, body, location, rotation, scale, size)`
 - `create_curve_path(name, points, bevel_depth, cyclic)`
+- `create_reference_modeling_guides(image_path, image_size, coordinate_space, landmarks, curves, masses, measurements)`
 - `add_particle_system_to_selected(name, count, frame_start, frame_end, lifetime)`
 - `create_basic_armature(name, location, rotation)`
 - `add_copy_transform_constraint(target_name, constraint_type)`

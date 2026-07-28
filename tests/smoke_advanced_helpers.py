@@ -50,6 +50,7 @@ ADVANCED_TOOLS = {
     "animate_shape_key",
     "create_text_object",
     "create_curve_path",
+    "create_reference_modeling_guides",
     "add_particle_system_to_selected",
     "create_basic_armature",
     "add_copy_transform_constraint",
@@ -1696,6 +1697,45 @@ def main():
             },
         )
         assert bpy.data.objects[curve["object"]].type == "CURVE"
+
+        reference_guides = _execute(
+            context,
+            "create_reference_modeling_guides",
+            {
+                "image_size": [1000, 1000],
+                "coordinate_space": "normalized",
+                "subject": "gray cartoon kitten",
+                "collection_name": "Agent Bridge Kitten Reference Guides",
+                "include_image_plane": False,
+                "plane_height": 3.0,
+                "landmarks": [
+                    {"name": "left_eye", "point": [0.35, 0.32]},
+                    {"name": "right_eye", "point": [0.65, 0.32]},
+                    {"name": "nose", "point": [0.50, 0.44]},
+                ],
+                "curves": [
+                    {
+                        "name": "head_outline",
+                        "points": [[0.18, 0.18], [0.82, 0.18], [0.84, 0.58], [0.50, 0.72], [0.16, 0.58]],
+                        "cyclic": True,
+                    }
+                ],
+                "masses": [
+                    {"name": "head", "center": [0.5, 0.36], "radius": [0.32, 0.25]},
+                ],
+                "measurements": [
+                    {"name": "eye_span", "from": "left_eye", "to": "right_eye"},
+                ],
+            },
+        )
+        assert reference_guides["collection"] in bpy.data.collections
+        assert len(reference_guides["landmarks"]) == 3, reference_guides
+        assert len(reference_guides["curves"]) == 1, reference_guides
+        assert len(reference_guides["masses"]) == 1, reference_guides
+        assert len(reference_guides["measurements"]) == 1, reference_guides
+        assert reference_guides["reference_brief_seed"]["subject"] == "gray cartoon kitten", reference_guides
+        assert live_preview.current_transaction()["status"] == "pending", reference_guides
+
         converted_curve = _execute(
             context,
             "curve_to_mesh",

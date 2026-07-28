@@ -37,6 +37,27 @@ def create_curve_path(context, args):
     )
 
 
+def create_reference_modeling_guides(context, args):
+    return advanced_helpers.create_reference_modeling_guides(
+        context,
+        image_path=str(args.get("image_path") or ""),
+        image_size=args.get("image_size") or [],
+        coordinate_space=str(args.get("coordinate_space") or "normalized"),
+        subject=str(args.get("subject") or "reference model"),
+        collection_name=str(args.get("collection_name") or "Reference Modeling Guides"),
+        plane_height=_bounded_float(args.get("plane_height"), 3.0, minimum=0.01, maximum=100.0),
+        plane_location=_float_list(args.get("plane_location"), 3, (0.0, 0.0, 1.5)),
+        guide_offset_y=_bounded_float(args.get("guide_offset_y"), -0.02, minimum=-10.0, maximum=10.0),
+        include_image_plane=bool(args.get("include_image_plane", True)),
+        image_alpha=_bounded_float(args.get("image_alpha"), 0.35, minimum=0.0, maximum=1.0),
+        landmarks=args.get("landmarks") if isinstance(args.get("landmarks"), list) else [],
+        curves=args.get("curves") if isinstance(args.get("curves"), list) else [],
+        masses=args.get("masses") if isinstance(args.get("masses"), list) else [],
+        measurements=args.get("measurements") if isinstance(args.get("measurements"), list) else [],
+        label=args.get("label", "Create reference modeling guides"),
+    )
+
+
 def apply_procedural_array_stack(context, args):
     return advanced_helpers.apply_procedural_array_stack(
         context,

@@ -14,6 +14,7 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "plan_model_quality_workflow",
             "list_scene_objects",
             "get_blend_file_diagnostics",
+            "create_reference_modeling_guides",
             "inspect_modeling_quality",
             "plan_advanced_scene_workflow",
             "capture_viewport",
