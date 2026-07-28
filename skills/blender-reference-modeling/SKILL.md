@@ -9,6 +9,8 @@ Use the supplied image as the comparison source. The skill defines process and q
 
 Apply the five-tool Blender Bridge contract. If it is not already active, read [../blender-bridge/references/gateway.md](../blender-bridge/references/gateway.md).
 
+For image-to-form work, create measurable guide scaffolding before sculpting. Read [references/guide-first-workflow.md](references/guide-first-workflow.md) whenever the task includes an image reference, clicked/annotated landmarks, organic sculpting, or fur/hair/groom direction.
+
 ## Non-Negotiable Contract
 
 For every live reference-modeling build, comparison, review, or repair:
@@ -30,12 +32,13 @@ Passing the quality gates means `ready_for_user_review`, not committed or saved.
 1. Analyze the actual reference before scene mutation.
 2. Write a structured `reference_brief`.
 3. Inspect scene objects and file diagnostics.
-4. Fetch and invoke `plan_model_quality_workflow`.
-5. Follow its `next_tool_calls` and resolve deferred calls only when their blockers clear.
-6. Build primary masses and silhouette before landmarks or surface detail.
-7. Refresh scene objects and resolve the union of existing targets, construction-returned names, and new scene-diff objects.
-8. Pass resolved names into every later inspection, surface, and evidence call.
-9. Start durable scoring only after current target names and matched evidence URIs are available.
+4. Create or inspect reference guide scaffolding when the source is visual and guide inputs are available.
+5. Fetch and invoke `plan_model_quality_workflow`.
+6. Follow its `next_tool_calls` and resolve deferred calls only when their blockers clear.
+7. Build primary masses and silhouette before landmarks or surface detail.
+8. Refresh scene objects and resolve the union of existing targets, construction-returned names, and new scene-diff objects.
+9. Pass resolved names into every later inspection, surface, and evidence call.
+10. Start durable scoring only after current target names and matched evidence URIs are available.
 
 Read [references/reference-brief.md](references/reference-brief.md) before invoking the planner.
 
@@ -44,6 +47,8 @@ Do not use canned category bases, category-specific builders, memorized anatomy,
 Reference requests commonly mix construction with evidence, rendering, or saving. Keep those operational calls outside the authored script handoff without allowing them to demote the reference-derived construction or repair script.
 
 Do not invent focal lengths, numeric tolerances, material parameters, anatomy, dimensions, or symmetry. Preserve ambiguous measurements as ambiguity unless the image or user resolves them. Label values as supplied, measured, derived, or uncertain.
+
+Use `create_reference_modeling_guides` for calibrated image planes, outline curves, landmark empties, mass ellipses, and proportional measurements when the prompt or annotation data supplies enough points. Use `inspect_reference_modeling_guides` before authored construction or repair scripts so scripts receive exact guide names, world points, and the saved `reference_brief` seed instead of re-parsing the scene.
 
 ## Gate Form Before Surface
 
@@ -57,6 +62,8 @@ Capture evidence from:
 Score silhouette, proportions, landmark placement, and form continuity before adding surface treatment. Require every applicable form criterion to meet the planner's quality floor.
 
 Read [references/evidence-review.md](references/evidence-review.md) before scoring.
+
+For fur, hair, fibers, whiskers, or plush surface flow, place coarse forms first, then use `create_directional_fur_curves` as a preview-safe groom scaffold only after silhouette and proportions are acceptable. Directional curves are guide/detail evidence, not a substitute for mass correction.
 
 ## Repair Weakest Criteria
 

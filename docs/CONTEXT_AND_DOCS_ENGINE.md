@@ -230,7 +230,9 @@ Initial helpers:
 - `create_text_object(name, body, location, rotation, scale, size)`
 - `create_curve_path(name, points, bevel_depth, cyclic)`
 - `create_reference_modeling_guides(image_path, image_size, coordinate_space, landmarks, curves, masses, measurements)`
+- `inspect_reference_modeling_guides(collection_name, include_points, max_points_per_curve, max_collections)`
 - `add_particle_system_to_selected(name, count, frame_start, frame_end, lifetime)`
+- `create_directional_fur_curves(object_names, selected_only, count, length, root_width, flow_direction)`
 - `create_basic_armature(name, location, rotation)`
 - `add_copy_transform_constraint(target_name, constraint_type)`
 - `set_render_settings(engine, resolution, fps, frame_start, frame_end, film_transparent, quality_preset, samples, denoise, view_transform, look, exposure, gamma)`

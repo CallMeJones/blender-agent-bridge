@@ -51,7 +51,9 @@ ADVANCED_TOOLS = {
     "create_text_object",
     "create_curve_path",
     "create_reference_modeling_guides",
+    "inspect_reference_modeling_guides",
     "add_particle_system_to_selected",
+    "create_directional_fur_curves",
     "create_basic_armature",
     "add_copy_transform_constraint",
     "set_render_settings",
@@ -1663,6 +1665,25 @@ def main():
         assert particles["objects"] == ["Cube"]
         assert cube.modifiers.get("Agent Bridge Advanced Particles")
 
+        fur_curves = _execute(
+            context,
+            "create_directional_fur_curves",
+            {
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "name_prefix": "Agent Bridge Advanced Fur",
+                "count": 18,
+                "length": 0.12,
+                "root_width": 0.003,
+                "flow_direction": [1.0, 0.0, 0.0],
+                "curve_points": 4,
+                "seed": 11,
+            },
+        )
+        fur_object = bpy.data.objects[fur_curves["created"][0]["object"]]
+        assert fur_object.type == "CURVE", fur_curves
+        assert len(fur_object.data.splines) == fur_curves["created"][0]["strand_count"], fur_curves
+
         cloth = _execute(
             context,
             "add_cloth_simulation_to_selected",
@@ -1734,6 +1755,18 @@ def main():
         assert len(reference_guides["masses"]) == 1, reference_guides
         assert len(reference_guides["measurements"]) == 1, reference_guides
         assert reference_guides["reference_brief_seed"]["subject"] == "gray cartoon kitten", reference_guides
+        inspected_guides = _execute(
+            context,
+            "inspect_reference_modeling_guides",
+            {"collection_name": reference_guides["collection"], "include_points": True, "max_points_per_curve": 8},
+        )
+        inspected_collection = inspected_guides["collections"][0]
+        assert inspected_guides["totals"]["landmarks"] == 3, inspected_guides
+        assert inspected_guides["totals"]["curves"] == 1, inspected_guides
+        assert inspected_guides["totals"]["masses"] == 1, inspected_guides
+        assert inspected_guides["totals"]["measurements"] == 1, inspected_guides
+        assert inspected_collection["subject"] == "gray cartoon kitten", inspected_guides
+        assert inspected_collection["curves"][0]["world_points"], inspected_guides
         assert live_preview.current_transaction()["status"] == "pending", reference_guides
 
         converted_curve = _execute(

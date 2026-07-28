@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .. import advanced_rigging as advanced_helpers, live_preview, preferences, script_execution, script_runner, world_model
-from .support import _bounded_int, _float_list, _name_list, _simulation_bake_script
+from .support import _bounded_float, _bounded_int, _float_list, _name_list, _simulation_bake_script
 
 
 def get_rigging_details(context, args):
@@ -258,6 +258,27 @@ def add_particle_system_to_selected(context, args):
         lifetime=float(args.get("lifetime", 80.0)),
         particle_size=float(args.get("particle_size", 0.05)),
         label=args.get("label", "Add particle system"),
+    )
+
+
+def create_directional_fur_curves(context, args):
+    return advanced_helpers.create_directional_fur_curves(
+        context,
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", True)),
+        name_prefix=str(args.get("name_prefix") or "Agent Bridge Fur"),
+        count=_bounded_int(args.get("count"), 160, minimum=1, maximum=5000),
+        length=_bounded_float(args.get("length"), 0.12, minimum=0.001, maximum=100.0),
+        root_width=_bounded_float(args.get("root_width"), 0.004, minimum=0.0001, maximum=10.0),
+        flow_direction=_float_list(args.get("flow_direction"), 3, (1.0, 0.0, 0.0)),
+        flow_strength=_bounded_float(args.get("flow_strength"), 0.65, minimum=0.0, maximum=1.0),
+        normal_lift=_bounded_float(args.get("normal_lift"), 0.35, minimum=0.0, maximum=1.0),
+        length_randomness=_bounded_float(args.get("length_randomness"), 0.35, minimum=0.0, maximum=1.0),
+        curve_points=_bounded_int(args.get("curve_points"), 4, minimum=2, maximum=8),
+        material_name=str(args.get("material_name") or ""),
+        color=_float_list(args.get("color"), 4, (0.82, 0.82, 0.78, 1.0)),
+        seed=_bounded_int(args.get("seed"), 17, minimum=0, maximum=1000000),
+        label=args.get("label", "Create directional fur curves"),
     )
 
 

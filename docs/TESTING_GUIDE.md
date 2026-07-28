@@ -609,9 +609,11 @@ Tools:
 create_text_object
 create_curve_path
 create_reference_modeling_guides
+inspect_reference_modeling_guides
 apply_procedural_array_stack
 create_camera_dolly_animation
 add_particle_system_to_selected
+create_directional_fur_curves
 add_cloth_simulation_to_selected
 create_basic_armature
 add_copy_transform_constraint

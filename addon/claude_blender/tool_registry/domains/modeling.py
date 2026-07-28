@@ -343,9 +343,33 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'edit_mesh',
                'path_policy': 'image_path must be a local reference image path supplied by the user, a file picker, a '
                               'prior capture, or another trusted local source. Omit image_path to create guides from '
                               'image_size and annotations only.'},
-  'handler_key': 'create_reference_modeling_guides',
+ 'handler_key': 'create_reference_modeling_guides',
   'order': 1070,
   'groups': ('advanced_create', 'procedural_3d', 'model_quality', 'reference_modeling'),
+  'exposure': 'catalog',
+  'owner': 'modeling'},
+ {'name': 'inspect_reference_modeling_guides',
+  'description': 'Inspect reference modeling guide collections created by create_reference_modeling_guides. Returns '
+                 'image-plane metadata, landmarks, curves, mass ellipses, measurements, and the saved '
+                 'reference_brief seed so agents can hand exact guide facts into authored modeling scripts.',
+  'input_schema': {'type': 'object',
+                   'properties': {'collection_name': {'type': 'string',
+                                                      'description': 'Optional exact guide collection name. Omit to '
+                                                                     'inspect tagged guide collections.'},
+                                  'include_points': {'type': 'boolean',
+                                                     'description': 'Include sampled world-space curve points. Keep '
+                                                                    'false for compact script handoff unless points '
+                                                                    'are needed.'},
+                                  'max_points_per_curve': {'type': 'integer', 'minimum': 2, 'maximum': 512},
+                                  'max_collections': {'type': 'integer', 'minimum': 1, 'maximum': 64}},
+                   'additionalProperties': False},
+  'contract': {'description': 'Read reference guide metadata without mutating the scene',
+               'mutates_scene': False,
+               'permissions': ['scene:read'],
+               'supports_headless': True},
+  'handler_key': 'inspect_reference_modeling_guides',
+  'order': 1075,
+  'groups': ('deep_inspect', 'model_quality', 'reference_modeling'),
   'exposure': 'catalog',
   'owner': 'modeling'},
  {'name': 'apply_procedural_array_stack',

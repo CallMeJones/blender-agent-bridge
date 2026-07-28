@@ -797,6 +797,8 @@ HELPER_FIRST_SCRIPT_RULES = (
             "get_geometry_nodes_details",
             "inspect_modeling_quality",
             "create_reference_modeling_guides",
+            "inspect_reference_modeling_guides",
+            "create_directional_fur_curves",
             "apply_procedural_array_stack",
             "edit_mesh",
             "curve_to_mesh",
@@ -971,6 +973,7 @@ HELPER_FIRST_SCRIPT_RULES = (
             "create_text_object",
             "create_curve_path",
             "create_reference_modeling_guides",
+            "inspect_reference_modeling_guides",
         ],
     },
     {

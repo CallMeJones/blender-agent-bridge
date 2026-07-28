@@ -4,9 +4,12 @@
 
 from __future__ import annotations
 
+import math
+import random
 import re
 
 import bpy
+from mathutils import Vector
 
 from . import live_preview
 
@@ -14,6 +17,7 @@ from .advanced_support import (
     KEYFRAME_INTERPOLATIONS,
     TRANSFORM_PATH_ALIASES,
     _coerce_vector,
+    _material_for_color,
     _prepare_transform_action_for_edit,
     _resolve_edit_objects,
     _set_action_interpolation,
@@ -1020,6 +1024,138 @@ def add_particle_system_to_selected(
         "transaction_id": transaction["id"],
     }
 
+def _mesh_polygon_center(mesh, poly):
+    vertices = [mesh.vertices[index].co for index in poly.vertices]
+    if not vertices:
+        return Vector((0.0, 0.0, 0.0))
+    center = Vector((0.0, 0.0, 0.0))
+    for vertex in vertices:
+        center += vertex
+    return center / len(vertices)
+
+def _stable_surface_samples(obj, *, count, seed):
+    mesh = obj.data
+    polygons = [poly for poly in mesh.polygons if len(poly.vertices) >= 3 and float(getattr(poly, "area", 0.0)) > 0.0]
+    if not polygons:
+        return []
+    rng = random.Random(int(seed or 0) + sum(ord(char) for char in obj.name))
+    samples = []
+    normal_matrix = obj.matrix_world.to_3x3()
+    for index in range(max(1, int(count or 1))):
+        poly = polygons[index % len(polygons)]
+        center = _mesh_polygon_center(mesh, poly)
+        vertices = [mesh.vertices[vertex_index].co for vertex_index in poly.vertices]
+        jitter = Vector((0.0, 0.0, 0.0))
+        if len(vertices) >= 2:
+            edge_a = vertices[1] - vertices[0]
+            edge_b = vertices[-1] - vertices[0]
+            jitter = edge_a * (rng.random() - 0.5) * 0.45 + edge_b * (rng.random() - 0.5) * 0.45
+        root = obj.matrix_world @ (center + jitter)
+        normal = normal_matrix @ poly.normal
+        if normal.length < 0.000001:
+            normal = Vector((0.0, 0.0, 1.0))
+        normal.normalize()
+        samples.append((root, normal))
+    return samples
+
+def _surface_flow_tangent(normal, flow_direction):
+    flow = Vector(_coerce_vector(flow_direction, (1.0, 0.0, 0.0)))
+    if flow.length < 0.000001:
+        flow = Vector((1.0, 0.0, 0.0))
+    flow.normalize()
+    tangent = flow - normal * flow.dot(normal)
+    if tangent.length < 0.000001:
+        fallback = Vector((0.0, 1.0, 0.0)) if abs(normal.y) < 0.9 else Vector((1.0, 0.0, 0.0))
+        tangent = fallback - normal * fallback.dot(normal)
+    tangent.normalize()
+    return tangent
+
+def create_directional_fur_curves(
+    context,
+    *,
+    object_names=None,
+    selected_only=True,
+    name_prefix="Agent Bridge Fur",
+    count=160,
+    length=0.12,
+    root_width=0.004,
+    flow_direction=(1.0, 0.0, 0.0),
+    flow_strength=0.65,
+    normal_lift=0.35,
+    length_randomness=0.35,
+    curve_points=4,
+    material_name="",
+    color=(0.82, 0.82, 0.78, 1.0),
+    seed=17,
+    label="Create directional fur curves",
+):
+    objects, missing = _resolve_edit_objects(context, object_names=object_names, selected_only=selected_only)
+    meshes = [obj for obj in objects if obj.type == "MESH"]
+    if not meshes:
+        return {"ok": False, "message": "No mesh objects found for directional fur curves", "missing_object_names": missing}
+    transaction = live_preview.begin(label, context)
+    material = _material_for_color(material_name or f"{name_prefix} Material", color)
+    created = []
+    total_count = max(1, min(5000, int(count or 1)))
+    per_object_count = max(1, int(math.ceil(total_count / max(1, len(meshes)))))
+    strand_points = max(2, min(8, int(curve_points or 4)))
+    fur_length = max(0.001, min(100.0, float(length or 0.001)))
+    width = max(0.0001, min(10.0, float(root_width or 0.0001)))
+    tangent_weight = max(0.0, min(1.0, float(flow_strength or 0.0)))
+    lift_weight = max(0.0, min(1.0, float(normal_lift or 0.0)))
+    random_weight = max(0.0, min(1.0, float(length_randomness or 0.0)))
+    for obj_index, obj in enumerate(meshes):
+        curve = bpy.data.curves.new(f"{name_prefix} {obj.name} Data", "CURVE")
+        curve.dimensions = "3D"
+        curve.bevel_depth = width
+        curve.bevel_resolution = 1
+        curve.resolution_u = 2
+        curve.materials.append(material)
+        rng = random.Random(int(seed or 0) + obj_index * 7919)
+        samples = _stable_surface_samples(obj, count=per_object_count, seed=int(seed or 0) + obj_index * 101)
+        for root, normal in samples:
+            tangent = _surface_flow_tangent(normal, flow_direction)
+            length_scale = 1.0 - random_weight * rng.random()
+            direction = tangent * tangent_weight + normal * lift_weight
+            if direction.length < 0.000001:
+                direction = normal
+            direction.normalize()
+            spline = curve.splines.new("POLY")
+            spline.points.add(strand_points - 1)
+            for point_index, point in enumerate(spline.points):
+                t = point_index / max(1, strand_points - 1)
+                bend = math.sin(t * math.pi) * 0.25
+                world = root + direction * (fur_length * length_scale * t) + normal * (fur_length * bend * lift_weight)
+                point.co = (float(world.x), float(world.y), float(world.z), 1.0)
+        curve_obj = bpy.data.objects.new(f"{name_prefix} {obj.name}", curve)
+        context.scene.collection.objects.link(curve_obj)
+        live_preview._record_created_id("object", curve_obj.name)
+        live_preview._record_created_id("curve", curve.name)
+        curve_obj["agent_bridge_fur_source_object"] = obj.name
+        curve_obj["agent_bridge_fur_flow_direction"] = [float(value) for value in _coerce_vector(flow_direction, (1.0, 0.0, 0.0))]
+        curve_obj["agent_bridge_fur_kind"] = "directional_surface_curves"
+        created.append(
+            {
+                "object": curve_obj.name,
+                "source_object": obj.name,
+                "strand_count": len(samples),
+                "curve_points": strand_points,
+                "length": fur_length,
+                "root_width": width,
+            }
+        )
+    transaction["applied_steps"].append({"type": "create_directional_fur_curves", "label": label, "created": created})
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": f"Created directional fur curve guides for {len(created)} mesh object(s)",
+        "created": created,
+        "missing_object_names": missing,
+        "material": material.name,
+        "transaction_id": transaction["id"],
+    }
+
 def create_basic_armature(
     context,
     *,
@@ -1141,4 +1277,3 @@ def register():
 def unregister():
 
     pass
-

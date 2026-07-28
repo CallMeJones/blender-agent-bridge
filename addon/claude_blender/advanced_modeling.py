@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import bmesh
+import json
 import math
 import os
 
@@ -108,6 +109,26 @@ def create_curve_path(
     return {"ok": True, "message": f"Created curve path {obj.name}", "object": obj.name, "transaction_id": transaction["id"]}
 
 REFERENCE_GUIDE_COORDINATE_SPACES = {"normalized", "pixel"}
+REFERENCE_GUIDE_METADATA_PROP = "reference_guide_metadata_json"
+
+def _set_json_prop(data_block, key, value):
+    try:
+        data_block[key] = json.dumps(value, sort_keys=True)
+    except Exception:
+        data_block[key] = "{}"
+
+def _get_json_prop(data_block, key, fallback=None):
+    try:
+        value = data_block.get(key)
+        if not value:
+            return fallback
+        loaded = json.loads(str(value))
+        return loaded if isinstance(loaded, dict) else fallback
+    except Exception:
+        return fallback
+
+def _vector_list(values):
+    return [float(values[0]), float(values[1]), float(values[2])]
 
 def _has_reference_guide_inputs(*, include_image_plane, landmarks, curves, masses, measurements):
     if include_image_plane:
@@ -312,6 +333,19 @@ def create_reference_modeling_guides(
     collection = bpy.data.collections.new(_safe_label(collection_name, "Reference Modeling Guides"))
     context.scene.collection.children.link(collection)
     live_preview._record_created_id("collection", collection.name)
+    collection["reference_modeling_guides"] = True
+    collection["reference_guide_subject"] = str(subject or "reference model")
+    _set_json_prop(
+        collection,
+        REFERENCE_GUIDE_METADATA_PROP,
+        {
+            "subject": str(subject or "reference model"),
+            "coordinate_space": str(coordinate_space or "normalized").strip().lower(),
+            "image_size": [image_width, image_height],
+            "plane": {"width": plane_width, "height": plane_height, "location": list(_coerce_vector(plane_location, (0.0, 0.0, 1.5)))},
+            "guide_offset_y": float(guide_offset_y),
+        },
+    )
 
     def move_to_collection(obj):
         if collection.objects.get(obj.name) is None:
@@ -338,6 +372,19 @@ def create_reference_modeling_guides(
             alpha=image_alpha,
         )
         move_to_collection(image_plane)
+        image_plane["reference_guide_kind"] = "image_plane"
+        image_plane["reference_guide_name"] = "image_plane"
+        _set_json_prop(
+            image_plane,
+            REFERENCE_GUIDE_METADATA_PROP,
+            {
+                "kind": "image_plane",
+                "name": "image_plane",
+                "image_path": image_path,
+                "image_size": [image_width, image_height],
+                "plane": {"width": plane_width, "height": plane_height, "location": list(_coerce_vector(plane_location, (0.0, 0.0, 1.5)))},
+            },
+        )
 
     landmark_positions = {}
     landmark_brief = []
@@ -361,6 +408,19 @@ def create_reference_modeling_guides(
         empty["reference_landmark_name"] = name
         empty["reference_landmark_normalized"] = normalized
         empty["reference_landmark_note"] = str(item.get("note") or "")
+        empty["reference_guide_kind"] = "landmark"
+        empty["reference_guide_name"] = name
+        _set_json_prop(
+            empty,
+            REFERENCE_GUIDE_METADATA_PROP,
+            {
+                "kind": "landmark",
+                "name": name,
+                "normalized": [float(normalized[0]), float(normalized[1])],
+                "location": _vector_list(location),
+                "note": str(item.get("note") or ""),
+            },
+        )
         landmark_positions[name] = location
         created_landmarks.append({"name": name, "object": empty.name, "location": location, "normalized": normalized})
         landmark_brief.append(f"{name} at normalized image coordinate ({normalized[0]:.3f}, {normalized[1]:.3f})")
@@ -385,6 +445,20 @@ def create_reference_modeling_guides(
             cyclic=bool(item.get("cyclic", False)),
         )
         move_to_collection(obj)
+        normalized_points = [[float(value) for value in normalize(point)] for point in raw_points[:512]]
+        obj["reference_guide_kind"] = "curve"
+        obj["reference_guide_name"] = name
+        _set_json_prop(
+            obj,
+            REFERENCE_GUIDE_METADATA_PROP,
+            {
+                "kind": "curve",
+                "name": name,
+                "normalized_points": normalized_points,
+                "point_count": len(points),
+                "cyclic": bool(item.get("cyclic", False)),
+            },
+        )
         created_curves.append({"name": name, "object": obj.name, "point_count": len(points), "cyclic": bool(item.get("cyclic", False))})
         curve_brief.append(f"{name} guide with {len(points)} point(s)" + (" closed" if item.get("cyclic") else ""))
 
@@ -419,6 +493,19 @@ def create_reference_modeling_guides(
             cyclic=True,
         )
         move_to_collection(obj)
+        obj["reference_guide_kind"] = "mass"
+        obj["reference_guide_name"] = name
+        _set_json_prop(
+            obj,
+            REFERENCE_GUIDE_METADATA_PROP,
+            {
+                "kind": "mass",
+                "name": name,
+                "center": [float(cx), float(cy)],
+                "radius": [float(rx), float(ry)],
+                "point_count": len(ellipse),
+            },
+        )
         created_masses.append({"name": name, "object": obj.name, "center": (cx, cy), "radius": (rx, ry)})
         mass_brief.append(f"{name} mass centered at ({cx:.3f}, {cy:.3f}) with normalized radius ({rx:.3f}, {ry:.3f})")
 
@@ -451,6 +538,21 @@ def create_reference_modeling_guides(
         )
         move_to_collection(obj)
         distance = (Vector(end) - Vector(start)).length
+        obj["reference_guide_kind"] = "measurement"
+        obj["reference_guide_name"] = name
+        _set_json_prop(
+            obj,
+            REFERENCE_GUIDE_METADATA_PROP,
+            {
+                "kind": "measurement",
+                "name": name,
+                "from": str(item.get("from") or ""),
+                "to": str(item.get("to") or ""),
+                "distance": float(distance),
+                "start": _vector_list(start),
+                "end": _vector_list(end),
+            },
+        )
         created_measurements.append({"name": name, "object": obj.name, "distance": distance})
         measurement_brief.append(f"{name} guide distance {distance:.3f} Blender units")
 
@@ -476,6 +578,7 @@ def create_reference_modeling_guides(
         "negative_constraints": ["Sculpt/model against guide curves and landmarks before adding surface detail."],
         "inspection_views": ["front", "side"],
     }
+    _set_json_prop(collection, "reference_brief_seed_json", reference_brief_seed)
     transaction["applied_steps"].append(
         {
             "type": "create_reference_modeling_guides",
@@ -504,6 +607,163 @@ def create_reference_modeling_guides(
         "measurements": created_measurements,
         "reference_brief_seed": reference_brief_seed,
         "transaction_id": transaction["id"],
+    }
+
+def _curve_spline_point_count(obj):
+    data = getattr(obj, "data", None)
+    if not data or getattr(obj, "type", "") != "CURVE":
+        return 0
+    return sum(len(getattr(spline, "points", []) or []) for spline in data.splines)
+
+def _curve_world_points(obj, *, max_points):
+    data = getattr(obj, "data", None)
+    if not data or getattr(obj, "type", "") != "CURVE":
+        return []
+    points = []
+    matrix = obj.matrix_world
+    for spline in data.splines:
+        for point in spline.points:
+            world = matrix @ Vector((float(point.co[0]), float(point.co[1]), float(point.co[2])))
+            points.append(_vector_list(world))
+            if len(points) >= max_points:
+                return points
+    return points
+
+def _reference_collection_matches(collection, collection_name):
+    if collection_name:
+        return collection.name == collection_name
+    if bool(collection.get("reference_modeling_guides", False)):
+        return True
+    for obj in collection.objects:
+        if obj.get("reference_guide_kind") or obj.get("reference_landmark_name"):
+            return True
+    return False
+
+def _inspect_reference_collection(collection, *, include_points, max_points_per_curve):
+    collection_meta = _get_json_prop(collection, REFERENCE_GUIDE_METADATA_PROP, {}) or {}
+    result = {
+        "collection": collection.name,
+        "subject": str(collection.get("reference_guide_subject") or collection_meta.get("subject") or ""),
+        "coordinate_space": str(collection_meta.get("coordinate_space") or ""),
+        "image_size": list(collection_meta.get("image_size") or []),
+        "plane": dict(collection_meta.get("plane") or {}),
+        "object_count": len(collection.objects),
+        "image_plane": "",
+        "landmarks": [],
+        "curves": [],
+        "masses": [],
+        "measurements": [],
+        "unclassified": [],
+        "reference_brief_seed": _get_json_prop(collection, "reference_brief_seed_json", {}) or {},
+    }
+    for obj in sorted(collection.objects, key=lambda item: item.name):
+        kind = str(obj.get("reference_guide_kind") or "").strip()
+        meta = _get_json_prop(obj, REFERENCE_GUIDE_METADATA_PROP, {}) or {}
+        if not kind and obj.get("reference_landmark_name"):
+            kind = "landmark"
+        name = str(obj.get("reference_guide_name") or meta.get("name") or obj.name)
+        item = {"name": name, "object": obj.name, "type": obj.type}
+        if kind == "image_plane":
+            result["image_plane"] = obj.name
+            item.update({
+                "image_path": str(meta.get("image_path") or ""),
+                "image_size": list(meta.get("image_size") or []),
+                "plane": dict(meta.get("plane") or {}),
+            })
+            result.setdefault("image_planes", []).append(item)
+        elif kind == "landmark":
+            normalized = meta.get("normalized", obj.get("reference_landmark_normalized", []))
+            item.update(
+                {
+                    "normalized": [float(value) for value in list(normalized or [])[:2]],
+                    "location": _vector_list(obj.location),
+                    "note": str(meta.get("note") or obj.get("reference_landmark_note") or ""),
+                }
+            )
+            result["landmarks"].append(item)
+        elif kind == "curve":
+            item.update(
+                {
+                    "point_count": int(meta.get("point_count") or _curve_spline_point_count(obj)),
+                    "cyclic": bool(meta.get("cyclic", False)),
+                    "normalized_points": list(meta.get("normalized_points") or []),
+                }
+            )
+            if include_points:
+                item["world_points"] = _curve_world_points(obj, max_points=max_points_per_curve)
+            result["curves"].append(item)
+        elif kind == "mass":
+            item.update(
+                {
+                    "center": list(meta.get("center") or []),
+                    "radius": list(meta.get("radius") or []),
+                    "point_count": int(meta.get("point_count") or _curve_spline_point_count(obj)),
+                }
+            )
+            if include_points:
+                item["world_points"] = _curve_world_points(obj, max_points=max_points_per_curve)
+            result["masses"].append(item)
+        elif kind == "measurement":
+            item.update(
+                {
+                    "from": str(meta.get("from") or ""),
+                    "to": str(meta.get("to") or ""),
+                    "distance": float(meta.get("distance") or 0.0),
+                    "start": list(meta.get("start") or []),
+                    "end": list(meta.get("end") or []),
+                }
+            )
+            if include_points:
+                item["world_points"] = _curve_world_points(obj, max_points=max_points_per_curve)
+            result["measurements"].append(item)
+        else:
+            result["unclassified"].append(item)
+    return result
+
+def inspect_reference_modeling_guides(
+    context,
+    *,
+    collection_name="",
+    include_points=False,
+    max_points_per_curve=32,
+    max_collections=8,
+):
+    """Inspect reference guide collections and return script-handoff-friendly metadata."""
+
+    del context
+    target_name = str(collection_name or "").strip()
+    matched = []
+    for collection in bpy.data.collections:
+        if _reference_collection_matches(collection, target_name):
+            matched.append(collection)
+            if len(matched) >= max(1, int(max_collections or 8)):
+                break
+    if not matched:
+        return {
+            "ok": False,
+            "message": f"No reference modeling guide collection found{f' named {target_name}' if target_name else ''}",
+            "collections": [],
+        }
+    collections = [
+        _inspect_reference_collection(
+            collection,
+            include_points=bool(include_points),
+            max_points_per_curve=max(2, min(512, int(max_points_per_curve or 32))),
+        )
+        for collection in matched
+    ]
+    totals = {
+        "collections": len(collections),
+        "landmarks": sum(len(item["landmarks"]) for item in collections),
+        "curves": sum(len(item["curves"]) for item in collections),
+        "masses": sum(len(item["masses"]) for item in collections),
+        "measurements": sum(len(item["measurements"]) for item in collections),
+    }
+    return {
+        "ok": True,
+        "message": f"Inspected {totals['collections']} reference guide collection(s)",
+        "totals": totals,
+        "collections": collections,
     }
 
 MODELING_SEED_MODIFIER_TYPES = {"ARRAY", "BOOLEAN", "MIRROR", "NODES", "SCREW", "SOLIDIFY"}

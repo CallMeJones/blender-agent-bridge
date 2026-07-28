@@ -19,6 +19,7 @@ class RepositorySkillTests(unittest.TestCase):
             ),
             "blender-reference-modeling": (
                 "reference-brief.md",
+                "guide-first-workflow.md",
                 "evidence-review.md",
                 "repair-loop.md",
             ),

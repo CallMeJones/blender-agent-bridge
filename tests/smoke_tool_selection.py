@@ -437,7 +437,17 @@ def main():
         )
         reference_names = _names(reference_tools)
         assert "create_reference_modeling_guides" in reference_names, reference_meta
+        assert "inspect_reference_modeling_guides" in reference_names, reference_meta
+        assert "create_directional_fur_curves" in reference_names, reference_meta
         assert "plan_model_quality_workflow" in reference_names, reference_meta
+
+        fur_tools, fur_meta = agent_tools.select_blender_tool_definitions(
+            "Add short directional fur and groom flow guides to the selected plush kitten mesh.",
+            bundle,
+        )
+        fur_names = _names(fur_tools)
+        assert "create_directional_fur_curves" in fur_names, fur_meta
+        assert "add_particle_system_to_selected" in fur_names, fur_meta
 
         cloth_tools, cloth_meta = agent_tools.select_blender_tool_definitions(
             "Add cloth simulation setup and inspect the physics cache before any bake.",

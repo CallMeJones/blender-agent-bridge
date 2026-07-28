@@ -58,6 +58,16 @@ def create_reference_modeling_guides(context, args):
     )
 
 
+def inspect_reference_modeling_guides(context, args):
+    return advanced_helpers.inspect_reference_modeling_guides(
+        context,
+        collection_name=str(args.get("collection_name") or ""),
+        include_points=bool(args.get("include_points", False)),
+        max_points_per_curve=_bounded_int(args.get("max_points_per_curve"), 32, minimum=2, maximum=512),
+        max_collections=_bounded_int(args.get("max_collections"), 8, minimum=1, maximum=64),
+    )
+
+
 def apply_procedural_array_stack(context, args):
     return advanced_helpers.apply_procedural_array_stack(
         context,
