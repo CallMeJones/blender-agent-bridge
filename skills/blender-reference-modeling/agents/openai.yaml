@@ -1,0 +1,4 @@
+interface:
+  display_name: "Blender Reference Modeling"
+  short_description: "Build and repair models from visual references"
+  default_prompt: "Use $blender-reference-modeling to build this Blender model faithfully from the supplied reference."

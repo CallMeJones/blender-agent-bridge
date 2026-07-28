@@ -110,7 +110,7 @@ def main():
             "Trust agent-generated Python for this Blender session?",
             "Equivalent to Blender Run Script: files, network, and processes are allowed.",
             "Any client connected to this local bridge can use these permissions.",
-            "Runs with Blender's OS permissions until Revoke, file load, reload, or exit.",
+            "Runs with Blender's OS permissions until Revoke, add-on reload, or exit.",
         ], trust_dialog_layout.labels
 
         # The exact operator sets are a product boundary: adding setup or

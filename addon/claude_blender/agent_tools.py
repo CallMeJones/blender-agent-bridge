@@ -18,8 +18,8 @@ AGENT_GUIDANCE = (
     "For scene edits, identify targets first and leave successful live-preview changes pending for the user. Do not commit or revert unless the user explicitly asks; use last-step revert only when they want to undo the latest external import. "
     "For .blend lifecycle work, inspect diagnostics first. Never invent a durable project path: new, open, save-as, and save-copy paths must come from the user or a file picker. Project-file tools are bounded to the current saved .blend directory. "
     "Use asynchronous external-asset and render jobs for downloads, imports, long renders, frame sequences, and final video validation. Poll the returned status tools, preserve provider provenance, and treat bridge timeouts as recoverable before rerunning work. "
-    "Use composable modeling, material, node, camera, animation, staging, and evidence helpers when they fit. For open-ended authored content, complex multi-object builds, custom Grease Pencil work, bespoke node graphs, production rigs, or other real helper gaps, use one cohesive trusted Blender Python script rather than a long chain of speculative template calls. "
-    "Generated Python runs only while runtime script trust is active. Trust Agent Scripts is equivalent to Blender's Run Script command and permits filesystem, network, subprocess, project-file, persistent-cache, and full Blender API access. Put complete source in draft_script.code, search version-sensitive Blender documentation first, and report the exact refusal or execution error when it does not run. "
+    "When runtime script trust is active, prefer one cohesive trusted Blender Python script for authored object generation, modeling, animation, materials, custom nodes, rigging, and look development unless the user explicitly requests helpers, a helper path, or no Python. In mixed requests, keep that authored script path and use exact helpers separately for project files, imports, long renders, persistent bakes, evidence, preview decisions, and isolated edits; an operational suffix must not demote the authored work to a helper chain. "
+    "Generated Python runs only while runtime script trust is active. Trust Agent Scripts is equivalent to Blender's Run Script command and permits filesystem, network, subprocess, project-file, persistent-cache, and full Blender API access. Put complete source in draft_script.code, inspect bpy.app.version, validate version-sensitive RNA enums before assignment, and report the exact refusal or execution error when it does not run. "
     "Use low-resolution evidence for routine review unless the user asks for final quality. Do not claim an artifact, save, import, render, checkpoint, or script run succeeded unless the tool result verifies it. "
     "When work is complete, summarize what changed, what remains pending, and any user decision still required."
 )
@@ -50,8 +50,36 @@ _CORE_TOOL_NAMES = {
 
 _FALLBACK_TOOL_NAMES = {"draft_script"}
 _PRIVILEGED_FALLBACK_TOOL_NAMES = set()
+_SCRIPT_FIRST_SUPPORT_TOOL_NAMES = {
+    "plan_advanced_scene_workflow",
+    "inspect_modeling_quality",
+    "capture_viewport",
+    "capture_object_inspection_renders",
+    "get_visual_evidence_resources",
+    "commit_preview",
+    "revert_preview",
+}
+_ANIMATION_WORKFLOW_SUPPORT_TOOL_NAMES = {
+    "plan_animation_workflow",
+    "run_animation_workflow",
+    "run_animation_task",
+    "capture_animation_playblast",
+    "review_inspection_renders_against_brief",
+    "repair_animation_from_findings",
+}
+_RENDER_SETUP_TOOL_NAMES = {
+    "configure_render_outputs",
+    "set_render_settings",
+    "set_render_engine",
+    "get_render_camera_compositor_details",
+}
 
 _TOOL_GROUPS = tool_registry.group_map()
+_ANIMATION_ONLY_TOOL_NAMES = {
+    spec.name
+    for spec in tool_registry.REGISTRY.specs()
+    if spec.owner == "animation"
+} | {"capture_animation_playblast"}
 
 _GROUP_KEYWORDS = {
     "selection": {"select", "selected", "active", "frame", "playhead", "inspect", "workspace", "tab", "focus", "viewport focus", "front view", "top view", "camera view"},
@@ -137,20 +165,6 @@ _UV_LAYOUT_KEYWORDS = {
     "overlap uvs",
     "texel density",
 }
-_AUTHORED_CONTENT_ACTIONS = {"create", "make", "build", "design", "model"}
-_AUTHORED_CONTENT_SUBJECTS = {
-    "appliance",
-    "coffee machine",
-    "control panel",
-    "desk lamp",
-    "furniture",
-    "lamp",
-    "modular wall panel",
-    "product prop",
-    "storyboard",
-    "cutout",
-}
-
 def _tool_map():
     return {tool["name"]: tool for tool in blender_tool_definitions()}
 
@@ -177,7 +191,7 @@ def _contains_keyword(text, keywords):
 
 
 def is_open_ended_authored_content(text):
-    return _contains_keyword(text, _AUTHORED_CONTENT_ACTIONS) and _contains_keyword(text, _AUTHORED_CONTENT_SUBJECTS)
+    return helper_routing.is_script_first_authored_request(text)
 
 
 def _is_continuation_prompt(prompt):
@@ -195,6 +209,15 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
     full_map = _tool_map()
     selected = set(_CORE_TOOL_NAMES)
     text = _selection_text(prompt, context_bundle)
+    request_text = str(prompt or "").strip().lower()
+    script_first_authored_request = helper_routing.is_script_first_authored_request(
+        request_text
+    )
+    animation_workflow_request = helper_routing.is_animation_workflow_request(
+        request_text
+    )
+    render_setup_request = helper_routing.is_render_setup_request(request_text)
+    lookdev_review_request = helper_routing.is_lookdev_review_request(request_text)
     matched_groups = []
 
     if _is_continuation_prompt(prompt):
@@ -204,8 +227,18 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
     else:
         for group, keywords in _GROUP_KEYWORDS.items():
             if _contains_keyword(text, keywords):
+                if group == "animation" and not animation_workflow_request:
+                    continue
+                if group == "advanced_create" and script_first_authored_request:
+                    continue
                 selected.update(_TOOL_GROUPS[group])
                 matched_groups.append(group)
+
+    if not animation_workflow_request:
+        selected.difference_update(_ANIMATION_ONLY_TOOL_NAMES)
+    elif "animation" not in matched_groups:
+        selected.update(_ANIMATION_WORKFLOW_SUPPORT_TOOL_NAMES)
+        matched_groups.append("animation_workflow")
 
     if _contains_keyword(text, _RENDER_OUTPUT_KEYWORDS):
         selected.update({"configure_render_outputs", "set_render_engine", "set_render_settings", "get_render_camera_compositor_details"})
@@ -222,14 +255,45 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         matched_groups.append("basic_edit")
         matched_groups.append("materials")
 
-    if helper_routing.should_include_draft_script(text, matched_groups):
+    if helper_routing.project_file_operation_kinds(request_text):
+        selected.update(_TOOL_GROUPS["project_files"])
+        matched_groups.append("project_files")
+
+    if lookdev_review_request:
+        selected.add("create_lookdev_turntable_review")
+        matched_groups.append("lookdev_review")
+
+    if render_setup_request:
+        selected.update(_RENDER_SETUP_TOOL_NAMES)
+        matched_groups.append("render_setup")
+
+    quality_reference_request = helper_routing.is_reference_model_quality_request(request_text)
+    if quality_reference_request:
+        selected.update(
+            {
+                "plan_model_quality_workflow",
+                "plan_advanced_scene_workflow",
+                "list_scene_objects",
+                "get_blend_file_diagnostics",
+                "inspect_modeling_quality",
+                "capture_viewport",
+                "capture_object_inspection_renders",
+                "get_visual_evidence_resources",
+                "draft_script",
+                "commit_preview",
+                "revert_preview",
+            }
+        )
+        matched_groups.append("advanced_workflow")
+
+    if helper_routing.should_include_draft_script(request_text, matched_groups):
         selected.update(_FALLBACK_TOOL_NAMES)
-    if helper_routing.should_include_privileged_script(text, matched_groups):
+    if helper_routing.should_include_privileged_script(request_text, matched_groups):
         selected.update(_PRIVILEGED_FALLBACK_TOOL_NAMES)
-    if is_open_ended_authored_content(text):
+    if script_first_authored_request:
         selected.update(_FALLBACK_TOOL_NAMES)
-        selected.update(_TOOL_GROUPS["advanced_create"])
-        matched_groups.append("advanced_create")
+        selected.update(_SCRIPT_FIRST_SUPPORT_TOOL_NAMES)
+        matched_groups.append("script_authoring")
 
     if not selected.intersection(TOOL_FUNCTIONS_FOR_MUTATION_COMPAT):
         selected.update({"select_objects"})
@@ -252,6 +316,22 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
             continue
         if group in {"vehicle", "product", "character", "refinement", "camera_render", "rigging", "curves_text", "particles", "geometry_nodes", "external_assets", "advanced_workflow", "two_d_storyboard", "procedural_3d", "simulation_setup", "preview_control"}:
             protected.update(_TOOL_GROUPS.get(group, set()))
+    if quality_reference_request:
+        protected.update(
+            {
+                "plan_model_quality_workflow",
+                "plan_advanced_scene_workflow",
+                "list_scene_objects",
+                "get_blend_file_diagnostics",
+                "inspect_modeling_quality",
+                "capture_viewport",
+                "capture_object_inspection_renders",
+                "get_visual_evidence_resources",
+                "draft_script",
+                "commit_preview",
+                "revert_preview",
+            }
+        )
     if _contains_keyword(text, _RENDER_OUTPUT_KEYWORDS):
         protected.add("configure_render_outputs")
     if _contains_keyword(text, _PROCEDURAL_TEXTURE_KEYWORDS):
@@ -392,6 +472,16 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         protected.add("draft_script")
     if "draft_privileged_script" in selected:
         protected.add("draft_privileged_script")
+    if "advanced_create" in matched_groups:
+        protected.add("plan_advanced_scene_workflow")
+    if script_first_authored_request:
+        protected.update(_SCRIPT_FIRST_SUPPORT_TOOL_NAMES)
+    if animation_workflow_request:
+        protected.update(_ANIMATION_WORKFLOW_SUPPORT_TOOL_NAMES)
+    if lookdev_review_request:
+        protected.add("create_lookdev_turntable_review")
+    if render_setup_request:
+        protected.update(_RENDER_SETUP_TOOL_NAMES)
     while _schema_chars(tools) > budget:
         removable_index = next(
             (index for index in range(len(ordered_names) - 1, -1, -1) if ordered_names[index] not in protected),
@@ -434,6 +524,7 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "uv_unwrap",
     "mark_uv_seams",
     "plan_director_workflow",
+    "plan_model_quality_workflow",
     "plan_asset_import_workflow",
     "plan_advanced_scene_workflow",
     "animate_object_bounce",

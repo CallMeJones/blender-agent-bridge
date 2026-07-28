@@ -1,4 +1,4 @@
-"""Smoke tests for helper-first script routing metadata."""
+"""Smoke tests for script-first authoring and bounded operational routing."""
 
 from __future__ import annotations
 
@@ -24,7 +24,22 @@ def main():
         assert agent_tools._TOOL_GROUPS[group], group
 
     rules = list(helper_routing.iter_helper_first_script_rules())
-    assert rules, "expected helper-first script rules"
+    assert rules, "expected bounded-helper advisory rules"
+
+    for prompt in (
+        "Match the reference image while modeling this character's silhouette and proportions.",
+        "Review this mesh against the attached photo and repair its form continuity.",
+        "Improve the model quality and landmark placement of this prop.",
+        "Build a 3D model from image and run a quality pass.",
+    ):
+        assert helper_routing.is_reference_model_quality_request(prompt), prompt
+    for prompt in (
+        "Animate this character waving.",
+        "Create a product reference sheet.",
+        "Use this character as a reference for the story.",
+        "Add fur to the selected object.",
+    ):
+        assert not helper_routing.is_reference_model_quality_request(prompt), prompt
 
     codes = set()
     for rule in rules:
@@ -41,6 +56,117 @@ def main():
 
     helper_prompt = "Write a Python script to move the selected cube up and make it red."
     assert helper_routing.should_include_draft_script(helper_prompt, ["basic_edit", "materials"])
+
+    for authored_prompt in (
+        "Create a realistic cartoon cat from the supplied brief.",
+        "Animate this character waving with secondary motion.",
+        "Create a procedural marble material and custom shader nodes.",
+        "Rig this character with custom controls and drivers.",
+        "Build a product scene, animate a reveal, render frames, and capture viewport evidence.",
+        "Import a Poly Haven asset, build a robot, animate it, and render frames.",
+        "Create a new project, build a robot, and save the blend.",
+    ):
+        assert helper_routing.is_script_first_authored_request(authored_prompt), authored_prompt
+        assert helper_routing.should_include_draft_script(
+            authored_prompt,
+            ["advanced_create", "animation", "materials", "rigging"],
+        ), authored_prompt
+
+    for helper_override in (
+        "Use helpers only to create a procedural material for the selected object.",
+        "Create a procedural material with helpers.",
+        "Use the helper path to build a robot.",
+        "Use helper-based tools to animate the selected object.",
+    ):
+        assert helper_routing.prefers_bounded_helpers(helper_override), helper_override
+        assert not helper_routing.is_script_first_authored_request(helper_override), helper_override
+        assert not helper_routing.should_include_draft_script(
+            helper_override,
+            ["materials", "animation", "advanced_workflow"],
+        ), helper_override
+    helper_override = "Use helpers only to create a procedural material for the selected object."
+    for script_preference in (
+        "Do not use helpers; build the robot with a cohesive script.",
+        "Use a script, not the helper path, to animate the character.",
+    ):
+        assert not helper_routing.prefers_bounded_helpers(
+            script_preference
+        ), script_preference
+        assert helper_routing.is_script_first_authored_request(
+            script_preference
+        ), script_preference
+
+    for operational_prompt in (
+        "Create a new Blender project.",
+        "Render the final animation.",
+        "Find a Poly Haven model, download it, import it, and make a studio presentation.",
+    ):
+        assert not helper_routing.is_script_first_authored_request(
+            operational_prompt
+        ), operational_prompt
+    assert helper_routing.project_file_operation_kinds(
+        "Create a new Blender project."
+    ) == {"create"}
+    assert helper_routing.is_render_job_request("Render the final animation.")
+    assert helper_routing.is_authored_animation_request(
+        "Animate this character waving and repair the timing."
+    )
+    assert not helper_routing.is_authored_animation_request(
+        "Render the final animation."
+    )
+    assert helper_routing.is_animation_workflow_request(
+        "Review the playblast timing and spacing."
+    )
+    assert helper_routing.is_animation_workflow_request(
+        "Inspect the current animation state."
+    )
+    for static_motion_prompt in (
+        "Build a wave machine.",
+        "Create an orbit sculpture.",
+        "Build a reveal mechanism.",
+    ):
+        assert not helper_routing.is_authored_animation_request(
+            static_motion_prompt
+        ), static_motion_prompt
+        selected_tools, metadata = agent_tools.select_blender_tool_definitions(
+            static_motion_prompt
+        )
+        selected_names = {tool["name"] for tool in selected_tools}
+        assert "draft_script" in selected_names, (static_motion_prompt, metadata)
+        assert "run_animation_task" not in selected_names, (
+            static_motion_prompt,
+            metadata,
+        )
+    assert helper_routing.is_authored_animation_request(
+        "Make the character wave."
+    )
+    assert helper_routing.is_authored_animation_request(
+        "Render frames after animating the character."
+    )
+    wave_tools, wave_metadata = agent_tools.select_blender_tool_definitions(
+        "Make the character wave."
+    )
+    wave_names = {tool["name"] for tool in wave_tools}
+    assert "draft_script" in wave_names, wave_metadata
+    assert "run_animation_task" in wave_names, wave_metadata
+    assert helper_routing.is_script_first_authored_request(
+        "Save the blend after creating a material."
+    )
+    assert helper_routing.project_file_operation_kinds(
+        "Open this blend and animate the character."
+    ) == {"open"}
+    assert helper_routing.is_lookdev_review_request(
+        "Create a lookdev turntable review."
+    )
+    lookdev_tools, lookdev_metadata = agent_tools.select_blender_tool_definitions(
+        "Create a lookdev turntable review."
+    )
+    assert "create_lookdev_turntable_review" in {
+        tool["name"] for tool in lookdev_tools
+    }, lookdev_metadata
+    script_preflight = helper_routing.script_authoring_preflight()
+    assert "bpy.app.version" in script_preflight["version_check"], script_preflight
+    assert "enum_items" in script_preflight["enum_check"], script_preflight
 
     custom_prompt = "Draft a custom procedural material node network that helpers cannot express."
     assert helper_routing.should_include_draft_script(custom_prompt, ["materials"])
@@ -65,15 +191,14 @@ def main():
     material_guard = helper_routing.helper_first_script_advisory(
         "Make the selected cube red with bpy.data.materials and a material script."
     )
-    assert material_guard, material_guard
-    assert material_guard["code"] == "material_helper_required", material_guard
-    assert not material_guard["blocked"], material_guard
-    assert "create_shader_material" in material_guard["recommended_tools"], material_guard
-    assert "create_image_texture_material" in material_guard["recommended_tools"], material_guard
+    assert material_guard is None, material_guard
+    explicit_material_helper = helper_routing.helper_first_script_advisory(helper_override)
+    assert explicit_material_helper["code"] == "material_helper_required", explicit_material_helper
+    assert "create_shader_material" in explicit_material_helper["recommended_tools"], explicit_material_helper
     texture_guard = helper_routing.helper_first_script_advisory(
         "Apply a local base color image texture and normal map to the selected cube with a material script."
     )
-    assert texture_guard and "create_image_texture_material" in texture_guard["recommended_tools"], texture_guard
+    assert texture_guard is None, texture_guard
     map_bake_guard = helper_routing.helper_first_script_advisory(
         "Write Python to run bpy.ops.object.bake for AO, normal, and diffuse maps."
     )
@@ -91,30 +216,22 @@ def main():
     storyboard_guard = helper_routing.helper_first_script_advisory(
         "Write a Python script to create a storyboard animatic with 2D panels."
     )
-    assert storyboard_guard["code"] == "two_d_storyboard_helper_required", storyboard_guard
-    assert not storyboard_guard["blocked"], storyboard_guard
-    assert "create_text_object" in storyboard_guard["recommended_tools"], storyboard_guard
+    assert storyboard_guard is None, storyboard_guard
 
     procedural_guard = helper_routing.helper_first_script_advisory(
         "Write Python for a non-destructive procedural array stack with bevels."
     )
-    assert procedural_guard["code"] == "procedural_3d_helper_required", procedural_guard
-    assert not procedural_guard["blocked"], procedural_guard
-    assert "apply_procedural_array_stack" in procedural_guard["recommended_tools"], procedural_guard
+    assert procedural_guard is None, procedural_guard
 
     modeling_guard = helper_routing.helper_first_script_advisory(
         "Write Python for a boolean cutter, mirror modifier, symmetry pass, solidify thickness, and screw thread."
     )
-    assert modeling_guard["code"] == "procedural_3d_helper_required", modeling_guard
-    for expected in {"boolean_op", "mirror_model", "symmetrize_model", "solidify_model", "screw_model"}:
-        assert expected in modeling_guard["recommended_tools"], (expected, modeling_guard)
+    assert modeling_guard is None, modeling_guard
 
     edit_mesh_guard = helper_routing.helper_first_script_advisory(
         "Write Python to extrude faces, inset panels, loop cut, knife cut, proportional edit, bridge edge loops, merge by distance, and convert curve to mesh."
     )
-    assert edit_mesh_guard["code"] == "procedural_3d_helper_required", edit_mesh_guard
-    assert "edit_mesh" in edit_mesh_guard["recommended_tools"], edit_mesh_guard
-    assert "curve_to_mesh" in edit_mesh_guard["recommended_tools"], edit_mesh_guard
+    assert edit_mesh_guard is None, edit_mesh_guard
 
     quality_guard = helper_routing.helper_first_script_advisory(
         "Write Python to validate model mesh quality, non-manifold edges, loose geometry, and missing materials."
@@ -125,8 +242,7 @@ def main():
     modular_guard = helper_routing.helper_first_script_advisory(
         "Write Python for a modular wall panel object kit with pipe run details."
     )
-    assert modular_guard["code"] == "procedural_3d_helper_required", modular_guard
-    assert "apply_procedural_array_stack" in modular_guard["recommended_tools"], modular_guard
+    assert modular_guard is None, modular_guard
 
     cloth_guard = helper_routing.helper_first_script_advisory(
         "Draft a script to add cloth simulation setup to the selected mesh."

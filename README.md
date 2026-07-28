@@ -155,7 +155,7 @@ Connected agents do not get blanket access by default. Enabling session script t
 | Project tools | Restrict generic file access to the current saved project directory. Save/open/new-project operations require explicit confirmed paths. |
 | Local bridge | Off by default and bound to `127.0.0.1`. Optional bearer authentication is available; without it, any local client that can reach the bridge may call its tools. |
 | Generated Python | Refused while trust is off. With trust on, it has Blender **Run Script** permissions, including filesystem, network, subprocess, project-file, persistent-cache, and full Blender API access. |
-| Script trust | Runtime-only and visibly revocable. It clears on Revoke, file load, add-on reload, or Blender exit. Static findings are advisory, not a sandbox. |
+| Script trust | Runtime-only and visibly revocable. It clears on Revoke, timed expiry, add-on reload, or Blender exit. Opening, creating, restoring, copying, renaming, saving, or modifying `.blend` files does not change an active grant, and file operations never extend a timed grant's expiry. Static findings are advisory, not a sandbox. |
 | Credentials | Model-provider keys are never stored by the extension. Sketchfab tokens are redacted and are not saved in preferences, `.blend` files, or audit logs. |
 
 See [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), and [docs/SAFETY_MODEL.md](docs/SAFETY_MODEL.md) for the detailed model.

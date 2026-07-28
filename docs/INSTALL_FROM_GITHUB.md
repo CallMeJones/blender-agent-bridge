@@ -76,7 +76,7 @@ For animation routing, test with script trust off:
 Make the selected cube bounce twice and get smaller each bounce. Check it against the brief and leave it as a preview.
 ```
 
-The client should use `run_animation_task` or the animation workflow tools before considering `draft_script`.
+With trust off, the client should use `run_animation_task` or the animation workflow tools because `draft_script` cannot run. With session or timed trust active, authored animation defaults to one cohesive `draft_script`; the bounded animation tools remain available for fallback, inspection, evidence, and explicit helper requests.
 
 For external asset routing, test the async job path:
 

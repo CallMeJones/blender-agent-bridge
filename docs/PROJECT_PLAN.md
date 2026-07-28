@@ -50,15 +50,15 @@ User asks, "What is in this scene and how can I improve the lighting?" An extern
 
 2. Make A Small Change
 
-User asks, "Add a warm key light and a cool rim light." An external agent uses safe helper tools when possible, or uses session-trusted Python when helper tools are not expressive enough. The add-on saves an undo point/checkpoint before risky execution.
+User asks, "Add a warm key light and a cool rim light." With trust active, an external agent uses one cohesive session-trusted script for the authored lighting pass unless the user requests helpers. The add-on saves an undo point/checkpoint before risky execution.
 
 3. Create An Object
 
-User asks, "Make a stylized low-poly spaceship from primitives." An external agent inspects units, selection, and collections, then uses bounded creation helpers or session-trusted Python. The user can undo or restore checkpointed work.
+User asks, "Make a stylized low-poly spaceship from primitives." An external agent inspects units, selection, and collections, then uses one cohesive session-trusted script for the authored build unless the user requests helpers. The user can undo or restore checkpointed work.
 
 4. Build An Animation
 
-User asks, "Animate the camera orbiting this product over 120 frames." An external agent reads selected object bounds and timeline settings, then uses camera/path/keyframe helpers before considering session-trusted Python.
+User asks, "Animate the camera orbiting this product over 120 frames." An external agent reads selected object bounds and timeline settings, creates the brief and timing plan, then uses one cohesive session-trusted script for the authored camera motion. Camera/path/keyframe helpers remain the explicit helper alternative.
 
 5. Use Blender Docs
 
@@ -487,12 +487,12 @@ Real-client testing showed that a connected MCP client can successfully inspect 
 
 Acceptance:
 
-- For common animation prompts, external MCP clients follow the Milestone 7 helper path before considering arbitrary Python.
-- If a helper path cannot represent the request, the client can escalate to `draft_script`, but the response clearly labels the result as checkpoint-backed rather than live-preview helper state.
+- For common animation prompts, external MCP clients plan first and then use one cohesive `draft_script` for authored generation while trust is active, unless the user requests helpers.
+- The bounded helper workflow remains the trust-off, explicit-helper, or intentionally isolated-operation path; no helper-gap proof is required before trusted authored scripting.
 - The orchestrator can produce a pending preview for at least one full start-to-finish animation workflow, then run structured validation and return commit/revert guidance.
 - Real-client testing demonstrates that model behavior matches the intended workflow, not just that individual tools exist.
 
-Status: Orchestration, guidance, and routing reliability are implemented in code and smoke tests. `plan_animation_workflow` creates the animation brief, scene context, timing chart, ordered helper/evaluator/repair calls, and trusted-script fallback guidance. `run_animation_workflow` executes supported helper-backed bounce, turntable, reveal, pulse, and orbit workflows; camera dolly/orbit helpers cover reusable camera motion, while underspecified custom moves return an explicit blocker requesting coordinates or a path instead of guessing a shot design. It runs structured review, can capture playblast evidence, can apply bounded repairs, and reports preview state, helper gaps, skipped calls, findings, and repair plans. `run_animation_task` is the compact one-input wrapper. A first-class inspection-render/review path covers diagnostic visual evidence, rig findings route through rig-specific inspection and pose helpers, and asynchronous render jobs can assemble and validate output. The installed-extension live smoke verifies the clean ZIP, live bridge, and MCP stdio path; optional manual external-client refresh testing remains useful because clients may cache older tool lists or configs.
+Status: Orchestration, guidance, and routing reliability are implemented in code and smoke tests. `plan_animation_workflow` creates the animation brief, scene context, timing chart, script-first execution strategy, helper alternatives, and evaluator/repair calls. Under active trust, clients use one cohesive script for authored animation after preflight. `run_animation_workflow` and `run_animation_task` execute supported helper-backed bounce, turntable, reveal, pulse, and orbit workflows when trust is off or helpers are explicitly requested. Camera dolly/orbit helpers remain reusable alternatives, while underspecified custom moves return an explicit blocker instead of guessing shot design. Structured review, playblast evidence, bounded repair, rig inspection, and asynchronous render jobs remain helper-backed. The installed-extension live smoke verifies the clean ZIP, live bridge, and MCP stdio path; optional manual external-client refresh testing remains useful because clients may cache older tool lists or configs.
 
 ## Open Questions
 

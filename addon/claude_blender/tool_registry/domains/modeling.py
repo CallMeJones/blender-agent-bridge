@@ -230,8 +230,8 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'edit_mesh',
   'owner': 'modeling'},
  {'name': 'apply_procedural_array_stack',
   'description': 'Apply a bounded procedural modeling stack to mesh objects: array, bevel, and optional weighted '
-                 'normals. Use before custom geometry-node or mesh-edit scripts. Applies immediately with preview '
-                 'revert support.',
+                 'normals. Use when helpers were requested or this isolated stack exactly fits the task. Applies '
+                 'immediately with preview revert support.',
   'input_schema': {'type': 'object',
                    'properties': {'object_names': {'type': 'array', 'items': {'type': 'string'}},
                                   'selected_only': {'type': 'boolean'},
@@ -270,7 +270,7 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'edit_mesh',
   'owner': 'modeling'},
  {'name': 'boolean_op',
   'description': 'Add non-destructive Boolean modifiers to a target mesh using named cutter meshes or selected '
-                 'cutters. Use for difference, union, and intersect cuts before custom mesh scripts. Applies '
+                 'cutters. Use for an explicitly isolated difference, union, or intersect operation. Applies '
                  'immediately with preview revert support.',
   'input_schema': {'type': 'object',
                    'properties': {'target_object_name': {'type': 'string'},

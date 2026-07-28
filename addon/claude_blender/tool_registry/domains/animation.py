@@ -110,8 +110,8 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'get_animation_detail
   'owner': 'animation'},
  {'name': 'plan_animation_workflow',
   'description': 'Plan the Milestone 7 animation workflow for generation, review, or repair. Returns a brief, '
-                 'animation-aware scene context, timing chart, ordered helper/evaluator/repair tool calls, and '
-                 'explicit draft_script fallback rules. Does not mutate the scene.',
+                 'animation-aware scene context, timing chart, script-first execution strategy, helper alternatives, '
+                 'and evaluator/repair calls. Does not mutate the scene.',
   'input_schema': {'type': 'object',
                    'properties': {'prompt': {'type': 'string',
                                              'description': "The user's animation generation, review, or repair "
@@ -137,8 +137,8 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'get_animation_detail
                                                'description': 'Optional evaluator findings to plan repair calls.'}},
                    'required': ['prompt'],
                    'additionalProperties': False},
-  'contract': {'description': 'Plan the Milestone 7 animation workflow with brief, scene routing, timing chart, helper '
-                              'calls, evaluator calls, repair calls, and script fallback rules',
+  'contract': {'description': 'Plan the Milestone 7 animation workflow with brief, scene routing, timing chart, '
+                              'script-first authored execution, helper alternatives, evaluator calls, and repair calls',
                'mutates_scene': False,
                'input_schema': {'type': 'object',
                                 'properties': {'prompt': {'type': 'string'},
@@ -161,8 +161,9 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'get_animation_detail
   'exposure': 'compact_direct',
   'owner': 'animation'},
  {'name': 'run_animation_workflow',
-  'description': 'Execute the Milestone 7 helper-backed animation workflow for common requests, then run structured '
-                 'review and optional bounded repair. May leave live preview changes pending for commit/revert.',
+  'description': 'Execute the bounded helper alternative for animation generation, then run structured review and '
+                 'optional repair. Use when trust is off, helpers were requested, or an exact helper fits. May leave '
+                 'live preview changes pending for commit/revert.',
   'input_schema': {'type': 'object',
                    'properties': {'prompt': {'type': 'string',
                                              'description': "The user's animation generation, review, or repair "
@@ -237,16 +238,15 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'get_animation_detail
   'exposure': 'compact_direct',
   'owner': 'animation'},
  {'name': 'run_animation_task',
-  'description': 'One-input animation entry point for MCP clients. Routes the prompt through the Milestone 7 '
-                 'planner/runner workflow before any draft_script fallback.',
+  'description': 'One-input bounded-helper animation entry point for MCP clients. Use when trust is off or the user '
+                 'explicitly requests helper-backed animation generation.',
   'input_schema': {'type': 'object',
                    'properties': {'prompt': {'type': 'string',
                                              'description': "The user's animation generation, review, or repair "
                                                             'request.'}},
                    'required': ['prompt'],
                    'additionalProperties': False},
-  'contract': {'description': 'One-input animation task wrapper that routes the prompt through the Milestone 7 '
-                              'planner/runner workflow before any script fallback',
+  'contract': {'description': 'One-input animation task wrapper for the bounded-helper animation workflow',
                'mutates_scene': True,
                'long_running': True,
                'duration_hint': 'Usually seconds for helper-backed animation; can take longer when the workflow '

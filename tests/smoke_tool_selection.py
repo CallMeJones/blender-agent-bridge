@@ -58,7 +58,7 @@ def main():
             "shade_smooth_selected",
         }:
             assert expected in vehicle_names, (expected, vehicle_meta)
-        assert "draft_script" not in vehicle_names, vehicle_meta
+        assert "draft_script" in vehicle_names, vehicle_meta
         assert vehicle_meta["schema_chars"] <= agent_tools.TOOL_SCHEMA_CHAR_BUDGET
 
         script_tools, script_meta = agent_tools.select_blender_tool_definitions(
@@ -130,6 +130,7 @@ def main():
             "create_curve_path",
         }:
             assert expected in character_names, (expected, character_meta)
+        assert "draft_script" in character_names, character_meta
 
         animation_tools, animation_meta = agent_tools.select_blender_tool_definitions(
             "Create an animation brief and prompt contract before making the cube bounce three times.",
@@ -143,7 +144,7 @@ def main():
         assert "create_timing_chart" in animation_names, animation_meta
         assert "animate_object_bounce" in animation_names, animation_meta
         assert "create_progressive_bounce_animation" in animation_names, animation_meta
-        assert "draft_script" not in animation_names, animation_meta
+        assert "draft_script" in animation_names, animation_meta
 
         blocking_tools, blocking_meta = agent_tools.select_blender_tool_definitions(
             "Create a timing chart and block key poses for a jump animation.",
@@ -154,6 +155,7 @@ def main():
         assert "block_key_poses" in blocking_names, blocking_meta
         assert "add_breakdown_pose" in blocking_names, blocking_meta
         assert "set_pose_hold" in blocking_names, blocking_meta
+        assert "draft_script" in blocking_names, blocking_meta
         assert "create_motion_arc" in blocking_names, blocking_meta
 
         principles_tools, principles_meta = agent_tools.select_blender_tool_definitions(
@@ -226,6 +228,7 @@ def main():
         assert "plan_advanced_scene_workflow" in advanced_names, advanced_meta
         assert "get_2d_animation_details" in advanced_names, advanced_meta
         assert "get_render_camera_compositor_details" in advanced_names, advanced_meta
+        assert "draft_script" not in advanced_names, advanced_meta
 
         director_tools, director_meta = agent_tools.select_blender_tool_definitions(
             "Director workflow: import an asset, build a product scene, animate a reveal, review evidence, repair, then ask me to commit or revert.",
@@ -237,7 +240,7 @@ def main():
         assert "plan_advanced_scene_workflow" in director_names, director_meta
         assert "run_animation_workflow" in director_names, director_meta
         assert "capture_viewport" in director_names, director_meta
-        assert "draft_script" not in director_names, director_meta
+        assert "draft_script" in director_names, director_meta
 
         storyboard_tools, storyboard_meta = agent_tools.select_blender_tool_definitions(
             "Create a 2D storyboard animatic with panels, cutout layers, and a camera move.",
@@ -279,6 +282,7 @@ def main():
         assert "screw_model" in procedural_names, procedural_meta
         assert "add_geometry_nodes_modifier" in procedural_names, procedural_meta
         assert "get_geometry_nodes_details" in procedural_names, procedural_meta
+        assert "draft_script" in procedural_names, procedural_meta
 
         lamp_tools, lamp_meta = agent_tools.select_blender_tool_definitions(
             "Create a believable architect desk lamp product prop with spring arms, counterweight, open wide shade, bulb, and cable.",
@@ -308,7 +312,7 @@ def main():
         assert "inspect_uv_layout" in lookdev_names, lookdev_meta
         assert "create_shader_material" in lookdev_names, lookdev_meta
         assert "inspect_material_setup" in lookdev_names, lookdev_meta
-        assert "draft_script" not in lookdev_names, lookdev_meta
+        assert "draft_script" in lookdev_names, lookdev_meta
 
         material_quality_tools, material_quality_meta = agent_tools.select_blender_tool_definitions(
             "Inspect and repair the PBR material setup: missing texture files, wrong color spaces, shader links, and UV map vector inputs.",
@@ -381,7 +385,7 @@ def main():
         texture_names = _names(texture_tools)
         assert "create_image_texture_material" in texture_names, texture_meta
         assert "uv_unwrap" in texture_names, texture_meta
-        assert "draft_script" not in texture_names, texture_meta
+        assert "draft_script" in texture_names, texture_meta
 
         procedural_texture_tools, procedural_texture_meta = agent_tools.select_blender_tool_definitions(
             "Create a procedural marble texture material with noise bump for the selected mesh.",
@@ -390,7 +394,7 @@ def main():
         procedural_texture_names = _names(procedural_texture_tools)
         assert "create_procedural_texture_material" in procedural_texture_names, procedural_texture_meta
         assert "create_shader_material" in procedural_texture_names, procedural_texture_meta
-        assert "draft_script" not in procedural_texture_names, procedural_texture_meta
+        assert "draft_script" in procedural_texture_names, procedural_texture_meta
 
         procedural_node_tools, procedural_node_meta = agent_tools.select_blender_tool_definitions(
             "Build a custom shader node network for a procedural marble material.",
@@ -407,7 +411,7 @@ def main():
         modeling_names = _names(modeling_tools)
         for expected in {"boolean_op", "mirror_model", "symmetrize_model", "solidify_model", "screw_model"}:
             assert expected in modeling_names, (expected, modeling_meta)
-        assert "draft_script" not in modeling_names, modeling_meta
+        assert "draft_script" in modeling_names, modeling_meta
 
         mesh_edit_tools, mesh_edit_meta = agent_tools.select_blender_tool_definitions(
             "Extrude the top face, inset the panel, loop cut, knife cut, proportional edit, bridge boundary loops, merge by distance, and convert this curve to mesh.",
@@ -416,7 +420,7 @@ def main():
         mesh_edit_names = _names(mesh_edit_tools)
         assert "edit_mesh" in mesh_edit_names, mesh_edit_meta
         assert "curve_to_mesh" in mesh_edit_names, mesh_edit_meta
-        assert "draft_script" not in mesh_edit_names, mesh_edit_meta
+        assert "draft_script" in mesh_edit_names, mesh_edit_meta
 
         quality_tools, quality_meta = agent_tools.select_blender_tool_definitions(
             "Inspect mesh quality for loose geometry, non-manifold edges, missing materials, and unapplied scale.",
@@ -442,6 +446,7 @@ def main():
         dolly_names = _names(dolly_tools)
         assert "create_camera_dolly_animation" in dolly_names, dolly_meta
         assert "capture_animation_playblast" in dolly_names, dolly_meta
+        assert "draft_script" in dolly_names, dolly_meta
 
         request_tools = agent_tools.blender_tool_definitions_for_request(
             "What objects are in my current scene?",

@@ -27,7 +27,7 @@ The bridge is local-first: its Blender connection binds to localhost, and Blende
 
 ## What Can It Do?
 
-The current beta includes a canonical registry of 181 tool contracts covering scene inspection, editing, animation, rendering, project health, bounded project-directory files, and external asset workflows.
+The current beta includes a canonical registry of 182 tool contracts covering scene inspection, editing, animation, rendering, project health, bounded project-directory files, and external asset workflows.
 
 An agent can, among other things:
 

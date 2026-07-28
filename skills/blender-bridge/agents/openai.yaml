@@ -1,0 +1,4 @@
+interface:
+  display_name: "Blender Bridge"
+  short_description: "Operate Blender through the five-tool gateway"
+  default_prompt: "Use $blender-bridge to inspect and complete this Blender task safely through the gateway."

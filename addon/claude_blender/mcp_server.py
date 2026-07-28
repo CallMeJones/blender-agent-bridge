@@ -20,6 +20,7 @@ try:
         bridge_protocol,
         build_info,
         external_assets,
+        helper_routing,
         response_controls,
         tool_registry,
         tool_surface,
@@ -35,6 +36,7 @@ except ImportError:  # Allows direct execution as addon/claude_blender/mcp_serve
             bridge_protocol,
             build_info,
             external_assets,
+            helper_routing,
             response_controls,
             tool_registry,
             tool_surface,
@@ -45,6 +47,7 @@ except ImportError:  # Allows direct execution as addon/claude_blender/mcp_serve
         import build_info
         import bridge_protocol
         import external_assets
+        import helper_routing
         import response_controls
         import tool_registry
         import tool_surface
@@ -85,39 +88,6 @@ TELEMETRY_TOOL_NAMES = frozenset(
     (*GATEWAY_TOOL_NAMES, *(spec.name for spec in tool_registry.REGISTRY.specs() if spec.exposure != "internal"))
 )
 
-ANIMATION_ROUTE_TERMS = {
-    "animate",
-    "animation",
-    "bounce",
-    "jump",
-    "keyframe",
-    "keyframes",
-    "pose",
-    "rig",
-    "ik",
-    "fk",
-    "space",
-    "limb",
-    "pole",
-    "timing",
-    "arc",
-    "arcs",
-    "settle",
-    "squash",
-    "stretch",
-    "playblast",
-    "f-curve",
-    "fcurve",
-    "block",
-    "blocking",
-    "anticipation",
-    "contact",
-    "spacing",
-    "directed shot",
-    "shot template",
-    "shape key",
-    "material animation",
-}
 ANIMATION_ROUTE_TOOLS = {
     "run_animation_task",
     "plan_animation_workflow",
@@ -153,6 +123,34 @@ LOOKDEV_REVIEW_ROUTE_TERMS = {
     "artifact validation",
     "render evidence",
     "review still",
+}
+CATALOG_SEARCH_STOP_WORDS = {
+    "a",
+    "add",
+    "an",
+    "and",
+    "after",
+    "before",
+    "build",
+    "create",
+    "for",
+    "from",
+    "in",
+    "into",
+    "it",
+    "make",
+    "my",
+    "of",
+    "on",
+    "or",
+    "please",
+    "the",
+    "then",
+    "this",
+    "to",
+    "use",
+    "with",
+    "your",
 }
 RENDER_OUTPUT_ROUTE_TERMS = {
     "render pass",
@@ -294,6 +292,7 @@ ADVANCED_ROUTE_TERMS = {
     "loose geometry",
     "director",
     "director workflow",
+    "helper path",
     "asset import",
     *LOOKDEV_REVIEW_ROUTE_TERMS,
     *RENDER_OUTPUT_ROUTE_TERMS,
@@ -302,6 +301,7 @@ ADVANCED_ROUTE_TERMS = {
 }
 ADVANCED_ROUTE_TOOLS = {
     "plan_director_workflow",
+    "plan_model_quality_workflow",
     "plan_advanced_scene_workflow",
     "plan_asset_import_workflow",
     "get_2d_animation_details",
@@ -392,7 +392,19 @@ PROCEDURAL_ROUTE_TERMS = {
     "wall thickness",
 }
 SIMULATION_SETUP_ROUTE_TERMS = {"cloth simulation", "cloth sim", "simulation setup", "physics setup"}
-CAMERA_MOVE_ROUTE_TERMS = {"camera dolly", "dolly shot", "camera move", "camera animation", "lens keyframe", "directed shot", "shot template"}
+CAMERA_MOVE_ROUTE_TERMS = {
+    "camera animation",
+    "camera dolly",
+    "camera move",
+    "camera orbit",
+    "camera push",
+    "directed shot",
+    "dolly shot",
+    "lens keyframe",
+    "orbit reveal",
+    "push in",
+    "shot template",
+}
 UV_UNWRAP_ROUTE_TERMS = {
     "uv unwrap",
     "unwrap",
@@ -793,7 +805,7 @@ PROMPTS = {
     "safe_scene_change": {
         "name": "safe_scene_change",
         "title": "Plan Safe Blender Change",
-        "description": "Plan a scene change using reversible helper tools before session-trusted Python.",
+        "description": "Plan a scene change using capability-routed helpers or session-trusted Python.",
         "arguments": [
             {
                 "name": "goal",
@@ -803,14 +815,45 @@ PROMPTS = {
         ],
         "template": (
             "Make this Blender change safely: {goal}\n\n"
-            "Use read-only inspection first if needed. Prefer typed reversible helper tools for common edits. "
-            "Only call draft_script when helper tools cannot express the change."
+            "Use read-only inspection first if needed. With active script trust, prefer one cohesive draft_script for "
+            "authored object generation, modeling, animation, materials, nodes, rigging, and look development unless "
+            "the user explicitly asks for helpers, a helper path, or no Python. For mixed requests, keep that authored "
+            "script path and use bounded helpers separately for project files, external assets, long renders, "
+            "persistent bakes, evidence capture, and preview decisions."
+        ),
+    },
+    "blender_bridge_workflow": {
+        "name": "blender_bridge_workflow",
+        "title": "Operate Blender Through The Gateway",
+        "description": "Guide any MCP client through compact helper discovery, schema lookup, invocation, recovery, and preview decisions.",
+        "arguments": [
+            {
+                "name": "goal",
+                "description": "The live Blender task to complete.",
+                "required": True,
+            }
+        ],
+        "template": (
+            "Complete this live Blender task through Blender Agent Bridge: {goal}\n\n"
+            "Call blender_bridge_status when live state matters. Use the stable five-tool gateway: search with "
+            "search_blender_tools and include_schemas=false, fetch the current schema for one selected helper with "
+            "get_blender_tool_schema, then call invoke_blender_tool with schema-valid arguments. A helper named by a "
+            "planner remains available through the gateway even when it is absent from top-level tools/list. Inspect "
+            "before mutation, follow executable and deferred planner calls, refresh actual object names after broad "
+            "changes, and do not stop at planning when execution was requested. With active script trust, use one "
+            "cohesive draft_script as the default authored-mutation path for object generation, modeling, animation, "
+            "materials, nodes, rigging, and look development unless the user explicitly requests helpers, a helper path, "
+            "or no Python. Do not let render, capture, save, or import clauses suppress the script path for separate "
+            "authored work in the same request. Use bounded helpers for "
+            "inspection, project files, external assets, long jobs, evidence, and preview decisions. Treat bridge_timeout as recoverable: wait the returned interval, "
+            "check status and evidence, then retry only when the prior operation is no longer running. Leave changes in "
+            "preview until the user explicitly chooses commit_preview or revert_preview."
         ),
     },
     "director_workflow": {
         "name": "director_workflow",
         "title": "Plan Director Workflow",
-        "description": "Guide an MCP client through a multi-step helper-first scene, asset, animation, evidence, and preview decision workflow.",
+        "description": "Guide an MCP client through capability-routed scene authoring, assets, evidence, and preview decisions.",
         "arguments": [
             {
                 "name": "goal",
@@ -821,17 +864,18 @@ PROMPTS = {
         "template": (
             "Handle this Blender goal through Director Workflow v0: {goal}\n\n"
             "Call plan_director_workflow first. Follow its phases for inspection, asset import planning, "
-            "bounded creation helpers, animation workflow/review/repair, viewport/playblast/render evidence, "
-            "and explicit commit/revert decisions. Keep helper changes in live preview until the user asks to "
-            "commit. Use plan_asset_import_workflow for external assets, run_animation_workflow for animation, "
-            "and draft_script only after the helper plan identifies a concrete gap and the user has enabled script trust. "
-            "Use bounded structured tools for external assets and project files."
+            "authored construction, animation review/repair, viewport/playblast/render evidence, and explicit commit/revert "
+            "decisions. When trust is active, prefer one cohesive draft_script for authored modeling, animation, materials, "
+            "nodes, and rigging unless the user explicitly requests helpers, a helper path, or no Python. Clear the "
+            "director plan's asset, brief, and target-refresh gates before invoking its deferred script. Use "
+            "plan_asset_import_workflow for external assets and "
+            "bounded structured tools for project files, long renders, persistent bakes, evidence, and preview decisions."
         ),
     },
     "advanced_animation_workflow": {
         "name": "advanced_animation_workflow",
         "title": "Run Advanced Animation Workflow",
-        "description": "Guide an MCP client through the Milestone 7 animation brief, helper, evaluation, and repair workflow before scripts.",
+        "description": "Guide an MCP client through animation planning, script-first authored execution, evaluation, and repair.",
         "arguments": [
             {
                 "name": "goal",
@@ -841,20 +885,19 @@ PROMPTS = {
         ],
         "template": (
             "Handle this Blender animation task through the Milestone 7 workflow: {goal}\n\n"
-            "For simple prompt-in/task-out use, call run_animation_task. For manual control, call "
-            "plan_animation_workflow first. For common helper-backed generation, call "
-            "run_animation_workflow to execute the plan, review the result, and leave changes as a preview. "
-            "For manual control, follow next_tool_calls in order for brief, scene routing, timing, "
-            "helper generation, validation, playblast review, and repair. "
+            "Call plan_animation_workflow first to establish the brief, scene routing, timing chart, and hardening checks. "
+            "When script trust is active, author and invoke one cohesive draft_script for animation generation unless the "
+            "user explicitly requests helpers. Use run_animation_workflow as the bounded helper path when trust is off, "
+            "helpers were requested, or one exact helper completely expresses the motion. "
+            "Use evaluator, validation, playblast-review, and evidence helpers after generation. "
             "When rendered visual evidence is needed for object details, use capture_object_inspection_renders. "
-            "Prefer helpers when they clearly fit; use draft_script for custom advanced animation code only after "
-            "the user enables Trust Agent Scripts. Under trust, static findings are advisory and the script runs immediately."
+            "Under trust, static findings are advisory and the script runs immediately."
         ),
     },
     "advanced_scene_workflow": {
         "name": "advanced_scene_workflow",
         "title": "Plan Advanced 3D And 2D Workflow",
-        "description": "Guide an MCP client through helper-first advanced 3D, 2D/storyboard, animation, simulation, and render planning before scripts.",
+        "description": "Guide an MCP client through capability-routed advanced authoring, simulation, and render planning.",
         "arguments": [
             {
                 "name": "goal",
@@ -863,18 +906,55 @@ PROMPTS = {
             }
         ],
         "template": (
-            "Handle this advanced Blender task through helper-first planning: {goal}\n\n"
-            "Call plan_advanced_scene_workflow first when the helper path is not obvious. For 2D, storyboard, "
-            "animatic, cutout, or motion-graphics tasks, call get_2d_animation_details, then compose text, curve, camera, "
-            "and visual-review helpers. For open-ended object creation, inspect the scene and choose generic modeling helpers, asset import, or a trusted script. "
-            "For procedural 3D modifier-stack tasks, inspect geometry nodes when relevant "
-            "and prefer composable modeling helpers such as apply_procedural_array_stack before custom geometry scripts. For cloth setup, use "
+            "Handle this advanced Blender task through capability-routed planning: {goal}\n\n"
+            "Call plan_advanced_scene_workflow first when scene context or domain boundaries are unclear. With active "
+            "script trust, prefer one cohesive draft_script for authored 2D/3D object generation, modeling, animation, "
+            "materials, nodes, and rigging unless the user requests helpers. Inspect relevant scene, geometry-node, rig, "
+            "or material state before authoring the script. Use exact helpers for isolated operations when requested. For cloth setup, use "
             "add_cloth_simulation_to_selected, then get_simulation_details or inspect_simulation_bake before any "
             "persistent bake. For render-pass, cryptomatte, or shader AOV setup, prefer configure_render_outputs before custom compositor/render Python. "
             "For look-dev review, prefer create_lookdev_turntable_review to set up bounded staging/turntable, render controls, inspection stills, and artifact validation. "
-            "Use draft_script for custom advanced scene scripts only when session script trust is active. Static "
-            "findings are advisory under trust. Prefer bounded structured tools for external assets and project files "
+            "Static findings are advisory under trust. Prefer bounded structured tools for external assets and project files "
             "when their validation or recovery helps. Persistent bake/free scripts may run under active trust and can block Blender."
+        ),
+    },
+    "reference_modeling_workflow": {
+        "name": "reference_modeling_workflow",
+        "title": "Build A Model From Visual Reference",
+        "description": "Guide an MCP client through adaptive visual decomposition, model-quality planning, evidence scoring, repair, and preview review.",
+        "arguments": [
+            {
+                "name": "goal",
+                "description": "The model creation, comparison, or repair goal tied to a supplied visual reference.",
+                "required": True,
+            },
+            {
+                "name": "reference_notes",
+                "description": "Optional source, crop, view, or ambiguity notes supplied with the visual reference.",
+                "required": False,
+            },
+        ],
+        "template": (
+            "Build, compare, or repair a Blender model against the actual supplied visual reference: {goal}\n"
+            "Reference notes: {reference_notes}\n\n"
+            "Use compact gateway search, fetch only selected helper schemas, and invoke helpers through "
+            "invoke_blender_tool. Analyze the actual image into a structured reference_brief containing silhouette, "
+            "primary masses, secondary forms, landmarks, measurable proportion checks, explicit surface cues, negative "
+            "constraints, source notes, and inspection views. Use only supplied or visibly measured values; do not invent "
+            "focal lengths, tolerances, material parameters, anatomy, dimensions, or symmetry. Preserve unresolved "
+            "ambiguity. Do not use canned category bases, category-specific builders, memorized anatomy, or geometry "
+            "recipes. Fetch and invoke plan_model_quality_workflow as the required entry point, then follow "
+            "its construction_strategy, next_tool_calls, and deferred_tool_calls instead of stopping at the plan. When "
+            "script trust is active and the user did not request helpers, author one cohesive draft_script for primary "
+            "construction and broad repairs. Read bpy.app.version and validate version-sensitive RNA enum identifiers "
+            "before assignment. Inspect the baseline scene, "
+            "refresh after construction, resolve actual existing and newly created target names, and pass them into "
+            "later inspections and evidence calls. Gate surface detail behind silhouette, proportion, landmark, and form "
+            "scores at or above the quality floor. Capture a reference-matched viewport plus stable front and side/profile "
+            "views, repair the weakest failed criteria for no more than the planner's bounded pass limit, and recapture "
+            "the same evidence after each pass. Apply only surface treatments visible in the reference. Passing every "
+            "gate means ready_for_user_review, not committed or saved. Leave the final preview pending until the user "
+            "explicitly chooses commit_preview or revert_preview."
         ),
     },
     "external_asset_workflow": {
@@ -1681,22 +1761,37 @@ def _score_tool_match(tool, query):
     normalized_query = str(query or "").strip().lower()
     if not normalized_query:
         return 0
-    terms = [term for term in normalized_query.split() if term]
+    terms = [
+        term
+        for term in re.findall(r"[a-z0-9_]+", normalized_query)
+        if term not in CATALOG_SEARCH_STOP_WORDS
+    ]
     text = _tool_search_text(tool)
     name = str(tool.get("name") or "").lower()
     title = str(tool.get("title") or "").lower()
     category = _tool_category(tool)
-    animation_query = _contains_any_phrase(normalized_query, ANIMATION_ROUTE_TERMS)
-    advanced_query = _contains_any_phrase(normalized_query, ADVANCED_ROUTE_TERMS)
+    animation_query = helper_routing.is_animation_workflow_request(normalized_query)
+    model_quality_query = helper_routing.is_reference_model_quality_request(normalized_query)
+    advanced_query = _contains_any_phrase(normalized_query, ADVANCED_ROUTE_TERMS) or model_quality_query
     two_d_query = _contains_any_phrase(normalized_query, TWO_D_ROUTE_TERMS)
-    procedural_query = _contains_any_phrase(normalized_query, PROCEDURAL_ROUTE_TERMS)
+    procedural_query = _contains_any_phrase(normalized_query, PROCEDURAL_ROUTE_TERMS) or model_quality_query
     simulation_setup_query = _contains_any_phrase(normalized_query, SIMULATION_SETUP_ROUTE_TERMS)
     camera_move_query = _contains_any_phrase(normalized_query, CAMERA_MOVE_ROUTE_TERMS)
     uv_unwrap_query = _contains_any_phrase(normalized_query, UV_UNWRAP_ROUTE_TERMS)
     explicit_script_query = _contains_any_phrase(normalized_query, SCRIPT_EXPLICIT_TERMS)
     authored_content_query = agent_tools.is_open_ended_authored_content(normalized_query)
+    helper_preference_query = helper_routing.prefers_bounded_helpers(normalized_query)
     external_asset_query = _is_external_asset_route_query(normalized_query)
     explicit_direct_asset_query = _contains_any_phrase(normalized_query, EXTERNAL_ASSET_DIRECT_TERMS)
+    project_file_operations = helper_routing.project_file_operation_kinds(normalized_query)
+    render_job_query = helper_routing.is_render_job_request(normalized_query)
+    render_setup_query = helper_routing.is_render_setup_request(normalized_query)
+    lookdev_review_query = helper_routing.is_lookdev_review_request(normalized_query)
+    inspection_render_query = helper_routing.is_inspection_render_request(
+        normalized_query
+    )
+    if name == "plan_model_quality_workflow" and not model_quality_query and normalized_query != name:
+        return None
     leading_term = terms[0].strip(".,:;!?") if terms else ""
     inspection_only_query = (
         leading_term in INSPECTION_INTENT_TERMS
@@ -1752,9 +1847,58 @@ def _score_tool_match(tool, query):
             score += 2500
     if broad_workflow_query:
         if name == "plan_director_workflow":
-            score += 5000
+            score += 6000
         elif name == "plan_advanced_scene_workflow":
             score += 4000
+    if project_file_operations:
+        project_routes = {
+            "create": "create_new_blender_project",
+            "open": "open_blend_file",
+            "save": "save_blend_file",
+        }
+        if name in {
+            project_routes[kind]
+            for kind in project_file_operations
+        }:
+            score += 4000
+        elif name == "get_blend_file_diagnostics":
+            score += 1200
+        elif name == "draft_script" and not authored_content_query:
+            score -= 4000
+    if render_job_query:
+        if name == "start_render_job":
+            score += 3500
+        elif name in {
+            "get_render_job_status",
+            "validate_render_job_output",
+            "assemble_render_job_video",
+        }:
+            score += 1000
+        elif name == "draft_script" and not authored_content_query:
+            score -= 3000
+    if render_setup_query:
+        if name == "configure_render_outputs":
+            score += 4000
+        elif name == "set_render_settings":
+            score += 3500
+        elif name == "set_render_engine":
+            score += 3000
+        elif name == "get_render_camera_compositor_details":
+            score += 1800
+        elif name == "draft_script" and not authored_content_query:
+            score -= 3000
+    if lookdev_review_query:
+        if name == "create_lookdev_turntable_review":
+            score += 5000
+        elif name == "draft_script":
+            score -= 3000
+    if inspection_render_query:
+        if name == "capture_object_inspection_renders":
+            score += 1200 if authored_content_query else 5000
+        elif name == "review_inspection_renders_against_brief":
+            score += 900 if authored_content_query else 4000
+        elif name == "repair_animation_from_findings":
+            score += 700 if authored_content_query else 3000
     if uv_unwrap_query:
         if name == "uv_unwrap":
             score += 1400
@@ -1779,11 +1923,19 @@ def _score_tool_match(tool, query):
             score += 250
         if name in GENERIC_SELECTED_OBJECT_TOOLS:
             score -= 250
-        if name == "draft_script" and not explicit_script_query:
-            score -= 1000
+        if name == "draft_script":
+            if authored_content_query:
+                score += 1800
+            elif not explicit_script_query:
+                score -= 1000
     if advanced_query:
+        if model_quality_query:
+            if name == "plan_model_quality_workflow":
+                score += 4200
+            elif name in {"capture_viewport", "capture_object_inspection_renders", "inspect_modeling_quality"}:
+                score += 900
         if name == "plan_director_workflow" and any(term in normalized_query for term in ("director", "whole workflow", "end to end", "end-to-end")):
-            score += 3600
+            score += 5000
         if name == "plan_advanced_scene_workflow":
             score += 3000
         if name == "plan_asset_import_workflow" and external_asset_query:
@@ -1910,12 +2062,15 @@ def _score_tool_match(tool, query):
                 score += 450
         if not (two_d_query or procedural_query or simulation_setup_query or camera_move_query) and name in ADVANCED_ROUTE_TOOLS:
             score += 350
-        if name == "draft_script" and not explicit_script_query:
-            score -= 1000
-    elif name == "draft_script" and not explicit_script_query:
+        if name == "draft_script":
+            if authored_content_query:
+                score += 1400
+            elif not explicit_script_query:
+                score -= 1000
+    elif name == "draft_script" and not explicit_script_query and not authored_content_query:
         score -= 100
     if authored_content_query and name == "draft_script":
-        score += 1500
+        score += 1800
     if external_asset_query:
         if name == "plan_asset_import_workflow":
             score += 1300
@@ -1943,6 +2098,21 @@ def _score_tool_match(tool, query):
             score -= 900
     elif category == "external_assets" and not explicit_direct_asset_query:
         score -= 120
+    if not animation_query and category == "animation":
+        return None
+    if (
+        not animation_query
+        and not camera_move_query
+        and name in {
+            "capture_animation_playblast",
+            "create_camera_dolly_animation",
+            "create_camera_orbit",
+            "create_turntable_animation",
+        }
+    ):
+        return None
+    if helper_preference_query and name == "draft_script":
+        score -= 6000
     return score
 
 
@@ -2339,6 +2509,11 @@ class BlenderMCPServer:
                 "that they are unavailable. Mutating tools affect the live scene and may leave preview changes pending. "
                 "For broad advanced 3D, 2D/storyboard, animation, simulation, or render tasks, call "
                 "plan_advanced_scene_workflow first when the helper path is unclear. "
+                "When session script trust is active, prefer one cohesive draft_script for authored object generation, "
+                "modeling, animation, materials, custom nodes, rigging, and look development unless the user explicitly "
+                "requests helpers, a helper path, or no Python. For mixed requests, keep the authored script path and "
+                "route project files, external assets, long jobs, evidence, and preview decisions through bounded "
+                "helpers; those operational clauses do not demote the authored work. "
                 "For external asset downloads/imports, use the async path by default after discovery selects a concrete "
                 "asset_id or uid: start_external_asset_download, poll get_external_asset_job_status, then start_external_asset_import_job and poll "
                 "get_external_asset_import_job_status, then call prepare_imported_asset_presentation for cleanup/staging. Treat direct provider download/import tools as synchronous "

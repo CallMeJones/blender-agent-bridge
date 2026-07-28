@@ -9,7 +9,9 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'draft_script',
   'description': "Run Blender Python immediately with the same process permissions as Blender's Run Script command "
                  'when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, '
                  'and Blender API access are allowed. When trust is off the request is refused without retaining '
-                 'script state. Prefer bounded helpers when they provide better recovery or progress reporting.',
+                 'script state. This is the default authored-mutation path for object generation, modeling, animation, '
+                 'materials, custom nodes, rigging, and look development unless the user requests helpers. Prefer '
+                 'bounded helpers for operational work that needs recovery, provenance, polling, or path validation.',
   'input_schema': {'type': 'object',
                    'properties': {'intent': {'type': 'string', 'description': 'Plain-language reason for the script'},
                                   'expected_changes': {'type': 'string',

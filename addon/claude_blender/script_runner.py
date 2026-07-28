@@ -34,10 +34,32 @@ CHECKPOINT_FILENAME_RE = re.compile(
 
 _runtime_external_trust_expires_at = 0.0
 _runtime_external_trust_session = False
+_runtime_checkpoint_paths = set()
 
 
 def _default_checkpoint_dir():
     return user_paths.user_data_path("checkpoints")
+
+
+def _canonical_checkpoint_path(path):
+    value = bpy.path.abspath(str(path or ""))
+    return os.path.normcase(os.path.realpath(value)) if value else ""
+
+
+def _register_runtime_checkpoint(path):
+    canonical = _canonical_checkpoint_path(path)
+    if canonical:
+        _runtime_checkpoint_paths.add(canonical)
+    return canonical
+
+
+def _is_runtime_checkpoint(path):
+    canonical = _canonical_checkpoint_path(path)
+    return bool(canonical and canonical in _runtime_checkpoint_paths and os.path.isfile(canonical))
+
+
+def _clear_runtime_checkpoints():
+    _runtime_checkpoint_paths.clear()
 
 
 def _safe_filename(value):
@@ -283,6 +305,69 @@ def clear_external_script_trust_for_all_scenes(*, status=NO_EXTERNAL_TRUST_STATU
     return cleared
 
 
+def _reapply_external_script_trust_after_file_load(snapshot, *, audit_action):
+    """Reapply one runtime grant to scene state after a Blender file load."""
+    global _runtime_external_trust_expires_at, _runtime_external_trust_session
+    states = [
+        state
+        for scene in getattr(bpy.data, "scenes", [])
+        if (state := getattr(scene, "claude_blender", None)) is not None
+    ]
+    if not snapshot.get("active"):
+        return {
+            "preserved": False,
+            "reason": "inactive_before_restore",
+            "trust": external_script_trust_snapshot(state=states[0] if states else None),
+        }
+    if not states:
+        return {
+            "preserved": False,
+            "reason": "scene_state_unavailable",
+            "trust": external_script_trust_snapshot(),
+        }
+
+    session = bool(snapshot.get("session"))
+    expires_at = float(snapshot.get("expires_at") or 0.0)
+    if not session and expires_at <= time.time():
+        _runtime_external_trust_expires_at = 0.0
+        _runtime_external_trust_session = False
+        for state in states:
+            state.external_script_trust_expires_at = ""
+            state.external_script_trust_status = EXTERNAL_TRUST_EXPIRED_STATUS
+        trust = external_script_trust_snapshot(state=states[0])
+        _audit_external_script_trust(
+            "expire_during_checkpoint_restore",
+            state=states[0],
+            expires_at=expires_at,
+            status=trust["status"],
+        )
+        return {
+            "preserved": False,
+            "reason": "expired_during_restore",
+            "trust": trust,
+        }
+
+    _runtime_external_trust_expires_at = 0.0 if session else expires_at
+    _runtime_external_trust_session = session
+    stored_expires_at = "session" if session else f"{expires_at:.6f}"
+    for state in states:
+        state.external_script_trust_expires_at = stored_expires_at
+        state.external_script_trust_status = external_script_trust_status(state=state)
+
+    trust = external_script_trust_snapshot(state=states[0])
+    _audit_external_script_trust(
+        audit_action,
+        state=states[0],
+        expires_at=None if session else expires_at,
+        status=trust["status"],
+    )
+    return {
+        "preserved": bool(trust["active"]),
+        "reason": "session_grant" if session else "timed_grant",
+        "trust": trust,
+    }
+
+
 def approve_external_script_trust_window(context, *, ttl_seconds=EXTERNAL_TRUST_TTL_SECONDS, session=False):
     global _runtime_external_trust_expires_at, _runtime_external_trust_session
     state = _scene_state(context)
@@ -305,7 +390,8 @@ def approve_external_script_trust_window(context, *, ttl_seconds=EXTERNAL_TRUST_
         transcript.record_system_message(
             "User approved external script trust for this Blender session. "
             "Agent-generated Python now has the same process permissions as Blender's Run Script command, including "
-            "filesystem, network, subprocess, and Blender API access, until revoke, file load, add-on reload, or exit."
+            "filesystem, network, subprocess, and Blender API access, until revoke, add-on reload, or exit. "
+            "Blender file operations do not change this grant."
         )
         return {
             "ok": True,
@@ -371,6 +457,7 @@ def checkpoint_metadata(context, path, *, ok=None, message=""):
         "exists": exists,
         "restorable": restorable,
         "created_by_bridge": _is_checkpoint_path(path),
+        "created_this_runtime": _is_runtime_checkpoint(path),
         "size_bytes": int(size_bytes),
         "scene_name": scene.name if scene else "",
         "current_filepath": bpy.data.filepath or "",
@@ -401,6 +488,7 @@ def create_checkpoint(context, checkpoint_dir=None):
             ok=False,
             message=f"Checkpoint failed: {type(exc).__name__}: {exc}",
         )
+    _register_runtime_checkpoint(path)
     metadata = checkpoint_metadata(context, path, ok=True, message="Checkpoint saved")
     metadata["created_at"] = _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
     metadata["source_filepath"] = current_path or ""
@@ -434,9 +522,14 @@ def restore_checkpoint(context, checkpoint_path=None):
         metadata["ok"] = False
         metadata["message"] = message
         return {"ok": False, "message": message, "checkpoint": metadata}
+    trust_before_restore = external_script_trust_snapshot(context)
     try:
         bpy.ops.wm.open_mainfile(filepath=metadata["path"])
     except Exception as exc:
+        trust_restore = _reapply_external_script_trust_after_file_load(
+            trust_before_restore,
+            audit_action="preserve_after_failed_checkpoint_restore",
+        )
         message = f"Checkpoint restore failed: {type(exc).__name__}: {exc}"
         state = _scene_state()
         if state:
@@ -444,8 +537,23 @@ def restore_checkpoint(context, checkpoint_path=None):
             state.status = message
         metadata["ok"] = False
         metadata["message"] = message
-        return {"ok": False, "message": message, "checkpoint": metadata}
+        if trust_restore["preserved"]:
+            transcript.record_system_message(
+                "The checkpoint restore failed; the existing Agent Bridge script trust grant remains active."
+            )
+        return {
+            "ok": False,
+            "message": message,
+            "checkpoint": metadata,
+            "trust_preserved": trust_restore["preserved"],
+            "trust_preservation_reason": trust_restore["reason"],
+            "external_script_trust": trust_restore["trust"],
+        }
 
+    trust_restore = _reapply_external_script_trust_after_file_load(
+        trust_before_restore,
+        audit_action="preserve_on_checkpoint_restore",
+    )
     state = _scene_state()
     message = f"Checkpoint restored: {metadata['path']}"
     if state:
@@ -455,8 +563,19 @@ def restore_checkpoint(context, checkpoint_path=None):
         state.last_checkpoint_restored_path = metadata["path"]
         state.status = message
     transcript.record_system_message(message)
+    if trust_restore["preserved"]:
+        transcript.record_system_message(
+            "The existing Agent Bridge script trust grant was preserved across the checkpoint restore."
+        )
     metadata = checkpoint_metadata(bpy.context, metadata["path"], ok=True, message="Checkpoint restored")
-    return {"ok": True, "message": "Checkpoint restored", "checkpoint": metadata}
+    return {
+        "ok": True,
+        "message": "Checkpoint restored",
+        "checkpoint": metadata,
+        "trust_preserved": trust_restore["preserved"],
+        "trust_preservation_reason": trust_restore["reason"],
+        "external_script_trust": trust_restore["trust"],
+    }
 
 
 def _metadata_text(
@@ -699,34 +818,44 @@ def run_trusted_script(
 
 
 @persistent
-def _clear_external_script_trust_on_load(_dummy):
-    clear_external_script_trust_for_all_scenes(
-        status=NO_EXTERNAL_TRUST_STATUS,
-        audit_action="clear_on_load",
-    )
+def _preserve_external_script_trust_on_load(_dummy):
+    snapshot = external_script_trust_snapshot()
+    if snapshot["active"]:
+        _reapply_external_script_trust_after_file_load(
+            snapshot,
+            audit_action="preserve_on_file_load",
+        )
+    elif snapshot["expired"]:
+        expire_external_script_trust_if_needed()
 
 
-def _remove_external_trust_load_handler():
+def _remove_external_trust_load_handlers():
     handlers = bpy.app.handlers.load_post
     for handler in list(handlers):
         if (
-            getattr(handler, "__name__", "") == "_clear_external_script_trust_on_load"
+            getattr(handler, "__name__", "")
+            in {
+                "_clear_external_script_trust_on_load",
+                "_preserve_external_script_trust_on_load",
+            }
             and str(getattr(handler, "__module__", "")).endswith(".script_runner")
         ):
             handlers.remove(handler)
 
 
 def register():
+    _clear_runtime_checkpoints()
     clear_external_script_trust_for_all_scenes(
         status=NO_EXTERNAL_TRUST_STATUS,
         audit_action="clear_on_register",
     )
-    _remove_external_trust_load_handler()
-    bpy.app.handlers.load_post.append(_clear_external_script_trust_on_load)
+    _remove_external_trust_load_handlers()
+    bpy.app.handlers.load_post.append(_preserve_external_script_trust_on_load)
 
 
 def unregister():
-    _remove_external_trust_load_handler()
+    _remove_external_trust_load_handlers()
+    _clear_runtime_checkpoints()
     clear_external_script_trust_for_all_scenes(
         status=NO_EXTERNAL_TRUST_STATUS,
         audit_action="clear_on_unregister",

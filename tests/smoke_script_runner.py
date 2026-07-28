@@ -181,6 +181,16 @@ def main():
         assert first_checkpoint["path"] != second_checkpoint["path"], (first_checkpoint, second_checkpoint)
         assert first_checkpoint["restorable"] and second_checkpoint["restorable"]
         assert os.path.isfile(first_checkpoint["path"]) and os.path.isfile(second_checkpoint["path"])
+        tampered_checkpoint = script_runner.create_checkpoint(
+            context,
+            checkpoint_dir=checkpoint_dir,
+        )
+        assert tampered_checkpoint["created_this_runtime"], tampered_checkpoint
+        with open(tampered_checkpoint["path"], "ab") as handle:
+            handle.write(b"tampered")
+        assert script_runner._is_runtime_checkpoint(
+            tampered_checkpoint["path"]
+        ), tampered_checkpoint
 
         safe_code = f"""
 import bpy
@@ -298,6 +308,17 @@ print("created", obj.name)
         state = context.scene.claude_blender
         assert OBJECT_NAME not in bpy.data.objects, restored
         assert restored["checkpoint"]["restorable"], restored
+        assert restored["trust_preserved"], restored
+        assert restored["trust_preservation_reason"] == "session_grant", restored
+        assert restored["external_script_trust"]["active"], restored
+        assert restored["external_script_trust"]["session"], restored
+        post_restore_run = script_runner.run_trusted_script(
+            context,
+            code="scene['trust_survived_checkpoint_restore'] = 'ok'",
+            checkpoint_enabled=False,
+        )
+        assert post_restore_run["ok"] and post_restore_run["auto_ran"], post_restore_run
+        assert context.scene["trust_survived_checkpoint_restore"] == "ok"
 
         non_checkpoint_path = os.path.join(checkpoint_dir, "manual.blend")
         with open(non_checkpoint_path, "wb") as handle:
@@ -305,6 +326,68 @@ print("created", obj.name)
         refused_restore = script_runner.restore_checkpoint(context, non_checkpoint_path)
         assert not refused_restore["ok"], refused_restore
         assert not refused_restore["checkpoint"]["restorable"], refused_restore
+
+        script_runner._preserve_external_script_trust_on_load(None)
+        ordinary_load_snapshot = script_runner.external_script_trust_snapshot(context)
+        assert ordinary_load_snapshot["active"] and ordinary_load_snapshot["session"], ordinary_load_snapshot
+
+        timed = script_runner.approve_external_script_trust_window(context, ttl_seconds=900)
+        assert timed["ok"] and not timed["session"], timed
+        timed_before_restore = script_runner.external_script_trust_snapshot(context)
+        timed_restored = script_runner.restore_checkpoint(context, first_checkpoint["path"])
+        assert timed_restored["ok"] and timed_restored["trust_preserved"], timed_restored
+        assert timed_restored["trust_preservation_reason"] == "timed_grant", timed_restored
+        context = bpy.context
+        state = context.scene.claude_blender
+        timed_after_restore = script_runner.external_script_trust_snapshot(context)
+        assert timed_after_restore["active"] and not timed_after_restore["session"], timed_after_restore
+        assert abs(timed_after_restore["expires_at"] - timed_before_restore["expires_at"]) < 0.001
+        assert timed_after_restore["seconds_remaining"] <= timed_before_restore["seconds_remaining"]
+
+        modified_checkpoint = script_runner.create_checkpoint(
+            context,
+            checkpoint_dir=checkpoint_dir,
+        )
+        assert modified_checkpoint["ok"] and modified_checkpoint["created_this_runtime"], modified_checkpoint
+        context.scene["modified_checkpoint_source"] = "changed after checkpoint creation"
+        bpy.ops.wm.save_as_mainfile(
+            filepath=modified_checkpoint["path"],
+            check_existing=False,
+            copy=True,
+        )
+        assert script_runner._is_runtime_checkpoint(modified_checkpoint["path"])
+        modified_before_restore = script_runner.external_script_trust_snapshot(context)
+        modified_restore = script_runner.restore_checkpoint(
+            context,
+            modified_checkpoint["path"],
+        )
+        assert modified_restore["ok"] and modified_restore["trust_preserved"], modified_restore
+        assert modified_restore["trust_preservation_reason"] == "timed_grant", modified_restore
+        context = bpy.context
+        state = context.scene.claude_blender
+        modified_after_restore = script_runner.external_script_trust_snapshot(context)
+        assert modified_after_restore["active"] and not modified_after_restore["session"], modified_after_restore
+        assert abs(
+            modified_after_restore["expires_at"] - modified_before_restore["expires_at"]
+        ) < 0.001
+
+        spoofed_checkpoint_path = os.path.join(
+            checkpoint_dir,
+            "spoof-agent-20260728-120000-123456.blend",
+        )
+        shutil.copyfile(first_checkpoint["path"], spoofed_checkpoint_path)
+        assert script_runner._is_checkpoint_path(spoofed_checkpoint_path)
+        assert not script_runner._is_runtime_checkpoint(spoofed_checkpoint_path)
+        spoofed_restore = script_runner.restore_checkpoint(
+            context,
+            spoofed_checkpoint_path,
+        )
+        assert spoofed_restore["ok"], spoofed_restore
+        assert spoofed_restore["trust_preserved"], spoofed_restore
+        assert spoofed_restore["trust_preservation_reason"] == "timed_grant", spoofed_restore
+        context = bpy.context
+        state = context.scene.claude_blender
+        assert script_runner.external_script_trust_snapshot(context)["active"]
 
         assert script_runner.revoke_external_script_trust_window(context)["ok"]
         revoked_direct = script_runner.run_trusted_script(
@@ -322,7 +405,13 @@ print("created", obj.name)
                 if line.strip() and '"event":"external_script_trust"' in line
             ]
         trust_actions = {event.get("action") for event in trust_events}
-        assert {"grant", "expire", "revoke"}.issubset(trust_actions), trust_events
+        assert {
+            "expire",
+            "grant",
+            "preserve_on_file_load",
+            "preserve_on_checkpoint_restore",
+            "revoke",
+        }.issubset(trust_actions), trust_events
 
         _cleanup()
         print("smoke_script_runner: ok")

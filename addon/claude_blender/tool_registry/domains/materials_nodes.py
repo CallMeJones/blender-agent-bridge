@@ -366,7 +366,8 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'get_material_node_de
  {'name': 'create_procedural_texture_material',
   'description': 'Create or update a bounded procedural Principled material using noise, voronoi, wave, or checker '
                  'texture nodes with optional ColorRamp and bump. Use this for procedural stone, marble, wood, '
-                 'cellular, fabric, or musgrave-style texture requests before custom shader-node Python.',
+                 'cellular, fabric, or musgrave-style texture requests when helpers were explicitly requested or the '
+                 'bounded preset exactly fits.',
   'input_schema': {'type': 'object',
                    'properties': {'name': {'type': 'string'},
                                   'preset': {'type': 'string',

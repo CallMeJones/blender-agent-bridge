@@ -1,5 +1,5 @@
 {
-  "catalog_tool_count": 180,
+  "catalog_tool_count": 181,
   "contracts": {
     "add_action_cycles": {
       "description": "Add cycles modifiers to action f-curves so an animation loops. Applies immediately with preview revert support.",
@@ -1723,7 +1723,7 @@
       "requires_live_preview": true
     },
     "apply_procedural_array_stack": {
-      "description": "Apply a bounded procedural modeling stack to mesh objects: array, bevel, and optional weighted normals. Use before custom geometry-node or mesh-edit scripts. Applies immediately with preview revert support.",
+      "description": "Apply a bounded procedural modeling stack to mesh objects: array, bevel, and optional weighted normals. Use when helpers were requested or this isolated stack exactly fits the task. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -2400,7 +2400,7 @@
       "requires_live_preview": true
     },
     "boolean_op": {
-      "description": "Add non-destructive Boolean modifiers to a target mesh using named cutter meshes or selected cutters. Use for difference, union, and intersect cuts before custom mesh scripts. Applies immediately with preview revert support.",
+      "description": "Add non-destructive Boolean modifiers to a target mesh using named cutter meshes or selected cutters. Use for an explicitly isolated difference, union, or intersect operation. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -4037,7 +4037,7 @@
       "requires_live_preview": true
     },
     "create_procedural_texture_material": {
-      "description": "Create or update a bounded procedural Principled material using noise, voronoi, wave, or checker texture nodes with optional ColorRamp and bump. Use this for procedural stone, marble, wood, cellular, fabric, or musgrave-style texture requests before custom shader-node Python.",
+      "description": "Create or update a bounded procedural Principled material using noise, voronoi, wave, or checker texture nodes with optional ColorRamp and bump. Use this for procedural stone, marble, wood, cellular, fabric, or musgrave-style texture requests when helpers were explicitly requested or the bounded preset exactly fits.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -5371,7 +5371,7 @@
     },
     "draft_script": {
       "authorization_model": "blender_run_script_equivalent",
-      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. Prefer bounded helpers when they provide better recovery or progress reporting.",
+      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. This is the default authored-mutation path for object generation, modeling, animation, materials, custom nodes, rigging, and look development unless the user requests helpers. Prefer bounded helpers for operational work that needs recovery, provenance, polling, or path validation.",
       "destructive_hint": true,
       "duration_hint": "Synchronous trusted Python may finish in seconds or keep Blender busy indefinitely, depending on the script.",
       "has_side_effects": true,
@@ -8265,7 +8265,7 @@
       "requires_live_preview": true
     },
     "plan_advanced_scene_workflow": {
-      "description": "Plan a helper-first workflow for advanced 3D, 2D/storyboard, animation, simulation, asset import, compositor/render, and script-fallback work. Does not mutate the scene.",
+      "description": "Plan capability-routed advanced 3D, 2D/storyboard, animation, simulation, asset import, and compositor/render work. Returns gateway-ready inspections plus one deferred trusted-script handoff for authored domains when trust is active, with bounded helper fallbacks. Does not mutate the scene.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -8273,6 +8273,7 @@
             "items": {
               "enum": [
                 "2d_storyboard",
+                "model_quality",
                 "procedural_3d",
                 "advanced_animation",
                 "simulation_setup",
@@ -8316,7 +8317,7 @@
       "supports_headless": true
     },
     "plan_animation_workflow": {
-      "description": "Plan the Milestone 7 animation workflow for generation, review, or repair. Returns a brief, animation-aware scene context, timing chart, ordered helper/evaluator/repair tool calls, and explicit draft_script fallback rules. Does not mutate the scene.",
+      "description": "Plan the Milestone 7 animation workflow for generation, review, or repair. Returns a brief, animation-aware scene context, timing chart, script-first execution strategy, helper alternatives, and evaluator/repair calls. Does not mutate the scene.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -8446,7 +8447,7 @@
       "supports_headless": true
     },
     "plan_director_workflow": {
-      "description": "Plan a multi-step director workflow across inspection, optional asset import, creation, animation/review/repair, evidence capture, and commit/revert decision points. Does not mutate the scene.",
+      "description": "Plan a gateway-ready director workflow across inspection, optional bounded asset import, one trusted authored scene pass when available, animation review, evidence capture, and explicit commit/revert decision points. Does not mutate the scene.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -8460,6 +8461,143 @@
             "type": "string"
           },
           "prompt": {
+            "type": "string"
+          },
+          "target_objects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "supports_headless": true
+    },
+    "plan_model_quality_workflow": {
+      "description": "Plan a reference-driven model quality workflow from an LLM-authored visual brief, with gateway-ready calls, target refresh, evidence scoring, bounded repair, and commit/revert gates. Does not mutate the scene.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "quality_floor": {
+            "maximum": 5,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "reference_brief": {
+            "additionalProperties": false,
+            "description": "LLM-authored observations from the actual reference image. Supply concrete forms and ratios; do not infer a category template.",
+            "properties": {
+              "inspection_views": {
+                "items": {
+                  "enum": [
+                    "front_below",
+                    "underside",
+                    "side",
+                    "front",
+                    "rear",
+                    "top"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 6,
+                "type": "array"
+              },
+              "landmarks": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "negative_constraints": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "primary_masses": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "proportion_checks": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "secondary_forms": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "silhouette": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "source_notes": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "subject": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "surface_cues": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "reference_description": {
+            "description": "Optional source note; this does not replace the structured visual reference_brief.",
+            "maxLength": 4000,
             "type": "string"
           },
           "target_objects": {
@@ -9079,7 +9217,7 @@
       }
     },
     "run_animation_task": {
-      "description": "One-input animation entry point for MCP clients. Routes the prompt through the Milestone 7 planner/runner workflow before any draft_script fallback.",
+      "description": "One-input bounded-helper animation entry point for MCP clients. Use when trust is off or the user explicitly requests helper-backed animation generation.",
       "duration_hint": "Usually seconds for helper-backed animation; can take longer when the workflow captures or reviews visual evidence.",
       "input_schema": {
         "additionalProperties": false,
@@ -9119,7 +9257,7 @@
       }
     },
     "run_animation_workflow": {
-      "description": "Execute the Milestone 7 helper-backed animation workflow for common requests, then run structured review and optional bounded repair. May leave live preview changes pending for commit/revert.",
+      "description": "Execute the bounded helper alternative for animation generation, then run structured review and optional repair. Use when trust is off, helpers were requested, or an exact helper fits. May leave live preview changes pending for commit/revert.",
       "duration_hint": "Usually seconds for helper-only animation; can take longer when capture_playblast or repair recapture is enabled.",
       "input_schema": {
         "additionalProperties": false,
@@ -12523,7 +12661,7 @@
       "name": "create_timing_chart"
     },
     {
-      "description": "Plan the Milestone 7 animation workflow for generation, review, or repair. Returns a brief, animation-aware scene context, timing chart, ordered helper/evaluator/repair tool calls, and explicit draft_script fallback rules. Does not mutate the scene.",
+      "description": "Plan the Milestone 7 animation workflow for generation, review, or repair. Returns a brief, animation-aware scene context, timing chart, script-first execution strategy, helper alternatives, and evaluator/repair calls. Does not mutate the scene.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -12588,7 +12726,7 @@
       "name": "plan_animation_workflow"
     },
     {
-      "description": "Execute the Milestone 7 helper-backed animation workflow for common requests, then run structured review and optional bounded repair. May leave live preview changes pending for commit/revert.",
+      "description": "Execute the bounded helper alternative for animation generation, then run structured review and optional repair. Use when trust is off, helpers were requested, or an exact helper fits. May leave live preview changes pending for commit/revert.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -12675,7 +12813,7 @@
       "name": "run_animation_workflow"
     },
     {
-      "description": "One-input animation entry point for MCP clients. Routes the prompt through the Milestone 7 planner/runner workflow before any draft_script fallback.",
+      "description": "One-input bounded-helper animation entry point for MCP clients. Use when trust is off or the user explicitly requests helper-backed animation generation.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -14622,7 +14760,7 @@
       "name": "bake_maps"
     },
     {
-      "description": "Create or update a bounded procedural Principled material using noise, voronoi, wave, or checker texture nodes with optional ColorRamp and bump. Use this for procedural stone, marble, wood, cellular, fabric, or musgrave-style texture requests before custom shader-node Python.",
+      "description": "Create or update a bounded procedural Principled material using noise, voronoi, wave, or checker texture nodes with optional ColorRamp and bump. Use this for procedural stone, marble, wood, cellular, fabric, or musgrave-style texture requests when helpers were explicitly requested or the bounded preset exactly fits.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -16929,7 +17067,7 @@
       "name": "set_world_background"
     },
     {
-      "description": "Plan a helper-first workflow for advanced 3D, 2D/storyboard, animation, simulation, asset import, compositor/render, and script-fallback work. Does not mutate the scene.",
+      "description": "Plan capability-routed advanced 3D, 2D/storyboard, animation, simulation, asset import, and compositor/render work. Returns gateway-ready inspections plus one deferred trusted-script handoff for authored domains when trust is active, with bounded helper fallbacks. Does not mutate the scene.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -16937,6 +17075,7 @@
             "items": {
               "enum": [
                 "2d_storyboard",
+                "model_quality",
                 "procedural_3d",
                 "advanced_animation",
                 "simulation_setup",
@@ -16963,6 +17102,128 @@
         "type": "object"
       },
       "name": "plan_advanced_scene_workflow"
+    },
+    {
+      "description": "Plan a reference-driven model quality workflow from an LLM-authored visual brief, with gateway-ready calls, target refresh, evidence scoring, bounded repair, and commit/revert gates. Does not mutate the scene.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "quality_floor": {
+            "maximum": 5,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "reference_brief": {
+            "additionalProperties": false,
+            "description": "LLM-authored observations from the actual reference image. Supply concrete forms and ratios; do not infer a category template.",
+            "properties": {
+              "inspection_views": {
+                "items": {
+                  "enum": [
+                    "front_below",
+                    "underside",
+                    "side",
+                    "front",
+                    "rear",
+                    "top"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 6,
+                "type": "array"
+              },
+              "landmarks": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "negative_constraints": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "primary_masses": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "proportion_checks": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "secondary_forms": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "silhouette": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "source_notes": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "subject": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "surface_cues": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "reference_description": {
+            "description": "Optional source note; this does not replace the structured visual reference_brief.",
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "target_objects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "name": "plan_model_quality_workflow"
     },
     {
       "description": "Plan the async external-asset discovery, download/cache, queued import, post-import organization, staging, and visual-evidence workflow. Does not mutate the scene.",
@@ -17001,7 +17262,7 @@
       "name": "plan_asset_import_workflow"
     },
     {
-      "description": "Plan a multi-step director workflow across inspection, optional asset import, creation, animation/review/repair, evidence capture, and commit/revert decision points. Does not mutate the scene.",
+      "description": "Plan a gateway-ready director workflow across inspection, optional bounded asset import, one trusted authored scene pass when available, animation review, evidence capture, and explicit commit/revert decision points. Does not mutate the scene.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -17086,7 +17347,7 @@
       "name": "get_2d_animation_details"
     },
     {
-      "description": "Apply a bounded procedural modeling stack to mesh objects: array, bevel, and optional weighted normals. Use before custom geometry-node or mesh-edit scripts. Applies immediately with preview revert support.",
+      "description": "Apply a bounded procedural modeling stack to mesh objects: array, bevel, and optional weighted normals. Use when helpers were requested or this isolated stack exactly fits the task. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -17135,7 +17396,7 @@
       "name": "apply_procedural_array_stack"
     },
     {
-      "description": "Add non-destructive Boolean modifiers to a target mesh using named cutter meshes or selected cutters. Use for difference, union, and intersect cuts before custom mesh scripts. Applies immediately with preview revert support.",
+      "description": "Add non-destructive Boolean modifiers to a target mesh using named cutter meshes or selected cutters. Use for an explicitly isolated difference, union, or intersect operation. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -19183,7 +19444,7 @@
       "name": "prune_external_asset_cache"
     },
     {
-      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. Prefer bounded helpers when they provide better recovery or progress reporting.",
+      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. This is the default authored-mutation path for object generation, modeling, animation, materials, custom nodes, rigging, and look development unless the user requests helpers. Prefer bounded helpers for operational work that needs recovery, provenance, polling, or path validation.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -19534,6 +19795,7 @@
     ],
     "workflows_refinement": [
       "plan_advanced_scene_workflow",
+      "plan_model_quality_workflow",
       "plan_asset_import_workflow",
       "plan_director_workflow",
       "get_2d_animation_details",
@@ -19546,7 +19808,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "51883ccc40a244837db7d536a660c103c5a06b5ddcd2b17b12e8dbc1a242cb9c",
+  "registry_digest": "32ef7bcac1d468ca94b6e417e729e74dc027223bad4f614e61daa127b0c50c84",
   "schema_version": 1,
   "specs": [
     {
@@ -22246,7 +22508,7 @@
     },
     {
       "contract": {
-        "description": "Plan the Milestone 7 animation workflow with brief, scene routing, timing chart, helper calls, evaluator calls, repair calls, and script fallback rules",
+        "description": "Plan the Milestone 7 animation workflow with brief, scene routing, timing chart, script-first authored execution, helper alternatives, evaluator calls, and repair calls",
         "input_schema": {
           "additionalProperties": false,
           "properties": {
@@ -22303,7 +22565,7 @@
         },
         "mutates_scene": false
       },
-      "description": "Plan the Milestone 7 animation workflow for generation, review, or repair. Returns a brief, animation-aware scene context, timing chart, ordered helper/evaluator/repair tool calls, and explicit draft_script fallback rules. Does not mutate the scene.",
+      "description": "Plan the Milestone 7 animation workflow for generation, review, or repair. Returns a brief, animation-aware scene context, timing chart, script-first execution strategy, helper alternatives, and evaluator/repair calls. Does not mutate the scene.",
       "exposure": "compact_direct",
       "groups": [
         "animation",
@@ -22481,7 +22743,7 @@
           "status_tool": "blender_bridge_status"
         }
       },
-      "description": "Execute the Milestone 7 helper-backed animation workflow for common requests, then run structured review and optional bounded repair. May leave live preview changes pending for commit/revert.",
+      "description": "Execute the bounded helper alternative for animation generation, then run structured review and optional repair. Use when trust is off, helpers were requested, or an exact helper fits. May leave live preview changes pending for commit/revert.",
       "exposure": "compact_direct",
       "groups": [
         "animation",
@@ -22593,7 +22855,7 @@
     },
     {
       "contract": {
-        "description": "One-input animation task wrapper that routes the prompt through the Milestone 7 planner/runner workflow before any script fallback",
+        "description": "One-input animation task wrapper for the bounded-helper animation workflow",
         "duration_hint": "Usually seconds for helper-backed animation; can take longer when the workflow captures or reviews visual evidence.",
         "input_schema": {
           "additionalProperties": false,
@@ -22617,7 +22879,7 @@
           "status_tool": "blender_bridge_status"
         }
       },
-      "description": "One-input animation entry point for MCP clients. Routes the prompt through the Milestone 7 planner/runner workflow before any draft_script fallback.",
+      "description": "One-input bounded-helper animation entry point for MCP clients. Use when trust is off or the user explicitly requests helper-backed animation generation.",
       "exposure": "compact_direct",
       "groups": [
         "animation",
@@ -26487,7 +26749,7 @@
         "mutates_scene": true,
         "requires_live_preview": true
       },
-      "description": "Create or update a bounded procedural Principled material using noise, voronoi, wave, or checker texture nodes with optional ColorRamp and bump. Use this for procedural stone, marble, wood, cellular, fabric, or musgrave-style texture requests before custom shader-node Python.",
+      "description": "Create or update a bounded procedural Principled material using noise, voronoi, wave, or checker texture nodes with optional ColorRamp and bump. Use this for procedural stone, marble, wood, cellular, fabric, or musgrave-style texture requests when helpers were explicitly requested or the bounded preset exactly fits.",
       "exposure": "catalog",
       "groups": [
         "materials",
@@ -30237,7 +30499,7 @@
     },
     {
       "contract": {
-        "description": "Plan helper-first workflows for advanced 3D, 2D/storyboard, animation, simulation, asset import, compositor/render, and script-fallback work",
+        "description": "Plan gateway-ready capability-routed workflows for advanced authored and operational Blender work, with trusted-script handoff and bounded helper fallbacks",
         "input_schema": {
           "additionalProperties": false,
           "properties": {
@@ -30245,6 +30507,7 @@
               "items": {
                 "enum": [
                   "2d_storyboard",
+                  "model_quality",
                   "procedural_3d",
                   "advanced_animation",
                   "simulation_setup",
@@ -30273,7 +30536,7 @@
         "mutates_scene": false,
         "supports_headless": true
       },
-      "description": "Plan a helper-first workflow for advanced 3D, 2D/storyboard, animation, simulation, asset import, compositor/render, and script-fallback work. Does not mutate the scene.",
+      "description": "Plan capability-routed advanced 3D, 2D/storyboard, animation, simulation, asset import, and compositor/render work. Returns gateway-ready inspections plus one deferred trusted-script handoff for authored domains when trust is active, with bounded helper fallbacks. Does not mutate the scene.",
       "exposure": "compact_direct",
       "groups": [
         "animation",
@@ -30293,6 +30556,7 @@
             "items": {
               "enum": [
                 "2d_storyboard",
+                "model_quality",
                 "procedural_3d",
                 "advanced_animation",
                 "simulation_setup",
@@ -30320,6 +30584,272 @@
       },
       "name": "plan_advanced_scene_workflow",
       "order": 1150,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "workflows_refinement"
+    },
+    {
+      "contract": {
+        "description": "Plan generic reference-driven model quality work with client-authored decomposition, gateway execution, evidence scoring, repair, and preview decision gates",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "prompt": {
+              "type": "string"
+            },
+            "quality_floor": {
+              "maximum": 5,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "reference_brief": {
+              "additionalProperties": false,
+              "description": "LLM-authored observations from the actual reference image. Supply concrete forms and ratios; do not infer a category template.",
+              "properties": {
+                "inspection_views": {
+                  "items": {
+                    "enum": [
+                      "front_below",
+                      "underside",
+                      "side",
+                      "front",
+                      "rear",
+                      "top"
+                    ],
+                    "type": "string"
+                  },
+                  "maxItems": 6,
+                  "type": "array"
+                },
+                "landmarks": {
+                  "items": {
+                    "maxLength": 240,
+                    "type": "string"
+                  },
+                  "maxItems": 24,
+                  "type": "array"
+                },
+                "negative_constraints": {
+                  "items": {
+                    "maxLength": 240,
+                    "type": "string"
+                  },
+                  "maxItems": 24,
+                  "type": "array"
+                },
+                "primary_masses": {
+                  "items": {
+                    "maxLength": 240,
+                    "type": "string"
+                  },
+                  "maxItems": 24,
+                  "type": "array"
+                },
+                "proportion_checks": {
+                  "items": {
+                    "maxLength": 240,
+                    "type": "string"
+                  },
+                  "maxItems": 24,
+                  "type": "array"
+                },
+                "secondary_forms": {
+                  "items": {
+                    "maxLength": 240,
+                    "type": "string"
+                  },
+                  "maxItems": 24,
+                  "type": "array"
+                },
+                "silhouette": {
+                  "items": {
+                    "maxLength": 240,
+                    "type": "string"
+                  },
+                  "maxItems": 24,
+                  "type": "array"
+                },
+                "source_notes": {
+                  "items": {
+                    "maxLength": 240,
+                    "type": "string"
+                  },
+                  "maxItems": 24,
+                  "type": "array"
+                },
+                "subject": {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "surface_cues": {
+                  "items": {
+                    "maxLength": 240,
+                    "type": "string"
+                  },
+                  "maxItems": 24,
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            "reference_description": {
+              "description": "Optional source note; this does not replace the structured visual reference_brief.",
+              "maxLength": 4000,
+              "type": "string"
+            },
+            "target_objects": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "mutates_scene": false,
+        "supports_headless": true
+      },
+      "description": "Plan a reference-driven model quality workflow from an LLM-authored visual brief, with gateway-ready calls, target refresh, evidence scoring, bounded repair, and commit/revert gates. Does not mutate the scene.",
+      "exposure": "compact_direct",
+      "groups": [
+        "model_quality"
+      ],
+      "handler_key": "plan_model_quality_workflow",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "quality_floor": {
+            "maximum": 5,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "reference_brief": {
+            "additionalProperties": false,
+            "description": "LLM-authored observations from the actual reference image. Supply concrete forms and ratios; do not infer a category template.",
+            "properties": {
+              "inspection_views": {
+                "items": {
+                  "enum": [
+                    "front_below",
+                    "underside",
+                    "side",
+                    "front",
+                    "rear",
+                    "top"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 6,
+                "type": "array"
+              },
+              "landmarks": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "negative_constraints": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "primary_masses": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "proportion_checks": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "secondary_forms": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "silhouette": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "source_notes": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              },
+              "subject": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "surface_cues": {
+                "items": {
+                  "maxLength": 240,
+                  "type": "string"
+                },
+                "maxItems": 24,
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "reference_description": {
+            "description": "Optional source note; this does not replace the structured visual reference_brief.",
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "target_objects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "name": "plan_model_quality_workflow",
+      "order": 1160,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -30434,7 +30964,7 @@
     },
     {
       "contract": {
-        "description": "Plan a multi-step director workflow across inspection, asset import, creation, animation/review/repair, evidence, and preview decisions",
+        "description": "Plan a gateway-ready director workflow with bounded operational phases, one trusted authored scene pass when available, evidence, and preview decisions",
         "input_schema": {
           "additionalProperties": false,
           "properties": {
@@ -30462,7 +30992,7 @@
         "mutates_scene": false,
         "supports_headless": true
       },
-      "description": "Plan a multi-step director workflow across inspection, optional asset import, creation, animation/review/repair, evidence capture, and commit/revert decision points. Does not mutate the scene.",
+      "description": "Plan a gateway-ready director workflow across inspection, optional bounded asset import, one trusted authored scene pass when available, animation review, evidence capture, and explicit commit/revert decision points. Does not mutate the scene.",
       "exposure": "compact_direct",
       "groups": [
         "external_assets",
@@ -30649,7 +31179,7 @@
         "mutates_scene": true,
         "requires_live_preview": true
       },
-      "description": "Apply a bounded procedural modeling stack to mesh objects: array, bevel, and optional weighted normals. Use before custom geometry-node or mesh-edit scripts. Applies immediately with preview revert support.",
+      "description": "Apply a bounded procedural modeling stack to mesh objects: array, bevel, and optional weighted normals. Use when helpers were requested or this isolated stack exactly fits the task. Applies immediately with preview revert support.",
       "exposure": "catalog",
       "groups": [
         "advanced_create",
@@ -30765,7 +31295,7 @@
         "mutates_scene": true,
         "requires_live_preview": true
       },
-      "description": "Add non-destructive Boolean modifiers to a target mesh using named cutter meshes or selected cutters. Use for difference, union, and intersect cuts before custom mesh scripts. Applies immediately with preview revert support.",
+      "description": "Add non-destructive Boolean modifiers to a target mesh using named cutter meshes or selected cutters. Use for an explicitly isolated difference, union, or intersect operation. Applies immediately with preview revert support.",
       "exposure": "catalog",
       "groups": [
         "basic_edit",
@@ -35471,7 +36001,7 @@
         },
         "timeout_seconds": 300
       },
-      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. Prefer bounded helpers when they provide better recovery or progress reporting.",
+      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. This is the default authored-mutation path for object generation, modeling, animation, materials, custom nodes, rigging, and look development unless the user requests helpers. Prefer bounded helpers for operational work that needs recovery, provenance, polling, or path validation.",
       "exposure": "catalog",
       "groups": [],
       "handler_key": "draft_script",
@@ -35985,5 +36515,5 @@
       "owner": "scripts_transactions"
     }
   ],
-  "tool_count": 181
+  "tool_count": 182
 }

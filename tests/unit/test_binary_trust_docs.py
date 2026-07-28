@@ -19,6 +19,8 @@ class BinaryTrustDocumentationTests(unittest.TestCase):
             "only for staged scripts",
             "pending scripts, script logs, and repair context",
             "use `reject` for unwanted pending python",
+            "ordinary file load",
+            "content-fingerprinted",
         ):
             self.assertNotIn(stale_phrase, combined)
 
@@ -31,6 +33,7 @@ class BinaryTrustDocumentationTests(unittest.TestCase):
             "static script checks are advisory",
             "any local client",
             "**revoke**",
+            "file operations",
         ):
             self.assertIn(required_phrase, combined)
 

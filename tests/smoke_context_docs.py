@@ -17,7 +17,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import agent_tools, bridge_protocol, context_budget, context_bundle, docs_index, inspection_render, lab_parity, playblast_capture, tool_dispatcher, ui, viewport_capture  # noqa: E402
+from claude_blender import agent_tools, bridge_protocol, context_budget, context_bundle, docs_index, inspection_render, lab_parity, playblast_capture, tool_dispatcher, tool_registry, ui, viewport_capture  # noqa: E402
 
 
 class _FakeOfflineApp:
@@ -59,6 +59,11 @@ def main():
         assert "_attachments" not in public
         assert public["visual_context"]["requested"] is True
         assert public["visual_context"]["available"] is False
+        assert bundle["available_tools"] == [
+            spec.name for spec in tool_registry.REGISTRY.specs(include_internal=False)
+        ]
+        assert "plan_model_quality_workflow" in bundle["available_tools"]
+        assert "run_approved_script" not in bundle["available_tools"]
         assert "capture_viewport" in bundle["available_tools"]
         assert "capture_animation_playblast" in bundle["available_tools"]
         assert "capture_object_inspection_renders" in bundle["available_tools"]

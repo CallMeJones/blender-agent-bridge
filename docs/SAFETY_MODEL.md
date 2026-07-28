@@ -12,7 +12,7 @@ Generated Python has one session-wide switch; there is no per-script approval qu
 
 - With **Trust Agent Scripts** off, `draft_script` is refused without creating a Text datablock or pending UI.
 - With trust on, generated Python runs immediately with the same permissions as Blender's **Run Script** command: full Blender API access plus any filesystem, network, subprocess, project-file, and persistent-cache access available to the Blender process.
-- Trust is runtime-only and lasts until **Revoke**, add-on reload, file load, or Blender exit. Starting or stopping the bridge does not silently change the user's choice.
+- Trust is runtime-only and lasts until **Revoke**, timed expiry, add-on reload, or Blender exit. Starting or stopping the bridge and opening, creating, restoring, copying, renaming, saving, or modifying `.blend` files do not silently change the user's choice. File operations never extend a timed grant's expiry.
 - `draft_privileged_script` remains a compatibility alias to `draft_script`; `run_approved_script` refuses the removed per-script token flow.
 - Bounded structured tools are still preferable for external assets, project files, renders, captures, saves, and cache work because they add path/provider validation, provenance, rollback, polling, or recovery. Their restrictions do not constrain trusted Python. In particular, `list_project_files`, `read_project_file`, and `write_project_file` stay confined to the current saved `.blend` directory while trusted Python is not.
 - Static analysis remains visible as advisory risk information after trust; it is not a sandbox or permission filter. Only malformed Python and payloads above the 500k operational ceiling are refused.
@@ -96,7 +96,7 @@ Before trusted execution:
 - Record the generated script and result log locally.
 - Require active session script trust before accepting `draft_script`.
 - Refuse syntax-invalid or oversized payloads without creating a script Text datablock or retained execution state.
-- Return helper-first guidance as advice without preventing a trusted script from running.
+- Return bounded-helper guidance for operational risks without demoting trusted scripts for authored scene mutation.
 
 During live preview:
 

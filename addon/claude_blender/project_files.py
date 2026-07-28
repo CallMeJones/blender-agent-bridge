@@ -572,11 +572,7 @@ def _checkpoint_before_replace(context, *, create_checkpoint=True, require_check
     return checkpoint
 
 
-def _clear_scene_runtime_state(message):
-    script_runner.clear_external_script_trust_for_all_scenes(
-        status=script_runner.NO_EXTERNAL_TRUST_STATUS,
-        audit_action="clear_on_project_file_change",
-    )
+def _clear_scene_preview_state(message):
     state = getattr(getattr(bpy.context, "scene", None), "claude_blender", None)
     if not state:
         return
@@ -727,7 +723,7 @@ def open_blend_file(
             "checkpoint": checkpoint,
             "before": before,
         }
-    _clear_scene_runtime_state(f"Opened blend file: {path}")
+    _clear_scene_preview_state(f"Opened blend file: {path}")
     diagnostics = lab_parity.get_blend_file_diagnostics(bpy.context)
     return {
         "ok": True,
@@ -839,7 +835,7 @@ def create_new_blender_project(
             "created_dirs": created_dirs,
             "before": before,
         }
-    _clear_scene_runtime_state(f"Created new Blender project: {target}")
+    _clear_scene_preview_state(f"Created new Blender project: {target}")
     diagnostics = lab_parity.get_blend_file_diagnostics(bpy.context)
     return {
         "ok": bool(os.path.isfile(target)),

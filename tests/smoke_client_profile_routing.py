@@ -52,12 +52,12 @@ CLIENT_PROFILES = [
 
 ROUTING_FIXTURES = [
     {
-        "id": "animation_helper_first",
+        "id": "animation_script_first",
         "prompt": "Make the selected cube bounce twice, get smaller each bounce, capture a playblast, review it, repair issues, and leave it as a preview.",
-        "must_select": ["plan_animation_workflow", "run_animation_workflow", "capture_animation_playblast", "review_playblast_against_brief", "run_animation_repair_loop"],
-        "must_not_select": ["draft_script"],
-        "search": "bounce twice get smaller playblast review repair",
-        "search_before": [("run_animation_workflow", "draft_script"), ("plan_animation_workflow", "draft_script")],
+        "must_select": ["draft_script", "plan_animation_workflow", "run_animation_workflow", "capture_animation_playblast", "review_playblast_against_brief", "run_animation_repair_loop"],
+        "must_not_select": [],
+        "search": "Make the selected cube bounce twice, get smaller each bounce, capture a playblast, review it, repair issues, and leave it as a preview.",
+        "search_before": [("draft_script", "run_animation_workflow")],
     },
     {
         "id": "visual_inspection_helper_first",
@@ -72,24 +72,61 @@ ROUTING_FIXTURES = [
         "prompt": "Create a hard-surface modular wall panel kit with geometry node starters, bevels, material presets, and production organization.",
         "must_select": ["plan_advanced_scene_workflow", "apply_procedural_array_stack", "add_geometry_nodes_modifier", "create_shader_material", "organize_scene_for_production", "draft_script"],
         "must_not_select": [],
-        "search": "hard surface modular wall panel geometry nodes material preset object kit",
-        "search_before": [("plan_advanced_scene_workflow", "draft_script"), ("add_geometry_nodes_modifier", "draft_script")],
+        "search": "create hard surface modular wall panel geometry nodes material preset object kit",
+        "search_before": [("draft_script", "add_geometry_nodes_modifier")],
     },
     {
         "id": "object_design_composable_or_script",
         "prompt": "Design a futuristic wall-mounted coffee machine with chrome pipes, a small display, buttons, and beveled body.",
         "must_select": ["plan_advanced_scene_workflow", "edit_mesh", "create_shader_material", "inspect_modeling_quality", "draft_script"],
         "must_not_select": [],
-        "search": "object design coffee machine chrome pipes display buttons beveled body helper path",
-        "search_before": [("plan_advanced_scene_workflow", "draft_script"), ("create_shader_material", "draft_script")],
+        "search": "object design coffee machine chrome pipes display buttons beveled body",
+        "search_before": [("draft_script", "create_shader_material")],
     },
     {
         "id": "desk_lamp_prop_composable_or_script",
         "prompt": "Create a believable architect desk lamp product prop with spring arms, counterweight, open wide shade, bulb, cable, and capture inspection renders.",
         "must_select": ["plan_advanced_scene_workflow", "inspect_modeling_quality", "capture_object_inspection_renders", "draft_script"],
         "must_not_select": [],
-        "search": "architect desk lamp product prop spring arms counterweight wide shade bulb cable object kit inspection renders",
-        "search_before": [("plan_advanced_scene_workflow", "draft_script"), ("capture_object_inspection_renders", "draft_script")],
+        "search": "create architect desk lamp product prop spring arms counterweight wide shade bulb cable object kit inspection renders",
+        "search_before": [("draft_script", "capture_object_inspection_renders")],
+    },
+    {
+        "id": "reference_model_quality_loop",
+        "prompt": "Match the reference image of a plush cartoon cat: preserve silhouette, proportions, face placement, fur direction, paws, tail, capture evidence, score it, repair issues, and leave preview pending.",
+        "must_select": ["plan_model_quality_workflow", "plan_advanced_scene_workflow", "inspect_modeling_quality", "capture_viewport", "capture_object_inspection_renders", "draft_script"],
+        "must_not_select": [],
+        "search": "match reference cartoon cat silhouette proportions fur quality evidence repair",
+        "search_contains": ["plan_model_quality_workflow", "capture_viewport", "inspect_modeling_quality"],
+        "search_before": [("plan_model_quality_workflow", "plan_advanced_scene_workflow"), ("plan_model_quality_workflow", "draft_script")],
+    },
+    {
+        "id": "human_reference_model_quality_loop",
+        "prompt": "Model a human figure from the attached reference image, matching its silhouette, measured proportions, landmark placement, and form continuity before surface detail.",
+        "must_select": ["plan_model_quality_workflow", "plan_advanced_scene_workflow", "inspect_modeling_quality", "capture_viewport", "capture_object_inspection_renders", "draft_script"],
+        "must_not_select": [],
+        "search": "model human figure from attached reference image silhouette proportions landmark placement form continuity",
+        "search_contains": ["plan_model_quality_workflow", "capture_viewport", "inspect_modeling_quality"],
+        "search_before": [("plan_model_quality_workflow", "plan_advanced_scene_workflow")],
+    },
+    {
+        "id": "hard_surface_reference_model_quality_loop",
+        "prompt": "Rebuild this hard-surface product from the reference photo and score silhouette, proportions, feature placement, edge treatment, and surface match before preview approval.",
+        "must_select": ["plan_model_quality_workflow", "plan_advanced_scene_workflow", "inspect_modeling_quality", "capture_viewport", "capture_object_inspection_renders", "draft_script"],
+        "must_not_select": [],
+        "search": "rebuild hard surface product from reference photo silhouette proportions feature placement surface match",
+        "search_contains": ["plan_model_quality_workflow", "capture_viewport", "inspect_modeling_quality"],
+        "search_before": [("plan_model_quality_workflow", "plan_advanced_scene_workflow")],
+    },
+    {
+        "id": "character_animation_not_model_quality",
+        "prompt": "Animate this character waving, capture a playblast, and repair the timing.",
+        "must_select": ["draft_script", "run_animation_task", "plan_animation_workflow", "capture_animation_playblast"],
+        "must_not_select": ["plan_model_quality_workflow"],
+        "search": "animate character waving playblast timing repair",
+        "search_contains": ["draft_script", "run_animation_task", "plan_animation_workflow"],
+        "search_not_contains": ["plan_model_quality_workflow"],
+        "search_before": [("draft_script", "run_animation_task"), ("run_animation_task", "plan_advanced_scene_workflow")],
     },
     {
         "id": "asset_import_async_path",
@@ -102,10 +139,10 @@ ROUTING_FIXTURES = [
     {
         "id": "director_orchestration",
         "prompt": "Director workflow: import an asset, build a product scene, animate a reveal, review evidence, repair, and ask me to commit or revert.",
-        "must_select": ["plan_director_workflow", "plan_asset_import_workflow", "plan_advanced_scene_workflow", "prepare_imported_asset_presentation", "run_animation_workflow", "capture_viewport"],
-        "must_not_select": ["draft_script"],
+        "must_select": ["plan_director_workflow", "plan_asset_import_workflow", "plan_advanced_scene_workflow", "prepare_imported_asset_presentation", "run_animation_workflow", "capture_viewport", "draft_script"],
+        "must_not_select": [],
         "search": "director workflow import asset product scene animate reveal evidence commit revert",
-        "search_before": [("plan_director_workflow", "draft_script"), ("plan_asset_import_workflow", "draft_script")],
+        "search_before": [("plan_director_workflow", "draft_script"), ("draft_script", "run_animation_workflow")],
     },
     {
         "id": "explicit_custom_script_allowed_after_gap",
@@ -120,9 +157,45 @@ ROUTING_FIXTURES = [
         "prompt": "Inspect the selected object's material, repair missing shader nodes, assign a PBR material, and leave the changes in preview.",
         "must_select": ["inspect_material_setup", "repair_material_setup", "create_shader_material"],
         "must_not_select": ["draft_script"],
-        "search": "material shader repair",
+        "search": "inspect material shader repair",
         "search_contains": ["inspect_material_setup", "repair_material_setup", "create_shader_material"],
         "search_before": [("inspect_material_setup", "draft_script"), ("repair_material_setup", "draft_script")],
+    },
+    {
+        "id": "material_generation_script_first",
+        "prompt": "Create a custom procedural marble material with layered noise, color ramps, and bump for the selected object.",
+        "must_select": ["draft_script", "create_procedural_texture_material", "inspect_material_setup"],
+        "must_not_select": [],
+        "search": "create custom procedural marble material layered noise color ramps bump",
+        "search_contains": ["draft_script", "create_procedural_texture_material"],
+        "search_before": [("draft_script", "create_procedural_texture_material")],
+    },
+    {
+        "id": "explicit_material_helper_override",
+        "prompt": "Create a procedural marble material with helpers for the selected object.",
+        "must_select": ["create_procedural_texture_material"],
+        "must_not_select": ["draft_script"],
+        "search": "create procedural marble material with helpers",
+        "search_contains": ["create_procedural_texture_material"],
+        "search_before": [("create_procedural_texture_material", "draft_script")],
+    },
+    {
+        "id": "project_creation_helper_only",
+        "prompt": "Create a new Blender project.",
+        "must_select": ["create_new_blender_project", "get_blend_file_diagnostics"],
+        "must_not_select": ["draft_script"],
+        "search": "Create a new Blender project.",
+        "search_contains": ["create_new_blender_project", "get_blend_file_diagnostics"],
+        "search_before": [("create_new_blender_project", "draft_script")],
+    },
+    {
+        "id": "final_animation_render_helper_only",
+        "prompt": "Render the final animation.",
+        "must_select": ["start_render_job", "get_render_job_status"],
+        "must_not_select": ["draft_script"],
+        "search": "Render the final animation.",
+        "search_contains": ["start_render_job", "get_render_job_status"],
+        "search_before": [("start_render_job", "run_animation_task"), ("start_render_job", "draft_script")],
     },
     {
         "id": "project_file_diagnostics_and_save",
@@ -132,6 +205,42 @@ ROUTING_FIXTURES = [
         "search": "blend file save diagnostics",
         "search_contains": ["get_blend_file_diagnostics", "save_blend_file"],
         "search_before": [("get_blend_file_diagnostics", "draft_script"), ("save_blend_file", "draft_script")],
+    },
+    {
+        "id": "mixed_project_save_and_material_authoring",
+        "prompt": "Save the blend after creating a material.",
+        "must_select": ["save_blend_file", "draft_script"],
+        "must_not_select": ["run_animation_task"],
+        "search": "Save the blend after creating a material.",
+        "search_contains": ["save_blend_file", "draft_script"],
+        "search_before": [("save_blend_file", "draft_script")],
+    },
+    {
+        "id": "static_motion_noun_not_animation",
+        "prompt": "Create an orbit sculpture.",
+        "must_select": ["draft_script"],
+        "must_not_select": ["run_animation_task", "plan_animation_workflow"],
+        "search": "Create an orbit sculpture.",
+        "search_not_contains": ["run_animation_task", "plan_animation_workflow", "create_camera_orbit"],
+        "search_before": [],
+    },
+    {
+        "id": "render_setup_helper_route",
+        "prompt": "Create a render setup.",
+        "must_select": ["configure_render_outputs", "set_render_settings"],
+        "must_not_select": ["draft_script", "run_animation_task"],
+        "search": "Create a render setup.",
+        "search_contains": ["configure_render_outputs", "set_render_settings"],
+        "search_before": [("configure_render_outputs", "create_lookdev_turntable_review")],
+    },
+    {
+        "id": "lookdev_review_exact_helper_route",
+        "prompt": "Create a lookdev turntable review.",
+        "must_select": ["create_lookdev_turntable_review"],
+        "must_not_select": ["draft_script", "run_animation_task"],
+        "search": "Create a lookdev turntable review.",
+        "search_contains": ["create_lookdev_turntable_review"],
+        "search_before": [("create_lookdev_turntable_review", "plan_advanced_scene_workflow")],
     },
     {
         "id": "preview_commit_or_revert",
@@ -234,6 +343,7 @@ def _client_discovery_contract(server, profile):
         "list_scene_objects",
         "get_blend_file_diagnostics",
         "run_animation_workflow",
+        "plan_model_quality_workflow",
         "capture_viewport",
         "draft_script",
         "commit_preview",
@@ -245,6 +355,22 @@ def _client_discovery_contract(server, profile):
         {"name": "list_scene_objects", "arguments": {}}
     )["structuredContent"]
     assert invoked["ok"] is True and invoked["invoked_tool"] == "list_scene_objects", (profile["id"], invoked)
+    quality_invoked = server._invoke_blender_tool(
+        {
+            "name": "plan_model_quality_workflow",
+            "arguments": {
+                "prompt": "Match the attached reference image.",
+                "reference_brief": {
+                    "subject": "test model",
+                    "silhouette": ["wide upper form over a narrow base"],
+                    "primary_masses": ["upper form", "base"],
+                    "proportion_checks": ["upper form is twice the base width"],
+                },
+            },
+        }
+    )["structuredContent"]
+    assert quality_invoked["ok"] is True, (profile["id"], quality_invoked)
+    assert quality_invoked["invoked_tool"] == "plan_model_quality_workflow", (profile["id"], quality_invoked)
     return json.dumps(tools, separators=(",", ":"), sort_keys=True)
 
 

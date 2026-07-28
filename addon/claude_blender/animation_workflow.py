@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from . import animation_brief, world_model
+from . import animation_brief, helper_routing, script_runner, world_model
 
 
 def _as_string_list(value):
@@ -22,14 +22,85 @@ def _optional_int(value, default):
         return int(default)
 
 
-def _tool_call(name, arguments, *, reason="", mutates_scene=False, requires_live_preview=False):
-    return {
+def _tool_call(
+    name,
+    arguments,
+    *,
+    reason="",
+    mutates_scene=False,
+    requires_live_preview=False,
+    deferred=False,
+    input_handoff=None,
+    gateway_ready=False,
+):
+    call = {
         "name": name,
         "input": dict(arguments or {}),
         "reason": reason,
         "mutates_scene": bool(mutates_scene),
         "requires_live_preview": bool(requires_live_preview),
     }
+    if deferred:
+        call["deferred_until_inputs_resolved"] = True
+    if input_handoff:
+        call["input_handoff"] = dict(input_handoff)
+    if gateway_ready:
+        call["schema_lookup"] = {
+            "name": "get_blender_tool_schema",
+            "arguments": {"name": name},
+        }
+        if deferred:
+            call["gateway_call_template"] = {
+                "name": "invoke_blender_tool",
+                "arguments": {
+                    "name": name,
+                    "arguments": dict((input_handoff or {}).get("arguments_template") or {}),
+                },
+            }
+        else:
+            call["gateway_call"] = {
+                "name": "invoke_blender_tool",
+                "arguments": {"name": name, "arguments": dict(arguments or {})},
+            }
+    return call
+
+
+def _authored_animation_script_call(
+    brief,
+    *,
+    prompt,
+    subject_names,
+    frame_start,
+    frame_end,
+):
+    interpretation = str((brief or {}).get("user_visible_interpretation") or prompt).strip()
+    return _tool_call(
+        "draft_script",
+        {},
+        reason="Author and run one cohesive checkpoint-backed script from the resolved brief, targets, and timing chart.",
+        mutates_scene=True,
+        deferred=True,
+        input_handoff={
+            "arguments_template": {
+                "intent": interpretation or "Author the planned Blender animation",
+                "expected_changes": (
+                    f"Animate the resolved targets from frame {frame_start} through {frame_end} using the "
+                    "approved brief and timing chart, with stable names and idempotent updates."
+                ),
+                "risk_level": "medium",
+                "target_objects": list(subject_names),
+                "code": "<complete_llm_authored_blender_python>",
+            },
+            "resolve_from": [
+                "workflow.brief",
+                "workflow.scene_context",
+                "workflow.timing_chart",
+            ],
+            "client_must_replace_placeholders": True,
+            "script_preflight": helper_routing.script_authoring_preflight(),
+        },
+        gateway_ready=True,
+    )
 
 
 def _step(phase, status, title, *, tool_call=None, result_key="", notes=None):
@@ -337,7 +408,14 @@ def _review_tool_calls(brief, *, prompt, frame_start, frame_end, playblast=None,
     return calls
 
 
-def _script_fallback_policy(brief, generation_blockers, *, mode="full"):
+def _script_fallback_policy(
+    brief,
+    generation_blockers,
+    *,
+    mode="full",
+    script_first=False,
+    trust_snapshot=None,
+):
     clarification_needed = bool((brief or {}).get("clarification_needed"))
     review_only = str(mode or "").lower() == "review"
     allowed = not clarification_needed and not review_only
@@ -346,14 +424,17 @@ def _script_fallback_policy(brief, generation_blockers, *, mode="full"):
         current_blockers.append("Review-only workflow: run evaluator/review tools before considering repair or custom script fallback.")
     return {
         "allowed": allowed,
+        "legacy_field_name": True,
+        "script_first": bool(script_first and allowed),
+        "preferred_role": "primary_authored_animation" if script_first and allowed else "bounded_fallback",
+        "script_trust": dict(trust_snapshot or {}),
         "allowed_after": [
             "create_animation_brief",
             "get_animation_scene_context",
             "create_timing_chart",
-            "attempt_or_rule_out_generation_helpers",
             "run_evaluator_or_playblast_review_when checking was requested",
         ],
-        "preferred_before_script": [
+        "helper_fallback_tools": [
             "set_scene_frame_range",
             "set_animation_preview_range",
             "animate_object_bounce",
@@ -364,16 +445,17 @@ def _script_fallback_policy(brief, generation_blockers, *, mode="full"):
             "block_key_poses",
             "run_animation_repair_loop",
         ],
+        "script_preflight": helper_routing.script_authoring_preflight(),
         "valid_reasons": [
-            "No helper can express the required secondary motion or data operation.",
-            "The timing chart requires explicit transforms that the client can only construct safely in Python.",
-            "A repair operation is under-specified for helpers and needs one cohesive checkpoint-backed script.",
+            "Authored animation defaults to one cohesive script while trust is active.",
+            "The timing chart requires coordinated transforms, controls, materials, drivers, or secondary motion.",
+            "A broad repair pass is more coherent as one checkpoint-backed script.",
         ],
         "not_allowed_for": [
             "Skipping the animation brief or scene routing context.",
             "Skipping validation when the user asked to check the result.",
             "Replacing a review-only request with script mutation.",
-            "Running scripts that fail static checks.",
+            "Running malformed or oversized script payloads.",
         ],
         "current_blockers": current_blockers,
     }
@@ -400,6 +482,8 @@ def plan_animation_workflow(
 
     subject_names = _as_string_list(subject_names)
     mode = _normalize_workflow_mode(prompt, mode)
+    trust_snapshot = script_runner.external_script_trust_snapshot(context)
+    helper_override = helper_routing.prefers_bounded_helpers(prompt)
 
     brief_result = None
     if isinstance(brief, dict):
@@ -466,10 +550,28 @@ def plan_animation_workflow(
         if item.get("severity") == "blocker"
     ]
     generation_blocked_by_scene_context = bool(hardening_blockers)
+    scripted_generation = bool(
+        trust_snapshot["active"]
+        and not helper_override
+        and mode in {"generate", "full"}
+        and not generation_blocked_by_clarification
+        and not generation_blocked_by_scene_context
+    )
     next_tool_calls = []
     if not generation_blocked_by_clarification and not generation_blocked_by_scene_context:
         if mode in {"generate", "full"}:
-            next_tool_calls.extend(generation_calls)
+            if scripted_generation:
+                next_tool_calls.append(
+                    _authored_animation_script_call(
+                        brief_data,
+                        prompt=prompt,
+                        subject_names=subject_names,
+                        frame_start=frame_start,
+                        frame_end=frame_end,
+                    )
+                )
+            else:
+                next_tool_calls.extend(generation_calls)
         if mode in {"review", "repair", "full"}:
             next_tool_calls.extend(review_calls)
     status = "needs_clarification" if generation_blocked_by_clarification else "ready"
@@ -477,7 +579,13 @@ def plan_animation_workflow(
         status = "blocked_by_scene_context"
     elif clarification_needed and mode == "review":
         status = "ready_for_review"
-    if generation_blockers and mode in {"generate", "full"} and not clarification_needed and not generation_blocked_by_scene_context:
+    if (
+        generation_blockers
+        and mode in {"generate", "full"}
+        and not scripted_generation
+        and not clarification_needed
+        and not generation_blocked_by_scene_context
+    ):
         status = "ready_with_helper_gaps"
     preflight_warnings = [
         item
@@ -544,8 +652,19 @@ def plan_animation_workflow(
                 _step(
                     "generate",
                     "recommended_next",
-                    "Apply helper-based generation before script fallback",
-                    notes=generation_blockers or ["Use the next_tool_calls generation helpers in order."],
+                    (
+                        "Author one cohesive trusted animation script"
+                        if scripted_generation
+                        else "Apply bounded helper-based animation generation"
+                    ),
+                    notes=(
+                        [
+                            "Use the brief, scene context, and timing chart to author one checkpoint-backed draft_script.",
+                            "Use helper_fallback_tool_calls only when helpers were requested or script trust is unavailable.",
+                        ]
+                        if scripted_generation
+                        else generation_blockers or ["Use the next_tool_calls generation helpers in order."]
+                    ),
                 )
             )
         steps.append(
@@ -569,13 +688,36 @@ def plan_animation_workflow(
         "timing_chart": chart,
         "steps": steps,
         "next_tool_calls": next_tool_calls,
+        "helper_fallback_tool_calls": generation_calls,
         "generation_blockers": generation_blockers,
-        "script_fallback_policy": _script_fallback_policy(brief_data, generation_blockers, mode=mode),
+        "execution_strategy": {
+            "selection": (
+                "cohesive_trusted_script"
+                if scripted_generation
+                else "bounded_helpers"
+            ),
+            "default_when_trusted": "cohesive_trusted_script",
+            "user_helper_override": helper_override,
+            "script_trust": trust_snapshot,
+            "script_preflight": helper_routing.script_authoring_preflight(),
+        },
+        "script_fallback_policy": _script_fallback_policy(
+            brief_data,
+            generation_blockers,
+            mode=mode,
+            script_first=scripted_generation,
+            trust_snapshot=trust_snapshot,
+        ),
         "mcp_client_guidance": [
             "Call plan_animation_workflow first for animation generation, review, or repair tasks.",
-            "Follow next_tool_calls in order; do not call draft_script before the workflow has produced brief, scene context, and timing chart.",
+            (
+                "After the brief, scene context, and timing chart, use one cohesive draft_script for authored "
+                "generation when execution_strategy selects cohesive_trusted_script."
+            ),
+            "Use helper_fallback_tool_calls when trust is off, helpers were explicitly requested, or an exact helper is intentionally chosen.",
+            "When next_tool_calls contains draft_script, replace its code placeholder with complete Blender Python before invoking it through the gateway.",
             "Leave helper mutations in preview state unless the user explicitly asks to commit or revert.",
-            "Use draft_script for custom animation code only under active session trust; static findings are advisory, and persistent bake/free operations may run under the same trust after inspection.",
+            "Static findings are advisory under active trust; persistent bake/free operations remain bounded operational exceptions after inspection.",
             "Use animation_hardening.required_before_mutation before changing rig controls, shape keys, material nodes, or simulation-backed objects.",
         ],
     }

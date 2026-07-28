@@ -28,6 +28,10 @@ def draft_script(context, args):
         for key in ("intent", "expected_changes", "brief", "prompt")
     )
     guard_text = "\n".join([intent_text, script_text[:4000]])
+    scripted_authoring_ready = bool(
+        helper_routing.is_script_first_authored_request(guard_text)
+        and script_runner.external_script_trust_snapshot(context)["active"]
+    )
     helper_advisory = None
     if _looks_like_render_job_intent(guard_text) and not helper_routing.has_explicit_animation_helper_gap(guard_text):
         helper_advisory = {
@@ -44,6 +48,7 @@ def draft_script(context, args):
         }
     if (
         _looks_like_animation_intent(guard_text)
+        and not scripted_authoring_ready
         and not _animation_script_fallback_recently_allowed(context)
         and not helper_routing.has_explicit_animation_helper_gap(guard_text)
         and helper_advisory is None

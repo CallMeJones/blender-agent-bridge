@@ -198,6 +198,7 @@ def run_animation_workflow(context, args):
     if not plan_result.get("ok"):
         return plan_result
     workflow = plan_result.get("workflow") if isinstance(plan_result.get("workflow"), dict) else {}
+    workflow_mode = str(workflow.get("mode") or mode).strip().lower()
     if workflow.get("status") == "needs_clarification":
         return {
             "ok": True,
@@ -228,8 +229,14 @@ def run_animation_workflow(context, args):
     executed = []
     skipped = []
     generation_count = 0
-    if apply_generation and mode in {"generate", "full", "repair", "review"}:
-        for index, tool_call in enumerate(workflow.get("next_tool_calls") or []):
+    planned_calls = workflow.get("next_tool_calls") or []
+    generation_calls = (
+        workflow.get("helper_fallback_tool_calls") or planned_calls
+        if workflow_mode in {"generate", "full"}
+        else planned_calls
+    )
+    if apply_generation and workflow_mode in {"generate", "full", "repair", "review"}:
+        for index, tool_call in enumerate(generation_calls):
             tool, tool_args = _workflow_tool_parts(tool_call)
             if tool not in _WORKFLOW_GENERATION_TOOLS:
                 if tool:
@@ -251,7 +258,7 @@ def run_animation_workflow(context, args):
             )
             generation_count += 1
     elif not apply_generation:
-        for index, tool_call in enumerate(workflow.get("next_tool_calls") or []):
+        for index, tool_call in enumerate(generation_calls):
             tool, _tool_args = _workflow_tool_parts(tool_call)
             if tool in _WORKFLOW_GENERATION_TOOLS:
                 skipped.append({"index": index, "tool": tool, "reason": "apply_generation is false"})

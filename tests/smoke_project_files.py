@@ -17,7 +17,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import agent_tools, autosave, bridge_protocol, tool_dispatcher  # noqa: E402
+from claude_blender import agent_tools, autosave, bridge_protocol, script_runner, tool_dispatcher  # noqa: E402
 
 
 def _execute(context, name, args=None):
@@ -268,6 +268,11 @@ def main():
         assert open_refused["ok"] is False, open_refused
         assert "confirm_discard_current=true" in open_refused["message"], open_refused
 
+        trusted = script_runner.approve_external_script_trust_window(
+            bpy.context,
+            session=True,
+        )
+        assert trusted["ok"] and trusted["session"], trusted
         opened = _execute(
             bpy.context,
             "open_blend_file",
@@ -284,6 +289,7 @@ def main():
         assert os.path.isfile(opened["checkpoint"]["path"]), opened
         assert bpy.data.filepath == copy_path, opened
         assert autosave._timer_is_registered()
+        assert script_runner.external_script_trust_snapshot(bpy.context)["active"]
 
         new_refused = _execute(
             bpy.context,
@@ -319,6 +325,7 @@ def main():
         assert os.path.isfile(created["path"]), created
         assert bpy.data.filepath == created["path"], created
         assert autosave._timer_is_registered()
+        assert script_runner.external_script_trust_snapshot(bpy.context)["active"]
         for folder in ("assets", "refs", "renders", "exports"):
             assert os.path.isdir(os.path.join(created["project_dir"], folder)), created
         assert created["diagnostics"]["file"]["is_saved"] is True, created

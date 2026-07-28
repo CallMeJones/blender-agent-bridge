@@ -1,4 +1,4 @@
-"""Shared helper-first routing metadata for script fallback decisions."""
+"""Shared routing metadata for authored scripts and bounded helper operations."""
 
 from __future__ import annotations
 
@@ -41,6 +41,561 @@ EXPLICIT_SCRIPT_FALLBACK_KEYWORDS = {
 }
 
 SCRIPT_FALLBACK_KEYWORDS = SCRIPT_REQUEST_KEYWORDS | EXPLICIT_SCRIPT_FALLBACK_KEYWORDS
+
+EXPLICIT_HELPER_PREFERENCE_TERMS = {
+    "bounded helper",
+    "bounded helpers",
+    "do not use python",
+    "don't use python",
+    "helper based",
+    "helper-based",
+    "helper backed",
+    "helper-backed",
+    "helper only",
+    "helpers only",
+    "helper path",
+    "no python",
+    "no script",
+    "no scripts",
+    "prefer helper",
+    "prefer helpers",
+    "structured helper",
+    "structured helpers",
+    "use helper",
+    "use helpers",
+    "using helper",
+    "using helpers",
+    "via helper",
+    "via helpers",
+    "with helper",
+    "with helpers",
+    "without python",
+    "without script",
+    "without scripts",
+}
+
+EXPLICIT_SCRIPT_PREFERENCE_TERMS = {
+    "avoid helpers",
+    "do not use helper",
+    "do not use helpers",
+    "don't use helper",
+    "don't use helpers",
+    "no helper",
+    "no helpers",
+    "not the helper path",
+    "without helper",
+    "without helpers",
+}
+
+AUTHORED_MUTATION_ACTION_TERMS = {
+    "add",
+    "animate",
+    "apply",
+    "block",
+    "build",
+    "bounce",
+    "bridge",
+    "convert",
+    "create",
+    "design",
+    "edit",
+    "extrude",
+    "generate",
+    "improve",
+    "inset",
+    "make",
+    "merge",
+    "mirror",
+    "model",
+    "modify",
+    "polish",
+    "rebuild",
+    "recreate",
+    "refine",
+    "repair",
+    "reveal",
+    "rig",
+    "sculpt",
+    "shade",
+    "texture",
+    "turn",
+    "solidify",
+    "symmetrize",
+    "wave",
+    "write",
+}
+
+AUTHORED_MUTATION_ACTION_ALIASES = {
+    "adding": "add",
+    "animating": "animate",
+    "applying": "apply",
+    "blocking": "block",
+    "building": "build",
+    "converting": "convert",
+    "creating": "create",
+    "designing": "design",
+    "editing": "edit",
+    "generating": "generate",
+    "improving": "improve",
+    "making": "make",
+    "modeling": "model",
+    "modelling": "model",
+    "modifying": "modify",
+    "polishing": "polish",
+    "rebuilding": "rebuild",
+    "recreating": "recreate",
+    "refining": "refine",
+    "repairing": "repair",
+    "rigging": "rig",
+    "sculpting": "sculpt",
+    "shading": "shade",
+    "texturing": "texture",
+    "writing": "write",
+}
+
+STRONG_AUTHORED_CREATION_ACTION_TERMS = {
+    "build",
+    "create",
+    "design",
+    "generate",
+    "model",
+    "rebuild",
+    "recreate",
+    "sculpt",
+}
+
+AUTHORED_MUTATION_DOMAIN_TERMS = {
+    "albedo",
+    "animation",
+    "armature",
+    "array",
+    "boolean",
+    "base color",
+    "camera",
+    "cat",
+    "character",
+    "coffee machine",
+    "color",
+    "colour",
+    "curve",
+    "driver",
+    "emission",
+    "bounce",
+    "furniture",
+    "geometry",
+    "geometry node",
+    "geometry nodes",
+    "hard surface",
+    "hard-surface",
+    "keyframe",
+    "jump",
+    "light",
+    "lookdev",
+    "look-dev",
+    "material",
+    "mesh",
+    "metallic",
+    "model",
+    "modifier",
+    "node graph",
+    "node network",
+    "normal map",
+    "object",
+    "particle",
+    "pbr",
+    "motion",
+    "primitive",
+    "product",
+    "procedural",
+    "prop",
+    "rig",
+    "roughness",
+    "scene",
+    "shader",
+    "shape key",
+    "storyboard",
+    "turntable",
+    "texture",
+    "vehicle",
+    "wave",
+}
+
+AUTHORED_MUTATION_SUBJECT_TERMS = {
+    "animal",
+    "avatar",
+    "body",
+    "car",
+    "chair",
+    "creature",
+    "cube",
+    "environment",
+    "figure",
+    "human",
+    "lamp",
+    "person",
+    "robot",
+    "set",
+    "sphere",
+    "table",
+    "wall panel",
+}
+
+PROJECT_FILE_CREATE_TERMS = {
+    "create a new blender project",
+    "create a new project",
+    "create project",
+    "new blender file",
+    "new blender project",
+    "new project",
+}
+
+PROJECT_FILE_OPEN_TERMS = {
+    "open a blend",
+    "open blend",
+    "open blender file",
+    "open current blend",
+    "open file",
+    "open my blend",
+    "open the blend",
+    "open this blend",
+}
+
+PROJECT_FILE_SAVE_TERMS = {
+    "autosave",
+    "save current blend",
+    "save my blend",
+    "save blend",
+    "save copy",
+    "save project",
+    "save the blend",
+    "save the project",
+    "save this blend",
+}
+
+RENDER_JOB_OPERATION_TERMS = {
+    "final render",
+    "render animation",
+    "render an animation",
+    "render final animation",
+    "render frames",
+    "render job",
+    "render the animation",
+    "render the final animation",
+    "start render",
+}
+
+RENDER_SETUP_OPERATION_TERMS = {
+    "configure render",
+    "render settings",
+    "render setup",
+    "set up render",
+    "setup render",
+}
+
+LOOKDEV_REVIEW_OPERATION_TERMS = {
+    "create a lookdev turntable review",
+    "create lookdev turntable review",
+    "look-dev turntable review",
+    "look dev turntable review",
+    "lookdev review",
+    "lookdev turntable",
+    "studio presentation",
+    "turntable review",
+}
+
+INSPECTION_RENDER_TERMS = {
+    "close-up render",
+    "close-up renders",
+    "inspection render",
+    "inspection renders",
+    "underside render",
+    "underside renders",
+}
+
+OPERATIONAL_HELPER_REQUEST_TERMS = {
+    *PROJECT_FILE_CREATE_TERMS,
+    *PROJECT_FILE_OPEN_TERMS,
+    *PROJECT_FILE_SAVE_TERMS,
+    *RENDER_JOB_OPERATION_TERMS,
+    *RENDER_SETUP_OPERATION_TERMS,
+    *LOOKDEV_REVIEW_OPERATION_TERMS,
+    "assemble video",
+    "asset import",
+    "bake map",
+    "bake maps",
+    "bake ao",
+    "bake diffuse",
+    "bake normal",
+    "bpy.ops.object.bake",
+    "capture a playblast",
+    "capture evidence",
+    "capture inspection render",
+    "capture inspection renders",
+    "capture playblast",
+    "capture screenshot",
+    "capture screenshots",
+    "capture viewport",
+    "download",
+    "download asset",
+    "download model",
+    "environment map",
+    "export",
+    "export file",
+    "external asset",
+    "frame sequence",
+    "hdri",
+    "import",
+    "import asset",
+    "import an asset",
+    "import model",
+    "persistent bake",
+    "poly haven",
+    "polyhaven",
+    "make a studio presentation",
+    "mesh quality",
+    "modeling quality",
+    "render pass",
+    "render passes",
+    "shader aov",
+    "studio shot",
+    "sketchfab",
+    "validate render",
+    "validate model",
+    "aov",
+    "cryptomatte",
+}
+
+_AUTHORED_RESIDUAL_STOP_WORDS = {
+    "a",
+    "an",
+    "and",
+    "as",
+    "at",
+    "before",
+    "for",
+    "from",
+    "in",
+    "into",
+    "it",
+    "me",
+    "my",
+    "of",
+    "on",
+    "or",
+    "please",
+    "the",
+    "then",
+    "this",
+    "to",
+    "with",
+}
+
+ANIMATION_AUTHORING_EXPLICIT_TERMS = {
+    "animate",
+    "animating",
+    "animation blocking",
+    "block key pose",
+    "block key poses",
+    "create keyframe",
+    "create keyframes",
+    "follow path",
+    "keyframe",
+    "keyframing",
+    "keyframes",
+    "motion arc",
+    "pose hold",
+    "retime",
+    "retiming",
+    "rig pose",
+}
+
+ANIMATION_AUTHORING_MOTION_TERMS = {
+    "anticipation",
+    "bounce",
+    "camera dolly",
+    "camera move",
+    "camera orbit",
+    "dolly",
+    "jump",
+    "orbit",
+    "pulse",
+    "reveal",
+    "settle",
+    "squash",
+    "stagger",
+    "stretch",
+    "turntable",
+    "wave",
+}
+
+ANIMATION_AUTHORING_CONTEXT_TERMS = {
+    "action",
+    "animation",
+    "f-curve",
+    "fcurve",
+    "frame",
+    "frames",
+    "keyframe",
+    "keyframes",
+    "motion",
+    "pose",
+    "shot",
+    "timeline",
+    "timing",
+}
+
+ANIMATION_AUTHORING_SUBJECT_TERMS = {
+    "arm",
+    "ball",
+    "camera",
+    "character",
+    "cube",
+    "figure",
+    "hand",
+    "head",
+    "it",
+    "light",
+    "logo",
+    "mesh",
+    "object",
+    "product",
+    "prop",
+    "rig",
+    "robot",
+    "sphere",
+    "target",
+    "text",
+    "them",
+    "vehicle",
+}
+
+ANIMATION_REVIEW_TERMS = {
+    "animation brief",
+    "animation helper",
+    "animation helpers",
+    "animation workflow",
+    "contact sliding",
+    "f-curve",
+    "fcurve",
+    "inspection render",
+    "inspection renders",
+    "key pose",
+    "key poses",
+    "motion arc",
+    "playblast",
+    "pose clarity",
+    "spacing",
+    "timing",
+}
+
+MATERIAL_AUTHORING_TERMS = {
+    "material",
+    "node graph",
+    "node network",
+    "procedural texture",
+    "shader",
+    "texture",
+}
+
+_AMBIGUOUS_ACTION_NOUN_TERMS = {
+    "bounce",
+    "bridge",
+    "model",
+    "reveal",
+    "rig",
+    "texture",
+    "wave",
+}
+
+INSPECTION_LEADING_TERMS = {
+    "analyze",
+    "analyse",
+    "check",
+    "compare",
+    "diagnose",
+    "inspect",
+    "list",
+    "review",
+    "show",
+    "summarize",
+    "validate",
+}
+
+SCRIPT_FIRST_ADVISORY_CODES = {
+    "advanced_workflow_helper_required",
+    "camera_animation_helper_required",
+    "creation_helper_required",
+    "material_helper_required",
+    "procedural_3d_helper_required",
+    "two_d_storyboard_helper_required",
+}
+
+REFERENCE_MODEL_ACTION_TERMS = {
+    "analyze",
+    "analyse",
+    "build",
+    "compare",
+    "create",
+    "evaluate",
+    "improve",
+    "make",
+    "match",
+    "model",
+    "modeling",
+    "modelled",
+    "modeled",
+    "rebuild",
+    "recreate",
+    "refine",
+    "remodel",
+    "repair",
+    "review",
+    "sculpt",
+}
+
+REFERENCE_MODEL_SOURCE_TERMS = {
+    "attached image",
+    "attached photo",
+    "attached picture",
+    "attached reference",
+    "based on reference",
+    "based on the image",
+    "based on the photo",
+    "compare to reference",
+    "example image",
+    "example photo",
+    "example picture",
+    "from image",
+    "from photo",
+    "from picture",
+    "from reference",
+    "like the reference",
+    "match reference",
+    "match the reference",
+    "reference image",
+    "reference photo",
+    "reference picture",
+    "using the reference",
+    "using this image",
+    "visual reference",
+}
+
+REFERENCE_MODEL_QUALITY_TERMS = {
+    "anatomy",
+    "feature placement",
+    "form continuity",
+    "landmark placement",
+    "model quality",
+    "modeling quality",
+    "proportion",
+    "proportions",
+    "quality pass",
+    "quality rubric",
+    "reference match",
+    "silhouette",
+    "surface quality",
+    "visual match",
+}
 
 ANIMATION_HELPER_GAP_TERMS = {
     "helper gap",
@@ -104,7 +659,6 @@ STRICT_HELPER_FIRST_SCRIPT_GROUPS = {
     "external_assets",
     "project_files",
     "render_outputs",
-    "procedural_textures",
 }
 PRIVILEGED_SCRIPT_FALLBACK_GROUPS = {
     "external_assets",
@@ -598,6 +1152,92 @@ def contains_any_guard_term(text, terms):
     return any(contains_guard_term(text, term) for term in terms)
 
 
+def _without_guard_terms(text, terms):
+    normalized = str(text or "").lower()
+    for term in sorted(terms, key=lambda item: (-len(str(item)), str(item))):
+        term_text = str(term or "").strip().lower()
+        if not term_text:
+            continue
+        pattern = re.escape(term_text).replace(r"\ ", r"\s+")
+        prefix = r"(?<![a-z0-9_])" if term_text[0].isalnum() else ""
+        suffix = r"(?![a-z0-9_])" if term_text[-1].isalnum() else ""
+        normalized = re.sub(f"{prefix}{pattern}{suffix}", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _has_meaningful_authored_residual(text):
+    tokens = re.findall(r"[a-z0-9_]+", str(text or "").lower())
+    ignored = _AUTHORED_RESIDUAL_STOP_WORDS | AUTHORED_MUTATION_ACTION_TERMS
+    return any(token not in ignored for token in tokens)
+
+
+def _matching_authored_actions(text):
+    matches = {
+        term
+        for term in AUTHORED_MUTATION_ACTION_TERMS
+        if contains_guard_term(text, term)
+    }
+    matches.update(
+        canonical
+        for alias, canonical in AUTHORED_MUTATION_ACTION_ALIASES.items()
+        if contains_guard_term(text, alias)
+    )
+    return matches
+
+
+def _request_clauses(text):
+    return [
+        clause.strip()
+        for clause in re.split(
+            r"(?:[,;.\n]+|\b(?:after that|and|then|afterwards|after|before)\b)",
+            str(text or "").lower(),
+        )
+        if clause.strip()
+    ]
+
+
+def _is_script_first_authored_clause(clause):
+    operational_clause = contains_any_guard_term(
+        clause,
+        OPERATIONAL_HELPER_REQUEST_TERMS,
+    )
+    authored_text = _without_guard_terms(
+        clause,
+        OPERATIONAL_HELPER_REQUEST_TERMS,
+    )
+    matching_actions = _matching_authored_actions(authored_text)
+    if not matching_actions:
+        return False
+    if operational_clause and matching_actions.issubset(_AMBIGUOUS_ACTION_NOUN_TERMS):
+        return False
+    has_domain = contains_any_guard_term(
+        authored_text,
+        AUTHORED_MUTATION_DOMAIN_TERMS,
+    )
+    has_subject = contains_any_guard_term(
+        authored_text,
+        AUTHORED_MUTATION_SUBJECT_TERMS,
+    )
+    if has_domain or has_subject:
+        return True
+    return bool(
+        contains_any_guard_term(
+            authored_text,
+            STRONG_AUTHORED_CREATION_ACTION_TERMS,
+        )
+        and _has_meaningful_authored_residual(authored_text)
+    )
+
+
+def is_reference_model_quality_request(text):
+    """Return whether text explicitly asks to model or review against visual quality criteria."""
+
+    has_action = contains_any_guard_term(text, REFERENCE_MODEL_ACTION_TERMS)
+    has_source = contains_any_guard_term(text, REFERENCE_MODEL_SOURCE_TERMS)
+    has_quality = contains_any_guard_term(text, REFERENCE_MODEL_QUALITY_TERMS)
+    return has_action and (has_source or has_quality)
+
+
 def has_explicit_animation_helper_gap(text):
     return contains_any_guard_term(text, ANIMATION_HELPER_GAP_TERMS)
 
@@ -606,11 +1246,141 @@ def has_explicit_helper_gap(text):
     return contains_any_guard_term(text, HELPER_GAP_TERMS)
 
 
+def prefers_bounded_helpers(text):
+    if contains_any_guard_term(text, EXPLICIT_SCRIPT_PREFERENCE_TERMS):
+        return False
+    return contains_any_guard_term(text, EXPLICIT_HELPER_PREFERENCE_TERMS)
+
+
+def project_file_operation_kinds(text):
+    kinds = set()
+    if contains_any_guard_term(text, PROJECT_FILE_CREATE_TERMS):
+        kinds.add("create")
+    if contains_any_guard_term(text, PROJECT_FILE_OPEN_TERMS):
+        kinds.add("open")
+    if contains_any_guard_term(text, PROJECT_FILE_SAVE_TERMS):
+        kinds.add("save")
+    return kinds
+
+
+def is_render_job_request(text):
+    return contains_any_guard_term(text, RENDER_JOB_OPERATION_TERMS)
+
+
+def is_render_setup_request(text):
+    return contains_any_guard_term(text, RENDER_SETUP_OPERATION_TERMS)
+
+
+def is_lookdev_review_request(text):
+    return contains_any_guard_term(text, LOOKDEV_REVIEW_OPERATION_TERMS)
+
+
+def is_inspection_render_request(text):
+    return contains_any_guard_term(text, INSPECTION_RENDER_TERMS)
+
+
+def is_script_first_authored_request(text):
+    """Return whether any authored part should prefer one cohesive trusted script."""
+
+    normalized = str(text or "").strip().lower()
+    if not normalized or prefers_bounded_helpers(normalized):
+        return False
+    leading_term = normalized.split(maxsplit=1)[0].strip(".,:;!?")
+    if leading_term in INSPECTION_LEADING_TERMS:
+        return False
+    return any(
+        _is_script_first_authored_clause(clause)
+        for clause in _request_clauses(normalized)
+    )
+
+
+def is_authored_animation_request(text):
+    """Return whether the request contains animation generation or repair work."""
+
+    normalized = str(text or "").strip().lower()
+    if not normalized:
+        return False
+    leading_term = normalized.split(maxsplit=1)[0].strip(".,:;!?")
+    if leading_term in INSPECTION_LEADING_TERMS:
+        return False
+    authored_text = _without_guard_terms(normalized, OPERATIONAL_HELPER_REQUEST_TERMS)
+    if not authored_text:
+        return False
+    if contains_any_guard_term(authored_text, ANIMATION_AUTHORING_EXPLICIT_TERMS):
+        return True
+    has_motion = contains_any_guard_term(
+        authored_text,
+        ANIMATION_AUTHORING_MOTION_TERMS,
+    )
+    if not has_motion:
+        return contains_any_guard_term(
+            authored_text,
+            AUTHORED_MUTATION_ACTION_TERMS,
+        ) and contains_guard_term(authored_text, "animation")
+    if (
+        contains_any_guard_term(authored_text, MATERIAL_AUTHORING_TERMS)
+        and not contains_guard_term(authored_text, "animation")
+    ):
+        return False
+    has_action = bool(_matching_authored_actions(authored_text))
+    if not has_action:
+        return False
+    if contains_any_guard_term(authored_text, ANIMATION_AUTHORING_CONTEXT_TERMS):
+        return True
+    return contains_any_guard_term(
+        authored_text,
+        ANIMATION_AUTHORING_SUBJECT_TERMS,
+    )
+
+
+def is_animation_workflow_request(text):
+    """Return whether search should route to animation planning, execution, or review."""
+
+    normalized = str(text or "").strip().lower()
+    if not normalized:
+        return False
+    if is_authored_animation_request(normalized):
+        return True
+    if normalized in {"animation", "animation helper", "animation helpers", "animation workflow"}:
+        return True
+    if contains_guard_term(normalized, "animation") and not is_render_job_request(
+        normalized
+    ):
+        return True
+    leading_term = normalized.split(maxsplit=1)[0].strip(".,:;!?")
+    if (
+        leading_term in INSPECTION_LEADING_TERMS
+        and contains_any_guard_term(normalized, {"render", "renders"})
+        and contains_guard_term(normalized, "repair")
+    ):
+        return True
+    return contains_any_guard_term(normalized, ANIMATION_REVIEW_TERMS)
+
+
+def script_authoring_preflight():
+    return {
+        "version_check": "Read bpy.app.version before using version-sensitive Blender APIs.",
+        "enum_check": (
+            "Inspect the target RNA property's enum_items before assigning identifiers such as render engines, "
+            "shading modes, interpolation, or node/socket types."
+        ),
+        "scene_check": "Resolve actual object, collection, material, action, rig, and node names before mutation.",
+        "cohesion": "Use one coordinate/proportion system and one cohesive script per authored pass.",
+        "idempotency": "Use stable names and replace or update prior pass outputs instead of silently duplicating them.",
+        "failure_recovery": "Return exact traceback context; repair the script from the checkpoint before degrading scope.",
+    }
+
+
 def should_include_draft_script(text, matched_groups):
-    if not contains_keyword(text, SCRIPT_FALLBACK_KEYWORDS):
+    if prefers_bounded_helpers(text):
+        return False
+    authored_request = is_script_first_authored_request(text)
+    if not authored_request and not contains_keyword(text, SCRIPT_FALLBACK_KEYWORDS):
         return False
     matched = set(matched_groups or [])
     if matched.intersection(STRICT_HELPER_FIRST_SCRIPT_GROUPS):
+        if authored_request:
+            return True
         strict = matched.intersection(STRICT_HELPER_FIRST_SCRIPT_GROUPS)
         if strict.issubset(BOUNDED_HELPER_SCRIPT_ESCALATION_GROUPS) and contains_any_guard_term(text, BOUNDED_HELPER_SCRIPT_ESCALATION_TERMS):
             return True
@@ -632,10 +1402,17 @@ def iter_helper_first_script_rules():
 
 
 def _matching_helper_first_rule(text, *, ignore_helper_gap=False):
-    if not ignore_helper_gap and has_explicit_helper_gap(text):
+    if (
+        not ignore_helper_gap
+        and has_explicit_helper_gap(text)
+        and not prefers_bounded_helpers(text)
+    ):
         return None
+    script_first = is_script_first_authored_request(text)
     for rule in HELPER_FIRST_SCRIPT_RULES:
         if not contains_any_guard_term(text, rule["terms"]):
+            continue
+        if script_first and rule["code"] in SCRIPT_FIRST_ADVISORY_CODES:
             continue
         return rule
     return None

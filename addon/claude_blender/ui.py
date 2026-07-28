@@ -512,7 +512,7 @@ class CLAUDEBLENDER_OT_approve_external_script_trust(bpy.types.Operator):
         self.layout.label(text="Trust agent-generated Python for this Blender session?", icon="ERROR")
         self.layout.label(text="Equivalent to Blender Run Script: files, network, and processes are allowed.")
         self.layout.label(text="Any client connected to this local bridge can use these permissions.")
-        self.layout.label(text="Runs with Blender's OS permissions until Revoke, file load, reload, or exit.")
+        self.layout.label(text="Runs with Blender's OS permissions until Revoke, add-on reload, or exit.")
 
     def execute(self, context):
         state = context.scene.claude_blender
@@ -525,7 +525,8 @@ class CLAUDEBLENDER_OT_approve_external_script_trust(bpy.types.Operator):
             state.last_response = (
                 "Agent script trust is active for this Blender session.\n"
                 "Agent Python now has Blender Run Script permissions, including files, network, and processes.\n"
-                "Trust lasts until Revoke, reload, file load, or Blender exit."
+                "Trust lasts until Revoke, add-on reload, or Blender exit.\n"
+                "Opening, creating, restoring, copying, renaming, or modifying .blend files does not change it."
             )
             self.report({"INFO"}, "External script trust approved")
             return {"FINISHED"}

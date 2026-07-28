@@ -133,7 +133,7 @@ After building a release zip, install `dist/claude_blender-<version>.zip` in a c
 - The MCP client sees exactly the five default gateways: `blender_bridge_status`, `blender_tool_catalog`, `search_blender_tools`, `get_blender_tool_schema`, and `invoke_blender_tool`. Search must find non-planner helpers such as `list_scene_objects`; schema lookup and invocation must then succeed through the gateways. The internal `run_approved_script` compatibility endpoint remains permanently refusing.
 - `blender_bridge_status` reports matching add-on/bridge/MCP versions.
 - `resources/list` includes capture, playblast, inspection-render, render-thumbnail, and async render-job resources, and `resources/read` can read `blender://captures/latest/metadata` after a capture, `blender://playblasts/latest/metadata` after a playblast capture, `blender://inspection-renders/latest/metadata` after diagnostic object renders, `blender://render-thumbnails/latest/metadata` after thumbnail renders, plus `blender://render-jobs/latest/metadata` after background render jobs.
-- External script trust can be turned on/off, persists across bridge stop/start, and clears on add-on reload or file load.
+- External script trust can be turned on/off, persists across bridge stop/start and every `.blend` lifecycle operation, and clears only on explicit Revoke, timed expiry, add-on reload, or Blender exit. File open, new, save, restore, copy, rename, and content changes do not alter the grant or extend timed expiry.
 - The GitHub Pages extension repository can be added, synced, installed, enabled, and listed from a temporary Blender profile:
 
 ```powershell

@@ -78,7 +78,7 @@ External clients may respond directly or request a tool. For tool calls, the add
 
 Before generating non-trivial code, external agents should either already have enough scene/docs context or explicitly call tools to get it. The bridge should steer clients toward this sequence: inspect, retrieve docs if needed, plan, draft, review, run.
 
-Standard MCP `tools/list` has no user-prompt field, and clients such as Claude may retrieve only five matching tools from a larger manifest. The default `gateway` surface therefore advertises exactly five stable entry points: bridge status, the all-in-one catalog, search, canonical schema lookup, and validated invocation. The canonical registry remains the single owner of all helper contracts; a helper omitted from `tools/list` is still searchable, schema-addressable, and executable. `addon/claude_blender/tool_surface.py` owns exposure policy independently of registry membership and transport execution. `BLENDER_MCP_TOOL_SURFACE=direct` restores the former curated 28-tool surface for compatibility testing, while `BLENDER_MCP_TOOL_SURFACE=full` exposes gateways plus every helper for debugging. The legacy `BLENDER_MCP_FULL_TOOL_LIST=1` flag still maps to `full`. Client-facing definitions omit optional output schemas and annotation fields that only repeat default values; canonical schemas and complete safety metadata remain authoritative for validation.
+Standard MCP `tools/list` has no user-prompt field, and clients such as Claude may retrieve only five matching tools from a larger manifest. The default `gateway` surface therefore advertises exactly five stable entry points: bridge status, the all-in-one catalog, search, canonical schema lookup, and validated invocation. The canonical registry remains the single owner of all helper contracts; a helper omitted from `tools/list` is still searchable, schema-addressable, and executable. `addon/claude_blender/tool_surface.py` owns exposure policy independently of registry membership and transport execution. `BLENDER_MCP_TOOL_SURFACE=direct` exposes the gateways plus 24 curated direct helpers for compatibility testing, while `BLENDER_MCP_TOOL_SURFACE=full` exposes gateways plus every helper for debugging. The legacy `BLENDER_MCP_FULL_TOOL_LIST=1` flag still maps to `full`. Client-facing definitions omit optional output schemas and annotation fields that only repeat default values; canonical schemas and complete safety metadata remain authoritative for validation.
 
 `response_controls.py` owns one cross-domain, read-only policy for large inspectors. The registry adds optional full/summary, dotted field-selection, pagination, and known-digest inputs only to the allowlisted inspection tools. Blender handlers still build their original complete results. The bridge hashes that complete result before any opt-in reduction; a digest mismatch returns the complete result, while a match returns a tiny unchanged marker. This keeps response shaping out of scene/domain code and prevents partial client state from becoming an implicit source of truth.
 
@@ -138,7 +138,7 @@ For scripting tasks, client guidance should tell external agents to look up docs
 
 ## Safe Helper Strategy
 
-Common changes should use typed helper tools before arbitrary code:
+Operational changes should use typed helpers when validation, rollback, provenance, polling, or recovery is the main value:
 
 - `create_primitive`
 - `set_selected_location_delta`
@@ -185,11 +185,11 @@ Common changes should use typed helper tools before arbitrary code:
 - `create_lookdev_turntable_review`
 - `organize_scene_for_production`
 
-Helpers can validate object names, expected types, frame ranges, and value ranges before applying changes. When a helper is too limited, an external agent can fall back to a proposed Python script.
+Helpers can validate object names, expected types, frame ranges, and value ranges before applying changes. With active trust, authored object generation, modeling, animation, materials, custom nodes, rigging, and look development default to one cohesive Python script unless the user requests helpers. Exact helpers remain appropriate for deliberately isolated edits.
 
 Reusable mutating helpers are owned by cohesive `advanced_animation.py`, `advanced_camera_render.py`, `advanced_materials.py`, `advanced_modeling.py`, `advanced_presentation.py`, `advanced_rigging.py`, and `advanced_scene_editing.py` modules, with shared mechanics in `advanced_support.py`; `advanced_helpers.py` is only a compatibility re-export facade. The helpers still write through the live-preview transaction layer. Read-only workflow composition lives in `workflow_planning.py`, 2D inspection lives in `two_d_inspection.py`, neutral handler parsing lives in `tool_handlers/support.py`, generic runtime support lives in `handler_runtime.py`, animation orchestration lives in `animation_runtime.py`, and `tool_executor.py` is the only registry-composition owner. This keeps domain handlers independent of registry construction and removes the former handler/runtime import cycle.
 
-The bridge intentionally does not ship finished-content generators or style-specific vehicle, product, character, storyboard, cutout, prop, or shot templates. Open-ended authored content is composed from reusable modeling, material, staging, camera, animation, asset-import, and evidence helpers; when those operations cannot express the brief, the client may use one custom script while binary session trust is active.
+The bridge intentionally does not ship finished-content generators or style-specific vehicle, product, character, storyboard, cutout, prop, or shot templates. Under active trust, open-ended authored content uses one reference- or brief-derived custom script rather than category generators or long primitive-helper chains. Reusable helpers remain the control plane for inspection, asset import, evidence, long jobs, file operations, and preview decisions.
 
 ## Live Preview Strategy
 
@@ -202,7 +202,7 @@ The add-on should support immediate visual feedback through a reversible preview
 5. The add-on updates dependency state and requests viewport/timeline redraw.
 6. The sidebar shows the preview as pending with `Commit` and `Revert` controls.
 
-Live preview should be helper-first. Arbitrary generated Python runs only while binary session trust is enabled; there is no per-script approval state.
+Live preview remains the preferred transaction boundary for helper mutations. Authored generated Python is script-first only while binary session trust is enabled and uses checkpoint recovery; there is no per-script approval state.
 
 For animation edits, the preview layer should insert/update keyframes immediately, then either keep the current frame or jump to a relevant changed frame depending on the user's setting.
 

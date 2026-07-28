@@ -16,6 +16,18 @@ def plan_advanced_scene_workflow(context, args):
     )
 
 
+def plan_model_quality_workflow(context, args):
+    return workflow_planning.plan_model_quality_workflow(
+        context,
+        prompt=str(args.get("prompt") or ""),
+        reference_description=str(args.get("reference_description") or ""),
+        reference_brief=args.get("reference_brief") if isinstance(args.get("reference_brief"), dict) else None,
+        target_objects=_name_list(args.get("target_objects")),
+        quality_floor=_bounded_int(args.get("quality_floor"), 4, minimum=1, maximum=5),
+        label=args.get("label", "Plan model quality workflow"),
+    )
+
+
 
 
 def plan_asset_import_workflow(context, args):

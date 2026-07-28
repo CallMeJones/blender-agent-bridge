@@ -264,16 +264,17 @@ def main():
         assert any("exactly 3" in item for item in contract["success_criteria"]), contract
         assert not scene.claude_blender.pending_preview
 
-        workflow = _execute(
-            context,
-            "plan_animation_workflow",
-            {
+        workflow_args = {
                 "prompt": "Make the cube bounce twice over 72 frames, getting smaller each bounce. Check it against the brief and leave it as a preview.",
                 "subject_names": ["Cube"],
                 "frame_start": 1,
                 "frame_end": 72,
                 "mode": "full",
-            },
+            }
+        workflow = _execute(
+            context,
+            "plan_animation_workflow",
+            workflow_args,
         )
         plan = workflow["workflow"]
         assert plan["status"] == "ready", plan
@@ -288,6 +289,8 @@ def main():
         assert "review_playblast_against_brief" in call_names, plan
         assert "draft_script" not in call_names, plan
         assert plan["script_fallback_policy"]["allowed"] is True, plan
+        assert plan["script_fallback_policy"]["script_first"] is False, plan
+        assert plan["execution_strategy"]["selection"] == "bounded_helpers", plan
         assert plan["animation_hardening"]["status"] == "ready", plan
         assert plan["animation_hardening"]["target_counts"]["object_transform"] == 1, plan
         assert "analyze_camera_framing" in plan["animation_hardening"]["recommended_review_tools"], plan
@@ -295,6 +298,55 @@ def main():
         assert not plan["preflight_warnings"], plan
         assert not any("scale" in item for item in plan["generation_blockers"]), plan
         assert not scene.claude_blender.pending_preview
+
+        trusted = script_runner.approve_external_script_trust_window(context, session=True)
+        assert trusted["ok"] and trusted["session"], trusted
+        scripted_plan = _execute(
+            context,
+            "plan_animation_workflow",
+            workflow_args,
+        )["workflow"]
+        assert scripted_plan["execution_strategy"]["selection"] == "cohesive_trusted_script", scripted_plan
+        assert scripted_plan["script_fallback_policy"]["script_first"] is True, scripted_plan
+        assert "enum_items" in scripted_plan["execution_strategy"]["script_preflight"]["enum_check"], scripted_plan
+        scripted_call_names = [call["name"] for call in scripted_plan["next_tool_calls"]]
+        assert scripted_call_names[0] == "draft_script", scripted_plan
+        assert "create_progressive_bounce_animation" not in scripted_call_names, scripted_plan
+        scripted_call = scripted_plan["next_tool_calls"][0]
+        assert scripted_call["schema_lookup"]["arguments"]["name"] == "draft_script", scripted_call
+        assert scripted_call["gateway_call_template"]["arguments"]["name"] == "draft_script", scripted_call
+        assert scripted_call["input_handoff"]["client_must_replace_placeholders"] is True, scripted_call
+        assert scripted_call["input_handoff"]["arguments_template"]["code"] == (
+            "<complete_llm_authored_blender_python>"
+        ), scripted_call
+        assert any(call["name"] == "create_progressive_bounce_animation" for call in scripted_plan["helper_fallback_tool_calls"])
+        scripted_runner_dry_run = _execute(
+            context,
+            "run_animation_workflow",
+            {
+                **workflow_args,
+                "apply_generation": False,
+                "run_review": False,
+            },
+        )
+        assert scripted_runner_dry_run["executed"] == [], scripted_runner_dry_run
+        assert any(
+            item["tool"] == "create_progressive_bounce_animation"
+            for item in scripted_runner_dry_run["skipped"]
+        ), scripted_runner_dry_run
+        assert all(item["tool"] != "draft_script" for item in scripted_runner_dry_run["skipped"]), scripted_runner_dry_run
+        helper_animation_args = dict(workflow_args)
+        helper_animation_args["prompt"] = (
+            "Use helpers only to make the cube bounce twice over 72 frames and get smaller each bounce."
+        )
+        helper_override_plan = _execute(
+            context,
+            "plan_animation_workflow",
+            helper_animation_args,
+        )["workflow"]
+        assert helper_override_plan["execution_strategy"]["selection"] == "bounded_helpers", helper_override_plan
+        assert helper_override_plan["execution_strategy"]["user_helper_override"] is True, helper_override_plan
+        assert script_runner.revoke_external_script_trust_window(context)["ok"]
 
         original_camera = scene.camera
         scene.camera = None

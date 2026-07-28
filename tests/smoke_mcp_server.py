@@ -892,15 +892,21 @@ def _initialize(proc):
     return initialized
 
 
-def _assert_animation_search_routes_first(response, *, query):
+def _assert_animation_search_routes_first(response, *, query, script_first):
     tools = response["result"]["structuredContent"]["tools"]
     names = [tool["name"] for tool in tools]
-    assert names[:3] == ["run_animation_task", "plan_animation_workflow", "run_animation_workflow"], (query, names)
+    for workflow_name in ("run_animation_task", "plan_animation_workflow", "run_animation_workflow"):
+        assert workflow_name in names[:4], (query, workflow_name, names)
+    if script_first:
+        assert names[0] == "draft_script", (query, names)
+        assert names.index("draft_script") < names.index("run_animation_workflow"), (query, names)
+    else:
+        assert names[0] == "run_animation_task", (query, names)
+        if "draft_script" in names:
+            assert names.index("draft_script") > names.index("run_animation_workflow"), (query, names)
     for generic_name in ("set_selected_location_delta", "set_selected_transform", "select_objects"):
         if generic_name in names:
             assert names.index(generic_name) > names.index("run_animation_workflow"), (query, names)
-    if "draft_script" in names:
-        assert names.index("draft_script") > names.index("run_animation_workflow"), (query, names)
 
 
 def _assert_external_asset_search_routes_first(response, *, query):
@@ -924,17 +930,21 @@ def _assert_external_asset_search_routes_first(response, *, query):
             assert names.index(direct_name) > names.index("start_external_asset_import_job"), (query, names)
 
 
-def _assert_advanced_search_routes_first(response, *, query, expected):
+def _assert_advanced_search_routes_first(response, *, query, expected, script_first):
     tools = response["result"]["structuredContent"]["tools"]
     names = [tool["name"] for tool in tools]
-    assert names[0] == "plan_advanced_scene_workflow", (query, names)
     for tool_name in expected:
-        assert tool_name in names[:6], (query, tool_name, names)
-    if "draft_script" in names:
-        if "draft_script" in expected:
-            assert names.index("draft_script") > 0, (query, names)
-        else:
-            assert names.index("draft_script") > 5, (query, names)
+        assert tool_name in names[:10], (query, tool_name, names)
+    if script_first:
+        assert names[0] in {"draft_script", "plan_advanced_scene_workflow"}, (query, names)
+        assert "draft_script" in names[:2], (query, names)
+        assert "plan_advanced_scene_workflow" in names[:3], (query, names)
+        for tool_name in expected - {"draft_script"}:
+            assert names.index("draft_script") < names.index(tool_name), (query, tool_name, names)
+    else:
+        assert names[0] in {"plan_advanced_scene_workflow", *expected}, (query, names)
+        if "draft_script" in names:
+            assert all(names.index(tool_name) < names.index("draft_script") for tool_name in expected), (query, names)
 
 
 def _assert_material_texture_search_avoids_asset_route(response, *, query):
@@ -949,7 +959,8 @@ def _assert_image_texture_material_search(response, *, query):
     tools = response["result"]["structuredContent"]["tools"]
     names = [tool["name"] for tool in tools]
     assert "create_image_texture_material" in names[:5], (query, names)
-    assert "draft_script" not in names[:5], (query, names)
+    assert names[0] == "draft_script", (query, names)
+    assert names.index("draft_script") < names.index("create_image_texture_material"), (query, names)
     _assert_material_texture_search_avoids_asset_route(response, query=query)
 
 
@@ -957,19 +968,18 @@ def _assert_procedural_texture_material_search(response, *, query):
     tools = response["result"]["structuredContent"]["tools"]
     names = [tool["name"] for tool in tools]
     assert "create_procedural_texture_material" in names[:6], (query, names)
-    assert "draft_script" not in names[:6], (query, names)
+    assert names[0] == "draft_script", (query, names)
+    assert names.index("draft_script") < names.index("create_procedural_texture_material"), (query, names)
     _assert_material_texture_search_avoids_asset_route(response, query=query)
 
 
 def main():
     _assert_legacy_status_hashes_are_unknown()
-    assert not mcp_server._contains_any_phrase(
-        "Create an architectural arch from cubes",
-        mcp_server.ANIMATION_ROUTE_TERMS,
+    assert not mcp_server.helper_routing.is_animation_workflow_request(
+        "Create an architectural arch from cubes"
     )
-    assert mcp_server._contains_any_phrase(
-        "Make the selected cube bounce twice",
-        mcp_server.ANIMATION_ROUTE_TERMS,
+    assert mcp_server.helper_routing.is_animation_workflow_request(
+        "Make the selected cube bounce twice"
     )
     assert mcp_server._is_external_asset_route_query("import texture from Poly Haven")
     assert mcp_server._is_external_asset_route_query("download model from asset library")
@@ -1051,11 +1061,11 @@ def main():
             tool["name"] for tool in offline_catalog_search["result"]["structuredContent"]["tools"]
         }
         assert {"draft_script", "run_approved_script"}.issubset(offline_catalog_found), offline_catalog_search
-        for query in (
-            "Make the selected cube bounce twice and get smaller each bounce.",
-            "Block a jump animation with anticipation, contact, apex, settle.",
-            "Review this animation for spacing and contact sliding.",
-            "Create a simple turntable animation for the selected cube.",
+        for query, script_first in (
+            ("Make the selected cube bounce twice and get smaller each bounce.", True),
+            ("Block a jump animation with anticipation, contact, apex, settle.", True),
+            ("Review this animation for spacing and contact sliding.", False),
+            ("Create a simple turntable animation for the selected cube.", True),
         ):
             offline_animation_search = _send(
                 offline_proc,
@@ -1069,74 +1079,94 @@ def main():
                     },
                 },
             )
-            _assert_animation_search_routes_first(offline_animation_search, query=query)
+            _assert_animation_search_routes_first(
+                offline_animation_search,
+                query=query,
+                script_first=script_first,
+            )
         advanced_queries = (
             (
                 "Create a 2D storyboard animatic with panels, cutout layers, and a camera dolly.",
                 {"get_2d_animation_details", "create_camera_dolly_animation", "draft_script"},
+                True,
             ),
             (
                 "Make an advanced procedural 3D hard-surface array stack with bevels.",
                 {"apply_procedural_array_stack"},
+                True,
             ),
             (
                 "Use a boolean cutter, mirror the model, symmetrize it, solidify wall thickness, and add a screw thread.",
                 {"boolean_op", "mirror_model", "symmetrize_model", "solidify_model", "screw_model"},
+                True,
             ),
             (
                 "Extrude mesh faces, inset panels, loop cut, knife cut, proportional edit, bridge boundary loops, merge by distance, and convert curve to mesh.",
                 {"edit_mesh", "curve_to_mesh"},
+                True,
             ),
             (
                 "Inspect mesh quality for non-manifold edges, loose geometry, missing materials, and model readiness.",
                 {"inspect_modeling_quality"},
+                False,
             ),
             (
                 "Create an advanced procedural hard-surface array with a geometry-nodes scatter grid.",
                 {"apply_procedural_array_stack", "add_geometry_nodes_modifier"},
+                True,
             ),
             (
                 "Create a lookdev turntable review with Cycles denoise, inspection stills, and artifact validation.",
                 {"create_lookdev_turntable_review"},
+                False,
             ),
             (
                 "Enable normal, depth, ambient occlusion, cryptomatte render passes and add a custom shader AOV.",
                 {"configure_render_outputs"},
+                False,
             ),
             (
                 "Create a procedural marble texture material with noise bump for the selected mesh.",
                 {"create_procedural_texture_material"},
+                True,
             ),
             (
                 "Bake AO, normal, and diffuse maps for a game-ready textured asset.",
                 {"bake_maps"},
+                False,
             ),
             (
                 "Design a futuristic wall-mounted coffee machine with chrome pipes, a small display, buttons, and beveled body.",
                 {"draft_script", "create_shader_material", "apply_procedural_array_stack"},
+                True,
             ),
             (
                 "Create a control panel with buttons and a display.",
                 {"draft_script", "apply_procedural_array_stack"},
+                True,
             ),
             (
                 "Create a believable architect desk lamp product prop with spring arms, counterweight, wide shade, bulb, and cable.",
                 {"draft_script", "screw_model", "apply_procedural_array_stack"},
+                True,
             ),
             (
                 "Create a modular wall-panel system with pipe-run details and geometry nodes.",
                 {"apply_procedural_array_stack", "add_geometry_nodes_modifier"},
+                True,
             ),
             (
                 "Create an advanced camera push and orbit reveal.",
                 {"create_camera_dolly_animation", "create_camera_orbit"},
+                True,
             ),
             (
                 "Add cloth simulation setup and inspect it before any bake.",
                 {"add_cloth_simulation_to_selected", "get_simulation_details"},
+                False,
             ),
         )
-        for query, expected in advanced_queries:
+        for query, expected, script_first in advanced_queries:
             offline_advanced_search = _send(
                 offline_proc,
                 {
@@ -1149,7 +1179,12 @@ def main():
                     },
                 },
             )
-            _assert_advanced_search_routes_first(offline_advanced_search, query=query, expected=expected)
+            _assert_advanced_search_routes_first(
+                offline_advanced_search,
+                query=query,
+                expected=expected,
+                script_first=script_first,
+            )
         offline_uv_search = _send(
             offline_proc,
             {
@@ -1163,10 +1198,11 @@ def main():
             },
         )
         offline_uv_names = [tool["name"] for tool in offline_uv_search["result"]["structuredContent"]["tools"]]
-        assert offline_uv_names[0] == "uv_unwrap", offline_uv_search
+        assert offline_uv_names[0] == "draft_script", offline_uv_search
+        assert "uv_unwrap" in offline_uv_names[:3], offline_uv_search
+        assert offline_uv_names.index("draft_script") < offline_uv_names.index("uv_unwrap"), offline_uv_search
         assert "mark_uv_seams" in offline_uv_names[:6], offline_uv_search
         assert "inspect_uv_layout" in offline_uv_names[:6], offline_uv_search
-        assert "create_shader_material" in offline_uv_names, offline_uv_search
         offline_uv_quality_search = _send(
             offline_proc,
             {
@@ -1238,8 +1274,55 @@ def main():
         )
         offline_director_names = [tool["name"] for tool in offline_director_search["result"]["structuredContent"]["tools"]]
         assert offline_director_names[0] == "plan_director_workflow", offline_director_names
+        assert "draft_script" in offline_director_names[:3], offline_director_names
         assert "plan_asset_import_workflow" in offline_director_names[:5], offline_director_names
         assert "run_animation_workflow" in offline_director_names[:10], offline_director_names
+        assert offline_director_names.index("draft_script") < offline_director_names.index(
+            "run_animation_workflow"
+        ), offline_director_names
+        offline_project_search = _send(
+            offline_proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 951,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_blender_tools",
+                    "arguments": {
+                        "query": "Create a new Blender project.",
+                        "limit": 8,
+                    },
+                },
+            },
+        )
+        offline_project_names = [
+            tool["name"]
+            for tool in offline_project_search["result"]["structuredContent"]["tools"]
+        ]
+        assert offline_project_names[0] == "create_new_blender_project", offline_project_names
+        assert "draft_script" not in offline_project_names[:5], offline_project_names
+        offline_final_render_search = _send(
+            offline_proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 952,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_blender_tools",
+                    "arguments": {
+                        "query": "Render the final animation.",
+                        "limit": 8,
+                    },
+                },
+            },
+        )
+        offline_final_render_names = [
+            tool["name"]
+            for tool in offline_final_render_search["result"]["structuredContent"]["tools"]
+        ]
+        assert offline_final_render_names[0] == "start_render_job", offline_final_render_names
+        assert "run_animation_task" not in offline_final_render_names[:5], offline_final_render_names
+        assert "draft_script" not in offline_final_render_names[:5], offline_final_render_names
         for query in (
             "Create a wood texture material on the selected cube.",
             "Assign a procedural texture material to the selected cube.",
@@ -1663,11 +1746,11 @@ def main():
         assert "destructive_scene_operation" in open_summary_warning_codes, destructive_search
         assert "user_confirmed_path_required" in open_summary_warning_codes, destructive_search
 
-        for query in (
-            "Make the selected cube bounce twice and get smaller each bounce.",
-            "Block a jump animation with anticipation, contact, apex, settle.",
-            "Review this animation for spacing and contact sliding.",
-            "Create a simple turntable animation for the selected cube.",
+        for query, script_first in (
+            ("Make the selected cube bounce twice and get smaller each bounce.", True),
+            ("Block a jump animation with anticipation, contact, apex, settle.", True),
+            ("Review this animation for spacing and contact sliding.", False),
+            ("Create a simple turntable animation for the selected cube.", True),
         ):
             animation_search = _send(
                 proc,
@@ -1681,7 +1764,11 @@ def main():
                     },
                 },
             )
-            _assert_animation_search_routes_first(animation_search, query=query)
+            _assert_animation_search_routes_first(
+                animation_search,
+                query=query,
+                script_first=script_first,
+            )
         for query in (
             "Search Poly Haven for a sunset HDRI and import it into the world.",
             "Import a downloadable Sketchfab Falcon 9 model if auth is present.",
@@ -1752,6 +1839,7 @@ def main():
             lookdev_review_search,
             query="Create a lookdev turntable review with Cycles denoise, inspection stills, and artifact validation.",
             expected={"create_lookdev_turntable_review"},
+            script_first=False,
         )
 
         render_outputs_search = _send(
@@ -1773,6 +1861,7 @@ def main():
             render_outputs_search,
             query="Enable normal, depth, ambient occlusion, cryptomatte render passes and add a custom shader AOV.",
             expected={"configure_render_outputs"},
+            script_first=False,
         )
 
         procedural_texture_search = _send(
@@ -1794,6 +1883,7 @@ def main():
             procedural_texture_search,
             query="Create a procedural marble texture material with noise bump for the selected mesh.",
             expected={"create_procedural_texture_material"},
+            script_first=True,
         )
         _assert_procedural_texture_material_search(
             procedural_texture_search,
@@ -1819,6 +1909,7 @@ def main():
             bake_map_search,
             query="Bake AO, normal, and diffuse maps for a game-ready textured asset.",
             expected={"bake_maps"},
+            script_first=False,
         )
         bake_schema = _send(
             proc,
@@ -2336,12 +2427,16 @@ def main():
         assert "render-job-video-resource" in template_names, templates
 
         prompts = _send(proc, {"jsonrpc": "2.0", "id": 41, "method": "prompts/list"})
+        for prompt_metadata in prompts["result"]["prompts"]:
+            assert set(prompt_metadata) <= {"name", "title", "description", "arguments"}, prompt_metadata
         prompt_names = {item["name"] for item in prompts["result"]["prompts"]}
         assert "safe_scene_change" in prompt_names, prompts
+        assert "blender_bridge_workflow" in prompt_names, prompts
         assert "director_workflow" in prompt_names, prompts
         assert "advanced_scene_workflow" in prompt_names, prompts
         assert "advanced_animation_workflow" in prompt_names, prompts
         assert "external_asset_workflow" in prompt_names, prompts
+        assert "reference_modeling_workflow" in prompt_names, prompts
         assert "trusted_script" in prompt_names, prompts
         assert "draft_approved_script" not in prompt_names, prompts
 
@@ -2355,6 +2450,55 @@ def main():
             },
         )
         assert "add a light" in prompt["result"]["messages"][0]["content"]["text"], prompt
+        bridge_prompt = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 48,
+                "method": "prompts/get",
+                "params": {
+                    "name": "blender_bridge_workflow",
+                    "arguments": {"goal": "inspect the scene and repair the selected model"},
+                },
+            },
+        )
+        bridge_prompt_text = bridge_prompt["result"]["messages"][0]["content"]["text"]
+        assert "include_schemas=false" in bridge_prompt_text, bridge_prompt
+        assert "planner remains available through the gateway" in bridge_prompt_text, bridge_prompt
+        assert "bridge_timeout" in bridge_prompt_text, bridge_prompt
+        assert "commit_preview or revert_preview" in bridge_prompt_text, bridge_prompt
+        assert "cohesive draft_script as the default authored-mutation path" in bridge_prompt_text, bridge_prompt
+        reference_prompt = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 49,
+                "method": "prompts/get",
+                "params": {
+                    "name": "reference_modeling_workflow",
+                    "arguments": {
+                        "goal": "match the attached product image",
+                        "reference_notes": "single three-quarter view",
+                    },
+                },
+            },
+        )
+        reference_prompt_text = reference_prompt["result"]["messages"][0]["content"]["text"]
+        assert "match the attached product image" in reference_prompt_text, reference_prompt
+        assert "single three-quarter view" in reference_prompt_text, reference_prompt
+        assert "structured reference_brief" in reference_prompt_text, reference_prompt
+        assert "plan_model_quality_workflow" in reference_prompt_text, reference_prompt
+        assert "construction_strategy" in reference_prompt_text, reference_prompt
+        assert "one cohesive draft_script for primary construction" in reference_prompt_text, reference_prompt
+        assert "bpy.app.version" in reference_prompt_text, reference_prompt
+        assert "RNA enum identifiers" in reference_prompt_text, reference_prompt
+        assert "canned category bases" in reference_prompt_text, reference_prompt
+        assert "resolve actual existing and newly created target names" in reference_prompt_text, reference_prompt
+        assert "quality floor" in reference_prompt_text, reference_prompt
+        assert "required entry point" in reference_prompt_text, reference_prompt
+        assert "do not invent focal lengths" in reference_prompt_text, reference_prompt
+        assert "ready_for_user_review, not committed or saved" in reference_prompt_text, reference_prompt
+        assert "preview pending" in reference_prompt_text, reference_prompt
         animation_prompt = _send(
             proc,
             {
@@ -2368,7 +2512,8 @@ def main():
         assert "plan_animation_workflow" in animation_prompt_text, animation_prompt
         assert "run_animation_workflow" in animation_prompt_text, animation_prompt
         assert "capture_object_inspection_renders" in animation_prompt_text, animation_prompt
-        assert "draft_script for custom advanced animation code" in animation_prompt_text, animation_prompt
+        assert "one cohesive draft_script for animation generation" in animation_prompt_text, animation_prompt
+        assert "bounded helper path" in animation_prompt_text, animation_prompt
         director_prompt = _send(
             proc,
             {
@@ -2381,7 +2526,7 @@ def main():
         director_prompt_text = director_prompt["result"]["messages"][0]["content"]["text"]
         assert "plan_director_workflow" in director_prompt_text, director_prompt
         assert "plan_asset_import_workflow" in director_prompt_text, director_prompt
-        assert "run_animation_workflow" in director_prompt_text, director_prompt
+        assert "one cohesive draft_script for authored modeling, animation, materials" in director_prompt_text, director_prompt
         advanced_prompt = _send(
             proc,
             {
@@ -2396,9 +2541,8 @@ def main():
         )
         advanced_prompt_text = advanced_prompt["result"]["messages"][0]["content"]["text"]
         assert "plan_advanced_scene_workflow" in advanced_prompt_text, advanced_prompt
-        assert "get_2d_animation_details" in advanced_prompt_text, advanced_prompt
-        assert "apply_procedural_array_stack" in advanced_prompt_text, advanced_prompt
-        assert "compose text, curve, camera, and visual-review helpers" in advanced_prompt_text, advanced_prompt
+        assert "one cohesive draft_script for authored 2D/3D object generation" in advanced_prompt_text, advanced_prompt
+        assert "unless the user requests helpers" in advanced_prompt_text, advanced_prompt
         assert "create_lookdev_turntable_review" in advanced_prompt_text, advanced_prompt
         assert "configure_render_outputs" in advanced_prompt_text, advanced_prompt
         assert "add_cloth_simulation_to_selected" in advanced_prompt_text, advanced_prompt

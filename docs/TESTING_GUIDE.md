@@ -7,8 +7,8 @@ Current project snapshot, checked on 2026-07-23:
 - Extension: `Blender Agent Bridge`, manifest id `claude_blender`; version comes from `addon/claude_blender/blender_manifest.toml` and is checked against `build_info.py` and `CHANGELOG.md`.
 - Minimum Blender: `4.2.0`. CI tests 4.2 LTS, 4.5 LTS, and 5.1; newer versions are accepted with capability-based warnings.
 - Local Blender detected on this workstation: `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`.
-- Canonical registry inventory: 181 Blender tool contracts across explicit domain modules.
-- Normal agent catalog inventory: 180 tool definitions; the default surface exposes exactly five gateways. The opt-in `direct` surface adds 23 curated direct helpers.
+- Canonical registry inventory: 182 Blender tool contracts across explicit domain modules.
+- Normal agent catalog inventory: 181 tool definitions; the default surface exposes exactly five gateways. The opt-in `direct` surface adds 24 curated direct helpers.
 - Intentional catalog difference: `run_approved_script` is a compatibility dispatcher path that always refuses the removed per-script flow; it is not exposed in the normal agent helper catalog.
 - The published 0.4.0 artifacts were verified on 2026-07-23. The current unreleased 0.4.1 working line contains 94 unit tests and an 18-test Blender-background suite; tagged CI repeats the supported Blender matrix under Xvfb on Linux.
 
@@ -107,7 +107,7 @@ What this covers:
 - Context-budget truncation and prompt JSON limits.
 - Static extension repository generation.
 - External asset catalog/cache helpers that do not need Blender imports.
-- Helper-first script routing metadata and recommended-tool drift.
+- Capability-routed script/helper metadata and recommended-tool drift.
 - One provider-neutral offline discovery/routing contract shaped like Claude, Codex, and Cursor clients across animation, materials, visual inspection, advanced creation, asset import, project files, binary script trust, preview commit/revert, and director orchestration. This is a deterministic regression gate, not a live model evaluation.
 - Stdio MCP protocol, five-tool gateway reachability, opt-in direct/full surfaces, pagination, prompts, resources, wrappers, and error paths.
 - Lossless full-default inspection controls, dotted field selection, result pagination, complete-on-digest-mismatch behavior, tiny unchanged responses, schema digests, and content-free payload-size telemetry.
@@ -323,7 +323,7 @@ Pass criteria:
 
 - `blender_bridge_status` reports matching add-on, bridge, MCP server, config version, and source hash metadata.
 - Gateway mode advertises no more than five tools and reaches every helper through catalog/search/schema/invoke.
-- Direct mode preserves the former 28-tool compatibility surface.
+- Direct mode exposes the five gateways plus 24 curated direct helpers.
 - Full mode can expose every bridge contract as a top-level tool for debugging.
 - Wrapper tools cannot invoke wrapper tools recursively through `invoke_blender_tool`.
 - Pagination works for `tools/list`, `resources/list`, `resources/templates/list`, and `prompts/list`.
@@ -552,8 +552,8 @@ Owner tests:
 
 Required scenarios:
 
-- Prompt-only routing uses `run_animation_task` or `run_animation_workflow` before script fallback.
-- Bounce plus shrinking routes to `create_progressive_bounce_animation`.
+- With active trust, authored animation routing selects `draft_script` after brief, scene-context, and timing preflight.
+- With trust off or an explicit helper request, bounce plus shrinking can route to `run_animation_workflow` and `create_progressive_bounce_animation`.
 - Ambiguous review prompts use evaluator/review helpers and do not draft Python first.
 - Timing chart, pose blocking, breakdown, holds, interpolation, retiming, cycles, preview range, and clear animation update expected f-curves/actions.
 - Review tools return actionable findings and executable repair operation payloads.
@@ -563,8 +563,8 @@ Regression prompts for real clients:
 
 | Prompt | Expected route | Pass condition |
 | --- | --- | --- |
-| `make selected cube bounce twice and get smaller each bounce` | `run_animation_task` or `run_animation_workflow`, then `create_progressive_bounce_animation` | Workflow route preferred; explicit script/Python requests may use `draft_script` under active session trust. |
-| `block a jump with anticipation, contact, apex, settle` | `plan_animation_workflow` or `run_animation_task`, then timing/blocking helpers | Workflow-first path before Python. |
+| `make selected cube bounce twice and get smaller each bounce` | `plan_animation_workflow`, then cohesive `draft_script`, then review helpers | Script-first authored generation under active trust; helper runner remains the trust-off or explicit-helper path. |
+| `block a jump with anticipation, contact, apex, settle` | `plan_animation_workflow`, then cohesive `draft_script`, then evaluators | Brief, target, and timing preflight precede one authored animation script. |
 | `review this animation for spacing/contact` | Workflow/evaluator/review tools | Review helpers before script repair. |
 
 ### Rig, Pose, Shape Keys, Simulation
@@ -637,6 +637,8 @@ Owner tests:
 
 Required scenarios:
 
+- With active trust, advanced and director plans return gateway-ready inspections followed by one deferred cohesive `draft_script` for generic object, material/node, rig, camera, and animation authoring.
+- Deferred script calls block on missing briefs, unresolved asset selection, missing target refresh, or blocked animation context; trust-off and explicit-helper plans keep bounded helper paths.
 - Helpers create bounded, reversible data-blocks and reject unsupported complex operations.
 - Reusable text, curve, camera, and scene helpers remain reversible when composed for 2D work.
 - Procedural stack helpers add bounded array/bevel/weighted-normal modifiers without destructive mesh edits.
@@ -806,7 +808,7 @@ Required scenarios:
 - Missing code, alternate code field names, compile errors, static warnings, analyzer-only blocked imports/calls, and harmless scripts.
 - Trust off refuses `draft_script` without creating pending script state; trust on immediately grants Blender Run Script-equivalent permissions.
 - Runtime external script trust allows tokenless runs only while active. Syntax-invalid and oversized payloads remain operationally invalid.
-- Trust is cleared on add-on reload and file load, but persists across bridge stop/start within the same Blender session.
+- Trust is cleared on add-on reload, explicit Revoke, timed expiry, or Blender exit. It persists across bridge stop/start and every `.blend` lifecycle operation, including open, new, save, restore, copy, rename, and content changes. File operations do not extend timed expiry.
 - Animation-like and helper-overlap script drafts auto-run under trust, with helper advice returned as metadata rather than enforcement.
 - Filesystem, `os`, compatibility `draft_privileged_script`, project-file operator, and persistent-bake operator probes execute under trust without performing destructive release-test actions. `run_approved_script` still refuses the removed per-script flow.
 - Checkpoints, undo, stdout/stderr logs, and error tracebacks remain visible; no pending-script approval UI is registered.

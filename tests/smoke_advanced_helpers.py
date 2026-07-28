@@ -15,11 +15,12 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import advanced_helpers, advanced_modeling, agent_tools, blender_compat, context_bundle, live_preview, preferences, tool_dispatcher  # noqa: E402
+from claude_blender import advanced_helpers, advanced_modeling, agent_tools, blender_compat, context_bundle, live_preview, preferences, script_runner, tool_dispatcher  # noqa: E402
 
 
 ADVANCED_TOOLS = {
     "plan_advanced_scene_workflow",
+    "plan_model_quality_workflow",
     "plan_asset_import_workflow",
     "plan_director_workflow",
     "get_2d_animation_details",
@@ -580,6 +581,221 @@ def main():
             {"prompt": "Plan advanced 2D storyboard, procedural 3D, cloth simulation, and camera animation helpers."},
         )
         assert {"two_d_storyboard", "procedural_3d", "advanced_animation", "simulation_setup"}.intersection(set(workflow["domains"]))
+        assert workflow["execution_strategy"]["selection"] == "bounded_helpers_until_trust_enabled", workflow
+        assert all(call["name"] != "draft_script" for call in workflow["next_tool_calls"]), workflow
+        quality_args = {
+                "prompt": "Match a reference image of a plush cartoon cat without using a canned template.",
+                "reference_description": "Round head, large blue eyes, soft cheeks, small pink nose, smiling mouth, dense directional fur, rounded paws, and curved tail.",
+                "reference_brief": {
+                    "subject": "plush cartoon cat",
+                    "silhouette": ["round head over a compact seated body", "curved tail visible beside the body"],
+                    "primary_masses": ["head volume", "body volume", "front paws", "tail"],
+                    "secondary_forms": ["cheek volumes", "muzzle volume"],
+                    "landmarks": ["large paired eyes", "small nose", "smiling mouth"],
+                    "proportion_checks": ["head is wider than body", "eyes occupy the middle third of the face"],
+                    "surface_cues": ["dense directional fur with shorter fibers on the face"],
+                    "negative_constraints": ["avoid sparse random particle spikes"],
+                    "inspection_views": ["front", "side"],
+                },
+                "target_objects": ["Cube", "PlannedDetail"],
+            }
+        trust_off_quality_plan = _execute(
+            context,
+            "plan_model_quality_workflow",
+            quality_args,
+        )
+        assert trust_off_quality_plan["construction_strategy"]["selection"] == (
+            "bounded_helpers_until_trust_enabled"
+        ), trust_off_quality_plan
+        assert trust_off_quality_plan["script_fallback_policy"]["helper_first"] is True, trust_off_quality_plan
+        trusted = script_runner.approve_external_script_trust_window(context, session=True)
+        assert trusted["ok"] and trusted["session"], trusted
+        animation_only_plan = _execute(
+            context,
+            "plan_advanced_scene_workflow",
+            {
+                "prompt": (
+                    "Animate this character waving, capture a playblast, and repair "
+                    "the timing."
+                ),
+                "target_objects": ["Cube"],
+            },
+        )
+        assert animation_only_plan["domains"] == [
+            "advanced_animation"
+        ], animation_only_plan
+        material_render_plan = _execute(
+            context,
+            "plan_advanced_scene_workflow",
+            {
+                "prompt": (
+                    "Create a custom procedural material and render the final "
+                    "animation."
+                ),
+                "target_objects": ["Cube"],
+            },
+        )
+        assert "procedural_3d" in material_render_plan["domains"], material_render_plan
+        assert "advanced_animation" not in material_render_plan[
+            "domains"
+        ], material_render_plan
+        scripted_advanced_plan = _execute(
+            context,
+            "plan_advanced_scene_workflow",
+            {
+                "prompt": (
+                    "Build a named-part robot with custom materials and nodes, then animate it waving "
+                    "with an orbit camera."
+                ),
+                "target_objects": ["Cube"],
+            },
+        )
+        assert {"procedural_3d", "advanced_animation"}.issubset(
+            set(scripted_advanced_plan["domains"])
+        ), scripted_advanced_plan
+        assert scripted_advanced_plan["scripted_domains"] == [
+            domain
+            for domain in scripted_advanced_plan["domains"]
+            if domain in {"model_quality", "2d_storyboard", "procedural_3d", "advanced_animation"}
+        ], scripted_advanced_plan
+        scripted_advanced_names = [
+            call["name"] for call in scripted_advanced_plan["next_tool_calls"]
+        ]
+        assert "get_geometry_nodes_details" in scripted_advanced_names, scripted_advanced_plan
+        assert "plan_animation_workflow" in scripted_advanced_names, scripted_advanced_plan
+        assert scripted_advanced_names[-1] == "draft_script", scripted_advanced_plan
+        scripted_advanced_call = scripted_advanced_plan["next_tool_calls"][-1]
+        assert scripted_advanced_call["gateway_call_template"]["arguments"]["name"] == "draft_script"
+        assert scripted_advanced_call["input_handoff"]["client_must_replace_placeholders"] is True
+        assert "needs_reference_brief" in scripted_advanced_call["input_handoff"]["completion_gate"][
+            "block_on_status"
+        ]
+        helper_advanced_plan = _execute(
+            context,
+            "plan_advanced_scene_workflow",
+            {
+                "prompt": "Use helpers only to build a hard-surface control panel and animate a reveal.",
+                "target_objects": ["Cube"],
+            },
+        )
+        assert helper_advanced_plan["execution_strategy"]["selection"] == (
+            "bounded_helpers_requested"
+        ), helper_advanced_plan
+        assert not helper_advanced_plan["scripted_domains"], helper_advanced_plan
+        assert all(
+            call["name"] != "draft_script"
+            for call in helper_advanced_plan["next_tool_calls"]
+        ), helper_advanced_plan
+        quality_plan = _execute(
+            context,
+            "plan_model_quality_workflow",
+            quality_args,
+        )
+        assert quality_plan["status"] == "ready", quality_plan
+        assert quality_plan["subject"] == "plush cartoon cat", quality_plan
+        assert quality_plan["quality_floor"] == 4, quality_plan
+        assert "head volume" in quality_plan["reference_breakdown"]["main_masses"], quality_plan
+        quality_phase_names = [phase["name"] for phase in quality_plan["phases"]]
+        assert quality_phase_names == [
+            "reference_decomposition",
+            "inspect_scene",
+            "block_major_masses",
+            "refresh_targets",
+            "form_evidence_gate",
+            "surface_and_detail_pass",
+            "evidence_score_repair",
+            "preview_decision",
+        ], quality_plan
+        assert quality_plan["token_policy"]["keep_gateway_surface"] is True, quality_plan
+        assert quality_plan["construction_strategy"]["selection"] == "cohesive_trusted_script", quality_plan
+        assert quality_plan["construction_strategy"]["script_trust"]["active"] is True, quality_plan
+        assert quality_plan["script_fallback_policy"]["helper_first"] is False, quality_plan
+        assert quality_plan["script_fallback_policy"]["script_first"] is True, quality_plan
+        assert quality_plan["script_fallback_policy"]["requires_session_script_trust"] is True, quality_plan
+        assert "enum_items" in quality_plan["script_fallback_policy"]["script_preflight"]["enum_check"], quality_plan
+        assert any(item["criterion"] == "silhouette_match" for item in quality_plan["quality_rubric"]), quality_plan
+        assert quality_plan["completion_contract"]["must_not_stop_after_planning"] is True, quality_plan
+        assert quality_plan["target_objects"] == ["Cube"], quality_plan
+        assert quality_plan["missing_target_objects"] == ["PlannedDetail"], quality_plan
+        refresh_phase = next(phase for phase in quality_plan["phases"] if phase["name"] == "refresh_targets")
+        assert refresh_phase["target_resolution"]["seed_with"] == ["Cube"], quality_plan
+        assert quality_plan["next_tool_calls"], quality_plan
+        for planned_call in quality_plan["next_tool_calls"]:
+            assert planned_call["schema_lookup"]["name"] == "get_blender_tool_schema", planned_call
+            assert planned_call["gateway_call"]["name"] == "invoke_blender_tool", planned_call
+            assert planned_call["gateway_call"]["arguments"]["name"] == planned_call["name"], planned_call
+        assert any(call["phase"] == "refresh_targets" for call in quality_plan["deferred_tool_calls"]), quality_plan
+        construction_script_calls = [
+            call
+            for call in quality_plan["deferred_tool_calls"]
+            if call["name"] == "draft_script" and call["phase"] == "block_major_masses"
+        ]
+        assert len(construction_script_calls) == 1, quality_plan
+        assert construction_script_calls[0]["gateway_call_template"]["arguments"]["name"] == "draft_script"
+        assert construction_script_calls[0]["input_handoff"]["client_must_replace_placeholders"] is True
+        resolved_target_calls = [
+            call
+            for call in quality_plan["deferred_tool_calls"]
+            if call["name"] in {"inspect_modeling_quality", "capture_object_inspection_renders"}
+        ]
+        assert resolved_target_calls, quality_plan
+        for planned_call in resolved_target_calls:
+            assert planned_call["gateway_call_template"]["arguments"]["arguments"]["object_names"] == (
+                "<resolved_target_objects>"
+            ), planned_call
+
+        human_plan = _execute(
+            context,
+            "plan_model_quality_workflow",
+            {
+                "prompt": "Model a human character from a reference image.",
+                "reference_brief": {
+                    "subject": "human character",
+                    "silhouette": ["upright figure with relaxed shoulders"],
+                    "primary_masses": ["ribcage", "pelvis", "head"],
+                    "secondary_forms": ["upper arms", "forearms", "thighs", "lower legs"],
+                    "landmarks": ["shoulder line", "elbows", "knees"],
+                    "proportion_checks": ["head height is one eighth of total height"],
+                    "surface_cues": ["matte cloth clothing"],
+                },
+            },
+        )
+        serialized_human_plan = json.dumps(human_plan).lower()
+        for canned_animal_term in ("muzzle pads", "front paws", "tail curve", "chest ruff", "ear interior"):
+            assert canned_animal_term not in serialized_human_plan, (canned_animal_term, human_plan)
+        assert human_plan["reference_brief"]["primary_masses"] == ["ribcage", "pelvis", "head"], human_plan
+        assert any("gateway_call_template" in call for call in human_plan["deferred_tool_calls"]), human_plan
+        for deferred_call in human_plan["deferred_tool_calls"]:
+            assert "schema_lookup" in deferred_call, deferred_call
+            assert "gateway_call" in deferred_call or "gateway_call_template" in deferred_call, deferred_call
+
+        incomplete_quality_plan = _execute(
+            context,
+            "plan_model_quality_workflow",
+            {
+                "prompt": "Match this character reference.",
+                "reference_description": "A human character in a neutral stance.",
+            },
+        )
+        assert incomplete_quality_plan["status"] == "needs_reference_brief", incomplete_quality_plan
+        assert incomplete_quality_plan["completion_contract"]["ready_for_mutation"] is False, incomplete_quality_plan
+        assert set(incomplete_quality_plan["missing_reference_brief_fields"]) == {
+            "silhouette",
+            "primary_masses",
+            "proportion_checks",
+        }, incomplete_quality_plan
+        helper_override_args = dict(quality_args)
+        helper_override_args["prompt"] = "Use helpers only to match this reference image."
+        helper_override_plan = _execute(
+            context,
+            "plan_model_quality_workflow",
+            helper_override_args,
+        )
+        assert helper_override_plan["construction_strategy"]["selection"] == (
+            "bounded_helpers_requested"
+        ), helper_override_plan
+        assert helper_override_plan["script_fallback_policy"]["helper_first"] is True, helper_override_plan
+        assert script_runner.revoke_external_script_trust_window(context)["ok"]
         asset_plan = _execute(
             context,
             "plan_asset_import_workflow",
@@ -657,6 +873,41 @@ def main():
         director_decision_names = [option["tool_call"]["name"] for option in director_plan["preview_decision_options"]]
         assert director_decision_names == ["commit_preview", "revert_preview"], director_plan
         assert director_plan["preview_policy"]["commit_only_on_user_request"] is True, director_plan
+        trusted_director = script_runner.approve_external_script_trust_window(context, session=True)
+        assert trusted_director["ok"] and trusted_director["session"], trusted_director
+        scripted_director_plan = _execute(
+            context,
+            "plan_director_workflow",
+            {
+                "prompt": (
+                    "Director workflow: import a Poly Haven asset, build a named-part robot with custom "
+                    "materials, animate it waving, capture evidence, and ask before commit."
+                ),
+                "target_objects": ["Cube"],
+            },
+        )
+        scripted_director_names = [
+            call["name"] for call in scripted_director_plan["next_tool_calls"]
+        ]
+        assert "plan_asset_import_workflow" in scripted_director_names, scripted_director_plan
+        assert "plan_animation_workflow" in scripted_director_names, scripted_director_plan
+        assert "draft_script" in scripted_director_names, scripted_director_plan
+        assert "run_animation_workflow" not in scripted_director_names, scripted_director_plan
+        assert "plan_advanced_scene_workflow" not in scripted_director_names, scripted_director_plan
+        director_script_call = next(
+            call
+            for call in scripted_director_plan["next_tool_calls"]
+            if call["name"] == "draft_script"
+        )
+        assert director_script_call["gateway_call_template"]["arguments"]["name"] == "draft_script"
+        assert director_script_call["input_handoff"]["client_must_replace_placeholders"] is True
+        assert director_script_call["input_handoff"]["completion_gate"][
+            "require_asset_selection_and_import_when_requested"
+        ] is True
+        assert scripted_director_names.index("draft_script") < scripted_director_names.index(
+            "capture_viewport"
+        ), scripted_director_plan
+        assert script_runner.revoke_external_script_trust_window(context)["ok"]
         details = _execute(context, "get_2d_animation_details", {"max_items": 12})
         assert "recommended_tools" in details
 

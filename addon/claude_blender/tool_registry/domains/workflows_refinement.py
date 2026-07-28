@@ -5,14 +5,77 @@ from __future__ import annotations
 from ..registry import ToolSpec
 
 
+REFERENCE_BRIEF_SCHEMA = {
+    'type': 'object',
+    'description': (
+        'LLM-authored observations from the actual reference image. Supply concrete forms and ratios; '
+        'do not infer a category template.'
+    ),
+    'properties': {
+        'subject': {'type': 'string', 'maxLength': 120},
+        'silhouette': {
+            'type': 'array',
+            'items': {'type': 'string', 'maxLength': 240},
+            'maxItems': 24,
+        },
+        'primary_masses': {
+            'type': 'array',
+            'items': {'type': 'string', 'maxLength': 240},
+            'maxItems': 24,
+        },
+        'secondary_forms': {
+            'type': 'array',
+            'items': {'type': 'string', 'maxLength': 240},
+            'maxItems': 24,
+        },
+        'landmarks': {
+            'type': 'array',
+            'items': {'type': 'string', 'maxLength': 240},
+            'maxItems': 24,
+        },
+        'proportion_checks': {
+            'type': 'array',
+            'items': {'type': 'string', 'maxLength': 240},
+            'maxItems': 24,
+        },
+        'surface_cues': {
+            'type': 'array',
+            'items': {'type': 'string', 'maxLength': 240},
+            'maxItems': 24,
+        },
+        'negative_constraints': {
+            'type': 'array',
+            'items': {'type': 'string', 'maxLength': 240},
+            'maxItems': 24,
+        },
+        'source_notes': {
+            'type': 'array',
+            'items': {'type': 'string', 'maxLength': 240},
+            'maxItems': 24,
+        },
+        'inspection_views': {
+            'type': 'array',
+            'items': {
+                'type': 'string',
+                'enum': ['front_below', 'underside', 'side', 'front', 'rear', 'top'],
+            },
+            'maxItems': 6,
+        },
+    },
+    'additionalProperties': False,
+}
+
+
 SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'plan_advanced_scene_workflow',
-  'description': 'Plan a helper-first workflow for advanced 3D, 2D/storyboard, animation, simulation, asset import, '
-                 'compositor/render, and script-fallback work. Does not mutate the scene.',
+  'description': 'Plan capability-routed advanced 3D, 2D/storyboard, animation, simulation, asset import, and '
+                 'compositor/render work. Returns gateway-ready inspections plus one deferred trusted-script handoff '
+                 'for authored domains when trust is active, with bounded helper fallbacks. Does not mutate the scene.',
   'input_schema': {'type': 'object',
                    'properties': {'prompt': {'type': 'string'},
                                   'domains': {'type': 'array',
                                               'items': {'type': 'string',
-                                                        'enum': ['2d_storyboard',
+                                                         'enum': ['2d_storyboard',
+                                                                 'model_quality',
                                                                  'procedural_3d',
                                                                  'advanced_animation',
                                                                  'simulation_setup',
@@ -21,8 +84,8 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'plan_advanced_scene_
                                   'target_objects': {'type': 'array', 'items': {'type': 'string'}},
                                   'label': {'type': 'string'}},
                    'additionalProperties': False},
-  'contract': {'description': 'Plan helper-first workflows for advanced 3D, 2D/storyboard, animation, simulation, '
-                              'asset import, compositor/render, and script-fallback work',
+  'contract': {'description': 'Plan gateway-ready capability-routed workflows for advanced authored and operational '
+                              'Blender work, with trusted-script handoff and bounded helper fallbacks',
                'mutates_scene': False,
                'supports_headless': True,
                'input_schema': {'type': 'object',
@@ -30,6 +93,7 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'plan_advanced_scene_
                                                'domains': {'type': 'array',
                                                            'items': {'type': 'string',
                                                                      'enum': ['2d_storyboard',
+                                                                              'model_quality',
                                                                               'procedural_3d',
                                                                               'advanced_animation',
                                                                               'simulation_setup',
@@ -48,6 +112,42 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'plan_advanced_scene_
              'procedural_3d',
              'simulation_setup',
              'geometry_nodes'),
+  'exposure': 'compact_direct',
+  'owner': 'workflows_refinement'},
+ {'name': 'plan_model_quality_workflow',
+  'description': 'Plan a reference-driven model quality workflow from an LLM-authored visual brief, with gateway-ready '
+                 'calls, target refresh, evidence scoring, bounded repair, and commit/revert gates. Does not mutate the '
+                 'scene.',
+  'input_schema': {'type': 'object',
+                   'properties': {'prompt': {'type': 'string'},
+                                  'reference_description': {'type': 'string',
+                                                            'maxLength': 4000,
+                                                            'description': 'Optional source note; this does not replace '
+                                                                           'the structured visual reference_brief.'},
+                                  'reference_brief': REFERENCE_BRIEF_SCHEMA,
+                                  'target_objects': {'type': 'array', 'items': {'type': 'string'}},
+                                  'quality_floor': {'type': 'integer', 'minimum': 1, 'maximum': 5},
+                                  'label': {'type': 'string'}},
+                   'additionalProperties': False},
+  'contract': {'description': 'Plan generic reference-driven model quality work with client-authored decomposition, '
+                              'gateway execution, evidence scoring, repair, and preview decision gates',
+               'mutates_scene': False,
+               'supports_headless': True,
+               'input_schema': {'type': 'object',
+                                'properties': {'prompt': {'type': 'string'},
+                                               'reference_description': {'type': 'string',
+                                                                         'maxLength': 4000,
+                                                                         'description': 'Optional source note; this does '
+                                                                                        'not replace the structured '
+                                                                                        'visual reference_brief.'},
+                                               'reference_brief': REFERENCE_BRIEF_SCHEMA,
+                                               'target_objects': {'type': 'array', 'items': {'type': 'string'}},
+                                               'quality_floor': {'type': 'integer', 'minimum': 1, 'maximum': 5},
+                                               'label': {'type': 'string'}},
+                                'additionalProperties': False}},
+  'handler_key': 'plan_model_quality_workflow',
+  'order': 1160,
+  'groups': ('model_quality',),
   'exposure': 'compact_direct',
   'owner': 'workflows_refinement'},
  {'name': 'plan_asset_import_workflow',
@@ -81,17 +181,17 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'plan_advanced_scene_
   'exposure': 'compact_direct',
   'owner': 'workflows_refinement'},
  {'name': 'plan_director_workflow',
-  'description': 'Plan a multi-step director workflow across inspection, optional asset import, creation, '
-                 'animation/review/repair, evidence capture, and commit/revert decision points. Does not mutate the '
-                 'scene.',
+  'description': 'Plan a gateway-ready director workflow across inspection, optional bounded asset import, one '
+                 'trusted authored scene pass when available, animation review, evidence capture, and explicit '
+                 'commit/revert decision points. Does not mutate the scene.',
   'input_schema': {'type': 'object',
                    'properties': {'prompt': {'type': 'string'},
                                   'target_objects': {'type': 'array', 'items': {'type': 'string'}},
                                   'deliverables': {'type': 'array', 'items': {'type': 'string'}},
                                   'label': {'type': 'string'}},
                    'additionalProperties': False},
-  'contract': {'description': 'Plan a multi-step director workflow across inspection, asset import, creation, '
-                              'animation/review/repair, evidence, and preview decisions',
+  'contract': {'description': 'Plan a gateway-ready director workflow with bounded operational phases, one trusted '
+                              'authored scene pass when available, evidence, and preview decisions',
                'mutates_scene': False,
                'supports_headless': True,
                'input_schema': {'type': 'object',

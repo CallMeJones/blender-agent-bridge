@@ -24,7 +24,7 @@ Do not include API keys, bridge tokens, proprietary `.blend` files, or private s
 
 - Generated Python has a binary Blender-side trust boundary. With **Trust Agent Scripts** off, `draft_script` is refused without retaining script state or showing a pending-script dialog.
 - With trust on, generated Python runs immediately with the same process permissions as Blender's **Run Script** command, including Blender API, filesystem, network, subprocess, project-file, and persistent-cache access.
-- Trust is runtime-only and session-scoped. It is cleared by **Revoke**, add-on reload, file load, or Blender exit. Starting or stopping the bridge does not silently change it.
+- Trust is runtime-only and session-scoped. It is cleared by **Revoke**, timed expiry, add-on reload, or Blender exit. Starting or stopping the bridge and opening, creating, restoring, copying, renaming, saving, or modifying `.blend` files do not silently change it. File operations never extend a timed grant's expiry.
 - The MCP bridge is off by default, binds to `127.0.0.1` only, and can require a bearer token. If no token is configured, any local client that can reach the bridge may call its tools; the trust confirmation states this before enabling generated Python.
 - Live helper tools are bounded and should use reversible preview transactions.
 - Checkpoints are saved before trusted scripts when enabled. Checkpoint failure blocks execution.
