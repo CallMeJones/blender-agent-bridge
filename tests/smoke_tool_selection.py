@@ -431,6 +431,14 @@ def main():
         assert "capture_object_inspection_renders" in quality_names, quality_meta
         assert "draft_script" not in quality_names, quality_meta
 
+        reference_tools, reference_meta = agent_tools.select_blender_tool_definitions(
+            "Match the supplied reference image and create landmark guides before modeling the character.",
+            bundle,
+        )
+        reference_names = _names(reference_tools)
+        assert "create_reference_modeling_guides" in reference_names, reference_meta
+        assert "plan_model_quality_workflow" in reference_names, reference_meta
+
         cloth_tools, cloth_meta = agent_tools.select_blender_tool_definitions(
             "Add cloth simulation setup and inspect the physics cache before any bake.",
             bundle,

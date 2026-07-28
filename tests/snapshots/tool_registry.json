@@ -22096,7 +22096,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "371ba00c14bab5f4ca1092793b6ba93e6d83eca2c275d6fe747fe5be9ce29b92",
+  "registry_digest": "35f703c1f0780da34ddcbdb5a48017e790745cdbfa4d22e22da43790c4e68e90",
   "schema_version": 1,
   "specs": [
     {
@@ -32148,7 +32148,6 @@
       "exposure": "catalog",
       "groups": [
         "advanced_create",
-        "character",
         "procedural_3d",
         "model_quality",
         "reference_modeling"
