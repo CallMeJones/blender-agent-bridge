@@ -5,6 +5,64 @@ from __future__ import annotations
 from ..registry import ToolSpec
 
 
+_MULTIVIEW_VIEW_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'name': {'type': 'string'},
+        'image_path': {
+            'type': 'string',
+            'description': 'Local reference image path supplied by the user or another trusted local source.',
+        },
+        'axis': {
+            'type': 'string',
+            'enum': ['FRONT', 'BACK', 'LEFT', 'RIGHT', 'TOP', 'BOTTOM', 'CUSTOM'],
+        },
+        'view_direction': {
+            'type': 'array',
+            'items': {'type': 'number'},
+            'minItems': 3,
+            'maxItems': 3,
+            'description': 'Required with CUSTOM: world-space direction from camera toward the subject.',
+        },
+        'up_direction': {
+            'type': 'array',
+            'items': {'type': 'number'},
+            'minItems': 3,
+            'maxItems': 3,
+            'description': 'Required with CUSTOM: approximate world-space image-up direction.',
+        },
+        'annotations': {
+            'type': 'object',
+            'description': 'Annotation schema v1 object. Supply exactly one annotation source per view.',
+            'additionalProperties': True,
+        },
+        'annotations_json': {
+            'type': 'string',
+            'description': 'Annotation schema v1 as JSON text.',
+        },
+        'annotations_path': {
+            'type': 'string',
+            'description': 'Local UTF-8 annotation JSON path supplied by the user or another trusted local source.',
+        },
+        'default_coordinate_space': {
+            'type': 'string',
+            'enum': ['pixel', 'normalized'],
+        },
+        'default_origin': {
+            'type': 'string',
+            'enum': ['top_left', 'bottom_left'],
+        },
+        'plane_height': {'type': 'number', 'minimum': 0.01, 'maximum': 100.0},
+        'camera_margin': {'type': 'number', 'minimum': 0.0, 'maximum': 1.0},
+        'guide_offset': {'type': 'number', 'minimum': -10.0, 'maximum': 10.0},
+        'include_image_plane': {'type': 'boolean'},
+        'image_alpha': {'type': 'number', 'minimum': 0.0, 'maximum': 1.0},
+    },
+    'required': ['name', 'image_path', 'axis'],
+    'additionalProperties': False,
+}
+
+
 SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'edit_mesh',
   'description': 'Apply one bounded destructive mesh edit to selected or named single-user mesh objects with mesh-data '
                  'snapshot rollback. Supports face extrusion, face inset, bounded planar loop cut, planar knife cut, '
@@ -339,6 +397,7 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'edit_mesh',
                               'structured 2D annotations',
                'mutates_scene': True,
                'requires_live_preview': True,
+               'requires_user_path': True,
                'permissions': ['scene:read', 'scene:mutate', 'preview:write', 'files:read'],
                'path_policy': 'image_path must be a local reference image path supplied by the user, a file picker, a '
                               'prior capture, or another trusted local source. Omit image_path to create guides from '
@@ -348,10 +407,159 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'edit_mesh',
   'groups': ('advanced_create', 'procedural_3d', 'model_quality', 'reference_modeling'),
   'exposure': 'catalog',
   'owner': 'modeling'},
+ {'name': 'create_reference_guides_from_annotations',
+  'description': 'Create a calibrated, preview-safe Blender guide scene from a local reference image plus '
+                 'client-neutral landmark/outline JSON. Accepts an annotation object, JSON text, or a user-supplied '
+                 'JSON path; normalizes pixel or normalized coordinates, corrects top-left or bottom-left origins and '
+                 'optional image rectangles, creates landmarks/outlines/masses/measurements, and adds an orthographic '
+                 'reference camera with deterministic calibration metadata.',
+  'input_schema': {'type': 'object',
+                   'properties': {'image_path': {'type': 'string',
+                                                 'description': 'Local reference image path supplied by the user, a '
+                                                                'file picker, a prior capture, or another trusted '
+                                                                'local source.'},
+                                  'annotations': {'type': 'object',
+                                                  'description': 'Annotation schema v1 object. Supply exactly one of '
+                                                                 'annotations, annotations_json, or annotations_path.',
+                                                  'properties': {'version': {'type': 'integer', 'enum': [1]},
+                                                                 'subject': {'type': 'string'},
+                                                                 'coordinate_space': {'type': 'string',
+                                                                                      'enum': ['pixel', 'normalized']},
+                                                                 'origin': {'type': 'string',
+                                                                            'enum': ['top_left', 'bottom_left']},
+                                                                 'image_size': {'type': 'array',
+                                                                                'items': {'type': 'number'},
+                                                                                'minItems': 2,
+                                                                                'maxItems': 2},
+                                                                 'image_rect': {'type': 'array',
+                                                                                'items': {'type': 'number'},
+                                                                                'minItems': 4,
+                                                                                'maxItems': 4,
+                                                                                'description': 'Image bounds as '
+                                                                                               '[x, y, width, height] '
+                                                                                               'in the declared '
+                                                                                               'coordinate space.'},
+                                                                 'image': {'type': 'object',
+                                                                           'description': 'Optional nested image '
+                                                                                          'size, coordinate-space, '
+                                                                                          'origin, or rect metadata.'},
+                                                                 'landmarks': {'description': 'Landmark array or '
+                                                                                              'name-to-point object '
+                                                                                              'map.'},
+                                                                 'outlines': {'description': 'Outline array, point '
+                                                                                             'array, or name-to-outline '
+                                                                                             'object map.'},
+                                                                 'curves': {'description': 'Alias for outlines.'},
+                                                                 'masses': {'description': 'Mass ellipse array or '
+                                                                                           'name-to-mass object map.'},
+                                                                 'measurements': {'description': 'Measurement array or '
+                                                                                                 'name-to-measurement '
+                                                                                                 'object map.'}},
+                                                  'additionalProperties': True},
+                                  'annotations_json': {'type': 'string',
+                                                       'description': 'Annotation schema v1 as JSON text. Supply '
+                                                                      'exactly one annotation source.'},
+                                  'annotations_path': {'type': 'string',
+                                                       'description': 'Local UTF-8 annotation JSON path supplied by '
+                                                                      'the user or another trusted local source.'},
+                                  'default_coordinate_space': {'type': 'string',
+                                                               'enum': ['pixel', 'normalized'],
+                                                               'description': 'Fallback when the annotation document '
+                                                                              'does not declare coordinate_space.'},
+                                  'default_origin': {'type': 'string',
+                                                     'enum': ['top_left', 'bottom_left'],
+                                                     'description': 'Fallback when the annotation document does not '
+                                                                    'declare origin.'},
+                                  'subject': {'type': 'string'},
+                                  'collection_name': {'type': 'string'},
+                                  'plane_height': {'type': 'number', 'minimum': 0.01, 'maximum': 100.0},
+                                  'plane_location': {'type': 'array',
+                                                     'items': {'type': 'number'},
+                                                     'minItems': 3,
+                                                     'maxItems': 3},
+                                  'guide_offset_y': {'type': 'number', 'minimum': -10.0, 'maximum': 10.0},
+                                  'include_image_plane': {'type': 'boolean'},
+                                  'image_alpha': {'type': 'number', 'minimum': 0.0, 'maximum': 1.0},
+                                  'create_camera': {'type': 'boolean'},
+                                  'camera_name': {'type': 'string'},
+                                  'camera_margin': {'type': 'number', 'minimum': 0.0, 'maximum': 1.0},
+                                  'activate_camera': {'type': 'boolean'},
+                                  'match_render_aspect': {'type': 'boolean',
+                                                          'description': 'Match the scene render dimensions to the '
+                                                                         'reference aspect while the preview is '
+                                                                         'pending. Revert restores the prior render '
+                                                                         'dimensions.'},
+                                  'label': {'type': 'string'}},
+                   'required': ['image_path'],
+                   'additionalProperties': False},
+  'contract': {'description': 'Create a calibrated reference guide collection and optional orthographic camera from '
+                              'a local image and bounded client-neutral annotation JSON',
+               'mutates_scene': True,
+               'requires_live_preview': True,
+               'requires_user_path': True,
+               'permissions': ['scene:read', 'scene:mutate', 'preview:write', 'files:read'],
+               'path_policy': 'image_path and annotations_path must be local paths explicitly supplied by the user, a '
+                              'file picker, a prior capture, or another trusted local source. Annotation objects and '
+                              'JSON text are parsed in memory. Exactly one annotation source is required.'},
+  'handler_key': 'create_reference_guides_from_annotations',
+  'order': 1072,
+  'groups': ('advanced_create', 'procedural_3d', 'model_quality', 'reference_modeling'),
+  'exposure': 'catalog',
+  'owner': 'modeling'},
+ {'name': 'create_multiview_reference_guides',
+  'description': 'Create two to six calibrated reference-image guide collections and reconstruct shared landmark names '
+                 'as 3D empties. Supports front/back/left/right/top/bottom presets or custom orthographic bases, keeps '
+                 'each image, outline, and camera isolated by view, solves landmark rays by least squares, reports '
+                 'residual and view-angle quality, and can add hidden reconstruction connectors. Applies immediately '
+                 'with preview revert support.',
+  'input_schema': {'type': 'object',
+                   'properties': {'views': {'type': 'array',
+                                            'items': _MULTIVIEW_VIEW_SCHEMA,
+                                            'minItems': 2,
+                                            'maxItems': 6},
+                                  'subject': {'type': 'string'},
+                                  'collection_name': {'type': 'string'},
+                                  'subject_center': {'type': 'array',
+                                                     'items': {'type': 'number'},
+                                                     'minItems': 3,
+                                                     'maxItems': 3},
+                                  'active_view': {'type': 'string'},
+                                  'include_image_planes': {'type': 'boolean'},
+                                  'image_alpha': {'type': 'number', 'minimum': 0.0, 'maximum': 1.0},
+                                  'guide_offset': {'type': 'number', 'minimum': -10.0, 'maximum': 10.0},
+                                  'create_connectors': {'type': 'boolean'},
+                                  'require_reconstruction': {'type': 'boolean'},
+                                  'minimum_views_per_landmark': {'type': 'integer',
+                                                                 'minimum': 2,
+                                                                 'maximum': 6},
+                                  'minimum_ray_angle_degrees': {'type': 'number',
+                                                                'minimum': 0.0,
+                                                                'maximum': 90.0},
+                                  'max_landmark_residual': {'type': 'number',
+                                                            'minimum': 0.0,
+                                                            'maximum': 1000.0},
+                                  'match_render_aspect': {'type': 'boolean'},
+                                  'label': {'type': 'string'}},
+                   'required': ['views'],
+                   'additionalProperties': False},
+  'contract': {'description': 'Create calibrated multi-view guide collections and least-squares 3D landmarks',
+               'mutates_scene': True,
+               'requires_live_preview': True,
+               'requires_user_path': True,
+               'permissions': ['scene:read', 'scene:mutate', 'preview:write', 'files:read'],
+               'path_policy': 'Every view image_path and optional annotations_path must be a local path explicitly '
+                              'supplied by the user, a file picker, a prior capture, or another trusted local source. '
+                              'Annotation objects and JSON text are parsed in memory.'},
+  'handler_key': 'create_multiview_reference_guides',
+  'order': 1073,
+  'groups': ('advanced_create', 'procedural_3d', 'model_quality', 'reference_modeling'),
+  'exposure': 'catalog',
+  'owner': 'modeling'},
  {'name': 'inspect_reference_modeling_guides',
   'description': 'Inspect reference modeling guide collections created by create_reference_modeling_guides. Returns '
-                 'image-plane metadata, landmarks, curves, mass ellipses, measurements, and the saved '
-                 'reference_brief seed so agents can hand exact guide facts into authored modeling scripts.',
+                 'image-plane metadata, 2D and reconstructed 3D landmarks, reconstruction rays, curves, mass ellipses, '
+                 'measurements, and the saved reference_brief seed so agents can hand exact guide facts into authored '
+                 'modeling scripts.',
   'input_schema': {'type': 'object',
                    'properties': {'collection_name': {'type': 'string',
                                                       'description': 'Optional exact guide collection name. Omit to '
@@ -370,6 +578,157 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'edit_mesh',
   'handler_key': 'inspect_reference_modeling_guides',
   'order': 1075,
   'groups': ('deep_inspect', 'model_quality', 'reference_modeling'),
+  'exposure': 'catalog',
+  'owner': 'modeling'},
+ {'name': 'compare_model_to_reference',
+  'description': 'Render named model targets through a calibrated reference-guide camera, compare their binary '
+                 'silhouette with an annotated outline or useful reference alpha, measure overlap, edge distance, '
+                 'centroid and optional landmark errors, and publish model-mask, reference-mask, and redline PNG '
+                 'resources. Use after each broad construction or repair pass so the next edit is driven by named '
+                 'image-space errors instead of an unmeasured visual impression.',
+  'input_schema': {'type': 'object',
+                   'properties': {'collection_name': {'type': 'string',
+                                                      'description': 'Exact calibrated reference-guide collection. '
+                                                                     'May be omitted only when exactly one tagged '
+                                                                     'guide collection exists.'},
+                                  'camera_name': {'type': 'string',
+                                                  'description': 'Optional calibrated camera override.'},
+                                  'object_names': {'type': 'array',
+                                                   'items': {'type': 'string'},
+                                                   'maxItems': 64,
+                                                   'description': 'Renderable model roots. Their descendants are '
+                                                                  'included in the silhouette.'},
+                                  'selected_only': {'type': 'boolean',
+                                                    'description': 'Use selected renderable objects when object_names '
+                                                                   'is empty. Defaults to true.'},
+                                  'outline_name': {'type': 'string',
+                                                   'description': 'Optional exact reference curve name. Defaults to '
+                                                                  'the first cyclic outline.'},
+                                  'reference_mask_source': {'type': 'string',
+                                                            'enum': ['auto', 'outline', 'alpha'],
+                                                            'description': 'Auto prefers a calibrated outline and '
+                                                                           'falls back to non-trivial image alpha.'},
+                                  'landmark_targets': {'type': 'array',
+                                                       'items': {'type': 'object',
+                                                                 'properties': {'name': {'type': 'string'},
+                                                                                'object_name': {'type': 'string'},
+                                                                                'location': {'type': 'array',
+                                                                                             'items': {'type': 'number'},
+                                                                                             'minItems': 3,
+                                                                                             'maxItems': 3}},
+                                                                 'required': ['name'],
+                                                                 'additionalProperties': False},
+                                                       'maxItems': 128,
+                                                       'description': 'Optional mappings from reference landmark name '
+                                                                      'to a target object origin or world location.'},
+                                  'max_axis': {'type': 'integer',
+                                               'minimum': 64,
+                                               'maximum': 1024,
+                                               'description': 'Maximum comparison image axis. Defaults to 512.'},
+                                  'mask_threshold': {'type': 'number',
+                                                     'minimum': 0.01,
+                                                     'maximum': 0.99,
+                                                     'description': 'Alpha threshold for model/reference masks. '
+                                                                    'Defaults to 0.5.'}},
+                   'additionalProperties': False},
+  'contract': {'description': 'Render and compare a model silhouette against calibrated reference guides, then '
+                              'publish durable redline evidence',
+               'mutates_scene': False,
+               'has_side_effects': True,
+               'permissions': ['scene:read', 'files:read', 'files:write'],
+               'supports_headless': True,
+               'long_running': True,
+               'duration_hint': 'One bounded still render plus image-space comparison, normally a few seconds at '
+                                '512px but dependent on scene/render complexity.',
+               'timeout_recovery': {'recoverable': True,
+                                    'poll_after_seconds': 5,
+                                    'status_tool': 'blender_bridge_status',
+                                    'evidence_resource': 'blender://inspection-renders/latest/metadata'}},
+  'handler_key': 'compare_model_to_reference',
+  'order': 1077,
+  'groups': ('deep_inspect', 'model_quality', 'reference_modeling', 'camera_render'),
+  'exposure': 'catalog',
+  'owner': 'modeling'},
+ {'name': 'create_reference_blockout',
+  'description': 'Create editable camera-oriented soft forms from calibrated reference mass ellipses, or from the '
+                 'primary outline when no masses exist. Supports per-mass depth, scale, offset, and bounded local '
+                 'deformation controls, then optionally builds a non-destructive voxel-remesh union. Use for primary '
+                 'mass and silhouette blockout before authored secondary forms, features, fur, or surface detail.',
+  'input_schema': {'type': 'object',
+                   'properties': {'collection_name': {'type': 'string',
+                                                      'description': 'Exact calibrated reference-guide collection. '
+                                                                     'May be omitted only when exactly one exists.'},
+                                  'camera_name': {'type': 'string',
+                                                  'description': 'Optional calibrated camera override.'},
+                                  'mass_names': {'type': 'array',
+                                                 'items': {'type': 'string'},
+                                                 'maxItems': 32,
+                                                 'description': 'Optional exact guide-mass names. Empty uses all '
+                                                                'masses or one cyclic-outline fallback.'},
+                                  'mass_settings': {'type': 'array',
+                                                    'items': {'type': 'object',
+                                                              'properties': {'name': {'type': 'string'},
+                                                                             'depth_ratio': {'type': 'number',
+                                                                                             'minimum': 0.05,
+                                                                                             'maximum': 3.0},
+                                                                             'scale': {'type': 'array',
+                                                                                       'items': {'type': 'number'},
+                                                                                       'minItems': 3,
+                                                                                       'maxItems': 3},
+                                                                             'offset': {'type': 'array',
+                                                                                        'items': {'type': 'number'},
+                                                                                        'minItems': 3,
+                                                                                        'maxItems': 3,
+                                                                                        'description': 'Camera-local '
+                                                                                                       '[right, depth, '
+                                                                                                       'up] offset in '
+                                                                                                       'Blender units.'},
+                                                                             'controls': {'type': 'array',
+                                                                                          'items': {'type': 'object',
+                                                                                                    'properties': {'direction': {'type': 'array',
+                                                                                                                                 'items': {'type': 'number'},
+                                                                                                                                 'minItems': 3,
+                                                                                                                                 'maxItems': 3},
+                                                                                                                   'offset': {'type': 'number',
+                                                                                                                              'minimum': -2.0,
+                                                                                                                              'maximum': 2.0},
+                                                                                                                   'falloff': {'type': 'number',
+                                                                                                                               'minimum': 0.01,
+                                                                                                                               'maximum': 2.0}},
+                                                                                                    'required': ['direction',
+                                                                                                                 'offset'],
+                                                                                                    'additionalProperties': False},
+                                                                                          'maxItems': 32}},
+                                                              'required': ['name'],
+                                                              'additionalProperties': False},
+                                                    'maxItems': 64},
+                                  'name_prefix': {'type': 'string'},
+                                  'depth_ratio': {'type': 'number',
+                                                  'minimum': 0.05,
+                                                  'maximum': 3.0,
+                                                  'description': 'Default depth relative to geometric mean of guide '
+                                                                 'width and height radii.'},
+                                  'segments': {'type': 'integer', 'minimum': 8, 'maximum': 128},
+                                  'rings': {'type': 'integer', 'minimum': 4, 'maximum': 64},
+                                  'max_forms': {'type': 'integer', 'minimum': 1, 'maximum': 32},
+                                  'blend_mode': {'type': 'string', 'enum': ['voxel', 'separate']},
+                                  'voxel_size': {'type': 'number', 'minimum': 0.001, 'maximum': 10.0},
+                                  'smooth_iterations': {'type': 'integer', 'minimum': 0, 'maximum': 20},
+                                  'show_components': {'type': 'boolean'},
+                                  'color': {'type': 'array',
+                                            'items': {'type': 'number'},
+                                            'minItems': 3,
+                                            'maxItems': 4},
+                                  'label': {'type': 'string'}},
+                   'additionalProperties': False},
+  'contract': {'description': 'Create reference-derived soft blockout geometry with preview revert support',
+               'mutates_scene': True,
+               'requires_live_preview': True,
+               'permissions': ['scene:read', 'scene:mutate', 'preview:write'],
+               'supports_headless': True},
+  'handler_key': 'create_reference_blockout',
+  'order': 1080,
+  'groups': ('advanced_create', 'procedural_3d', 'model_quality', 'reference_modeling'),
   'exposure': 'catalog',
   'owner': 'modeling'},
  {'name': 'apply_procedural_array_stack',

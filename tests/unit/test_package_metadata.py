@@ -4,6 +4,7 @@ import os
 import sys
 import tomllib
 import unittest
+from unittest import mock
 
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -30,6 +31,16 @@ class PackageMetadataTests(unittest.TestCase):
         sys.modules.pop("bpy", None)
         __import__("claude_blender.mcp_runtime.server")
         self.assertNotIn("bpy", sys.modules)
+
+    def test_console_dispatches_doctor_without_starting_stdio_server(self):
+        from claude_blender import connection_diagnostics
+        from claude_blender.mcp_runtime import server
+
+        with mock.patch.object(connection_diagnostics, "main", return_value=7) as doctor:
+            result = server.main(["doctor", "--json"])
+
+        self.assertEqual(7, result)
+        doctor.assert_called_once_with(["--json"])
 
 
 if __name__ == "__main__":

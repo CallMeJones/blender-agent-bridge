@@ -11,6 +11,8 @@ Apply the five-tool Blender Bridge contract. If it is not already active, read [
 
 For image-to-form work, create measurable guide scaffolding before sculpting. Read [references/guide-first-workflow.md](references/guide-first-workflow.md) whenever the task includes an image reference, clicked/annotated landmarks, organic sculpting, or fur/hair/groom direction.
 
+When front, side, top, or other calibrated reference views are available, reconstruct shared landmark names with `create_multiview_reference_guides` before authored modeling. Preserve per-view collections and cameras, inspect residuals and ray angles, and repair annotations or calibration when reconstruction confidence is low.
+
 ## Non-Negotiable Contract
 
 For every live reference-modeling build, comparison, review, or repair:
@@ -48,7 +50,11 @@ Reference requests commonly mix construction with evidence, rendering, or saving
 
 Do not invent focal lengths, numeric tolerances, material parameters, anatomy, dimensions, or symmetry. Preserve ambiguous measurements as ambiguity unless the image or user resolves them. Label values as supplied, measured, derived, or uncertain.
 
-Use `create_reference_modeling_guides` for calibrated image planes, outline curves, landmark empties, mass ellipses, and proportional measurements when the prompt or annotation data supplies enough points. Use `inspect_reference_modeling_guides` before authored construction or repair scripts so scripts receive exact guide names, world points, and the saved `reference_brief` seed instead of re-parsing the scene.
+Use `create_reference_guides_from_annotations` when a reference image and landmark/outline JSON are available; let it normalize the annotation coordinate system, create the image plane and orthographic comparison camera, and persist calibration metadata. Use `create_reference_modeling_guides` only for already-normalized or manually assembled guide inputs. Use `inspect_reference_modeling_guides` before authored construction or repair scripts so scripts receive exact guide names, world points, calibration, and the saved `reference_brief` seed instead of re-parsing the scene.
+
+When bounded helpers are explicitly requested or trusted scripting is unavailable, use `create_reference_blockout` for primary camera-oriented masses. Derive every mass from named guide ellipses or the primary outline fallback, use per-mass settings only when the reference supports them, and keep the result in preview. The helper is a blockout scaffold; authored scripts still own subject-specific secondary forms and transitions.
+
+After each broad form or repair pass, invoke `compare_model_to_reference` through the calibrated guide camera. Use its redline image, silhouette overlap, edge-distance metrics, named error regions, and optional landmark vectors to choose the next repair. At declared blockout, refined, and review checkpoints, invoke `evaluate_reference_model_benchmark` with the corresponding versioned profile. Custom threshold overrides are diagnostic and must not be used to certify a benchmark run. The durable blind review remains the final completion gate.
 
 ## Gate Form Before Surface
 
@@ -63,7 +69,7 @@ Score silhouette, proportions, landmark placement, and form continuity before ad
 
 Read [references/evidence-review.md](references/evidence-review.md) before scoring.
 
-For fur, hair, fibers, whiskers, or plush surface flow, place coarse forms first, then use `create_directional_fur_curves` as a preview-safe groom scaffold only after silhouette and proportions are acceptable. Directional curves are guide/detail evidence, not a substitute for mass correction.
+For fur, hair, fibers, whiskers, or plush surface flow, place coarse forms first, then use `create_directional_fur_curves` as a preview-safe groom scaffold only after silhouette and proportions are acceptable. Prefer named regions with vertex-group density masks, local flow controls, automatic spacing, restrained clumping/noise, and root-to-tip taper. Directional curves are guide/detail evidence, not a substitute for mass correction.
 
 ## Repair Weakest Criteria
 

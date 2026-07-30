@@ -35,6 +35,18 @@ python -m unittest discover -s tests\unit -p "test_*.py" -v
 python scripts\update_tool_snapshot.py
 ```
 
+Repository skill changes also require the repository-owned, MCP-client-neutral validator. It uses only the Python standard library and validates every repository skill by default:
+
+```powershell
+python scripts\validate_repository_skills.py
+```
+
+Pass a skill directory to validate only one changed skill:
+
+```powershell
+python scripts\validate_repository_skills.py skills\blender-reference-modeling
+```
+
 To target a different Blender version:
 
 ```powershell

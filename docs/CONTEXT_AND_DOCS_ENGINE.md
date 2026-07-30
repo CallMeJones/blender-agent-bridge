@@ -229,10 +229,15 @@ Initial helpers:
 - `animate_shape_key(object_name, key_name, frame_start, frame_end, value_start, value_end)`
 - `create_text_object(name, body, location, rotation, scale, size)`
 - `create_curve_path(name, points, bevel_depth, cyclic)`
+- `create_reference_guides_from_annotations(image_path, annotations, annotations_json, annotations_path, default_coordinate_space, default_origin, plane_height, create_camera)`
+- `create_multiview_reference_guides(views, subject_center, active_view, minimum_views_per_landmark, minimum_ray_angle_degrees, max_landmark_residual)`
 - `create_reference_modeling_guides(image_path, image_size, coordinate_space, landmarks, curves, masses, measurements)`
 - `inspect_reference_modeling_guides(collection_name, include_points, max_points_per_curve, max_collections)`
+- `compare_model_to_reference(collection_name, camera_name, object_names, outline_name, reference_mask_source, landmark_targets, max_axis, mask_threshold)`
+- `evaluate_reference_model_benchmark(profile, run_id, collection_name, camera_name, object_names, outline_name, reference_mask_source, landmark_targets, max_axis, mask_threshold)`
+- `create_reference_blockout(collection_name, camera_name, mass_names, mass_settings, depth_ratio, blend_mode, voxel_size)`
 - `add_particle_system_to_selected(name, count, frame_start, frame_end, lifetime)`
-- `create_directional_fur_curves(object_names, selected_only, count, length, root_width, flow_direction)`
+- `create_directional_fur_curves(object_names, selected_only, count, length, root_width, tip_width, flow_direction, flow_controls, minimum_spacing, auto_spacing, clump_strength, clump_size, noise_strength, regions)`
 - `create_basic_armature(name, location, rotation)`
 - `add_copy_transform_constraint(target_name, constraint_type)`
 - `set_render_settings(engine, resolution, fps, frame_start, frame_end, film_transparent, quality_preset, samples, denoise, view_transform, look, exposure, gamma)`

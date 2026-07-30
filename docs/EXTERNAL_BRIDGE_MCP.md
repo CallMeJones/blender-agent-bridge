@@ -196,6 +196,8 @@ The repository also ships two progressively disclosed client skills:
 
 Clients with skill support can load those bodies and references only when relevant. Other MCP clients can request the equivalent `blender_bridge_workflow` and `reference_modeling_workflow` prompts through `prompts/get`. Skills and prompts guide clients, while current helper schemas, Blender-side validation, routing, and preview controls remain the correctness boundary.
 
+Every MCP client can discover `evaluate_reference_model_benchmark` through `search_blender_tools`, fetch its canonical schema, and invoke it through the gateway. The helper renders through the calibrated guide camera, publishes mask and redline resources, and evaluates versioned `blockout`, `refined`, or `review` metric profiles. Only the latest non-overridden evaluation can satisfy a running reference benchmark; custom thresholds are diagnostic only.
+
 JSON returned as MCP tool text, bridge HTTP responses, and JSON resources uses compact serialization. This removes formatting whitespace only: clients receive identical names, values, arrays, objects, schemas, warnings, and resource metadata after parsing.
 
 ### Large Inspection Response Controls
@@ -250,6 +252,23 @@ For broad advanced work, search for and invoke `plan_advanced_scene_workflow` or
 For procedural modeling, inspect geometry and modeling quality first. Under active trust, coordinated construction, custom node graphs, multi-object forms, and broad repairs default to one cohesive script. `apply_procedural_array_stack`, `edit_mesh`, `curve_to_mesh`, `boolean_op`, `mirror_model`, `symmetrize_model`, `solidify_model`, and `screw_model` remain exact bounded alternatives when the user requests helpers or one isolated operation is intentional. For cloth setup, use `add_cloth_simulation_to_selected`, then inspect simulation state before any persistent bake.
 
 Reference-model evidence gates are durable. After final matched captures, invoke `start_model_quality_review`, request a blind packet with `get_model_quality_review_packet`, and submit every applicable criterion with `submit_model_quality_evaluation`. A failed scorecard transitions to `repair_required`; after repair and recapture, invoke `record_model_quality_repair` before requesting a fresh blind evaluation. The only terminal quality states are `ready_for_user_review` and `blocked_quality_floor`.
+
+For annotated references, invoke `create_reference_guides_from_annotations` with the user-supplied local image path and exactly one of `annotations`, `annotations_json`, or `annotations_path`. The annotation schema is MCP-client-neutral; version 1 supports pixel or normalized coordinates, top-left or bottom-left origins, optional `[x, y, width, height]` image rectangles, landmarks, outlines, mass ellipses/bounds, and measurements:
+
+```json
+{
+  "version": 1,
+  "coordinate_space": "pixel",
+  "origin": "top_left",
+  "image_size": [1000, 600],
+  "image_rect": [100, 100, 800, 400],
+  "landmarks": [{"name": "feature_center", "point": [500, 300]}],
+  "outlines": [{"name": "primary_outline", "points": [[100, 100], [900, 100], [900, 500], [100, 500]], "closed": true}],
+  "masses": [{"name": "primary_mass", "bbox": [300, 200, 400, 200]}]
+}
+```
+
+The tool reads the actual image dimensions, creates an aspect-correct guide plane, converts annotations to normalized top-left coordinates, adds an orthographic comparison camera when requested, and by default matches the preview render dimensions and square-pixel aspect to the reference. `image_rect` uses the declared coordinate space, so normalized documents use normalized rectangle values. Preview rollback restores the prior camera, render dimensions, and pixel aspect. The guide collection stores bounded calibration metadata plus the annotation SHA-256 digest. Inspect the result with `inspect_reference_modeling_guides`; the raw annotation document is not stored in the `.blend`.
 
 The versioned quality benchmark suite is available through `list_quality_benchmark_tasks`, `start_quality_benchmark_run`, `get_quality_benchmark_run`, and `finish_quality_benchmark_run`. Local reference files are SHA-256 fingerprinted automatically; non-local references can provide `reference_sha256`. Reference runs pass expectations only when they link a terminal durable quality review created for that run. The initial matrix covers animal, human, hard-surface, animation-negative-routing, and fresh-gateway scenarios while linking observed routing, quality state, traces, and reported token usage.
 

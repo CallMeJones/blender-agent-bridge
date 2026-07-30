@@ -122,6 +122,8 @@ def _record_scene_render(scene):
         "engine": scene.render.engine,
         "resolution_x": int(scene.render.resolution_x),
         "resolution_y": int(scene.render.resolution_y),
+        "pixel_aspect_x": float(scene.render.pixel_aspect_x),
+        "pixel_aspect_y": float(scene.render.pixel_aspect_y),
         "fps": int(scene.render.fps),
         "frame_start": int(scene.frame_start),
         "frame_end": int(scene.frame_end),
@@ -236,8 +238,8 @@ def _material_for_color(name, color):
         float(color[2]),
         float(color[3]) if len(color) > 3 else 1.0,
     )
-    material.diffuse_color = rgba
     _record_shader_material(material)
+    material.diffuse_color = rgba
     principled = _ensure_principled_material(material)
     _set_socket_value(principled.inputs.get("Base Color"), rgba)
     _set_socket_value(principled.inputs.get("Alpha"), rgba[3])
@@ -462,4 +464,3 @@ def register():
 def unregister():
 
     pass
-

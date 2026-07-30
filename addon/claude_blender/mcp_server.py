@@ -1941,12 +1941,57 @@ def _score_tool_match(tool, query):
         if model_quality_query:
             if name == "plan_model_quality_workflow":
                 score += 4200
+            elif (
+                name == "compare_model_to_reference"
+                and any(
+                    term in normalized_query
+                    for term in (
+                        "redline",
+                        "silhouette",
+                        "landmark",
+                        "compare model",
+                        "compare render",
+                        "reference comparison",
+                    )
+                )
+            ):
+                score += 6500
+            elif (
+                name == "create_multiview_reference_guides"
+                and any(
+                    term in normalized_query
+                    for term in (
+                        "multi-view",
+                        "multiview",
+                        "front and side",
+                        "reference views",
+                        "3d landmark",
+                        "landmark reconstruction",
+                    )
+                )
+            ):
+                score += 6500
+            elif (
+                name == "evaluate_reference_model_benchmark"
+                and any(
+                    term in normalized_query
+                    for term in (
+                        "benchmark",
+                        "quality gate",
+                        "metric profile",
+                        "review profile",
+                        "refined profile",
+                        "blockout profile",
+                    )
+                )
+            ):
+                score += 6500
             elif name in {"capture_viewport", "capture_object_inspection_renders", "inspect_modeling_quality"}:
                 score += 900
         if name == "plan_director_workflow" and any(term in normalized_query for term in ("director", "whole workflow", "end to end", "end-to-end")):
             score += 5000
         if name == "plan_advanced_scene_workflow":
-            score += 3000
+            score += 3600 if explicit_script_query else 3000
         if name == "plan_asset_import_workflow" and external_asset_query:
             score += 1800
         if name == "configure_render_outputs" and _contains_any_phrase(normalized_query, RENDER_OUTPUT_ROUTE_TERMS):
@@ -3251,14 +3296,22 @@ def _handle_one(server, message):
 
 
 def main(argv=None):
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments[:1] == ["doctor"]:
+        try:
+            from . import connection_diagnostics
+        except ImportError:  # Allows direct execution as addon/claude_blender/mcp_server.py.
+            from claude_blender import connection_diagnostics
+
+        return connection_diagnostics.main(arguments[1:])
     parser = argparse.ArgumentParser(description="MCP server for Blender Agent Bridge")
     parser.add_argument("--version", action="version", version=f"%(prog)s {SERVER_VERSION}")
     parser.add_argument("--bridge-url", default=os.environ.get("BLENDER_BRIDGE_URL", DEFAULT_BRIDGE_URL))
     parser.add_argument("--token", default=os.environ.get("BLENDER_BRIDGE_TOKEN", ""))
     parser.add_argument("--timeout", type=float, default=float(os.environ.get("BLENDER_BRIDGE_TIMEOUT", "30")))
-    args = parser.parse_args(argv)
+    args = parser.parse_args(arguments)
     serve(BlenderMCPServer(BridgeClient(args.bridge_url, token=args.token, timeout=args.timeout)))
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -48,6 +48,44 @@ QUALITY_REPAIR_SCHEMA = {
     "additionalProperties": False,
 }
 
+REFERENCE_BENCHMARK_THRESHOLD_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "min_silhouette_iou": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+        },
+        "max_mean_edge_distance_ratio": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+        },
+        "max_p95_edge_distance_ratio": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+        },
+        "max_centroid_offset_ratio": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+        },
+        "max_landmark_error_ratio": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+        },
+        "max_error_region_magnitude": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+        },
+        "require_landmarks": {"type": "boolean"},
+    },
+    "additionalProperties": False,
+}
+
 
 def _read_contract(description):
     return {
@@ -182,7 +220,7 @@ SPECS = (
         name="list_quality_benchmark_tasks",
         description=(
             "List versioned quality benchmark tasks for animal, human, hard-surface, negative animation routing, "
-            "and fresh five-tool gateway behavior."
+            "fresh five-tool gateway behavior, and required calibrated reference-metric profiles."
         ),
         input_schema={"type": "object", "properties": {}, "additionalProperties": False},
         contract=_read_contract("List built-in versioned quality benchmark tasks"),
@@ -244,6 +282,100 @@ SPECS = (
         handler_key="get_quality_benchmark_run",
         order=1280,
         groups=("model_quality", "advanced_workflow", "observability"),
+        exposure="catalog",
+        owner="quality_observability",
+    ),
+    ToolSpec(
+        name="evaluate_reference_model_benchmark",
+        description=(
+            "Render a model through a calibrated reference camera, publish the mask/redline evidence, evaluate "
+            "silhouette, edge, centroid, regional, and optional landmark metrics against versioned blockout, refined, "
+            "or review thresholds, and optionally record the result on a running reference benchmark."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "profile": {
+                    "type": "string",
+                    "enum": ["blockout", "refined", "review"],
+                },
+                "threshold_overrides": {
+                    **REFERENCE_BENCHMARK_THRESHOLD_SCHEMA,
+                    "description": (
+                        "Optional diagnostic thresholds. Evaluations using "
+                        "overrides cannot satisfy an official benchmark run."
+                    ),
+                },
+                "run_id": {
+                    "type": "string",
+                    "description": "Optional running reference-model benchmark to receive this evaluation.",
+                },
+                "collection_name": {"type": "string"},
+                "camera_name": {"type": "string"},
+                "object_names": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 64,
+                },
+                "selected_only": {"type": "boolean"},
+                "outline_name": {"type": "string"},
+                "reference_mask_source": {
+                    "type": "string",
+                    "enum": ["auto", "outline", "alpha"],
+                },
+                "landmark_targets": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "object_name": {"type": "string"},
+                            "location": {
+                                "type": "array",
+                                "items": {"type": "number"},
+                                "minItems": 3,
+                                "maxItems": 3,
+                            },
+                        },
+                        "required": ["name"],
+                        "additionalProperties": False,
+                    },
+                    "maxItems": 128,
+                },
+                "max_axis": {
+                    "type": "integer",
+                    "minimum": 64,
+                    "maximum": 1024,
+                },
+                "mask_threshold": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "maximum": 0.99,
+                },
+            },
+            "additionalProperties": False,
+        },
+        contract={
+            **_local_write_contract(
+                "Render and gate calibrated reference metrics, publish evidence, and optionally update a benchmark run"
+            ),
+            "permissions": ["scene:read", "files:read", "files:write"],
+            "long_running": True,
+            "duration_hint": "One bounded still render plus deterministic metric evaluation.",
+            "timeout_recovery": {
+                "recoverable": True,
+                "poll_after_seconds": 5,
+                "status_tool": "blender_bridge_status",
+                "evidence_resource": "blender://inspection-renders/latest/metadata",
+            },
+        },
+        handler_key="evaluate_reference_model_benchmark",
+        order=1285,
+        groups=(
+            "model_quality",
+            "reference_modeling",
+            "observability",
+        ),
         exposure="catalog",
         owner="quality_observability",
     ),

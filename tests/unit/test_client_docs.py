@@ -48,6 +48,24 @@ class ClientGuideTests(unittest.TestCase):
         for filename in GUIDES:
             self.assertIn(filename, matrix)
 
+    def test_install_docs_cover_mcpb_and_deterministic_doctor(self):
+        paths = (
+            os.path.join(ROOT, "README.md"),
+            os.path.join(ROOT, "docs", "INSTALL_FROM_GITHUB.md"),
+            os.path.join(ROOT, "docs", "CONNECTION_DIAGNOSTICS.md"),
+            os.path.join(CLIENT_DIR, "CLAUDE.md"),
+        )
+        combined = ""
+        for path in paths:
+            with open(path, "r", encoding="utf-8") as handle:
+                combined += handle.read().lower()
+        self.assertIn("blender-agent-bridge-<version>.mcpb", combined)
+        self.assertIn("blender-bridge doctor", combined)
+        self.assertIn("--client-config", combined)
+        self.assertIn("windows", combined)
+        self.assertIn("macos", combined)
+        self.assertIn("linux", combined)
+
 
 if __name__ == "__main__":
     unittest.main()

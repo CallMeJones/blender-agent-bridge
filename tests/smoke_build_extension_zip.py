@@ -64,6 +64,8 @@ def _assert_package_clean(path):
         "execution_traces.py",
         "quality_benchmarks.py",
         "quality_reviews.py",
+        "reference_benchmark_scene.py",
+        "reference_benchmarks.py",
         "trusted_script_jobs.py",
         "tool_handlers/quality_observability.py",
         "tool_registry/domains/quality_observability.py",

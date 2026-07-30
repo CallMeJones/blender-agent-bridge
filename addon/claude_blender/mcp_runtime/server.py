@@ -9,11 +9,11 @@ import os
 # shared server so source-tree diagnostics use registry compatibility semantics.
 os.environ["CLAUDE_BLENDER_MCP_RUNTIME_MODE"] = "uvx"
 
-from ..mcp_server import main as _shared_main  # noqa: E402
-
 
 def main(argv=None):
-    return _shared_main(argv)
+    from ..mcp_server import main as shared_main
+
+    return shared_main(argv)
 
 
 __all__ = ["main"]

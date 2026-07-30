@@ -27,8 +27,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install packaging build frontend
-        run: python -m pip install build
+      - name: Install packaging and MCPB runtime test frontends
+        run: python -m pip install build uv
 
       - name: Run conventional unit tests
         run: python -m unittest discover -s tests\unit -p "test_*.py" -v
@@ -40,10 +40,26 @@ jobs:
           addon\claude_blender\bridge_protocol.py
           addon\claude_blender\bridge_server.py
           addon\claude_blender\audit_log.py
+          addon\claude_blender\connection_diagnostics.py
+          addon\claude_blender\fur_groom.py
+          addon\claude_blender\reference_benchmark_scene.py
+          addon\claude_blender\reference_benchmarks.py
+          addon\claude_blender\reference_blockout.py
+          addon\claude_blender\reference_comparison.py
+          addon\claude_blender\reference_forms.py
+          addon\claude_blender\reference_guides.py
+          addon\claude_blender\reference_metrics.py
+          addon\claude_blender\reference_multiview.py
+          addon\claude_blender\reference_multiview_scene.py
+          addon\claude_blender\reference_scene.py
           addon\claude_blender\script_analysis.py
           scripts\build_extension_zip.py
           scripts\build_extension_repository.py
+          scripts\build_mcpb.py
+          scripts\installed_extension_startup.py
+          scripts\installed_extension_live_smoke.py
           scripts\live_workflow_sweep.py
+          scripts\reference_benchmark_regression.py
           tests\smoke_audit_log.py
           tests\smoke_build_extension_zip.py
           tests\smoke_extension_repository.py
@@ -80,6 +96,9 @@ jobs:
       - name: Run provider-shaped offline routing regression gate
         run: python tests\smoke_client_profile_routing.py
 
+      - name: Run offline reference-modeling benchmark regression gate
+        run: python scripts\reference_benchmark_regression.py
+
       - name: Run extension build smoke test
         run: python tests\smoke_build_extension_zip.py
 
@@ -97,6 +116,15 @@ jobs:
 
       - name: Build blender-bridge wheel and source distribution
         run: python -m build
+
+      - name: Build deterministic Claude Desktop MCPB connector
+        run: python scripts\build_mcpb.py --stage-dir build\mcpb-stage
+
+      - name: Validate MCPB metadata with the official toolchain
+        run: npx --yes @anthropic-ai/mcpb@2.1.2 validate build\mcpb-stage
+
+      - name: Smoke MCPB through its host-managed uv runtime
+        run: uv run --directory build\mcpb-stage src\main.py --version
 
       - name: Smoke installed blender-bridge wheel
         shell: pwsh
@@ -126,6 +154,16 @@ jobs:
             dist/*.tar.gz
           if-no-files-found: error
 
+      - name: Upload tagged MCPB publication candidate
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v7
+        with:
+          name: blender-agent-bridge-official-mcpb-candidate
+          path: |
+            dist/*.mcpb
+            dist/*.mcpb.sha256
+          if-no-files-found: error
+
       - name: Build extension zip and GitHub Pages repository
         run: >
           python scripts\build_extension_repository.py
@@ -143,6 +181,7 @@ jobs:
           path: |
             dist/*.zip
             dist/*.sha256
+            dist/*.mcpb
 
       - name: Upload Python-built repository smoke artifact
         uses: actions/upload-artifact@v7
@@ -422,6 +461,12 @@ jobs:
           name: blender-bridge-official-python-candidate
           path: python-dist
 
+      - name: Download MCPB connector
+        uses: actions/download-artifact@v7
+        with:
+          name: blender-agent-bridge-official-mcpb-candidate
+          path: mcpb-dist
+
       - name: Publish tagged GitHub release assets
         uses: softprops/action-gh-release@v3
         with:
@@ -431,6 +476,8 @@ jobs:
             dist/*.sha256
             python-dist/*.whl
             python-dist/*.tar.gz
+            mcpb-dist/*.mcpb
+            mcpb-dist/*.mcpb.sha256
 
   verify-publication:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -446,5 +493,5 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Verify public Pages and Release archive identity
+      - name: Verify public Pages and Release artifact identity
         run: python tests/smoke_published_release_identity.py --attempts 30 --delay 5

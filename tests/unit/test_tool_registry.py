@@ -19,8 +19,8 @@ SNAPSHOT_PATH = os.path.join(ROOT, "tests", "snapshots", "tool_registry.json")
 class ToolRegistryTests(unittest.TestCase):
     def test_inventory_is_complete_and_domain_owned(self):
         specs = tool_registry.REGISTRY.specs()
-        self.assertEqual(204, len(specs))
-        self.assertEqual(203, len(tool_registry.definitions()))
+        self.assertEqual(209, len(specs))
+        self.assertEqual(208, len(tool_registry.definitions()))
         self.assertEqual(12, len(tool_registry.DOMAIN_MODULES))
         self.assertEqual({spec.name for spec in specs}, set(bridge_protocol.TOOL_CONTRACTS))
         self.assertEqual(
@@ -87,6 +87,27 @@ class ToolRegistryTests(unittest.TestCase):
                 self.assertEqual(spec.description, contract["description"])
                 self.assertEqual(dict(spec.input_schema), contract["input_schema"])
                 self.assertEqual(dict(spec.output_schema), contract["output_schema"])
+
+    def test_reference_file_access_contracts_are_explicit(self):
+        for name in (
+            "create_reference_modeling_guides",
+            "create_reference_guides_from_annotations",
+            "create_multiview_reference_guides",
+        ):
+            with self.subTest(tool=name):
+                contract = bridge_protocol.normalized_tool_contract(name)
+                annotations = bridge_protocol.mcp_annotations_for_tool(name)
+                self.assertTrue(contract["requires_user_path"])
+                self.assertTrue(annotations["requiresUserPath"])
+                self.assertIn("files:read", annotations["permissions"])
+
+        for name in (
+            "compare_model_to_reference",
+            "evaluate_reference_model_benchmark",
+        ):
+            with self.subTest(tool=name):
+                annotations = bridge_protocol.mcp_annotations_for_tool(name)
+                self.assertIn("files:read", annotations["permissions"])
 
     def test_handler_parity_requires_every_handler(self):
         handlers = {spec.name: (lambda _context, _args: None) for spec in tool_registry.REGISTRY.specs()}

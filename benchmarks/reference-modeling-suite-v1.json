@@ -1,0 +1,168 @@
+{
+  "cases": [
+    {
+      "case_id": "identical-review",
+      "expected_pass": true,
+      "height": 180,
+      "model_landmarks": {
+        "center": [
+          0.5,
+          0.5
+        ]
+      },
+      "model_polygon": [
+        [
+          0.2,
+          0.15
+        ],
+        [
+          0.8,
+          0.15
+        ],
+        [
+          0.8,
+          0.85
+        ],
+        [
+          0.2,
+          0.85
+        ]
+      ],
+      "profile": "review",
+      "reference_landmarks": {
+        "center": [
+          0.5,
+          0.5
+        ]
+      },
+      "reference_polygon": [
+        [
+          0.2,
+          0.15
+        ],
+        [
+          0.8,
+          0.15
+        ],
+        [
+          0.8,
+          0.85
+        ],
+        [
+          0.2,
+          0.85
+        ]
+      ],
+      "width": 240
+    },
+    {
+      "case_id": "shifted-refined",
+      "expected_pass": false,
+      "height": 180,
+      "model_landmarks": {
+        "center": [
+          0.62,
+          0.5
+        ]
+      },
+      "model_polygon": [
+        [
+          0.32,
+          0.15
+        ],
+        [
+          0.82,
+          0.15
+        ],
+        [
+          0.82,
+          0.85
+        ],
+        [
+          0.32,
+          0.85
+        ]
+      ],
+      "profile": "refined",
+      "reference_landmarks": {
+        "center": [
+          0.5,
+          0.5
+        ]
+      },
+      "reference_polygon": [
+        [
+          0.2,
+          0.15
+        ],
+        [
+          0.7,
+          0.15
+        ],
+        [
+          0.7,
+          0.85
+        ],
+        [
+          0.2,
+          0.85
+        ]
+      ],
+      "width": 240
+    },
+    {
+      "case_id": "missing-required-landmark",
+      "expected_pass": false,
+      "height": 180,
+      "model_polygon": [
+        [
+          0.2,
+          0.15
+        ],
+        [
+          0.8,
+          0.15
+        ],
+        [
+          0.8,
+          0.85
+        ],
+        [
+          0.2,
+          0.85
+        ]
+      ],
+      "profile": "review",
+      "reference_landmarks": {
+        "center": [
+          0.5,
+          0.5
+        ]
+      },
+      "reference_polygon": [
+        [
+          0.2,
+          0.15
+        ],
+        [
+          0.8,
+          0.15
+        ],
+        [
+          0.8,
+          0.85
+        ],
+        [
+          0.2,
+          0.85
+        ]
+      ],
+      "threshold_overrides": {
+        "require_landmarks": true
+      },
+      "width": 240
+    }
+  ],
+  "schema_version": 1,
+  "suite_version": "2026.07.1"
+}

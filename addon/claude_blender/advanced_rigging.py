@@ -11,7 +11,7 @@ import re
 import bpy
 from mathutils import Vector
 
-from . import live_preview
+from . import fur_groom, live_preview
 
 from .advanced_support import (
     KEYFRAME_INTERPOLATIONS,
@@ -1024,51 +1024,216 @@ def add_particle_system_to_selected(
         "transaction_id": transaction["id"],
     }
 
-def _mesh_polygon_center(mesh, poly):
-    vertices = [mesh.vertices[index].co for index in poly.vertices]
-    if not vertices:
-        return Vector((0.0, 0.0, 0.0))
-    center = Vector((0.0, 0.0, 0.0))
-    for vertex in vertices:
-        center += vertex
-    return center / len(vertices)
+def _groom_float(value, default, *, minimum=None, maximum=None):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        number = float(default)
+    if not math.isfinite(number):
+        number = float(default)
+    if minimum is not None:
+        number = max(float(minimum), number)
+    if maximum is not None:
+        number = min(float(maximum), number)
+    return number
 
-def _stable_surface_samples(obj, *, count, seed):
-    mesh = obj.data
-    polygons = [poly for poly in mesh.polygons if len(poly.vertices) >= 3 and float(getattr(poly, "area", 0.0)) > 0.0]
-    if not polygons:
-        return []
-    rng = random.Random(int(seed or 0) + sum(ord(char) for char in obj.name))
-    samples = []
-    normal_matrix = obj.matrix_world.to_3x3()
-    for index in range(max(1, int(count or 1))):
-        poly = polygons[index % len(polygons)]
-        center = _mesh_polygon_center(mesh, poly)
-        vertices = [mesh.vertices[vertex_index].co for vertex_index in poly.vertices]
-        jitter = Vector((0.0, 0.0, 0.0))
-        if len(vertices) >= 2:
+
+def _groom_int(value, default, *, minimum=None, maximum=None):
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = int(default)
+    if minimum is not None:
+        number = max(int(minimum), number)
+    if maximum is not None:
+        number = min(int(maximum), number)
+    return number
+
+
+def _groom_flow_controls(controls):
+    normalized = []
+    source = controls if isinstance(controls, (list, tuple)) else []
+    for control in source[:64]:
+        if not isinstance(control, dict):
+            continue
+        normalized.append(
+            {
+                "location": _coerce_vector(control.get("location"), (0.0, 0.0, 0.0)),
+                "direction": _coerce_vector(control.get("direction"), (1.0, 0.0, 0.0)),
+                "radius": _groom_float(control.get("radius"), 1.0, minimum=0.0001, maximum=10000.0),
+                "strength": _groom_float(control.get("strength"), 1.0, minimum=0.0, maximum=10.0),
+            }
+        )
+    return normalized
+
+
+def _groom_regions(
+    regions,
+    *,
+    length,
+    root_width,
+    tip_width,
+    flow_direction,
+    flow_strength,
+    normal_lift,
+    length_randomness,
+    curve_points,
+    minimum_spacing,
+    auto_spacing,
+    clump_strength,
+    clump_size,
+    noise_strength,
+    flow_controls,
+):
+    source = regions if isinstance(regions, (list, tuple)) else []
+    source = list(source[:16]) or [{}]
+    normalized = []
+    for index, raw in enumerate(source):
+        raw = raw if isinstance(raw, dict) else {}
+        requested_count = raw.get("count")
+        if requested_count is not None:
+            requested_count = _groom_int(requested_count, 0, minimum=0, maximum=5000)
+        region_root_width = _groom_float(
+            raw.get("root_width"),
+            root_width,
+            minimum=0.0001,
+            maximum=10.0,
+        )
+        default_tip_width = region_root_width * 0.15 if tip_width is None else tip_width
+        normalized.append(
+            {
+                "name": str(raw.get("name") or f"region_{index + 1}")[:80],
+                "vertex_group": str(raw.get("vertex_group") or "")[:256],
+                "count": requested_count,
+                "density": _groom_float(raw.get("density"), 1.0, minimum=0.0, maximum=100.0),
+                "length": _groom_float(raw.get("length"), length, minimum=0.001, maximum=100.0),
+                "root_width": region_root_width,
+                "tip_width": _groom_float(
+                    raw.get("tip_width"),
+                    default_tip_width,
+                    minimum=0.0,
+                    maximum=region_root_width,
+                ),
+                "flow_direction": _coerce_vector(raw.get("flow_direction"), flow_direction),
+                "flow_strength": _groom_float(raw.get("flow_strength"), flow_strength, minimum=0.0, maximum=1.0),
+                "normal_lift": _groom_float(raw.get("normal_lift"), normal_lift, minimum=0.0, maximum=1.0),
+                "length_randomness": _groom_float(
+                    raw.get("length_randomness"),
+                    length_randomness,
+                    minimum=0.0,
+                    maximum=1.0,
+                ),
+                "curve_points": _groom_int(raw.get("curve_points"), curve_points, minimum=2, maximum=16),
+                "minimum_spacing": _groom_float(
+                    raw.get("minimum_spacing"),
+                    minimum_spacing,
+                    minimum=0.0,
+                    maximum=100.0,
+                ),
+                "auto_spacing": bool(raw.get("auto_spacing", auto_spacing)),
+                "clump_strength": _groom_float(
+                    raw.get("clump_strength"),
+                    clump_strength,
+                    minimum=0.0,
+                    maximum=1.0,
+                ),
+                "clump_size": _groom_int(raw.get("clump_size"), clump_size, minimum=1, maximum=100),
+                "noise_strength": _groom_float(
+                    raw.get("noise_strength"),
+                    noise_strength,
+                    minimum=0.0,
+                    maximum=1.0,
+                ),
+                "flow_controls": _groom_flow_controls(flow_controls) + _groom_flow_controls(raw.get("flow_controls")),
+            }
+        )
+    return normalized
+
+
+def _surface_triangles(obj, vertex_group_name=""):
+    group = obj.vertex_groups.get(vertex_group_name) if vertex_group_name else None
+    if vertex_group_name and group is None:
+        return [], f"Vertex group not found on {obj.name}: {vertex_group_name}"
+    triangles = []
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    evaluated = obj.evaluated_get(depsgraph)
+    mesh = evaluated.to_mesh(
+        preserve_all_data_layers=True,
+        depsgraph=depsgraph,
+    )
+    try:
+        mesh.calc_loop_triangles()
+        normal_matrix = (
+            evaluated.matrix_world.to_3x3().inverted_safe().transposed()
+        )
+        for loop_triangle in mesh.loop_triangles:
+            triangle_indices = tuple(loop_triangle.vertices)
+            vertices = [
+                evaluated.matrix_world @ mesh.vertices[index].co
+                for index in triangle_indices
+            ]
             edge_a = vertices[1] - vertices[0]
-            edge_b = vertices[-1] - vertices[0]
-            jitter = edge_a * (rng.random() - 0.5) * 0.45 + edge_b * (rng.random() - 0.5) * 0.45
-        root = obj.matrix_world @ (center + jitter)
-        normal = normal_matrix @ poly.normal
-        if normal.length < 0.000001:
-            normal = Vector((0.0, 0.0, 1.0))
-        normal.normalize()
-        samples.append((root, normal))
-    return samples
+            edge_b = vertices[2] - vertices[0]
+            normal = edge_a.cross(edge_b)
+            if normal.length <= 1.0e-9:
+                continue
+            normal.normalize()
+            expected_normal = normal_matrix @ loop_triangle.normal
+            if expected_normal.length > 1.0e-9:
+                expected_normal.normalize()
+                if normal.dot(expected_normal) < 0.0:
+                    normal.negate()
+            weight = 1.0
+            vertex_weights = None
+            if group is not None:
+                vertex_weights = []
+                for vertex_index in triangle_indices:
+                    assignment = next(
+                        (
+                            item
+                            for item in mesh.vertices[vertex_index].groups
+                            if item.group == group.index
+                        ),
+                        None,
+                    )
+                    vertex_weights.append(
+                        float(assignment.weight) if assignment else 0.0
+                    )
+                weight = sum(vertex_weights) / len(vertex_weights)
+                if weight <= 0.0:
+                    continue
+            triangles.append(
+                {
+                    "vertices": [tuple(vertex) for vertex in vertices],
+                    "normal": tuple(normal),
+                    "weight": 1.0,
+                    "vertex_weights": vertex_weights,
+                }
+            )
+    finally:
+        evaluated.to_mesh_clear()
+    return triangles, ""
 
-def _surface_flow_tangent(normal, flow_direction):
-    flow = Vector(_coerce_vector(flow_direction, (1.0, 0.0, 0.0)))
-    if flow.length < 0.000001:
-        flow = Vector((1.0, 0.0, 0.0))
-    flow.normalize()
-    tangent = flow - normal * flow.dot(normal)
-    if tangent.length < 0.000001:
-        fallback = Vector((0.0, 1.0, 0.0)) if abs(normal.y) < 0.9 else Vector((1.0, 0.0, 0.0))
-        tangent = fallback - normal * fallback.dot(normal)
-    tangent.normalize()
-    return tangent
+
+def _cleanup_groom_data(created_objects, created_curves, material, *, remove_material):
+    for obj in reversed(created_objects):
+        try:
+            if obj and obj.name in bpy.data.objects:
+                bpy.data.objects.remove(obj, do_unlink=True)
+        except Exception:
+            pass
+    for curve in reversed(created_curves):
+        try:
+            if curve and curve.name in bpy.data.curves:
+                bpy.data.curves.remove(curve)
+        except Exception:
+            pass
+    if remove_material and material is not None:
+        try:
+            if material.name in bpy.data.materials and material.users == 0:
+                bpy.data.materials.remove(material)
+        except Exception:
+            pass
 
 def create_directional_fur_curves(
     context,
@@ -1079,11 +1244,19 @@ def create_directional_fur_curves(
     count=160,
     length=0.12,
     root_width=0.004,
+    tip_width=None,
     flow_direction=(1.0, 0.0, 0.0),
     flow_strength=0.65,
     normal_lift=0.35,
     length_randomness=0.35,
     curve_points=4,
+    minimum_spacing=0.0,
+    auto_spacing=True,
+    clump_strength=0.15,
+    clump_size=8,
+    noise_strength=0.08,
+    flow_controls=None,
+    regions=None,
     material_name="",
     color=(0.82, 0.82, 0.78, 1.0),
     seed=17,
@@ -1093,58 +1266,224 @@ def create_directional_fur_curves(
     meshes = [obj for obj in objects if obj.type == "MESH"]
     if not meshes:
         return {"ok": False, "message": "No mesh objects found for directional fur curves", "missing_object_names": missing}
-    transaction = live_preview.begin(label, context)
-    material = _material_for_color(material_name or f"{name_prefix} Material", color)
+    total_count = _groom_int(count, 160, minimum=1, maximum=5000)
+    fur_length = _groom_float(length, 0.12, minimum=0.001, maximum=100.0)
+    width = _groom_float(root_width, 0.004, minimum=0.0001, maximum=10.0)
+    region_specs = _groom_regions(
+        regions,
+        length=fur_length,
+        root_width=width,
+        tip_width=tip_width,
+        flow_direction=flow_direction,
+        flow_strength=flow_strength,
+        normal_lift=normal_lift,
+        length_randomness=length_randomness,
+        curve_points=curve_points,
+        minimum_spacing=minimum_spacing,
+        auto_spacing=auto_spacing,
+        clump_strength=clump_strength,
+        clump_size=clump_size,
+        noise_strength=noise_strength,
+        flow_controls=flow_controls,
+    )
+    object_budgets = fur_groom.allocate_weighted_counts([1.0] * len(meshes), total_count)
+    operation = live_preview.begin_isolated(label, context)
+    transaction = operation["transaction"]
+    material_label = material_name or f"{name_prefix} Material"
+    material_existed = bpy.data.materials.get(material_label) is not None
+    material = None
     created = []
-    total_count = max(1, min(5000, int(count or 1)))
-    per_object_count = max(1, int(math.ceil(total_count / max(1, len(meshes)))))
-    strand_points = max(2, min(8, int(curve_points or 4)))
-    fur_length = max(0.001, min(100.0, float(length or 0.001)))
-    width = max(0.0001, min(10.0, float(root_width or 0.0001)))
-    tangent_weight = max(0.0, min(1.0, float(flow_strength or 0.0)))
-    lift_weight = max(0.0, min(1.0, float(normal_lift or 0.0)))
-    random_weight = max(0.0, min(1.0, float(length_randomness or 0.0)))
-    for obj_index, obj in enumerate(meshes):
-        curve = bpy.data.curves.new(f"{name_prefix} {obj.name} Data", "CURVE")
-        curve.dimensions = "3D"
-        curve.bevel_depth = width
-        curve.bevel_resolution = 1
-        curve.resolution_u = 2
-        curve.materials.append(material)
-        rng = random.Random(int(seed or 0) + obj_index * 7919)
-        samples = _stable_surface_samples(obj, count=per_object_count, seed=int(seed or 0) + obj_index * 101)
-        for root, normal in samples:
-            tangent = _surface_flow_tangent(normal, flow_direction)
-            length_scale = 1.0 - random_weight * rng.random()
-            direction = tangent * tangent_weight + normal * lift_weight
-            if direction.length < 0.000001:
-                direction = normal
-            direction.normalize()
-            spline = curve.splines.new("POLY")
-            spline.points.add(strand_points - 1)
-            for point_index, point in enumerate(spline.points):
-                t = point_index / max(1, strand_points - 1)
-                bend = math.sin(t * math.pi) * 0.25
-                world = root + direction * (fur_length * length_scale * t) + normal * (fur_length * bend * lift_weight)
-                point.co = (float(world.x), float(world.y), float(world.z), 1.0)
-        curve_obj = bpy.data.objects.new(f"{name_prefix} {obj.name}", curve)
-        context.scene.collection.objects.link(curve_obj)
-        live_preview._record_created_id("object", curve_obj.name)
-        live_preview._record_created_id("curve", curve.name)
-        curve_obj["agent_bridge_fur_source_object"] = obj.name
-        curve_obj["agent_bridge_fur_flow_direction"] = [float(value) for value in _coerce_vector(flow_direction, (1.0, 0.0, 0.0))]
-        curve_obj["agent_bridge_fur_kind"] = "directional_surface_curves"
-        created.append(
-            {
-                "object": curve_obj.name,
-                "source_object": obj.name,
-                "strand_count": len(samples),
-                "curve_points": strand_points,
-                "length": fur_length,
-                "root_width": width,
+    created_objects = []
+    created_curves = []
+    warnings = []
+    if isinstance(regions, (list, tuple)) and len(regions) > 16:
+        warnings.append(f"Only the first 16 of {len(regions)} fur regions were used")
+    if isinstance(flow_controls, (list, tuple)) and len(flow_controls) > 64:
+        warnings.append(f"Only the first 64 of {len(flow_controls)} top-level flow controls were used")
+    try:
+        material = _material_for_color(material_label, color)
+        for obj_index, (obj, object_budget) in enumerate(zip(meshes, object_budgets)):
+            if object_budget <= 0:
+                warnings.append(f"No strand budget remained for {obj.name}")
+                continue
+            region_counts = fur_groom.allocate_region_counts(region_specs, object_budget)
+            strands = []
+            region_results = []
+            max_width = max(
+                (
+                    region["root_width"]
+                    for region, region_count in zip(region_specs, region_counts)
+                    if region_count > 0
+                ),
+                default=width,
+            )
+            for region_index, (region, region_count) in enumerate(zip(region_specs, region_counts)):
+                if region_count <= 0:
+                    continue
+                triangles, triangle_warning = _surface_triangles(obj, region["vertex_group"])
+                if triangle_warning:
+                    warnings.append(triangle_warning)
+                    region_results.append(
+                        {
+                            "name": region["name"],
+                            "vertex_group": region["vertex_group"],
+                            "requested_count": region_count,
+                            "strand_count": 0,
+                            "warning": triangle_warning,
+                        }
+                    )
+                    continue
+                weighted_area = 0.0
+                for triangle in triangles:
+                    density = float(triangle.get("weight", 1.0))
+                    vertex_weights = triangle.get("vertex_weights")
+                    if vertex_weights:
+                        density *= sum(vertex_weights) / len(vertex_weights)
+                    weighted_area += fur_groom.triangle_area(triangle["vertices"]) * density
+                spacing = region["minimum_spacing"]
+                if spacing <= 0.0 and region["auto_spacing"] and weighted_area > 0.0:
+                    spacing = math.sqrt(weighted_area / max(1, region_count)) * 0.22
+                region_seed = int(seed or 0) + obj_index * 100003 + region_index * 1009
+                samples = fur_groom.sample_surface(
+                    triangles,
+                    region_count,
+                    seed=region_seed,
+                    minimum_spacing=spacing,
+                    oversample=10,
+                )
+                clumps = fur_groom.clump_vectors(samples, region["clump_size"])
+                rng = random.Random(region_seed + 37)
+                for strand_index, (sample, clump_vector) in enumerate(zip(samples, clumps)):
+                    flow = fur_groom.blend_flow_controls(
+                        sample["point"],
+                        region["flow_direction"],
+                        region["flow_controls"],
+                    )
+                    length_scale = max(
+                        0.1,
+                        1.0
+                        + rng.uniform(
+                            -region["length_randomness"],
+                            region["length_randomness"],
+                        ),
+                    )
+                    path = fur_groom.strand_path(
+                        sample["point"],
+                        sample["normal"],
+                        flow,
+                        length=region["length"] * length_scale,
+                        point_count=region["curve_points"],
+                        flow_strength=region["flow_strength"],
+                        normal_lift=region["normal_lift"],
+                        clump_vector=clump_vector,
+                        clump_strength=region["clump_strength"],
+                        noise_strength=region["noise_strength"],
+                        seed=region_seed + strand_index * 17,
+                    )
+                    strands.append(
+                        {
+                            "path": path,
+                            "root_width": region["root_width"],
+                            "tip_width": region["tip_width"],
+                        }
+                    )
+                warning = ""
+                if len(samples) < region_count:
+                    warning = (
+                        f"Spacing limited {obj.name}/{region['name']} to "
+                        f"{len(samples)} of {region_count} requested strands"
+                    )
+                    warnings.append(warning)
+                region_results.append(
+                    {
+                        "name": region["name"],
+                        "vertex_group": region["vertex_group"],
+                        "requested_count": region_count,
+                        "strand_count": len(samples),
+                        "minimum_spacing": spacing,
+                        "warning": warning,
+                    }
+                )
+            if not strands:
+                continue
+            curve = bpy.data.curves.new(f"{name_prefix} {obj.name} Data", "CURVE")
+            created_curves.append(curve)
+            curve.dimensions = "3D"
+            curve.bevel_depth = max_width
+            curve.bevel_resolution = 2
+            curve.resolution_u = 2
+            curve.materials.append(material)
+            for strand in strands:
+                spline = curve.splines.new("NURBS")
+                spline.points.add(len(strand["path"]) - 1)
+                spline.order_u = min(4, len(strand["path"]))
+                spline.use_endpoint_u = True
+                for point_index, (point, coordinate) in enumerate(zip(spline.points, strand["path"])):
+                    t = point_index / max(1, len(strand["path"]) - 1)
+                    strand_width = (
+                        strand["root_width"] * (1.0 - t)
+                        + strand["tip_width"] * t
+                    )
+                    point.radius = max(0.0, strand_width / max_width)
+                    point.co = (*coordinate, 1.0)
+            curve_obj = bpy.data.objects.new(f"{name_prefix} {obj.name}", curve)
+            created_objects.append(curve_obj)
+            context.scene.collection.objects.link(curve_obj)
+            curve_obj.parent = obj
+            curve_obj.matrix_parent_inverse = obj.matrix_world.inverted_safe()
+            live_preview._record_created_id("object", curve_obj.name)
+            live_preview._record_created_id("curve", curve.name)
+            curve_obj["agent_bridge_fur_source_object"] = obj.name
+            curve_obj["agent_bridge_fur_flow_direction"] = [
+                float(value)
+                for value in _coerce_vector(flow_direction, (1.0, 0.0, 0.0))
+            ]
+            curve_obj["agent_bridge_fur_kind"] = "directional_surface_curves_v2"
+            curve_obj["agent_bridge_fur_regions"] = [result["name"] for result in region_results]
+            created.append(
+                {
+                    "object": curve_obj.name,
+                    "source_object": obj.name,
+                    "strand_count": len(strands),
+                    "curve_points": max(len(strand["path"]) for strand in strands),
+                    "curve_point_counts": sorted({len(strand["path"]) for strand in strands}),
+                    "length": fur_length,
+                    "root_width": width,
+                    "regions": region_results,
+                }
+            )
+        if not created:
+            live_preview.abort_isolated(operation, context)
+            _cleanup_groom_data(
+                created_objects,
+                created_curves,
+                material,
+                remove_material=not material_existed,
+            )
+            return {
+                "ok": False,
+                "code": "no_fur_samples",
+                "message": "No fur roots could be sampled from the requested mesh regions",
+                "missing_object_names": missing,
+                "warnings": warnings,
             }
+    except Exception as exc:
+        live_preview.abort_isolated(operation, context)
+        _cleanup_groom_data(
+            created_objects,
+            created_curves,
+            material,
+            remove_material=not material_existed,
         )
+        return {
+            "ok": False,
+            "code": "fur_groom_failed",
+            "message": f"Directional fur groom failed: {exc}",
+            "missing_object_names": missing,
+            "warnings": warnings,
+        }
     transaction["applied_steps"].append({"type": "create_directional_fur_curves", "label": label, "created": created})
+    transaction = live_preview.finish_isolated(operation)
     live_preview.redraw(context)
     live_preview._mark_pending(context, label)
     return {
@@ -1152,6 +1491,7 @@ def create_directional_fur_curves(
         "message": f"Created directional fur curve guides for {len(created)} mesh object(s)",
         "created": created,
         "missing_object_names": missing,
+        "warnings": warnings,
         "material": material.name,
         "transaction_id": transaction["id"],
     }

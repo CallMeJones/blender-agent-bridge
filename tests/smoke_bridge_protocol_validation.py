@@ -63,6 +63,20 @@ def test_bool_not_accepted_as_integer():
     assert any("count" in e for e in errors), errors
 
 
+def test_numbers_must_be_finite_and_respect_bounds():
+    schema = {"type": "number", "minimum": 0.0, "maximum": 1.0}
+    for value in (float("nan"), float("inf"), float("-inf")):
+        errors = bridge_protocol.validate_arguments(value, schema)
+        assert any("finite" in error for error in errors), errors
+    assert bridge_protocol.validate_arguments(-0.1, schema), "minimum should fail"
+    assert bridge_protocol.validate_arguments(1.1, schema), "maximum should fail"
+    assert bridge_protocol.validate_arguments(0.5, schema) == []
+    assert bridge_protocol.validate_arguments(
+        10**10000,
+        {"type": "integer"},
+    ) == []
+
+
 def test_real_contract_schema_smoke():
     # A real contract that ships an input_schema should accept a minimal valid call.
     contract = bridge_protocol.normalized_tool_contract("validate_render_job_output")
@@ -96,6 +110,7 @@ def main():
     test_enum_rejected()
     test_maxitems_rejected()
     test_bool_not_accepted_as_integer()
+    test_numbers_must_be_finite_and_respect_bounds()
     test_real_contract_schema_smoke()
     test_anyof_requires_one_import_source()
     test_oneof_rejects_ambiguous_value()

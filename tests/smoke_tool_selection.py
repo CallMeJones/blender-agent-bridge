@@ -436,10 +436,53 @@ def main():
             bundle,
         )
         reference_names = _names(reference_tools)
+        assert "create_reference_guides_from_annotations" in reference_names, reference_meta
+        assert "create_multiview_reference_guides" in reference_names, reference_meta
         assert "create_reference_modeling_guides" in reference_names, reference_meta
         assert "inspect_reference_modeling_guides" in reference_names, reference_meta
+        assert "compare_model_to_reference" in reference_names, reference_meta
+        assert "evaluate_reference_model_benchmark" in reference_names, reference_meta
+        assert "create_reference_blockout" in reference_names, reference_meta
         assert "create_directional_fur_curves" in reference_names, reference_meta
         assert "plan_model_quality_workflow" in reference_names, reference_meta
+        assert (
+            reference_meta["schema_chars"]
+            <= agent_tools.TOOL_SCHEMA_CHAR_BUDGET
+        ), reference_meta
+
+        benchmark_tools, benchmark_meta = agent_tools.select_blender_tool_definitions(
+            "Evaluate the calibrated reference comparison against the refined benchmark quality gate profile.",
+            bundle,
+        )
+        assert (
+            "evaluate_reference_model_benchmark" in _names(benchmark_tools)
+        ), benchmark_meta
+
+        annotation_tools, annotation_meta = agent_tools.select_blender_tool_definitions(
+            "Create a calibrated Blender guide scene from this reference image and landmark outline JSON.",
+            bundle,
+        )
+        annotation_names = _names(annotation_tools)
+        assert "create_reference_guides_from_annotations" in annotation_names, annotation_meta
+        assert "inspect_reference_modeling_guides" in annotation_names, annotation_meta
+        assert "plan_model_quality_workflow" in annotation_names, annotation_meta
+        assert (
+            annotation_meta["schema_chars"]
+            <= agent_tools.TOOL_SCHEMA_CHAR_BUDGET
+        ), annotation_meta
+
+        multiview_tools, multiview_meta = agent_tools.select_blender_tool_definitions(
+            "Create calibrated front and side reference views and reconstruct shared 3D landmarks.",
+            bundle,
+        )
+        multiview_names = _names(multiview_tools)
+        assert "create_multiview_reference_guides" in multiview_names, multiview_meta
+        assert "inspect_reference_modeling_guides" in multiview_names, multiview_meta
+        assert "plan_model_quality_workflow" in multiview_names, multiview_meta
+        assert (
+            multiview_meta["schema_chars"]
+            <= agent_tools.TOOL_SCHEMA_CHAR_BUDGET
+        ), multiview_meta
 
         fur_tools, fur_meta = agent_tools.select_blender_tool_definitions(
             "Add short directional fur and groom flow guides to the selected plush kitten mesh.",

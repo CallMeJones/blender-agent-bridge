@@ -77,9 +77,114 @@ def _metadata_path(render_dir):
 
 def _write_metadata(metadata):
     path = metadata.get("metadata_path") or _metadata_path(metadata["render_dir"])
-    with open(path, "w", encoding="utf-8", newline="\n") as handle:
-        json.dump(metadata, handle, indent=2, sort_keys=True)
+    temp_path = f"{path}.tmp"
+    try:
+        with open(temp_path, "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(metadata, handle, indent=2, sort_keys=True)
+        os.replace(temp_path, path)
+    except Exception:
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
+        raise
     return path
+
+
+def begin_inspection_artifact(
+    context,
+    *,
+    prefix="artifact",
+    capture_dir=None,
+):
+    """Allocate a project/session-scoped directory for generated PNG evidence."""
+
+    artifact_id = f"{_safe_id(prefix, 'artifact')}-{_render_id()}"
+    capture_info = _render_root_info(
+        context, preferred_dir=capture_dir, create=True
+    )
+    render_dir = os.path.join(
+        capture_info["inspection_render_root"], artifact_id
+    )
+    os.makedirs(render_dir, exist_ok=False)
+    return {
+        "render_id": artifact_id,
+        "render_dir": render_dir,
+        "project_id": capture_info.get("project_id", ""),
+        "session_id": capture_info.get("session_id", ""),
+        "storage_scope": capture_info.get("storage_scope", ""),
+        "capture_dir": capture_info.get("capture_dir", ""),
+        "base_dir": capture_info.get("base_dir", ""),
+        "fallback_reason": capture_info.get("fallback_reason", ""),
+    }
+
+
+def publish_inspection_artifact(
+    artifact,
+    *,
+    images,
+    metadata=None,
+):
+    """Publish existing PNG files through inspection-render MCP resources."""
+
+    artifact = dict(artifact or {})
+    render_id = _safe_id(artifact.get("render_id"), "")
+    render_dir = os.path.abspath(str(artifact.get("render_dir") or ""))
+    if not render_id or not render_dir or not os.path.isdir(render_dir):
+        raise ValueError("A prepared inspection artifact directory is required")
+
+    published_images = []
+    for raw in list(images or [])[:32]:
+        if not isinstance(raw, dict):
+            continue
+        image_id = _safe_id(raw.get("image_id"), "")
+        path = os.path.abspath(str(raw.get("path") or ""))
+        try:
+            inside_artifact = (
+                os.path.commonpath([render_dir, path]) == render_dir
+            )
+        except ValueError:
+            inside_artifact = False
+        if not image_id or not inside_artifact:
+            raise ValueError(
+                "Published inspection images must stay inside the artifact directory"
+            )
+        available = os.path.isfile(path)
+        width, height = _image_size(path) if available else (0, 0)
+        published_images.append(
+            {
+                **raw,
+                "image_id": image_id,
+                "path": path,
+                "resource_uri": _image_resource_uri(render_id, image_id),
+                "available": available,
+                "size_bytes": os.path.getsize(path) if available else 0,
+                "width": width,
+                "height": height,
+            }
+        )
+
+    available_images = [
+        item for item in published_images if item.get("available")
+    ]
+    payload = {
+        **artifact,
+        **dict(metadata or {}),
+        "ok": bool(available_images),
+        "requested": True,
+        "available": bool(available_images),
+        "render_id": render_id,
+        "render_dir": render_dir,
+        "metadata_uri": _metadata_uri(render_id),
+        "latest_metadata_uri": LATEST_INSPECTION_RENDER_METADATA_URI,
+        "created_at": time.time(),
+        "image_count": len(available_images),
+        "requested_image_count": len(published_images),
+        "images": published_images,
+    }
+    payload["metadata_path"] = _metadata_path(render_dir)
+    _write_metadata(payload)
+    return payload
 
 
 def _read_metadata(path):

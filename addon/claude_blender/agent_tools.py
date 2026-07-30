@@ -74,6 +74,43 @@ _RENDER_SETUP_TOOL_NAMES = {
     "set_render_engine",
     "get_render_camera_compositor_details",
 }
+_REFERENCE_QUALITY_TOOL_NAMES = {
+    "plan_model_quality_workflow",
+    "plan_advanced_scene_workflow",
+    "list_scene_objects",
+    "get_blend_file_diagnostics",
+    "create_reference_guides_from_annotations",
+    "create_multiview_reference_guides",
+    "create_reference_modeling_guides",
+    "inspect_reference_modeling_guides",
+    "compare_model_to_reference",
+    "evaluate_reference_model_benchmark",
+    "create_reference_blockout",
+    "create_directional_fur_curves",
+    "inspect_modeling_quality",
+    "capture_viewport",
+    "capture_object_inspection_renders",
+    "get_visual_evidence_resources",
+    "draft_script",
+    "commit_preview",
+    "revert_preview",
+}
+_REFERENCE_QUALITY_REQUIRED_TOOL_NAMES = {
+    "plan_model_quality_workflow",
+    "plan_advanced_scene_workflow",
+    "create_reference_guides_from_annotations",
+    "create_multiview_reference_guides",
+    "create_reference_modeling_guides",
+    "inspect_reference_modeling_guides",
+    "compare_model_to_reference",
+    "evaluate_reference_model_benchmark",
+    "create_reference_blockout",
+    "create_directional_fur_curves",
+    "inspect_modeling_quality",
+    "capture_viewport",
+    "capture_object_inspection_renders",
+    "draft_script",
+}
 
 _TOOL_GROUPS = tool_registry.group_map()
 _ANIMATION_ONLY_TOOL_NAMES = {
@@ -270,24 +307,7 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
 
     quality_reference_request = helper_routing.is_reference_model_quality_request(request_text)
     if quality_reference_request:
-        selected.update(
-            {
-                "plan_model_quality_workflow",
-                "plan_advanced_scene_workflow",
-                "list_scene_objects",
-                "get_blend_file_diagnostics",
-                "create_reference_modeling_guides",
-                "inspect_reference_modeling_guides",
-                "create_directional_fur_curves",
-                "inspect_modeling_quality",
-                "capture_viewport",
-                "capture_object_inspection_renders",
-                "get_visual_evidence_resources",
-                "draft_script",
-                "commit_preview",
-                "revert_preview",
-            }
-        )
+        selected.update(_REFERENCE_QUALITY_TOOL_NAMES)
         matched_groups.append("advanced_workflow")
 
     if helper_routing.should_include_draft_script(request_text, matched_groups):
@@ -316,36 +336,21 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
     protected = set(_CORE_TOOL_NAMES)
     specific_refinement_groups = {"vehicle", "product", "character"}.intersection(matched_groups)
     for group in matched_groups:
+        if quality_reference_request:
+            continue
         if group == "refinement" and specific_refinement_groups:
             continue
         if group in {"vehicle", "product", "character", "refinement", "camera_render", "rigging", "curves_text", "particles", "geometry_nodes", "external_assets", "advanced_workflow", "two_d_storyboard", "procedural_3d", "simulation_setup", "preview_control"}:
             protected.update(_TOOL_GROUPS.get(group, set()))
     if quality_reference_request:
-        protected.update(
-            {
-                "plan_model_quality_workflow",
-                "plan_advanced_scene_workflow",
-                "list_scene_objects",
-                "get_blend_file_diagnostics",
-                "create_reference_modeling_guides",
-                "inspect_reference_modeling_guides",
-                "create_directional_fur_curves",
-                "inspect_modeling_quality",
-                "capture_viewport",
-                "capture_object_inspection_renders",
-                "get_visual_evidence_resources",
-                "draft_script",
-                "commit_preview",
-                "revert_preview",
-            }
-        )
+        protected.update(_REFERENCE_QUALITY_REQUIRED_TOOL_NAMES)
     if _contains_keyword(text, _RENDER_OUTPUT_KEYWORDS):
         protected.add("configure_render_outputs")
     if _contains_keyword(text, _PROCEDURAL_TEXTURE_KEYWORDS):
         protected.add("create_procedural_texture_material")
     if _contains_keyword(text, _UV_LAYOUT_KEYWORDS):
         protected.update({"mark_uv_seams", "uv_unwrap", "inspect_uv_layout", "bake_maps"})
-    if "basic_edit" in matched_groups:
+    if "basic_edit" in matched_groups and not quality_reference_request:
         protected.update({"select_objects", "set_selected_location_delta", "set_selected_transform", "assign_material_to_selected"})
     if "animation" in matched_groups:
         protected.update(
@@ -460,7 +465,11 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
             "glow",
         },
     )
-    if "materials" in matched_groups and explicit_material_request:
+    if (
+        "materials" in matched_groups
+        and explicit_material_request
+        and not quality_reference_request
+    ):
         protected.update(
             {
                 "get_material_node_details",

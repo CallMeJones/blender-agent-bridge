@@ -9,13 +9,17 @@ import sys
 import tempfile
 
 import bpy
+from mathutils import Vector
 
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import advanced_helpers, advanced_modeling, agent_tools, blender_compat, context_bundle, live_preview, preferences, script_runner, tool_dispatcher  # noqa: E402
+from claude_blender import advanced_helpers, advanced_modeling, advanced_rigging, agent_tools, blender_compat, context_bundle, live_preview, preferences, script_runner, tool_dispatcher  # noqa: E402
+from claude_blender import quality_benchmarks, reference_benchmark_scene  # noqa: E402
+from claude_blender import reference_blockout as reference_blockout_module  # noqa: E402
+from claude_blender import reference_comparison as reference_comparison_module  # noqa: E402
 
 
 ADVANCED_TOOLS = {
@@ -50,8 +54,13 @@ ADVANCED_TOOLS = {
     "animate_shape_key",
     "create_text_object",
     "create_curve_path",
+    "create_reference_guides_from_annotations",
+    "create_multiview_reference_guides",
     "create_reference_modeling_guides",
     "inspect_reference_modeling_guides",
+    "compare_model_to_reference",
+    "evaluate_reference_model_benchmark",
+    "create_reference_blockout",
     "add_particle_system_to_selected",
     "create_directional_fur_curves",
     "create_basic_armature",
@@ -106,7 +115,12 @@ def _snapshot(scene, cube, camera):
         "camera_constraints": len(camera.constraints),
         "camera_lens": camera.data.lens,
         "camera_dof": camera.data.dof.use_dof,
+        "scene_camera": scene.camera.name if scene.camera else "",
         "resolution": (scene.render.resolution_x, scene.render.resolution_y),
+        "pixel_aspect": (
+            scene.render.pixel_aspect_x,
+            scene.render.pixel_aspect_y,
+        ),
         "fps": scene.render.fps,
         "frame_range": (scene.frame_start, scene.frame_end),
         "film_transparent": scene.render.film_transparent,
@@ -141,9 +155,9 @@ def _material_topology(material):
     }
 
 
-def _write_test_image(path, color):
-    image = bpy.data.images.new(name=os.path.basename(path), width=2, height=2, alpha=True)
-    image.pixels = list(color) * 4
+def _write_test_image(path, color, width=2, height=2):
+    image = bpy.data.images.new(name=os.path.basename(path), width=width, height=height, alpha=True)
+    image.pixels = list(color) * (width * height)
     image.filepath_raw = path
     image.file_format = "PNG"
     image.save()
@@ -445,6 +459,20 @@ def main():
     _write_test_image(persistent_roughness_path, (0.55, 0.55, 0.55, 1.0))
     persistent_roughness_image = bpy.data.images.load(persistent_roughness_path, check_existing=True)
     persistent_roughness_image.colorspace_settings.name = "sRGB"
+    persistent_reference_path = os.path.join(
+        capture_dir, "agent-bridge-reference-annotations.png"
+    )
+    _write_test_image(
+        persistent_reference_path,
+        (0.4, 0.45, 0.5, 1.0),
+        width=400,
+        height=200,
+    )
+    persistent_reference_image = bpy.data.images.load(
+        persistent_reference_path,
+        check_existing=True,
+    )
+    persistent_reference_name = persistent_reference_image.name
     initial = _snapshot(scene, cube, camera)
 
     try:
@@ -458,6 +486,38 @@ def main():
         assert invalid_dolly["ok"] is False, invalid_dolly
         assert "not a camera" in invalid_dolly["message"], invalid_dolly
         assert live_preview.current_transaction() is None, invalid_dolly
+        image_names_before_invalid_reference = set(bpy.data.images.keys())
+        invalid_reference = json.loads(
+            tool_dispatcher.execute_tool(
+                context,
+                "create_reference_modeling_guides",
+                {
+                    "image_path": os.path.join(ROOT, "README.md"),
+                    "include_image_plane": True,
+                },
+            )
+        )
+        assert invalid_reference["ok"] is False, invalid_reference
+        assert "Could not load usable reference image" in invalid_reference["message"], invalid_reference
+        assert set(bpy.data.images.keys()) == image_names_before_invalid_reference
+        assert live_preview.current_transaction() is None, invalid_reference
+        collections_before_non_finite_reference = set(
+            bpy.data.collections.keys()
+        )
+        non_finite_reference = json.loads(
+            tool_dispatcher.execute_tool(
+                context,
+                "create_reference_modeling_guides",
+                {
+                    "image_size": [float("inf"), 100.0],
+                    "include_image_plane": True,
+                },
+            )
+        )
+        assert non_finite_reference["ok"] is False, non_finite_reference
+        assert "finite" in non_finite_reference["message"].lower(), non_finite_reference
+        assert set(bpy.data.collections.keys()) == collections_before_non_finite_reference
+        assert live_preview.current_transaction() is None, non_finite_reference
         blocked_shape_key_edit = json.loads(
             tool_dispatcher.execute_tool(
                 context,
@@ -1665,6 +1725,12 @@ def main():
         assert particles["objects"] == ["Cube"]
         assert cube.modifiers.get("Agent Bridge Advanced Particles")
 
+        fur_mask = cube.vertex_groups.new(name="Agent Bridge Fur Mask")
+        fur_mask.add(
+            [vertex.index for vertex in cube.data.vertices],
+            1.0,
+            "REPLACE",
+        )
         fur_curves = _execute(
             context,
             "create_directional_fur_curves",
@@ -1675,14 +1741,163 @@ def main():
                 "count": 18,
                 "length": 0.12,
                 "root_width": 0.003,
+                "tip_width": 0.0003,
                 "flow_direction": [1.0, 0.0, 0.0],
-                "curve_points": 4,
+                "curve_points": 5,
+                "minimum_spacing": 0.02,
+                "clump_strength": 0.2,
+                "clump_size": 4,
+                "noise_strength": 0.05,
+                "flow_controls": [
+                    {
+                        "location": [0.0, 0.0, 0.0],
+                        "direction": [0.0, 1.0, 0.0],
+                        "radius": 5.0,
+                        "strength": 0.5,
+                    }
+                ],
+                "regions": [
+                    {
+                        "name": "coat",
+                        "vertex_group": fur_mask.name,
+                        "count": 12,
+                        "length": 0.1,
+                    },
+                    {
+                        "name": "fluff",
+                        "count": 6,
+                        "length": 0.16,
+                        "normal_lift": 0.5,
+                    },
+                ],
                 "seed": 11,
             },
         )
         fur_object = bpy.data.objects[fur_curves["created"][0]["object"]]
         assert fur_object.type == "CURVE", fur_curves
         assert len(fur_object.data.splines) == fur_curves["created"][0]["strand_count"], fur_curves
+        assert fur_object["agent_bridge_fur_kind"] == "directional_surface_curves_v2", fur_curves
+        assert {region["name"] for region in fur_curves["created"][0]["regions"]} == {"coat", "fluff"}, fur_curves
+        first_fur_spline = fur_object.data.splines[0]
+        assert first_fur_spline.points[0].radius > first_fur_spline.points[-1].radius, fur_curves
+
+        empty_fur_mask = cube.vertex_groups.new(
+            name="Agent Bridge Empty Fur Mask"
+        )
+        existing_fur_material = bpy.data.materials.new(
+            "Agent Bridge Existing Fur Material"
+        )
+        existing_fur_material.diffuse_color = (1.0, 0.0, 0.0, 1.0)
+        fur_failure_transaction = live_preview.current_transaction()
+        fur_failure_state = (
+            fur_failure_transaction["id"],
+            len(fur_failure_transaction["before_state"]),
+            len(fur_failure_transaction["applied_steps"]),
+        )
+        failed_empty_fur = json.loads(
+            tool_dispatcher.execute_tool(
+                context,
+                "create_directional_fur_curves",
+                {
+                    "object_names": ["Cube"],
+                    "selected_only": False,
+                    "material_name": existing_fur_material.name,
+                    "color": [0.0, 1.0, 0.0, 1.0],
+                    "count": 8,
+                    "regions": [
+                        {
+                            "name": "empty",
+                            "vertex_group": empty_fur_mask.name,
+                        }
+                    ],
+                },
+            )
+        )
+        assert (
+            failed_empty_fur["code"] == "no_fur_samples"
+        ), failed_empty_fur
+        assert tuple(existing_fur_material.diffuse_color) == (
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+        ), failed_empty_fur
+        assert live_preview.current_transaction() is fur_failure_transaction
+        assert (
+            fur_failure_transaction["id"],
+            len(fur_failure_transaction["before_state"]),
+            len(fur_failure_transaction["applied_steps"]),
+        ) == fur_failure_state, failed_empty_fur
+        cube.vertex_groups.remove(empty_fur_mask)
+        bpy.data.materials.remove(existing_fur_material)
+
+        concave_mesh = bpy.data.meshes.new("Agent Bridge Concave Fur Surface")
+        concave_mesh.from_pydata(
+            [
+                (0.0, 0.0, 0.0),
+                (3.0, 0.0, 0.0),
+                (3.0, 3.0, 0.0),
+                (2.0, 3.0, 0.0),
+                (2.0, 1.0, 0.0),
+                (1.0, 1.0, 0.0),
+                (1.0, 3.0, 0.0),
+                (0.0, 3.0, 0.0),
+            ],
+            [],
+            [tuple(range(8))],
+        )
+        concave_object = bpy.data.objects.new(
+            "Agent Bridge Concave Fur Surface",
+            concave_mesh,
+        )
+        scene.collection.objects.link(concave_object)
+        solidify = concave_object.modifiers.new(
+            "Agent Bridge Concave Fur Solidify",
+            "SOLIDIFY",
+        )
+        solidify.thickness = 0.2
+        evaluated_triangles, triangle_warning = (
+            advanced_rigging._surface_triangles(concave_object)
+        )
+        evaluated_area = sum(
+            advanced_rigging.fur_groom.triangle_area(item["vertices"])
+            for item in evaluated_triangles
+        )
+        assert not triangle_warning, triangle_warning
+        assert len(evaluated_triangles) > 6, evaluated_triangles
+        assert evaluated_area > 14.0, evaluated_area
+        bpy.data.objects.remove(concave_object, do_unlink=True)
+        bpy.data.meshes.remove(concave_mesh)
+
+        failed_fur_inventory = (
+            set(bpy.data.objects.keys()),
+            set(bpy.data.curves.keys()),
+            set(bpy.data.materials.keys()),
+        )
+        failed_fur = json.loads(
+            tool_dispatcher.execute_tool(
+                context,
+                "create_directional_fur_curves",
+                {
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "name_prefix": "Agent Bridge Missing Mask Fur",
+                "count": 8,
+                "regions": [
+                    {
+                        "name": "missing",
+                        "vertex_group": "Agent Bridge Missing Fur Mask",
+                    }
+                ],
+                },
+            )
+        )
+        assert not failed_fur["ok"] and failed_fur["code"] == "no_fur_samples", failed_fur
+        assert (
+            set(bpy.data.objects.keys()),
+            set(bpy.data.curves.keys()),
+            set(bpy.data.materials.keys()),
+        ) == failed_fur_inventory, failed_fur
 
         cloth = _execute(
             context,
@@ -1769,6 +1984,558 @@ def main():
         assert inspected_collection["curves"][0]["world_points"], inspected_guides
         assert live_preview.current_transaction()["status"] == "pending", reference_guides
 
+        no_plane_reference_guides = _execute(
+            context,
+            "create_reference_modeling_guides",
+            {
+                "image_path": persistent_reference_path,
+                "include_image_plane": False,
+                "landmarks": [
+                    {"name": "center", "point": [0.5, 0.5]},
+                ],
+            },
+        )
+        assert no_plane_reference_guides["ok"] is True, no_plane_reference_guides
+        assert (
+            bpy.data.images.get(persistent_reference_name)
+            is persistent_reference_image
+        )
+        annotation_image_path = persistent_reference_path
+        scene.render.pixel_aspect_x = 2.0
+        scene.render.pixel_aspect_y = 1.0
+        annotation_guides = _execute(
+            context,
+            "create_reference_guides_from_annotations",
+            {
+                "image_path": annotation_image_path,
+                "annotations_json": json.dumps(
+                    {
+                        "version": 1,
+                        "subject": "annotation pipeline subject",
+                        "coordinate_space": "pixel",
+                        "origin": "top_left",
+                        "image_size": [1000, 600],
+                        "image_rect": [100, 100, 800, 400],
+                        "landmarks": [
+                            {"name": "center", "point": [500, 300]},
+                            {"name": "upper", "point": [500, 180]},
+                        ],
+                        "outlines": [
+                            {
+                                "name": "primary_outline",
+                                "points": [
+                                    [100, 100],
+                                    [900, 100],
+                                    [900, 500],
+                                    [100, 500],
+                                ],
+                                "closed": True,
+                            }
+                        ],
+                        "masses": [
+                            {
+                                "name": "primary_mass",
+                                "bbox": [300, 200, 400, 200],
+                            }
+                        ],
+                        "measurements": [
+                            {
+                                "name": "vertical_span",
+                                "from": "center",
+                                "to": "upper",
+                            }
+                        ],
+                    }
+                ),
+                "collection_name": "Agent Bridge Annotation Pipeline Guides",
+                "plane_height": 3.0,
+                "create_camera": True,
+                "activate_camera": True,
+            },
+        )
+        assert annotation_guides["image_size"] == [400.0, 200.0], annotation_guides
+        assert abs(annotation_guides["plane"]["width"] - 6.0) < 1e-6, annotation_guides
+        assert annotation_guides["annotation_source"]["kind"] == "json", annotation_guides
+        assert len(annotation_guides["annotation_source"]["sha256"]) == 64, annotation_guides
+        assert len(annotation_guides["reference_identity"]["sha256"]) == 64, annotation_guides
+        assert annotation_guides["annotation_summary"]["counts"]["landmarks"] == 2, annotation_guides
+        assert annotation_guides["annotation_summary"]["counts"]["outlines"] == 1, annotation_guides
+        world_per_pixel = annotation_guides["calibration"]["world_units_per_reference_pixel"]
+        assert abs(world_per_pixel[0] - 0.015) < 1e-6, annotation_guides
+        assert abs(world_per_pixel[1] - 0.015) < 1e-6, annotation_guides
+        center_location = annotation_guides["landmarks"][0]["location"]
+        assert abs(center_location[0]) < 1e-6, annotation_guides
+        assert abs(center_location[2] - 1.5) < 1e-6, annotation_guides
+        annotation_camera = bpy.data.objects[annotation_guides["camera"]["object"]]
+        assert annotation_camera.type == "CAMERA", annotation_guides
+        assert annotation_camera.data.type == "ORTHO", annotation_guides
+        assert abs(annotation_camera.data.ortho_scale - 3.3) < 1e-6, annotation_guides
+        assert annotation_guides["camera"]["render_resolution"] == [400, 200], annotation_guides
+        assert annotation_guides["camera"]["render_aspect_matched"], annotation_guides
+        assert scene.render.resolution_x == 400, annotation_guides
+        assert scene.render.resolution_y == 200, annotation_guides
+        assert scene.render.pixel_aspect_x == 1.0, annotation_guides
+        assert scene.render.pixel_aspect_y == 1.0, annotation_guides
+        assert scene.camera == annotation_camera, annotation_guides
+        invalid_camera_comparison = json.loads(
+            tool_dispatcher.execute_tool(
+                context,
+                "compare_model_to_reference",
+                {
+                    "collection_name": annotation_guides["collection"],
+                    "camera_name": camera.name,
+                    "object_names": ["Cube"],
+                    "selected_only": False,
+                },
+            )
+        )
+        assert not invalid_camera_comparison["ok"], invalid_camera_comparison
+        assert "calibrated" in invalid_camera_comparison["message"].lower() or (
+            "not part" in invalid_camera_comparison["message"].lower()
+        ), invalid_camera_comparison
+        inspected_annotations = _execute(
+            context,
+            "inspect_reference_modeling_guides",
+            {
+                "collection_name": annotation_guides["collection"],
+                "include_points": True,
+                "max_points_per_curve": 8,
+            },
+        )
+        inspected_annotation_collection = inspected_annotations["collections"][0]
+        assert inspected_annotations["totals"]["cameras"] == 1, inspected_annotations
+        assert inspected_annotation_collection["camera"] == annotation_camera.name, inspected_annotations
+        assert (
+            inspected_annotation_collection["cameras"][0]["render_resolution"]
+            == [400, 200]
+        ), inspected_annotations
+        assert (
+            inspected_annotation_collection["annotation_pipeline"]["source"]["sha256"]
+            == annotation_guides["annotation_source"]["sha256"]
+        ), inspected_annotations
+        assert live_preview.current_transaction()["status"] == "pending", annotation_guides
+        comparison_render_state = (
+            scene.render.resolution_x,
+            scene.render.resolution_y,
+            scene.render.resolution_percentage,
+            scene.render.pixel_aspect_x,
+            scene.render.pixel_aspect_y,
+        )
+        cube_hide_render = cube.hide_render
+        reference_comparison = _execute(
+            context,
+            "compare_model_to_reference",
+            {
+                "collection_name": annotation_guides["collection"],
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "outline_name": "primary_outline",
+                "reference_mask_source": "outline",
+                "landmark_targets": [
+                    {"name": "center", "object_name": "Cube"}
+                ],
+                "max_axis": 256,
+            },
+        )
+        assert reference_comparison["ok"], reference_comparison
+        assert (
+            0.0
+            < reference_comparison["metrics"]["silhouette_iou"]
+            <= 1.0
+        ), reference_comparison
+        assert reference_comparison["metrics"]["error_regions"], reference_comparison
+        assert reference_comparison["landmark_errors"], reference_comparison
+        assert (
+            reference_comparison["reference_identity"]["sha256"]
+            == annotation_guides["reference_identity"]["sha256"]
+        ), reference_comparison
+        original_validate_reference_target = (
+            quality_benchmarks.validate_reference_evaluation_target
+        )
+        original_compare_reference = (
+            reference_comparison_module.compare_model_to_reference
+        )
+        try:
+            quality_benchmarks.validate_reference_evaluation_target = (
+                lambda _run_id: {
+                    "ok": True,
+                    "run": {
+                        "reference_identity": {
+                            "sha256": "0" * 64,
+                            "reproducible": True,
+                        }
+                    },
+                }
+            )
+
+            def _unexpected_reference_render(*_args, **_kwargs):
+                raise AssertionError(
+                    "mismatched benchmark reference should fail before render"
+                )
+
+            reference_comparison_module.compare_model_to_reference = (
+                _unexpected_reference_render
+            )
+            mismatched_benchmark_reference = (
+                reference_benchmark_scene.evaluate_reference_model_benchmark(
+                    context,
+                    run_id="mismatched-reference-fixture",
+                    collection_name=annotation_guides["collection"],
+                )
+            )
+        finally:
+            quality_benchmarks.validate_reference_evaluation_target = (
+                original_validate_reference_target
+            )
+            reference_comparison_module.compare_model_to_reference = (
+                original_compare_reference
+            )
+        assert not mismatched_benchmark_reference["ok"], (
+            mismatched_benchmark_reference
+        )
+        assert (
+            mismatched_benchmark_reference["code"]
+            == "benchmark_reference_identity_mismatch"
+        ), mismatched_benchmark_reference
+        assert reference_comparison["metadata_uri"].startswith(
+            "blender://inspection-renders/"
+        ), reference_comparison
+        assert len(reference_comparison["images"]) == 3, reference_comparison
+        assert all(
+            image["available"] for image in reference_comparison["images"]
+        ), reference_comparison
+        assert (
+            scene.render.resolution_x,
+            scene.render.resolution_y,
+            scene.render.resolution_percentage,
+            scene.render.pixel_aspect_x,
+            scene.render.pixel_aspect_y,
+        ) == comparison_render_state, reference_comparison
+        assert cube.hide_render == cube_hide_render, reference_comparison
+        assert (
+            bpy.data.materials.get("Agent Bridge Reference Mask") is None
+        ), reference_comparison
+        assert (
+            live_preview.current_transaction()["status"] == "pending"
+        ), reference_comparison
+        reference_benchmark = _execute(
+            context,
+            "evaluate_reference_model_benchmark",
+            {
+                "collection_name": annotation_guides["collection"],
+                "object_names": ["Cube"],
+                "selected_only": False,
+                "outline_name": "primary_outline",
+                "reference_mask_source": "outline",
+                "landmark_targets": [
+                    {"name": "center", "object_name": "Cube"}
+                ],
+                "profile": "blockout",
+                "max_axis": 128,
+            },
+        )
+        assert isinstance(reference_benchmark["passed"], bool), reference_benchmark
+        assert (
+            reference_benchmark["evaluation"]["gate_count"] >= 5
+        ), reference_benchmark
+        assert (
+            reference_benchmark["evaluation"]["profile"] == "blockout"
+        ), reference_benchmark
+        assert len(reference_benchmark["images"]) == 3, reference_benchmark
+        assert all(
+            image["available"] for image in reference_benchmark["images"]
+        ), reference_benchmark
+        assert reference_benchmark["metadata_uri"].startswith(
+            "blender://inspection-renders/"
+        ), reference_benchmark
+        assert (
+            live_preview.current_transaction()["status"] == "pending"
+        ), reference_benchmark
+        multiview_annotations_front = {
+            "version": 1,
+            "coordinate_space": "normalized",
+            "origin": "top_left",
+            "landmarks": [
+                {"name": "shared", "point": [0.6, 0.4]},
+                {"name": "front_only", "point": [0.4, 0.55]},
+            ],
+            "outlines": [
+                {
+                    "name": "front_outline",
+                    "points": [[0.35, 0.2], [0.65, 0.2], [0.7, 0.8], [0.3, 0.8]],
+                    "closed": True,
+                }
+            ],
+        }
+        multiview_annotations_left = {
+            "version": 1,
+            "coordinate_space": "normalized",
+            "origin": "top_left",
+            "landmarks": [{"name": "shared", "point": [0.55, 0.4]}],
+            "outlines": [
+                {
+                    "name": "left_outline",
+                    "points": [[0.4, 0.2], [0.6, 0.2], [0.65, 0.8], [0.35, 0.8]],
+                    "closed": True,
+                }
+            ],
+        }
+        multiview_annotations_top = {
+            "version": 1,
+            "coordinate_space": "normalized",
+            "origin": "top_left",
+            "landmarks": [{"name": "shared", "point": [0.6, 0.4]}],
+        }
+        multiview_guides = _execute(
+            context,
+            "create_multiview_reference_guides",
+            {
+                "subject": "multi-view kitten",
+                "collection_name": "Agent Bridge Multi-View Guides",
+                "subject_center": [0.0, 0.0, 1.5],
+                "active_view": "front",
+                "views": [
+                    {
+                        "name": "front",
+                        "axis": "FRONT",
+                        "image_path": annotation_image_path,
+                        "annotations": multiview_annotations_front,
+                        "plane_height": 3.0,
+                    },
+                    {
+                        "name": "left",
+                        "axis": "LEFT",
+                        "image_path": annotation_image_path,
+                        "annotations": multiview_annotations_left,
+                        "plane_height": 3.0,
+                    },
+                    {
+                        "name": "top_custom",
+                        "axis": "CUSTOM",
+                        "view_direction": [0.0, 0.0, -1.0],
+                        "up_direction": [0.0, 1.0, 0.0],
+                        "image_path": annotation_image_path,
+                        "annotations": multiview_annotations_top,
+                        "plane_height": 3.0,
+                    },
+                ],
+                "create_connectors": True,
+                "max_landmark_residual": 0.01,
+            },
+        )
+        assert len(multiview_guides["views"]) == 3, multiview_guides
+        assert len(multiview_guides["landmarks_3d"]) == 1, multiview_guides
+        shared_landmark = multiview_guides["landmarks_3d"][0]
+        assert shared_landmark["name"] == "shared", multiview_guides
+        assert shared_landmark["confidence"] == "within_residual_limit", multiview_guides
+        assert len(shared_landmark["connectors"]) == 3, multiview_guides
+        assert abs(shared_landmark["location"][0] - 0.6) < 1e-5, multiview_guides
+        assert abs(shared_landmark["location"][1] - 0.3) < 1e-5, multiview_guides
+        assert abs(shared_landmark["location"][2] - 1.8) < 1e-5, multiview_guides
+        assert multiview_guides["unresolved_landmarks"][0]["name"] == "front_only", multiview_guides
+        multiview_master = bpy.data.collections[multiview_guides["collection"]]
+        assert multiview_master.get("reference_multiview_guides"), multiview_guides
+        assert all(
+            multiview_master.children.get(view["collection"]) is not None
+            for view in multiview_guides["views"]
+        ), multiview_guides
+        assert scene.camera.name == multiview_guides["views"][0]["camera"], multiview_guides
+        top_camera = bpy.data.objects[multiview_guides["views"][2]["camera"]]
+        top_camera_up = top_camera.matrix_world.to_quaternion() @ Vector((0.0, 1.0, 0.0))
+        assert (top_camera_up - Vector((0.0, 1.0, 0.0))).length < 1e-5, multiview_guides
+        inspected_multiview = _execute(
+            context,
+            "inspect_reference_modeling_guides",
+            {
+                "collection_name": multiview_master.name,
+                "include_points": True,
+                "max_points_per_curve": 4,
+            },
+        )
+        assert inspected_multiview["totals"]["landmarks_3d"] == 1, inspected_multiview
+        assert inspected_multiview["totals"]["reconstruction_rays"] == 3, inspected_multiview
+
+        failed_multiview_inventory = (
+            set(bpy.data.objects.keys()),
+            set(bpy.data.collections.keys()),
+            set(bpy.data.curves.keys()),
+            set(bpy.data.meshes.keys()),
+            set(bpy.data.cameras.keys()),
+            set(bpy.data.materials.keys()),
+            set(bpy.data.images.keys()),
+        )
+        failed_multiview = json.loads(
+            tool_dispatcher.execute_tool(
+                context,
+                "create_multiview_reference_guides",
+                {
+                    "collection_name": "Agent Bridge Parallel Multi-View Guides",
+                    "views": [
+                        {
+                            "name": "front",
+                            "axis": "FRONT",
+                            "image_path": annotation_image_path,
+                            "annotations": multiview_annotations_front,
+                        },
+                        {
+                            "name": "back",
+                            "axis": "BACK",
+                            "image_path": annotation_image_path,
+                            "annotations": multiview_annotations_left,
+                        },
+                    ],
+                },
+            )
+        )
+        assert not failed_multiview["ok"], failed_multiview
+        assert failed_multiview["code"] == "multiview_guide_creation_failed", failed_multiview
+        assert (
+            set(bpy.data.objects.keys()),
+            set(bpy.data.collections.keys()),
+            set(bpy.data.curves.keys()),
+            set(bpy.data.meshes.keys()),
+            set(bpy.data.cameras.keys()),
+            set(bpy.data.materials.keys()),
+            set(bpy.data.images.keys()),
+        ) == failed_multiview_inventory, failed_multiview
+        comparison_dirs_before_failure = {
+            os.path.join(root, name)
+            for root, directories, _files in os.walk(capture_dir)
+            for name in directories
+            if name.startswith("reference-comparison-")
+        }
+        failed_alpha_comparison = json.loads(
+            tool_dispatcher.execute_tool(
+                context,
+                "compare_model_to_reference",
+                {
+                    "collection_name": annotation_guides["collection"],
+                    "object_names": ["Cube"],
+                    "selected_only": False,
+                    "reference_mask_source": "alpha",
+                    "max_axis": 128,
+                },
+            )
+        )
+        assert not failed_alpha_comparison["ok"], failed_alpha_comparison
+        assert "fully opaque" in failed_alpha_comparison["message"], failed_alpha_comparison
+        assert (
+            scene.render.resolution_x,
+            scene.render.resolution_y,
+            scene.render.resolution_percentage,
+            scene.render.pixel_aspect_x,
+            scene.render.pixel_aspect_y,
+        ) == comparison_render_state, failed_alpha_comparison
+        assert cube.hide_render == cube_hide_render, failed_alpha_comparison
+        assert (
+            bpy.data.materials.get("Agent Bridge Reference Mask") is None
+        ), failed_alpha_comparison
+        comparison_dirs_after_failure = {
+            os.path.join(root, name)
+            for root, directories, _files in os.walk(capture_dir)
+            for name in directories
+            if name.startswith("reference-comparison-")
+        }
+        assert (
+            comparison_dirs_after_failure == comparison_dirs_before_failure
+        ), failed_alpha_comparison
+        reference_blockout = _execute(
+            context,
+            "create_reference_blockout",
+            {
+                "collection_name": annotation_guides["collection"],
+                "mass_names": ["primary_mass"],
+                "mass_settings": [
+                    {
+                        "name": "primary_mass",
+                        "depth_ratio": 0.65,
+                        "controls": [
+                            {
+                                "direction": [0.0, 0.0, 1.0],
+                                "offset": 0.08,
+                                "falloff": 0.5,
+                            }
+                        ],
+                    }
+                ],
+                "name_prefix": "Agent Bridge Reference Blockout",
+                "segments": 16,
+                "rings": 8,
+                "blend_mode": "voxel",
+                "voxel_size": 0.001,
+                "smooth_iterations": 1,
+            },
+        )
+        assert len(reference_blockout["components"]) == 1, reference_blockout
+        blockout_component = bpy.data.objects[
+            reference_blockout["components"][0]["object"]
+        ]
+        blockout_result = bpy.data.objects[
+            reference_blockout["blended_object"]
+        ]
+        assert blockout_component.type == "MESH", reference_blockout
+        assert blockout_component.hide_get(), reference_blockout
+        assert blockout_component.hide_render, reference_blockout
+        assert blockout_result.type == "MESH", reference_blockout
+        assert blockout_result.get("reference_blockout"), reference_blockout
+        assert blockout_result.modifiers.get(
+            "Reference Soft Union"
+        ), reference_blockout
+        assert blockout_result.modifiers.get(
+            "Reference Surface Relax"
+        ), reference_blockout
+        assert (
+            reference_blockout["effective_voxel_size"] > 0.001
+        ), reference_blockout
+        assert (
+            live_preview.current_transaction()["status"] == "pending"
+        ), reference_blockout
+        blockout_failure_transaction = live_preview.current_transaction()
+        blockout_failure_state = (
+            blockout_failure_transaction["id"],
+            len(blockout_failure_transaction["before_state"]),
+            len(blockout_failure_transaction["applied_steps"]),
+        )
+        blockout_failure_inventory = (
+            set(bpy.data.objects.keys()),
+            set(bpy.data.meshes.keys()),
+            set(bpy.data.materials.keys()),
+        )
+        original_blend_soft_forms = reference_blockout_module.blend_soft_forms
+        try:
+            reference_blockout_module.blend_soft_forms = (
+                lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    RuntimeError("forced blockout blend failure")
+                )
+            )
+            failed_blockout = reference_blockout_module.create_reference_blockout(
+                context,
+                collection_name=annotation_guides["collection"],
+                mass_names=["primary_mass"],
+                name_prefix="Agent Bridge Failed Reference Blockout",
+                segments=16,
+                rings=8,
+                blend_mode="voxel",
+            )
+        finally:
+            reference_blockout_module.blend_soft_forms = original_blend_soft_forms
+        assert not failed_blockout["ok"], failed_blockout
+        assert "forced blockout blend failure" in failed_blockout["message"], failed_blockout
+        assert (
+            set(bpy.data.objects.keys()),
+            set(bpy.data.meshes.keys()),
+            set(bpy.data.materials.keys()),
+        ) == blockout_failure_inventory, failed_blockout
+        assert (
+            live_preview.current_transaction()
+            is blockout_failure_transaction
+        ), failed_blockout
+        assert (
+            blockout_failure_transaction["id"],
+            len(blockout_failure_transaction["before_state"]),
+            len(blockout_failure_transaction["applied_steps"]),
+        ) == blockout_failure_state, failed_blockout
+
         converted_curve = _execute(
             context,
             "curve_to_mesh",
@@ -1828,6 +2595,10 @@ def main():
         assert tuple(round(float(component), 4) for component in scene.world.color) == (0.02, 0.03, 0.06)
 
         _execute(context, "revert_preview", {})
+        assert (
+            bpy.data.images.get(persistent_reference_name)
+            is persistent_reference_image
+        )
         final = _snapshot(scene, cube, camera)
         assert final == initial, {"initial": initial, "final": final}
         restored_topology = _material_topology(existing_material)
@@ -1835,6 +2606,49 @@ def main():
             "expected": existing_topology,
             "actual": restored_topology,
         }
+
+        fresh_failure_group = cube.vertex_groups.new(
+            name="Agent Bridge Fresh Failure Mask"
+        )
+        fresh_failure_material = bpy.data.materials.new(
+            "Agent Bridge Fresh Failure Material"
+        )
+        fresh_failure_material.diffuse_color = (1.0, 0.0, 0.0, 1.0)
+        fresh_failure = json.loads(
+            tool_dispatcher.execute_tool(
+                context,
+                "create_directional_fur_curves",
+                {
+                    "object_names": ["Cube"],
+                    "selected_only": False,
+                    "material_name": fresh_failure_material.name,
+                    "color": [0.0, 1.0, 0.0, 1.0],
+                    "count": 8,
+                    "regions": [
+                        {
+                            "name": "empty",
+                            "vertex_group": fresh_failure_group.name,
+                        }
+                    ],
+                },
+            )
+        )
+        assert not fresh_failure["ok"], fresh_failure
+        assert (
+            live_preview.current_transaction()["status"] == "reverted"
+        ), fresh_failure
+        assert not bool(
+            getattr(scene.claude_blender, "pending_preview", False)
+        ), fresh_failure
+        assert tuple(fresh_failure_material.diffuse_color) == (
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+        ), fresh_failure
+        cube.vertex_groups.remove(fresh_failure_group)
+        bpy.data.materials.remove(fresh_failure_material)
+        assert _snapshot(scene, cube, camera) == final
         print("smoke_advanced_helpers: ok")
     finally:
         preferences.get_preferences = original_get_preferences

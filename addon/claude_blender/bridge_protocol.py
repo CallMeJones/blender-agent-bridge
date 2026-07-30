@@ -7,6 +7,8 @@ tool semantics.
 
 from __future__ import annotations
 
+import math
+
 try:
     from . import build_info, tool_registry
 except ImportError:  # Allows direct imports from addon/claude_blender.
@@ -199,6 +201,10 @@ def _integer_schema_value(schema, key):
     return None
 
 
+def _finite_json_number(value):
+    return not isinstance(value, float) or math.isfinite(value)
+
+
 def validate_arguments(value, schema, path="$"):
     """Validate a value against the JSON Schema subset used by this project.
 
@@ -217,6 +223,25 @@ def validate_arguments(value, schema, path="$"):
     if "enum" in schema and value not in schema.get("enum", []):
         errors.append(f"{path}: expected one of {schema.get('enum')}")
         return errors
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if not _finite_json_number(value):
+            errors.append(f"{path}: expected a finite number")
+            return errors
+        for keyword, relation in (
+            ("minimum", "at least"),
+            ("maximum", "at most"),
+        ):
+            bound = schema.get(keyword)
+            if (
+                isinstance(bound, (int, float))
+                and not isinstance(bound, bool)
+                and _finite_json_number(bound)
+                and (
+                    (keyword == "minimum" and value < bound)
+                    or (keyword == "maximum" and value > bound)
+                )
+            ):
+                errors.append(f"{path}: expected {relation} {bound}")
     for combiner in ("anyOf", "oneOf"):
         variants = schema.get(combiner)
         if not isinstance(variants, list):

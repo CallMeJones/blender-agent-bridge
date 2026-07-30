@@ -4,8 +4,15 @@ from __future__ import annotations
 
 import bpy
 
-from .. import execution_traces, quality_benchmarks, quality_reviews, workflow_planning
-from .support import _bounded_int, _name_list
+from .. import (
+    execution_traces,
+    preferences,
+    quality_benchmarks,
+    quality_reviews,
+    reference_benchmark_scene,
+    workflow_planning,
+)
+from .support import _bounded_float, _bounded_int, _name_list
 
 
 def start_execution_trace(context, args):
@@ -81,6 +88,45 @@ def get_quality_benchmark_run(context, args):
         return quality_benchmarks.get_run(run_id)
     latest = quality_benchmarks.latest_run()
     return latest
+
+
+def evaluate_reference_model_benchmark(context, args):
+    prefs = preferences.get_preferences(context)
+    landmark_targets = args.get("landmark_targets")
+    return reference_benchmark_scene.evaluate_reference_model_benchmark(
+        context,
+        profile=str(args.get("profile") or "refined"),
+        threshold_overrides=(
+            args.get("threshold_overrides")
+            if isinstance(args.get("threshold_overrides"), dict)
+            else {}
+        ),
+        run_id=str(args.get("run_id") or ""),
+        collection_name=str(args.get("collection_name") or ""),
+        camera_name=str(args.get("camera_name") or ""),
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", True)),
+        outline_name=str(args.get("outline_name") or ""),
+        reference_mask_source=str(
+            args.get("reference_mask_source") or "auto"
+        ),
+        landmark_targets=(
+            landmark_targets if isinstance(landmark_targets, list) else []
+        ),
+        max_axis=_bounded_int(
+            args.get("max_axis"),
+            512,
+            minimum=64,
+            maximum=1024,
+        ),
+        mask_threshold=_bounded_float(
+            args.get("mask_threshold"),
+            0.5,
+            minimum=0.01,
+            maximum=0.99,
+        ),
+        capture_dir=getattr(prefs, "capture_cache_dir", None),
+    )
 
 
 def finish_quality_benchmark_run(context, args):

@@ -1,5 +1,27 @@
 # Diagnostics And Recovery
 
+## End-To-End Connection Doctor
+
+When the `blender-bridge` command is available, use `blender-bridge doctor` for
+a deterministic read-only check of the MCP process, socket, Blender health,
+version/registry parity, five-tool manifest, schema lookup, and gateway scene
+inspection. Use `--json` for structured output and `--client-config <path>` to
+inspect the `blender` entry in any supported JSON or TOML MCP client config
+without returning its environment values. The selected config's URL and token
+must drive the probe; explicit overrides must match it. Reject remote plaintext
+HTTP before opening a socket or sending authentication.
+
+Classify the failing layer before suggesting recovery:
+
+- missing command or server path: replace the client entry;
+- TCP refused: start Blender's bridge or correct the port;
+- TCP accepted but HTTP is wrong: investigate an occupied port;
+- HTTP 401: replace the bridge token;
+- registry/protocol mismatch: align add-on and connector versions;
+- current runtime passes but the client differs: restart or refresh the client.
+
+The doctor probe is non-mutating and does not require script trust.
+
 ## Bridge Timeout
 
 A `bridge_timeout` can mean Blender is still completing a main-thread operation.

@@ -171,8 +171,13 @@ Operational changes should use typed helpers when validation, rollback, provenan
 - `animate_shape_key`
 - `create_text_object`
 - `create_curve_path`
+- `create_reference_guides_from_annotations`
+- `create_multiview_reference_guides`
 - `create_reference_modeling_guides`
 - `inspect_reference_modeling_guides`
+- `compare_model_to_reference`
+- `evaluate_reference_model_benchmark`
+- `create_reference_blockout`
 - `add_particle_system_to_selected`
 - `create_directional_fur_curves`
 - `create_basic_armature`
@@ -194,7 +199,7 @@ Operational changes should use typed helpers when validation, rollback, provenan
 
 Helpers can validate object names, expected types, frame ranges, and value ranges before applying changes. With active trust, authored object generation, modeling, animation, materials, custom nodes, rigging, and look development default to one cohesive Python script unless the user requests helpers. Exact helpers remain appropriate for deliberately isolated edits.
 
-Reusable mutating helpers are owned by cohesive `advanced_animation.py`, `advanced_camera_render.py`, `advanced_materials.py`, `advanced_modeling.py`, `advanced_presentation.py`, `advanced_rigging.py`, and `advanced_scene_editing.py` modules, with shared mechanics in `advanced_support.py`; `advanced_helpers.py` is only a compatibility re-export facade. The helpers still write through the live-preview transaction layer. Read-only workflow composition lives in `workflow_planning.py`, 2D inspection lives in `two_d_inspection.py`, neutral handler parsing lives in `tool_handlers/support.py`, generic runtime support lives in `handler_runtime.py`, animation orchestration lives in `animation_runtime.py`, and `tool_executor.py` is the only registry-composition owner. This keeps domain handlers independent of registry construction and removes the former handler/runtime import cycle.
+Reusable mutating helpers are owned by cohesive `advanced_animation.py`, `advanced_camera_render.py`, `advanced_materials.py`, `advanced_modeling.py`, `advanced_presentation.py`, `advanced_rigging.py`, and `advanced_scene_editing.py` modules, with pure area-weighted groom geometry in `fur_groom.py`, pure multi-view calibration/ray intersection in `reference_multiview.py`, its Blender scene adapter in `reference_multiview_scene.py`, reference-image scene construction and inspection in `reference_guides.py`, pure annotation normalization in `reference_annotations.py`, pure render-comparison metrics in `reference_metrics.py`, versioned metric profiles in `reference_benchmarks.py`, and the live benchmark adapter in `reference_benchmark_scene.py`. Shared mechanics remain in `advanced_support.py`; `advanced_helpers.py` is only a compatibility re-export facade. The helpers still write through the live-preview transaction layer. Read-only workflow composition lives in `workflow_planning.py`, 2D inspection lives in `two_d_inspection.py`, neutral handler parsing lives in `tool_handlers/support.py`, generic runtime support lives in `handler_runtime.py`, animation orchestration lives in `animation_runtime.py`, and `tool_executor.py` is the only registry-composition owner. This keeps domain handlers independent of registry construction and removes the former handler/runtime import cycle.
 
 The bridge intentionally does not ship finished-content generators or style-specific vehicle, product, character, storyboard, cutout, prop, or shot templates. Under active trust, open-ended authored content uses one reference- or brief-derived custom script rather than category generators or long primitive-helper chains. Reusable helpers remain the control plane for inspection, asset import, evidence, long jobs, file operations, and preview decisions.
 

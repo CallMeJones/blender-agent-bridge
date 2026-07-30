@@ -1,8 +1,12 @@
 # MCP Client Guides
 
-Last verified: 2026-07-19
+Last verified: 2026-07-28
 
 Blender Agent Bridge works with MCP hosts that can launch a local stdio server. Bundled mode is the default and needs no extra package manager. The optional `uvx` mode runs the matching `blender-bridge` PyPI package and is useful when the client should not depend on the extension's installation path.
+
+The release `.mcpb` installs the connector only in Claude Desktop. Codex,
+Cursor, Claude Code, and other stdio clients should use the complete JSON from
+Blender's **Copy MCP Config** button.
 
 | Client | Local stdio support | Guide |
 | --- | --- | --- |
@@ -23,3 +27,15 @@ Blender Agent Bridge works with MCP hosts that can launch a local stdio server. 
 - Bundled mode remains the zero-install default. `uvx / PyPI` requires [`uv`](https://docs.astral.sh/uv/getting-started/installation/) and runs the exact matching version.
 - After changing the extension, launch mode, or config, replace the complete client entry and restart or refresh the MCP host.
 - Safe smoke prompt: `Check Blender bridge status, find and invoke the scene-object inspection tool, and make no changes.`
+
+The default manifest contains exactly:
+
+- `blender_bridge_status`
+- `blender_tool_catalog`
+- `search_blender_tools`
+- `get_blender_tool_schema`
+- `invoke_blender_tool`
+
+All other helpers remain available through search, schema lookup, and gateway
+invocation. A helper named by a planner is not missing merely because it is not
+advertised as a top-level tool.

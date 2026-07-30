@@ -270,11 +270,23 @@ def create_directional_fur_curves(context, args):
         count=_bounded_int(args.get("count"), 160, minimum=1, maximum=5000),
         length=_bounded_float(args.get("length"), 0.12, minimum=0.001, maximum=100.0),
         root_width=_bounded_float(args.get("root_width"), 0.004, minimum=0.0001, maximum=10.0),
+        tip_width=(
+            None
+            if args.get("tip_width") is None
+            else _bounded_float(args.get("tip_width"), 0.0006, minimum=0.0, maximum=10.0)
+        ),
         flow_direction=_float_list(args.get("flow_direction"), 3, (1.0, 0.0, 0.0)),
         flow_strength=_bounded_float(args.get("flow_strength"), 0.65, minimum=0.0, maximum=1.0),
         normal_lift=_bounded_float(args.get("normal_lift"), 0.35, minimum=0.0, maximum=1.0),
         length_randomness=_bounded_float(args.get("length_randomness"), 0.35, minimum=0.0, maximum=1.0),
-        curve_points=_bounded_int(args.get("curve_points"), 4, minimum=2, maximum=8),
+        curve_points=_bounded_int(args.get("curve_points"), 5, minimum=2, maximum=16),
+        minimum_spacing=_bounded_float(args.get("minimum_spacing"), 0.0, minimum=0.0, maximum=100.0),
+        auto_spacing=bool(args.get("auto_spacing", True)),
+        clump_strength=_bounded_float(args.get("clump_strength"), 0.15, minimum=0.0, maximum=1.0),
+        clump_size=_bounded_int(args.get("clump_size"), 8, minimum=1, maximum=100),
+        noise_strength=_bounded_float(args.get("noise_strength"), 0.08, minimum=0.0, maximum=1.0),
+        flow_controls=args.get("flow_controls") if isinstance(args.get("flow_controls"), list) else [],
+        regions=args.get("regions") if isinstance(args.get("regions"), list) else [],
         material_name=str(args.get("material_name") or ""),
         color=_float_list(args.get("color"), 4, (0.82, 0.82, 0.78, 1.0)),
         seed=_bounded_int(args.get("seed"), 17, minimum=0, maximum=1000000),

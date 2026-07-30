@@ -9,11 +9,16 @@ import os
 import time
 import uuid
 
-from . import execution_traces, quality_reviews, user_paths
+from . import (
+    execution_traces,
+    quality_reviews,
+    reference_benchmarks,
+    user_paths,
+)
 
 
 BENCHMARK_SCHEMA_VERSION = 1
-BENCHMARK_SUITE_VERSION = "2026.07.1"
+BENCHMARK_SUITE_VERSION = "2026.07.2"
 LATEST_BENCHMARK_RESOURCE_URI = "blender://quality-benchmarks/latest"
 
 TASKS = {
@@ -29,6 +34,7 @@ TASKS = {
         "expected_tools_any": ["draft_script", "start_trusted_script_job"],
         "required_tools": ["plan_model_quality_workflow", "submit_model_quality_evaluation"],
         "forbidden_tools": [],
+        "metric_profile": "refined",
     },
     "reference_human_character": {
         "title": "Human character reference modeling",
@@ -42,6 +48,7 @@ TASKS = {
         "expected_tools_any": ["draft_script", "start_trusted_script_job"],
         "required_tools": ["plan_model_quality_workflow", "submit_model_quality_evaluation"],
         "forbidden_tools": [],
+        "metric_profile": "refined",
     },
     "reference_hard_surface_product": {
         "title": "Hard-surface product reference modeling",
@@ -55,6 +62,7 @@ TASKS = {
         "expected_tools_any": ["draft_script", "start_trusted_script_job"],
         "required_tools": ["plan_model_quality_workflow", "submit_model_quality_evaluation"],
         "forbidden_tools": [],
+        "metric_profile": "refined",
     },
     "animation_wave_negative_routing": {
         "title": "Animation wave negative routing",
@@ -244,6 +252,7 @@ def start_run(
         "notes": str(notes or "")[:4000],
         "trace_id": trace["trace_id"],
         "quality_review_id": "",
+        "reference_evaluations": [],
         "expectation_result": {},
         "token_usage": {},
         "run_uri": f"blender://quality-benchmarks/{run_id}",
@@ -265,9 +274,210 @@ def start_run(
         "task_prompt": task["prompt"],
         "client_guidance": (
             "Execute the task normally through the five-tool gateway. For reference tasks, create and complete a "
-            "model quality review with this run_id as benchmark_run_id, then finish the benchmark with its review_id."
+            "model quality review with this run_id as benchmark_run_id, evaluate the final calibrated comparison with "
+            "evaluate_reference_model_benchmark using this run_id and the task metric_profile, then finish the "
+            "benchmark with its review_id."
         ),
     }
+
+
+def record_reference_evaluation(
+    run_id,
+    *,
+    evaluation,
+    comparison_id="",
+    metadata_uri="",
+    reference_identity=None,
+):
+    target = validate_reference_evaluation_target(run_id)
+    if not target.get("ok"):
+        return target
+    run = target["run"]
+    identity_result = validate_reference_identity(run, reference_identity)
+    if not identity_result.get("ok"):
+        return identity_result
+    try:
+        evaluation = _canonical_reference_evaluation(evaluation)
+    except ValueError as exc:
+        return {
+            "ok": False,
+            "code": "invalid_reference_benchmark_evaluation",
+            "message": str(exc),
+        }
+    entry = {
+        "recorded_at": _now_iso(),
+        "comparison_id": str(comparison_id or "")[:160],
+        "metadata_uri": str(metadata_uri or "")[:2000],
+        "reference_identity": identity_result["identity"],
+        "evaluation": evaluation,
+    }
+    evaluations = list(run.get("reference_evaluations") or [])
+    evaluations.append(entry)
+    run["reference_evaluations"] = evaluations[-20:]
+    _write(run)
+    execution_traces.record_event(
+        "benchmark_reference_evaluated",
+        trace_id=run["trace_id"],
+        layer="benchmark",
+        data={
+            "run_id": run["run_id"],
+            "profile": str(evaluation.get("profile") or ""),
+            "passed": bool(evaluation["passed"]),
+            "comparison_id": entry["comparison_id"],
+        },
+        allow_control_event=True,
+    )
+    return {
+        "ok": True,
+        "message": "Reference metric evaluation recorded on benchmark run",
+        "run_id": run["run_id"],
+        "reference_evaluation_count": len(run["reference_evaluations"]),
+        "entry": entry,
+    }
+
+
+def validate_reference_evaluation_target(run_id):
+    """Validate a benchmark link before spending time on a comparison render."""
+    run = _read(run_id)
+    if not run:
+        return {
+            "ok": False,
+            "available": False,
+            "run_id": str(run_id or ""),
+            "message": "Quality benchmark run was not found",
+        }
+    if run.get("status") != "running":
+        return {
+            "ok": False,
+            "code": "quality_benchmark_already_finished",
+            "message": f"Benchmark run status is {run.get('status')}",
+            "run": run,
+        }
+    if (run.get("task") or {}).get("category") != "reference_modeling":
+        return {
+            "ok": False,
+            "code": "benchmark_reference_evaluation_not_applicable",
+            "message": "Reference metric evaluations can only be linked to reference-modeling benchmark tasks",
+        }
+    return {"ok": True, "run": run}
+
+
+def validate_reference_identity(run, actual_identity):
+    expected = run.get("reference_identity") if isinstance(run, dict) else {}
+    expected = expected if isinstance(expected, dict) else {}
+    actual = actual_identity if isinstance(actual_identity, dict) else {}
+    expected_sha256 = str(expected.get("sha256") or "").strip().lower()
+    actual_sha256 = str(actual.get("sha256") or "").strip().lower()
+    valid_expected = len(expected_sha256) == 64 and all(
+        char in "0123456789abcdef" for char in expected_sha256
+    )
+    valid_actual = len(actual_sha256) == 64 and all(
+        char in "0123456789abcdef" for char in actual_sha256
+    )
+    if not bool(expected.get("reproducible")) or not valid_expected:
+        return {
+            "ok": False,
+            "code": "benchmark_reference_identity_unverifiable",
+            "message": (
+                "The benchmark run has no reproducible reference SHA-256; "
+                "start it with a local reference file or reference_sha256"
+            ),
+        }
+    if not valid_actual:
+        return {
+            "ok": False,
+            "code": "guide_reference_identity_missing",
+            "message": (
+                "The calibrated guide collection has no reference image "
+                "SHA-256; recreate the guides from the benchmark reference"
+            ),
+        }
+    if actual_sha256 != expected_sha256:
+        return {
+            "ok": False,
+            "code": "benchmark_reference_identity_mismatch",
+            "message": (
+                "The calibrated guide collection was created from a different "
+                "reference image than the benchmark run"
+            ),
+            "expected_sha256": expected_sha256,
+            "actual_sha256": actual_sha256,
+        }
+    return {"ok": True, "identity": actual}
+
+
+def _canonical_reference_evaluation(evaluation):
+    if not isinstance(evaluation, dict) or not isinstance(
+        evaluation.get("passed"),
+        bool,
+    ):
+        raise ValueError(
+            "evaluation must be a completed reference benchmark metric result"
+        )
+    if (
+        evaluation.get("schema_version")
+        != reference_benchmarks.REFERENCE_BENCHMARK_SCHEMA_VERSION
+    ):
+        raise ValueError(
+            "evaluation schema_version does not match the current reference benchmark schema"
+        )
+    if (
+        str(evaluation.get("suite_version") or "")
+        != reference_benchmarks.REFERENCE_BENCHMARK_SUITE_VERSION
+    ):
+        raise ValueError(
+            "evaluation suite_version does not match the current reference benchmark suite"
+        )
+    if not reference_benchmarks.profile_satisfies(
+        evaluation.get("profile"),
+        "blockout",
+    ):
+        raise ValueError("evaluation profile is not a recognized benchmark profile")
+    gates = evaluation.get("gates")
+    if not isinstance(gates, list) or not gates:
+        raise ValueError("evaluation gates must be a non-empty list")
+    if any(
+        not isinstance(gate, dict)
+        or not isinstance(gate.get("gate"), str)
+        or not isinstance(gate.get("passed"), bool)
+        for gate in gates
+    ):
+        raise ValueError("evaluation gates contain invalid entries")
+    failed_gates = [
+        gate["gate"] for gate in gates if not gate["passed"]
+    ]
+    if evaluation["passed"] != (not failed_gates):
+        raise ValueError("evaluation passed state does not match its gates")
+    if evaluation.get("failed_gates") != failed_gates:
+        raise ValueError("evaluation failed_gates do not match its gates")
+    if not isinstance(
+        evaluation.get("threshold_overrides_applied"),
+        bool,
+    ):
+        raise ValueError(
+            "evaluation threshold_overrides_applied must be boolean"
+        )
+    if not evaluation["threshold_overrides_applied"]:
+        expected_thresholds = reference_benchmarks.resolved_thresholds(
+            evaluation["profile"]
+        )
+        if evaluation.get("thresholds") != expected_thresholds:
+            raise ValueError(
+                "evaluation thresholds do not match its versioned profile"
+            )
+    try:
+        encoded = json.dumps(
+            evaluation,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError("evaluation must be finite JSON data") from exc
+    if len(encoded.encode("utf-8")) > 65536:
+        raise ValueError("evaluation exceeds the 64 KiB benchmark record limit")
+    return json.loads(encoded)
 
 
 def _observed_tool_names(trace_id):
@@ -308,6 +518,38 @@ def _evaluate_expectations(run):
         and str((review_summary or {}).get("benchmark_run_id") or "") == str(run.get("run_id") or "")
     )
     reference_reproducible = bool((run.get("reference_identity") or {}).get("reproducible"))
+    required_metric_profile = str(task.get("metric_profile") or "")
+    reference_evaluations = list(run.get("reference_evaluations") or [])
+    latest_metric_entry = (
+        reference_evaluations[-1] if reference_evaluations else {}
+    )
+    latest_metric_evaluation = (
+        latest_metric_entry.get("evaluation")
+        if isinstance(latest_metric_entry, dict)
+        and isinstance(latest_metric_entry.get("evaluation"), dict)
+        else {}
+    )
+    latest_metric_valid = bool(
+        latest_metric_evaluation
+        and latest_metric_evaluation.get("passed")
+        and not latest_metric_evaluation.get(
+            "threshold_overrides_applied",
+            False,
+        )
+        and reference_benchmarks.profile_satisfies(
+            latest_metric_evaluation.get("profile"),
+            required_metric_profile,
+        )
+        and str(latest_metric_entry.get("comparison_id") or "")
+        and str(latest_metric_entry.get("metadata_uri") or "").startswith(
+            "blender://inspection-renders/"
+        )
+    )
+    metric_state_valid = (
+        not reference_task
+        or not required_metric_profile
+        or latest_metric_valid
+    )
     quality_state_valid = not reference_task or (review_terminal and review_link_matches)
     reproducibility_valid = not reference_task or reference_reproducible
     return {
@@ -317,6 +559,7 @@ def _evaluate_expectations(run):
             and any_expected_seen
             and quality_state_valid
             and reproducibility_valid
+            and metric_state_valid
         ),
         "observed_tool_names": observed,
         "missing_required_tools": missing_required,
@@ -329,6 +572,28 @@ def _evaluate_expectations(run):
         "quality_review_status": review_status,
         "quality_review_terminal": review_terminal,
         "quality_review_link_matches_run": review_link_matches,
+        "required_metric_profile": required_metric_profile,
+        "reference_evaluation_count": len(reference_evaluations),
+        "latest_reference_evaluation_passed": bool(
+            latest_metric_evaluation.get("passed")
+        ),
+        "latest_reference_evaluation_profile": str(
+            latest_metric_evaluation.get("profile") or ""
+        ),
+        "latest_reference_evaluation_used_custom_thresholds": bool(
+            latest_metric_evaluation.get(
+                "threshold_overrides_applied",
+                False,
+            )
+        ),
+        "latest_reference_evaluation_has_evidence": bool(
+            latest_metric_entry
+            and str(latest_metric_entry.get("comparison_id") or "")
+            and str(latest_metric_entry.get("metadata_uri") or "").startswith(
+                "blender://inspection-renders/"
+            )
+        ),
+        "reference_metric_state_valid": metric_state_valid,
     }
 
 

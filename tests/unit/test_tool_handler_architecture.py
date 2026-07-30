@@ -13,6 +13,16 @@ ANIMATION_RUNTIME = ROOT / "addon" / "claude_blender" / "animation_runtime.py"
 EXECUTOR = ROOT / "addon" / "claude_blender" / "tool_executor.py"
 ENTRYPOINT = ROOT / "addon" / "claude_blender" / "__init__.py"
 ADVANCED_FACADE = ROOT / "addon" / "claude_blender" / "advanced_helpers.py"
+ADVANCED_MODELING = ROOT / "addon" / "claude_blender" / "advanced_modeling.py"
+REFERENCE_GUIDES = ROOT / "addon" / "claude_blender" / "reference_guides.py"
+REFERENCE_BLOCKOUT = ROOT / "addon" / "claude_blender" / "reference_blockout.py"
+REFERENCE_BENCHMARK_SCENE = (
+    ROOT / "addon" / "claude_blender" / "reference_benchmark_scene.py"
+)
+REFERENCE_MULTIVIEW = ROOT / "addon" / "claude_blender" / "reference_multiview.py"
+REFERENCE_MULTIVIEW_SCENE = (
+    ROOT / "addon" / "claude_blender" / "reference_multiview_scene.py"
+)
 
 
 class ToolHandlerArchitectureTests(unittest.TestCase):
@@ -53,6 +63,130 @@ class ToolHandlerArchitectureTests(unittest.TestCase):
         self.assertIn("importlib.reload(animation_runtime)", source)
         self.assertIn('sys.modules.get(f"{package}.tool_executor")', source)
         self.assertIn("importlib.reload(executor)", source)
+
+    def test_reference_annotation_policy_reloads_before_scene_consumer(self):
+        tree = ast.parse(ENTRYPOINT.read_text(encoding="utf-8"))
+        module_names = ()
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            if any(
+                isinstance(target, ast.Name) and target.id == "_MODULE_NAMES"
+                for target in node.targets
+            ):
+                module_names = ast.literal_eval(node.value)
+                break
+
+        self.assertIn("reference_annotations", module_names)
+        self.assertIn("reference_guides", module_names)
+        self.assertIn("inspection_render", module_names)
+        self.assertIn("reference_comparison", module_names)
+        self.assertIn("reference_forms", module_names)
+        self.assertIn("fur_groom", module_names)
+        self.assertIn("reference_multiview", module_names)
+        self.assertIn("reference_multiview_scene", module_names)
+        self.assertIn("reference_scene", module_names)
+        self.assertIn("reference_blockout", module_names)
+        self.assertIn("reference_benchmarks", module_names)
+        self.assertIn("reference_benchmark_scene", module_names)
+        self.assertLess(
+            module_names.index("reference_annotations"),
+            module_names.index("reference_guides"),
+        )
+        self.assertLess(
+            module_names.index("reference_guides"),
+            module_names.index("reference_comparison"),
+        )
+        self.assertLess(
+            module_names.index("inspection_render"),
+            module_names.index("reference_comparison"),
+        )
+        self.assertLess(
+            module_names.index("reference_forms"),
+            module_names.index("reference_blockout"),
+        )
+        self.assertLess(
+            module_names.index("reference_scene"),
+            module_names.index("reference_blockout"),
+        )
+        self.assertLess(
+            module_names.index("reference_multiview"),
+            module_names.index("reference_multiview_scene"),
+        )
+        self.assertLess(
+            module_names.index("reference_benchmarks"),
+            module_names.index("reference_benchmark_scene"),
+        )
+        self.assertLess(
+            module_names.index("reference_comparison"),
+            module_names.index("reference_benchmark_scene"),
+        )
+        self.assertLess(
+            module_names.index("reference_guides"),
+            module_names.index("reference_multiview_scene"),
+        )
+        self.assertLess(
+            module_names.index("fur_groom"),
+            module_names.index("advanced_rigging"),
+        )
+
+    def test_reference_guide_scene_ownership_is_separate_from_mesh_modeling(self):
+        required = {
+            "create_reference_modeling_guides",
+            "create_reference_guides_from_annotations",
+            "inspect_reference_modeling_guides",
+        }
+        reference_tree = ast.parse(REFERENCE_GUIDES.read_text(encoding="utf-8"))
+        modeling_tree = ast.parse(ADVANCED_MODELING.read_text(encoding="utf-8"))
+        reference_functions = {
+            node.name for node in reference_tree.body if isinstance(node, ast.FunctionDef)
+        }
+        modeling_functions = {
+            node.name for node in modeling_tree.body if isinstance(node, ast.FunctionDef)
+        }
+
+        self.assertTrue(required.issubset(reference_functions))
+        self.assertFalse(required & modeling_functions)
+
+        blockout_tree = ast.parse(REFERENCE_BLOCKOUT.read_text(encoding="utf-8"))
+        blockout_functions = {
+            node.name
+            for node in blockout_tree.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        self.assertIn("create_reference_blockout", blockout_functions)
+        self.assertNotIn("create_reference_blockout", modeling_functions)
+
+        multiview_tree = ast.parse(
+            REFERENCE_MULTIVIEW_SCENE.read_text(encoding="utf-8")
+        )
+        multiview_functions = {
+            node.name
+            for node in multiview_tree.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        self.assertIn("create_multiview_reference_guides", multiview_functions)
+        self.assertNotIn(
+            "create_multiview_reference_guides",
+            modeling_functions,
+        )
+
+        benchmark_tree = ast.parse(
+            REFERENCE_BENCHMARK_SCENE.read_text(encoding="utf-8")
+        )
+        benchmark_functions = {
+            node.name
+            for node in benchmark_tree.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        self.assertIn(
+            "evaluate_reference_model_benchmark",
+            benchmark_functions,
+        )
+        self.assertNotIn(
+            "evaluate_reference_model_benchmark",
+            modeling_functions,
+        )
 
     def test_domain_handlers_import_domain_helpers_not_advanced_facade(self):
         for path in sorted(HANDLERS.glob("*.py")):

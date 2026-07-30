@@ -345,6 +345,88 @@ def begin(user_request="", context=None):
     return _current_transaction
 
 
+def begin_isolated(user_request="", context=None):
+    """Begin one preview operation without absorbing an existing transaction."""
+
+    global _current_transaction
+    parent = (
+        _current_transaction
+        if _current_transaction
+        and _current_transaction.get("status") == "pending"
+        else None
+    )
+    _current_transaction = None
+    transaction = begin(user_request, context)
+    return {"parent": parent, "transaction": transaction}
+
+
+def _discard_unmerged_snapshot(before):
+    if before.get("kind") != "mesh_data_snapshot":
+        return
+    snapshot = bpy.data.meshes.get(before.get("snapshot_mesh_name", ""))
+    if snapshot and snapshot.users == 0:
+        bpy.data.meshes.remove(snapshot)
+
+
+def finish_isolated(scope):
+    """Merge a successful isolated operation into its parent preview."""
+
+    global _current_transaction
+    transaction = scope["transaction"]
+    parent = scope.get("parent")
+    if parent is None:
+        _current_transaction = transaction
+        return transaction
+
+    for key, before in transaction.get("before_state", {}).items():
+        if key in parent["before_state"]:
+            _discard_unmerged_snapshot(before)
+            continue
+        parent["before_state"][key] = before
+    for name in transaction.get("changed_data_blocks", []):
+        if name not in parent["changed_data_blocks"]:
+            parent["changed_data_blocks"].append(name)
+    parent["applied_steps"].extend(
+        transaction.get("applied_steps", [])
+    )
+    transaction["status"] = "merged"
+    transaction["merged_into"] = parent["id"]
+    _current_transaction = parent
+    return parent
+
+
+def abort_isolated(scope, context):
+    """Revert one failed operation while preserving an earlier preview."""
+
+    global _current_transaction
+    transaction = scope["transaction"]
+    parent = scope.get("parent")
+    _current_transaction = transaction
+    try:
+        result = revert(context)
+    except Exception as exc:
+        result = {
+            "ok": False,
+            "message": (
+                "Could not fully revert failed preview operation: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }
+    finally:
+        if parent is not None:
+            _current_transaction = parent
+            steps = parent.get("applied_steps") or []
+            label = (
+                str(steps[-1].get("label") or "")
+                if steps
+                else str(parent.get("user_request") or "Preview pending")
+            )
+            _mark_pending(context, label or "Preview pending")
+        else:
+            _current_transaction = transaction
+    return result
+
+
 def _record_object_transform(obj):
     transaction = begin()
     key = f"object:{obj.name}:transform"
@@ -1639,6 +1721,10 @@ def revert(context):
                 scene.render.engine = before["engine"]
                 scene.render.resolution_x = before["resolution_x"]
                 scene.render.resolution_y = before["resolution_y"]
+                if "pixel_aspect_x" in before:
+                    scene.render.pixel_aspect_x = before["pixel_aspect_x"]
+                if "pixel_aspect_y" in before:
+                    scene.render.pixel_aspect_y = before["pixel_aspect_y"]
                 scene.render.fps = before["fps"]
                 scene.frame_start = before["frame_start"]
                 scene.frame_end = before["frame_end"]

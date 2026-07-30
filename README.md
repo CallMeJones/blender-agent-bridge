@@ -54,14 +54,16 @@ The extension ZIP already includes the MCP server, so the recommended bundled mo
 
 ## 2. Connect Claude, Codex, or Cursor
 
-The MCP server is already bundled with the Blender extension. After pressing `Start`, press `Copy MCP Config`. Blender copies a complete `mcpServers.blender` JSON entry containing the correct local Python path, bridge URL, session token, version metadata, and tool-registry digest. Keep every generated `command`, `args`, and `env` value together.
+The MCP server is already bundled with the Blender extension. After pressing `Start`, press `Copy MCP Config`. Blender copies a complete `mcpServers.blender` JSON entry containing the correct local Python path, bridge URL, session token, version metadata, and tool-registry digest. Keep every generated `command`, `args`, and `env` value together; this generated entry is the source of truth for Codex, Cursor, Claude Code, and manual Claude Desktop setup.
 
 | Client | Exact setup |
 | --- | --- |
+| **Claude Desktop** | Recommended: open the `blender-agent-bridge-<version>.mcpb` asset from the matching GitHub release and enter the bridge URL/token shown in Blender. Manual fallback: merge the complete copied `mcpServers` object into Claude Desktop's config, then fully restart it. |
 | **Claude Code** | Take only the object inside `mcpServers.blender`, then run `claude mcp add-json --scope user blender '<server-object-json>'`. Run `claude mcp list`, restart Claude Code, and use `/mcp` to confirm it connected. |
-| **Claude Desktop** | Merge the complete copied `mcpServers` object into `%APPDATA%\Claude\claude_desktop_config.json` on Windows or `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, then fully restart Claude Desktop. |
-| **Codex app, CLI, or IDE extension** | Open **Settings > MCP servers > Add server** and add a local **STDIO** server using the copied `command`, `args`, and `env`, or convert the entry to `[mcp_servers.blender]` in `~/.codex/config.toml`. Save it, select **Restart**, then use `/mcp` or `codex mcp list`. |
-| **Cursor** | Merge the complete copied JSON into `~/.cursor/mcp.json` for all projects or `.cursor/mcp.json` for one project. Refresh Cursor's MCP servers or restart Cursor, then check **Settings > MCP**. |
+| **Codex app, CLI, or IDE extension** | Do not install the MCPB. Open **Settings > MCP servers > Add server**, choose local **STDIO**, and copy the generated `command`, every `args` item, and every `env` value. Alternatively, convert the same entry to `[mcp_servers.blender]` in `~/.codex/config.toml`. Save it, select **Restart**, then use `/mcp` or `codex mcp list`. |
+| **Cursor** | Do not install the MCPB. Merge the complete generated JSON into `~/.cursor/mcp.json` for all projects or `.cursor/mcp.json` for one project. Preserve other servers, refresh Cursor's MCP servers or restart Cursor, then check **Settings > MCP**. |
+
+The MCPB installs only the Claude Desktop connector; it is not the installation format for Codex or Cursor. Install and start the Blender extension separately. The MCPB packages the same dependency-free Python MCP server code and five-tool gateway as the release. Its MCPB v0.4 `uv` runtime is managed by the host, so users do not need to install or configure Python. The sensitive token setting stays in the client configuration.
 
 If you want a local coding agent to configure itself, copy the config in Blender and give that agent the matching one-line prompt:
 
@@ -83,15 +85,19 @@ Install the Blender MCP config currently on my clipboard as a user MCP server na
 Merge the Blender MCP config currently on my clipboard into my global ~/.cursor/mcp.json as server blender without deleting existing servers, never print token values, then verify Cursor can see it and tell me to refresh MCP.
 ```
 
-If the agent cannot read the clipboard, use the manual route above. The generated config contains a localhost bridge token: keep it in local configuration, never paste it into an issue or public chat, and press `Copy MCP Config` again after changing the extension or bridge settings. Full walkthroughs: [Claude](docs/clients/CLAUDE.md), [Codex](docs/clients/CODEX.md), and [Cursor](docs/clients/CURSOR.md).
+If the agent cannot read the clipboard, use the manual route above. The generated config contains a localhost bridge token: keep it in local configuration, never paste it into an issue or public chat, and press `Copy MCP Config` again after changing the extension or bridge settings. Keep only one `blender` entry in each client, and connect only one active MCP server to a Blender bridge at a time. Full walkthroughs: [Claude](docs/clients/CLAUDE.md), [Codex](docs/clients/CODEX.md), and [Cursor](docs/clients/CURSOR.md).
 
 ## 3. Test the Connection
 
 Keep Blender open with the bridge running, refresh or restart the MCP client, then ask:
 
 ```text
-Check Blender bridge status, list the objects in the current scene, and tell me which Blender Agent Bridge tools are available. Make no changes.
+Check Blender bridge status, find and invoke the scene-object inspection tool, and make no changes.
 ```
+
+The default tool list must contain exactly `blender_bridge_status`, `blender_tool_catalog`, `search_blender_tools`, `get_blender_tool_schema`, and `invoke_blender_tool`. Helpers such as `list_scene_objects` are intentionally not top-level tools: the client must find them through search, fetch their schema, and call them through the gateway. A planner naming a non-advertised helper does not mean that helper is unavailable.
+
+For a deterministic command-line check, run `blender-bridge doctor`. It verifies the MCP executable, optional client config, bridge socket, add-on/runtime compatibility, five-tool manifest, schema lookup, and a real read-only gateway invocation. See [Connection Diagnostics](docs/CONNECTION_DIAGNOSTICS.md).
 
 Then try a reversible edit:
 

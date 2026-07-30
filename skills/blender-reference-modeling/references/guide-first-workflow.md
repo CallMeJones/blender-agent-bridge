@@ -18,11 +18,14 @@ Use only visible or user-supplied facts. Mark hidden depth, ambiguous symmetry, 
 
 When image path, landmarks, or annotation points are available:
 
-1. Use `create_reference_modeling_guides` to create the reference plane, outline curves, landmark empties, mass ellipses, and measurements.
-2. Use normalized image coordinates unless the user supplies pixel coordinates and image size.
-3. Name guides for script handoff, such as `primary_outline`, `feature_left_center`, `secondary_mass`, or `major_width`.
-4. Inspect the result with `inspect_reference_modeling_guides(include_points=true)` before writing an authored modeling script.
-5. Feed the inspected collection metadata into the script; do not make the script rediscover guide objects by vague selection state.
+1. Use `create_reference_guides_from_annotations` when the reference image and annotation JSON are both available. Supply the annotation object, JSON text, or trusted local JSON path, plus its pixel/normalized coordinate space and top-left/bottom-left origin when the document does not declare them.
+2. Let the pipeline calibrate annotation coordinates to the actual image dimensions, image rectangle, guide plane, and orthographic comparison camera.
+3. Use `create_reference_modeling_guides` only when inputs are already normalized or must be assembled manually without an annotation document.
+4. Name guides for script handoff, such as `primary_outline`, `feature_left_center`, `secondary_mass`, or `major_width`.
+5. Inspect the result with `inspect_reference_modeling_guides(include_points=true)` before writing an authored modeling script.
+6. Feed the inspected collection metadata into the script; do not make the script rediscover guide objects by vague selection state.
+
+For two or more orthographic references, use `create_multiview_reference_guides` with a distinct axis or custom camera basis for every view. Reuse exact landmark names across views. Treat high residuals, nearly parallel rays, and unresolved landmarks as calibration problems; correct the source annotations or view scale before moving reconstructed 3D landmarks by eye.
 
 If annotation data is missing, create a `reference_brief` that explicitly lists the missing guide inputs and use the planner to request or proceed with lower-confidence guide seeds.
 
@@ -31,6 +34,7 @@ If annotation data is missing, create a `reference_brief` that explicitly lists 
 For organic subjects, prefer continuous deformed forms over stacked primitives:
 
 - Build broad ellipsoid or metaball-like masses that match silhouette first.
+- When helpers are requested, `create_reference_blockout` can turn named mass ellipses into camera-oriented editable forms and an optional voxel-remesh union. Keep per-mass depth and deformation settings reference-derived.
 - Blend or join adjacent soft forms only after their measured positions are acceptable.
 - Place landmarks from guide empties before adding expressive detail.
 - Keep visible features, openings, attachments, supports, and extensions tied to named guide points or measured ratios.
@@ -44,12 +48,17 @@ When the reference shows fur or directional fibers:
 
 1. Record flow regions in `surface_cues`, including direction, length, density, color variation, and where the flow changes.
 2. Use `create_directional_fur_curves` for short preview-safe groom strokes on named mesh surfaces after form gates pass.
-3. Use multiple passes for different flow regions instead of one global direction when the reference clearly changes direction.
-4. Treat directional fur curves as a scaffold for review; final hair systems or custom curves may still require authored script work.
+3. Prefer one bounded call with named `regions`: use vertex groups as density masks, per-region directions or world-space `flow_controls`, different lengths, and low controlled noise.
+4. Keep `auto_spacing` enabled unless the reference requires an explicit root spacing. Use modest clumping and a small tip width so the result reads as a coat instead of separate bristles.
+5. Treat directional fur curves as a scaffold for review; final production hair systems or hand-authored hero strands may still require authored script work.
 
 ## Redline Repair
 
 After each render or viewport capture, convert visual critique into measurable repairs:
+
+Invoke `compare_model_to_reference` first when a calibrated camera and outline or usable image alpha are available. Blue redline regions are reference silhouette missing from the model, red regions are model excess, and green is overlap. Repair the highest-magnitude named region or landmark error before subjective polish.
+
+At the end of a blockout, refined-form, or final review pass, invoke `evaluate_reference_model_benchmark` with the matching `blockout`, `refined`, or `review` profile. A failed gate names the measurable repair target. For official benchmark runs, use the task's required profile without threshold overrides; only the latest recorded evaluation counts.
 
 - "The upper mass should be wider here" becomes a named mass or outline-width adjustment.
 - "The paired features are lower" becomes landmark and vertical-spacing repair.

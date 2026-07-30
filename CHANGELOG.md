@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a deterministic `blender-bridge doctor` command that separates client config, executable/path, socket, bridge health, loaded-source, protocol/registry, five-tool manifest, schema, and read-only gateway failures without exposing credentials.
+- Added reproducible MCPB v0.4 `uv` packaging for a one-click Claude Desktop connector, including a host-managed Python environment, sensitive bridge-token configuration, matching runtime metadata, checksumed release artifacts, public artifact verification, tests, and cross-platform installation/recovery guidance.
 - Advanced the working source identity to 0.4.1 while public install guides remain pinned to the published 0.4.0 artifact, and strengthened the release-consistency gate so new Unreleased behavior cannot pass under an already-published version.
 - Replaced the competing 28-tool default MCP manifest with five stable gateway tools so retrieval-based clients cannot load planners while omitting the catalog execution path. Every canonical helper remains searchable, schema-addressable, and invokable; `BLENDER_MCP_TOOL_SURFACE=direct` restores the former curated surface, `full` exposes every helper, and the legacy full-list flag remains supported.
 - Made gateway registration independent of Blender/bridge availability, added explicit `mcp_tool_surface` diagnostics, enriched gateway descriptions for cross-client retrieval, and added default-gateway execution plus Claude/Codex/Cursor five-result reachability regressions.

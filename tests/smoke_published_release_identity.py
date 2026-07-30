@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
+import sys
+import tempfile
 import time
 import tomllib
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
 
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -28,13 +32,54 @@ def _download(url, *, max_bytes):
     return body
 
 
-def _sidecar_digest(body, url):
-    value = body.decode("utf-8").strip().split()[0].lower()
+def _sidecar_digest(body, url, *, expected_filename):
+    parts = body.decode("utf-8").strip().split()
+    assert len(parts) >= 2, (url, parts)
+    value = parts[0].lower()
     assert len(value) == 64, (url, value)
+    sidecar_filename = os.path.basename(parts[1].lstrip("*"))
+    assert sidecar_filename == expected_filename, (url, sidecar_filename, expected_filename)
     return value
 
 
-def _verify_once():
+def _verify_mcpb_archive(body, *, version):
+    build_mcpb = _load_mcpb_builder()
+    with zipfile.ZipFile(io.BytesIO(body)) as archive:
+        names = set(archive.namelist())
+        manifest = json.loads(archive.read("manifest.json"))
+        project = tomllib.loads(archive.read("pyproject.toml").decode("utf-8"))
+
+    server = manifest["server"]
+    assert manifest["manifest_version"] == "0.4", manifest
+    assert manifest["name"] == build_mcpb.MCPB_NAME, manifest
+    assert manifest["version"] == version, manifest
+    assert server["type"] == "uv", server
+    assert server["mcp_config"]["command"] == "uv", server
+    assert server["entry_point"] in names, (server["entry_point"], names)
+    assert project["project"]["version"] == version, project
+    assert project["project"]["dependencies"] == [], project
+    assert not any(name.startswith("server/lib/") for name in names), names
+
+
+def _load_mcpb_builder():
+    scripts_dir = os.path.join(ROOT, "scripts")
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    import build_mcpb
+
+    return build_mcpb
+
+
+def _expected_mcpb_digest(version):
+    build_mcpb = _load_mcpb_builder()
+    assert build_mcpb.build_info.MCP_SERVER_VERSION == version
+    with tempfile.TemporaryDirectory(prefix="bab-publication-mcpb-") as temporary:
+        output_path, _ = build_mcpb.build_mcpb(temporary)
+        with open(output_path, "rb") as handle:
+            return hashlib.sha256(handle.read()).hexdigest()
+
+
+def _verify_once(*, expected_mcpb_digest=None):
     with open(MANIFEST_PATH, "rb") as handle:
         manifest = tomllib.load(handle)
     version = manifest["version"]
@@ -60,11 +105,46 @@ def _verify_once():
     release_digest = hashlib.sha256(release_zip).hexdigest()
     assert pages_digest == advertised_digest, (pages_digest, advertised_digest)
     assert release_digest == advertised_digest, (release_digest, advertised_digest)
-    assert _sidecar_digest(_download(pages_sidecar_url, max_bytes=4096), pages_sidecar_url) == advertised_digest
-    assert _sidecar_digest(_download(release_sidecar_url, max_bytes=4096), release_sidecar_url) == advertised_digest
+    assert (
+        _sidecar_digest(
+            _download(pages_sidecar_url, max_bytes=4096),
+            pages_sidecar_url,
+            expected_filename=filename,
+        )
+        == advertised_digest
+    )
+    assert (
+        _sidecar_digest(
+            _download(release_sidecar_url, max_bytes=4096),
+            release_sidecar_url,
+            expected_filename=filename,
+        )
+        == advertised_digest
+    )
     assert len(pages_zip) == entry.get("archive_size"), (len(pages_zip), entry.get("archive_size"))
     assert pages_zip == release_zip, "Pages and GitHub Release archives differ"
-    print(f"smoke_published_release_identity: ok {filename} sha256:{advertised_digest}")
+
+    mcpb_filename = _load_mcpb_builder().mcpb_filename(version)
+    mcpb_url = f"{RELEASE_BASE_URL}/v{version}/{mcpb_filename}"
+    mcpb_sidecar_url = f"{mcpb_url}.sha256"
+    mcpb_body = _download(mcpb_url, max_bytes=MAX_ARCHIVE_BYTES)
+    mcpb_digest = hashlib.sha256(mcpb_body).hexdigest()
+    expected_mcpb_digest = expected_mcpb_digest or _expected_mcpb_digest(version)
+    assert mcpb_digest == expected_mcpb_digest, (mcpb_digest, expected_mcpb_digest)
+    assert (
+        _sidecar_digest(
+            _download(mcpb_sidecar_url, max_bytes=4096),
+            mcpb_sidecar_url,
+            expected_filename=mcpb_filename,
+        )
+        == mcpb_digest
+    )
+    _verify_mcpb_archive(mcpb_body, version=version)
+    print(
+        "smoke_published_release_identity: ok",
+        f"{filename} sha256:{advertised_digest};",
+        f"{mcpb_filename} sha256:{mcpb_digest}",
+    )
 
 
 def main():
@@ -75,12 +155,23 @@ def main():
     assert args.attempts >= 1
     assert args.delay >= 0
 
+    with open(MANIFEST_PATH, "rb") as handle:
+        expected_version = tomllib.load(handle)["version"]
+    expected_mcpb_digest = _expected_mcpb_digest(expected_version)
     last_error = None
     for attempt in range(1, args.attempts + 1):
         try:
-            _verify_once()
+            _verify_once(expected_mcpb_digest=expected_mcpb_digest)
             return
-        except (AssertionError, OSError, UnicodeError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        except (
+            AssertionError,
+            OSError,
+            UnicodeError,
+            urllib.error.URLError,
+            json.JSONDecodeError,
+            tomllib.TOMLDecodeError,
+            zipfile.BadZipFile,
+        ) as exc:
             last_error = exc
             if attempt == args.attempts:
                 raise

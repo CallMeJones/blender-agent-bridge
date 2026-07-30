@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import subprocess
 import sys
 import tempfile
 import threading
 import urllib.parse
+from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
@@ -652,11 +654,29 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
             self.send_error(404)
 
 
-def _send(proc, payload):
+def _send(proc, payload, *, timeout=20.0):
     proc.stdin.write(json.dumps(payload) + "\n")
     proc.stdin.flush()
-    line = proc.stdout.readline()
-    assert line, "MCP server closed stdout"
+
+    responses = queue.Queue(maxsize=1)
+    reader = threading.Thread(
+        target=lambda: responses.put(proc.stdout.readline()),
+        daemon=True,
+    )
+    reader.start()
+    try:
+        line = responses.get(timeout=timeout)
+    except queue.Empty as exc:
+        stderr_tail = "".join(getattr(proc, "_stderr_tail", ())).strip()
+        raise AssertionError(
+            f"MCP server did not respond within {timeout:.0f}s: {payload!r}; "
+            f"returncode={proc.poll()!r}; stderr_tail={stderr_tail!r}"
+        ) from exc
+    stderr_tail = "".join(getattr(proc, "_stderr_tail", ())).strip()
+    assert line, (
+        f"MCP server closed stdout; returncode={proc.poll()!r}; "
+        f"stderr_tail={stderr_tail!r}"
+    )
     return json.loads(line)
 
 
@@ -857,7 +877,7 @@ def _start_mcp(bridge_url, audit_path, *, timeout="30", extra_env=None):
     env["CLAUDE_BLENDER_AUDIT_LOG"] = audit_path
     if extra_env:
         env.update(extra_env)
-    return subprocess.Popen(
+    proc = subprocess.Popen(
         ["python", MCP_SERVER, "--bridge-url", bridge_url, "--timeout", str(timeout)],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
@@ -865,6 +885,14 @@ def _start_mcp(bridge_url, audit_path, *, timeout="30", extra_env=None):
         env=env,
         text=True,
     )
+    proc._stderr_tail = deque(maxlen=100)
+
+    def drain_stderr():
+        for line in proc.stderr:
+            proc._stderr_tail.append(line)
+
+    threading.Thread(target=drain_stderr, daemon=True).start()
+    return proc
 
 
 def _initialize(proc):
@@ -1113,6 +1141,11 @@ def main():
                 False,
             ),
             (
+                "Create calibrated front and side reference views and reconstruct shared 3D landmarks.",
+                {"create_multiview_reference_guides"},
+                False,
+            ),
+            (
                 "Create an advanced procedural hard-surface array with a geometry-nodes scatter grid.",
                 {"apply_procedural_array_stack", "add_geometry_nodes_modifier"},
                 True,
@@ -1165,6 +1198,11 @@ def main():
             (
                 "Add cloth simulation setup and inspect it before any bake.",
                 {"add_cloth_simulation_to_selected", "get_simulation_details"},
+                False,
+            ),
+            (
+                "Evaluate the calibrated reference model against the refined benchmark quality gate profile.",
+                {"evaluate_reference_model_benchmark"},
                 False,
             ),
         )
@@ -1628,6 +1666,56 @@ def main():
         }
         assert "user_confirmed_path_required" in save_schema_warning_codes, save_schema
         assert "long_running_synchronous_call" in save_schema_warning_codes, save_schema
+
+        reference_schema = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 311,
+                "method": "tools/call",
+                "params": {
+                    "name": "get_blender_tool_schema",
+                    "arguments": {
+                        "name": "create_reference_guides_from_annotations"
+                    },
+                },
+            },
+        )
+        reference_tool_schema = reference_schema["result"]["structuredContent"][
+            "tool"
+        ]
+        assert (
+            reference_tool_schema["annotations"]["requiresUserPath"] is True
+        ), reference_schema
+        assert (
+            "files:read"
+            in reference_tool_schema["annotations"]["permissions"]
+        ), reference_schema
+        reference_warning_codes = {
+            warning["code"]
+            for warning in reference_tool_schema["guardrail_warnings"]
+        }
+        assert (
+            "user_confirmed_path_required" in reference_warning_codes
+        ), reference_schema
+
+        comparison_schema = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 312,
+                "method": "tools/call",
+                "params": {
+                    "name": "get_blender_tool_schema",
+                    "arguments": {"name": "compare_model_to_reference"},
+                },
+            },
+        )
+        comparison_permissions = comparison_schema["result"][
+            "structuredContent"
+        ]["tool"]["annotations"]["permissions"]
+        assert "files:read" in comparison_permissions, comparison_schema
+        assert "files:write" in comparison_permissions, comparison_schema
 
         save_without_path = _send(
             proc,

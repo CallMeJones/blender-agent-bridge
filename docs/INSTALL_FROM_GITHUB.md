@@ -27,6 +27,28 @@ In Blender:
 
 To update later, sync the same repository and use Blender's extension update flow.
 
+## One-Click Claude Desktop Connector
+
+Tagged releases also include `blender-agent-bridge-<version>.mcpb` and its
+SHA-256 file. This is an MCP Bundle for supported Claude Desktop releases:
+
+1. Install and start the Blender extension first.
+2. Download the `.mcpb` asset whose version matches the extension.
+3. Open the bundle in Claude Desktop and approve the local connector.
+4. Keep the default `http://127.0.0.1:8765` URL unless the Blender bridge uses
+   another port.
+5. If Blender has an optional bridge token, enter it in the connector's
+   sensitive **Bridge token** field.
+6. Restart or refresh Claude Desktop and run the read-only smoke prompt below.
+
+The MCPB contains the dependency-free Python MCP server code, not Blender or the
+Blender extension. Its MCPB v0.4 `uv` runtime is managed by the host, including
+the compatible Python environment, so users do not need to install or configure
+Python. The connector does not grant script trust, upload scene data, or add
+tools beyond the five gateways. Codex, Cursor, Claude Code, and other clients
+continue to use **Copy MCP Config**, which supplies their exact platform command
+without editing source.
+
 ## Manual Fallback: GitHub Release ZIP
 
 If you do not want to add a remote repository:
@@ -62,6 +84,17 @@ After enabling the extension:
 6. Paste the generated config into your external MCP client.
 7. Restart or refresh the MCP client so stale tool caches are cleared.
 
+Run the deterministic read-only diagnostic when the `blender-bridge` command is
+installed:
+
+```text
+blender-bridge doctor
+blender-bridge doctor --client-config <path-to-client-config>
+```
+
+See [Connection Diagnostics](CONNECTION_DIAGNOSTICS.md) for JSON output,
+layer-by-layer recovery, and the matching `uvx` command.
+
 Once connected, `guardrail_warnings` in catalog, schema, or tool results are expected advisory hints. They steer clients toward async external asset jobs, queued imports, background render/MP4 polling, user-confirmed paths, session-trust checks, and preview controls without requiring extra prompts.
 
 Useful smoke prompt once connected:
@@ -91,6 +124,8 @@ Search Poly Haven for a sunset HDRI, cache it as an external asset job, poll unt
 - If your MCP client still shows old tools, replace the copied MCP config and restart or refresh the client.
 - If manual ZIP install fails, confirm you downloaded `claude_blender-<version>.zip` from release assets, not GitHub's source-code ZIP.
 - If the bridge starts but the client cannot connect, confirm Blender is still open, the bridge panel says `Bridge: On`, and no local firewall rule is blocking `127.0.0.1`.
+- If a TCP connection succeeds but the health check fails, run `blender-bridge doctor`; another local process may occupy the configured port.
+- If doctor passes but the client shows a different tool list, fully restart or refresh the client to clear its cached manifest.
 
 ## Maintainer Release Flow
 
@@ -105,6 +140,7 @@ python tests\smoke_release_consistency.py
 python tests\smoke_build_extension_zip.py
 python tests\smoke_extension_repository.py
 python scripts\build_extension_repository.py --zip-path "dist\claude_blender-$Version.zip" --repo-dir public
+python scripts\build_mcpb.py
 python tests\smoke_release_artifact_identity.py
 ```
 

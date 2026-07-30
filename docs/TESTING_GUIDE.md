@@ -608,6 +608,7 @@ Tools:
 ```text
 create_text_object
 create_curve_path
+create_reference_guides_from_annotations
 create_reference_modeling_guides
 inspect_reference_modeling_guides
 apply_procedural_array_stack
