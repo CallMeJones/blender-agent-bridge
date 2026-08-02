@@ -8,6 +8,7 @@ from .. import (
     preferences,
     reference_blockout,
     reference_comparison,
+    reference_feature_stacks,
     reference_guides,
     reference_image_intake,
     reference_multiview_scene,
@@ -564,6 +565,76 @@ def build_part_aware_base_mesh(context, args):
         ),
         show_components=bool(args.get("show_components", False)),
         label=str(args.get("label") or "Build part-aware base mesh"),
+    )
+
+
+def create_eye_stack(context, args):
+    return reference_feature_stacks.create_eye_stack(
+        context,
+        part_graph_collection_name=str(
+            args.get("part_graph_collection_name") or ""
+        ),
+        part_names=_name_list(args.get("part_names")),
+        name_prefix=str(args.get("name_prefix") or "Reference Eye Stack"),
+        iris_color=_float_list(args.get("iris_color"), 4, (0.22, 0.55, 0.78, 1.0)),
+        sclera_color=_float_list(args.get("sclera_color"), 4, (0.96, 0.97, 0.95, 1.0)),
+        pupil_color=_float_list(args.get("pupil_color"), 4, (0.01, 0.01, 0.012, 1.0)),
+        highlight_color=_float_list(args.get("highlight_color"), 4, (1.0, 1.0, 1.0, 1.0)),
+        scale=_bounded_float(args.get("scale"), 1.0, minimum=0.05, maximum=10.0),
+        protrusion=_bounded_float(
+            args.get("protrusion"), 0.0, minimum=-2.0, maximum=2.0
+        ),
+        create_highlight=bool(args.get("create_highlight", True)),
+        segments=_bounded_int(args.get("segments"), 32, minimum=8, maximum=128),
+        rings=_bounded_int(args.get("rings"), 16, minimum=4, maximum=64),
+        max_parts=_bounded_int(args.get("max_parts"), 8, minimum=1, maximum=32),
+        label=str(args.get("label") or "Create eye stack"),
+    )
+
+
+def create_muzzle_stack(context, args):
+    return reference_feature_stacks.create_muzzle_stack(
+        context,
+        part_graph_collection_name=str(
+            args.get("part_graph_collection_name") or ""
+        ),
+        part_names=_name_list(args.get("part_names")),
+        name_prefix=str(args.get("name_prefix") or "Reference Muzzle Stack"),
+        muzzle_color=_float_list(args.get("muzzle_color"), 4, (0.9, 0.84, 0.78, 1.0)),
+        nose_color=_float_list(args.get("nose_color"), 4, (0.86, 0.42, 0.48, 1.0)),
+        mouth_color=_float_list(args.get("mouth_color"), 4, (0.08, 0.035, 0.03, 1.0)),
+        tongue_color=_float_list(args.get("tongue_color"), 4, (0.9, 0.35, 0.42, 1.0)),
+        scale=_bounded_float(args.get("scale"), 1.0, minimum=0.05, maximum=10.0),
+        create_nose=bool(args.get("create_nose", True)),
+        create_mouth=bool(args.get("create_mouth", True)),
+        create_tongue=bool(args.get("create_tongue", False)),
+        segments=_bounded_int(args.get("segments"), 32, minimum=8, maximum=128),
+        rings=_bounded_int(args.get("rings"), 16, minimum=4, maximum=64),
+        max_parts=_bounded_int(args.get("max_parts"), 8, minimum=1, maximum=32),
+        label=str(args.get("label") or "Create muzzle stack"),
+    )
+
+
+def create_ear_stack(context, args):
+    return reference_feature_stacks.create_ear_stack(
+        context,
+        part_graph_collection_name=str(
+            args.get("part_graph_collection_name") or ""
+        ),
+        part_names=_name_list(args.get("part_names")),
+        name_prefix=str(args.get("name_prefix") or "Reference Ear Stack"),
+        outer_color=_float_list(args.get("outer_color"), 4, (0.7, 0.72, 0.74, 1.0)),
+        inner_color=_float_list(args.get("inner_color"), 4, (0.86, 0.68, 0.68, 1.0)),
+        scale=_bounded_float(args.get("scale"), 1.0, minimum=0.05, maximum=10.0),
+        inner_scale=_bounded_float(
+            args.get("inner_scale"), 0.62, minimum=0.05, maximum=1.0
+        ),
+        create_outer_shell=bool(args.get("create_outer_shell", True)),
+        create_inner_patch=bool(args.get("create_inner_patch", True)),
+        segments=_bounded_int(args.get("segments"), 32, minimum=8, maximum=128),
+        rings=_bounded_int(args.get("rings"), 16, minimum=4, maximum=64),
+        max_parts=_bounded_int(args.get("max_parts"), 8, minimum=1, maximum=32),
+        label=str(args.get("label") or "Create ear stack"),
     )
 
 

@@ -78,6 +78,18 @@ def _graph_collection(collection_name):
     return collections[0], ""
 
 
+def resolve_part_graph_collection(collection_name=""):
+    """Resolve a stored reference part graph collection by name or uniqueness."""
+
+    return _graph_collection(collection_name)
+
+
+def load_part_graph(collection):
+    """Read the stored JSON part graph from a graph collection."""
+
+    return _get_json_prop(collection, PART_GRAPH_METADATA_PROP, {}) or {}
+
+
 def _landmark_summaries(collection):
     result = []
     for obj in reference_scene.guide_objects(collection, "landmark"):

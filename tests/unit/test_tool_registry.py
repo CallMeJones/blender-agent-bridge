@@ -19,8 +19,8 @@ SNAPSHOT_PATH = os.path.join(ROOT, "tests", "snapshots", "tool_registry.json")
 class ToolRegistryTests(unittest.TestCase):
     def test_inventory_is_complete_and_domain_owned(self):
         specs = tool_registry.REGISTRY.specs()
-        self.assertEqual(224, len(specs))
-        self.assertEqual(223, len(tool_registry.definitions()))
+        self.assertEqual(227, len(specs))
+        self.assertEqual(226, len(tool_registry.definitions()))
         self.assertEqual(12, len(tool_registry.DOMAIN_MODULES))
         self.assertEqual({spec.name for spec in specs}, set(bridge_protocol.TOOL_CONTRACTS))
         self.assertEqual(
@@ -145,6 +145,10 @@ class ToolRegistryTests(unittest.TestCase):
             "reference_parts",
             tool_registry.REGISTRY.get("build_part_aware_base_mesh").groups,
         )
+        for name in ("create_eye_stack", "create_muzzle_stack", "create_ear_stack"):
+            with self.subTest(tool=name):
+                self.assertEqual("modeling", tool_registry.REGISTRY.get(name).owner)
+                self.assertIn("feature_stacks", tool_registry.REGISTRY.get(name).groups)
 
     def test_sculpt_and_reference_fit_do_not_advertise_unsafe_shape_key_edits(self):
         for name in (
@@ -156,6 +160,9 @@ class ToolRegistryTests(unittest.TestCase):
             "adaptive_remesh",
             "fit_surface_to_multiview_references",
             "build_part_aware_base_mesh",
+            "create_eye_stack",
+            "create_muzzle_stack",
+            "create_ear_stack",
         ):
             with self.subTest(tool=name):
                 properties = tool_registry.REGISTRY.get(name).input_schema["properties"]

@@ -95,6 +95,9 @@ _REFERENCE_QUALITY_TOOL_NAMES = {
     "create_reference_blockout",
     "create_reference_part_graph",
     "build_part_aware_base_mesh",
+    "create_eye_stack",
+    "create_muzzle_stack",
+    "create_ear_stack",
     "adaptive_remesh",
     "create_directional_fur_curves",
     "inspect_modeling_quality",
@@ -322,6 +325,30 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
             "anatomy parts",
         },
     )
+    explicit_feature_stack_request = _contains_keyword(
+        request_text,
+        {
+            "feature stack",
+            "feature stacks",
+            "eye stack",
+            "eye stacks",
+            "muzzle stack",
+            "muzzle stacks",
+            "ear stack",
+            "ear stacks",
+        },
+    )
+    broad_reference_feature_request = _contains_keyword(
+        request_text,
+        {
+            "eyes",
+            "muzzle",
+            "ears",
+            "create eyes",
+            "create muzzle",
+            "create ears",
+        },
+    )
     auto_reference_repair_request = _contains_keyword(
         request_text,
         {
@@ -400,6 +427,9 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         matched_groups.append("render_setup")
 
     quality_reference_request = helper_routing.is_reference_model_quality_request(request_text)
+    feature_stack_request = explicit_feature_stack_request or (
+        quality_reference_request and broad_reference_feature_request
+    )
     if quality_reference_request:
         selected.update(_REFERENCE_QUALITY_TOOL_NAMES)
         matched_groups.append("advanced_workflow")
@@ -421,6 +451,9 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
     if reference_parts_request:
         selected.update({"create_reference_part_graph", "build_part_aware_base_mesh"})
         matched_groups.append("reference_parts")
+    if feature_stack_request:
+        selected.update({"create_eye_stack", "create_muzzle_stack", "create_ear_stack"})
+        matched_groups.append("feature_stacks")
     if auto_reference_repair_request:
         selected.add("auto_reference_sculpt_repair")
         matched_groups.append("reference_scoring")
@@ -462,6 +495,8 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         protected.add("adaptive_remesh")
     if reference_parts_request:
         protected.update({"create_reference_part_graph", "build_part_aware_base_mesh"})
+    if feature_stack_request:
+        protected.update({"create_eye_stack", "create_muzzle_stack", "create_ear_stack"})
     if auto_reference_repair_request:
         protected.add("auto_reference_sculpt_repair")
     if reference_benchmark_request:
@@ -475,11 +510,28 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         if group in {"vehicle", "product", "character", "refinement", "camera_render", "rigging", "curves_text", "particles", "geometry_nodes", "external_assets", "advanced_workflow", "two_d_storyboard", "procedural_3d", "simulation_setup", "preview_control", "semantic_sculpt"}:
             protected.update(_TOOL_GROUPS.get(group, set()))
     if quality_reference_request:
-        protected.update(
-            _SEMANTIC_SCULPT_REQUIRED_TOOL_NAMES
-            if semantic_sculpt_request
-            else _REFERENCE_QUALITY_REQUIRED_TOOL_NAMES
-        )
+        if feature_stack_request:
+            protected.update(
+                {
+                    "plan_model_quality_workflow",
+                    "prepare_reference_images",
+                    "inspect_reference_modeling_guides",
+                    "create_reference_part_graph",
+                    "build_part_aware_base_mesh",
+                    "create_eye_stack",
+                    "create_muzzle_stack",
+                    "create_ear_stack",
+                    "inspect_modeling_quality",
+                    "capture_viewport",
+                    "draft_script",
+                }
+            )
+        else:
+            protected.update(
+                _SEMANTIC_SCULPT_REQUIRED_TOOL_NAMES
+                if semantic_sculpt_request
+                else _REFERENCE_QUALITY_REQUIRED_TOOL_NAMES
+            )
     if _contains_keyword(text, _RENDER_OUTPUT_KEYWORDS):
         protected.add("configure_render_outputs")
     if _contains_keyword(text, _PROCEDURAL_TEXTURE_KEYWORDS):
@@ -679,6 +731,9 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "plan_model_quality_workflow",
     "create_reference_part_graph",
     "build_part_aware_base_mesh",
+    "create_eye_stack",
+    "create_muzzle_stack",
+    "create_ear_stack",
     "plan_asset_import_workflow",
     "plan_advanced_scene_workflow",
     "animate_object_bounce",

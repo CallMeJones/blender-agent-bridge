@@ -116,6 +116,44 @@ def main():
         assert not filtered["feature_objects"], filtered
         assert filtered["result_objects"], filtered
 
+        eyes = _execute(
+            context,
+            "create_eye_stack",
+            {
+                "part_graph_collection_name": graph["collection"],
+                "name_prefix": "Reference Part Smoke Eyes",
+                "segments": 12,
+                "rings": 8,
+            },
+        )
+        assert len(eyes["objects"]) >= 6, eyes
+        assert bpy.data.objects[eyes["objects"][0]].get("reference_feature_stack"), eyes
+
+        muzzle = _execute(
+            context,
+            "create_muzzle_stack",
+            {
+                "part_graph_collection_name": graph["collection"],
+                "name_prefix": "Reference Part Smoke Muzzle",
+                "segments": 12,
+                "rings": 8,
+                "create_tongue": True,
+            },
+        )
+        assert len(muzzle["objects"]) >= 5, muzzle
+
+        ears = _execute(
+            context,
+            "create_ear_stack",
+            {
+                "part_graph_collection_name": graph["collection"],
+                "name_prefix": "Reference Part Smoke Ears",
+                "segments": 12,
+                "rings": 8,
+            },
+        )
+        assert len(ears["objects"]) >= 4, ears
+
         bad = _execute(
             context,
             "build_part_aware_base_mesh",

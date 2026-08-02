@@ -81,6 +81,7 @@ _MODULE_NAMES = (
     "reference_visual_hull",
     "reference_blockout",
     "reference_part_scene",
+    "reference_feature_stacks",
     "advanced_modeling",
     "advanced_rigging",
     "advanced_scene_editing",

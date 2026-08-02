@@ -1,5 +1,5 @@
 {
-  "catalog_tool_count": 223,
+  "catalog_tool_count": 226,
   "contracts": {
     "adaptive_remesh": {
       "description": "Adaptively refine sculpt topology by subdividing edges that exceed a bounded local target derived from edge length, semantic-region weight, and face curvature. Retains interpolated semantic point attributes, optionally relaxes spacing and projects vertices back to the source surface, and enforces input, per-pass, and result vertex limits. This is a form-preserving refinement pass; it does not decimate or promise production retopology.",
@@ -4629,6 +4629,104 @@
       },
       "requires_live_preview": true
     },
+    "create_ear_stack": {
+      "description": "Create reusable ear feature components from ear parts in a reference part graph: optional outer shells and inner colored patches. Use for soft animal, mascot, plush, or character ears before fur flow, materials, or scored reference repair.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "create_inner_patch": {
+            "type": "boolean"
+          },
+          "create_outer_shell": {
+            "type": "boolean"
+          },
+          "inner_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "inner_scale": {
+            "maximum": 1.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_parts": {
+            "maximum": 32,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "outer_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "part_graph_collection_name": {
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "rings": {
+            "maximum": 64,
+            "minimum": 4,
+            "type": "integer"
+          },
+          "scale": {
+            "maximum": 10.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "segments": {
+            "maximum": 128,
+            "minimum": 8,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
+    },
     "create_empty": {
       "description": "Create an empty helper object with transform and display settings. Applies immediately with preview revert support.",
       "input_schema": {
@@ -4706,6 +4804,121 @@
         "type": "object"
       },
       "requires_live_preview": true
+    },
+    "create_eye_stack": {
+      "description": "Create reusable eye feature components from eye parts in a reference part graph: sclera/eyeball, iris, pupil, and optional highlight objects. Use after create_reference_part_graph or build_part_aware_base_mesh when cartoon-real creature or character eyes need separate editable geometry and materials.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "create_highlight": {
+            "type": "boolean"
+          },
+          "highlight_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "iris_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_parts": {
+            "maximum": 32,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "part_graph_collection_name": {
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "protrusion": {
+            "maximum": 2.0,
+            "minimum": -2.0,
+            "type": "number"
+          },
+          "pupil_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "rings": {
+            "maximum": 64,
+            "minimum": 4,
+            "type": "integer"
+          },
+          "scale": {
+            "maximum": 10.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "sclera_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "segments": {
+            "maximum": 128,
+            "minimum": 8,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
     },
     "create_follow_path_animation": {
       "description": "Animate an object along an existing curve or a new curve built from path points. Applies immediately with preview revert support.",
@@ -5649,6 +5862,122 @@
         "type": "object"
       },
       "long_running": true,
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
+    },
+    "create_muzzle_stack": {
+      "description": "Create reusable muzzle feature components from muzzle parts in a reference part graph: paired soft cheek pads, optional nose, mouth curves, and tongue. Use for animals, mascots, plush forms, and cartoon-real creature faces before fur flow or scored reference repair.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "create_mouth": {
+            "type": "boolean"
+          },
+          "create_nose": {
+            "type": "boolean"
+          },
+          "create_tongue": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_parts": {
+            "maximum": 32,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "mouth_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "muzzle_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "nose_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "part_graph_collection_name": {
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "rings": {
+            "maximum": 64,
+            "minimum": 4,
+            "type": "integer"
+          },
+          "scale": {
+            "maximum": 10.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "segments": {
+            "maximum": 128,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "tongue_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "mutates_scene": true,
       "output_schema": {
         "additionalProperties": true,
@@ -24496,6 +24825,100 @@
       "name": "define_semantic_sculpt_regions"
     },
     {
+      "description": "Create reusable eye feature components from eye parts in a reference part graph: sclera/eyeball, iris, pupil, and optional highlight objects. Use after create_reference_part_graph or build_part_aware_base_mesh when cartoon-real creature or character eyes need separate editable geometry and materials.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "create_highlight": {
+            "type": "boolean"
+          },
+          "highlight_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "iris_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_parts": {
+            "maximum": 32,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "part_graph_collection_name": {
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "protrusion": {
+            "maximum": 2.0,
+            "minimum": -2.0,
+            "type": "number"
+          },
+          "pupil_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "rings": {
+            "maximum": 64,
+            "minimum": 4,
+            "type": "integer"
+          },
+          "scale": {
+            "maximum": 10.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "sclera_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "segments": {
+            "maximum": 128,
+            "minimum": 8,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "create_eye_stack"
+    },
+    {
       "description": "Inspect persistent semantic sculpt regions on one mesh, including weighted vertex counts and optional bounded per-vertex weights. Does not mutate the scene.",
       "input_schema": {
         "additionalProperties": false,
@@ -24518,6 +24941,101 @@
         "type": "object"
       },
       "name": "inspect_semantic_sculpt_regions"
+    },
+    {
+      "description": "Create reusable muzzle feature components from muzzle parts in a reference part graph: paired soft cheek pads, optional nose, mouth curves, and tongue. Use for animals, mascots, plush forms, and cartoon-real creature faces before fur flow or scored reference repair.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "create_mouth": {
+            "type": "boolean"
+          },
+          "create_nose": {
+            "type": "boolean"
+          },
+          "create_tongue": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_parts": {
+            "maximum": 32,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "mouth_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "muzzle_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "nose_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "part_graph_collection_name": {
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "rings": {
+            "maximum": 64,
+            "minimum": 4,
+            "type": "integer"
+          },
+          "scale": {
+            "maximum": 10.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "segments": {
+            "maximum": 128,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "tongue_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "name": "create_muzzle_stack"
     },
     {
       "description": "Apply one deterministic weighted sculpt field to named semantic regions on a mesh. Supports translation, normal inflation, Laplacian smoothing, and plane flattening with optional mirrored deformation and bounded volume compensation. Applies immediately with mesh-snapshot preview rollback.",
@@ -24875,6 +25393,83 @@
         "type": "object"
       },
       "name": "apply_screen_space_sculpt"
+    },
+    {
+      "description": "Create reusable ear feature components from ear parts in a reference part graph: optional outer shells and inner colored patches. Use for soft animal, mascot, plush, or character ears before fur flow, materials, or scored reference repair.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "create_inner_patch": {
+            "type": "boolean"
+          },
+          "create_outer_shell": {
+            "type": "boolean"
+          },
+          "inner_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "inner_scale": {
+            "maximum": 1.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_parts": {
+            "maximum": 32,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "outer_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "part_graph_collection_name": {
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "rings": {
+            "maximum": 64,
+            "minimum": 4,
+            "type": "integer"
+          },
+          "scale": {
+            "maximum": 10.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "segments": {
+            "maximum": 128,
+            "minimum": 8,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "create_ear_stack"
     },
     {
       "description": "Add a Copy Location/Rotation/Scale/Transforms constraint from selected object(s) to a target. Applies immediately with preview revert support.",
@@ -28935,6 +29530,9 @@
       "create_reference_blockout",
       "create_reference_part_graph",
       "build_part_aware_base_mesh",
+      "create_eye_stack",
+      "create_muzzle_stack",
+      "create_ear_stack",
       "adaptive_remesh",
       "define_semantic_sculpt_regions",
       "inspect_semantic_sculpt_regions",
@@ -29046,7 +29644,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "250acf6448794fcaaf04f2b2afeff3e6039945e8094901730603b1df0842f205",
+  "registry_digest": "0a0ae6f33603f1ab976c0b028bcc9c9597f4abcf69f1532a7eecdaa56b60c7ab",
   "schema_version": 1,
   "specs": [
     {
@@ -42377,6 +42975,136 @@
     },
     {
       "contract": {
+        "description": "Create preview-safe editable eye stack components from reference part graph eye parts",
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Create reusable eye feature components from eye parts in a reference part graph: sclera/eyeball, iris, pupil, and optional highlight objects. Use after create_reference_part_graph or build_part_aware_base_mesh when cartoon-real creature or character eyes need separate editable geometry and materials.",
+      "exposure": "catalog",
+      "groups": [
+        "advanced_create",
+        "model_quality",
+        "reference_modeling",
+        "reference_parts",
+        "feature_stacks"
+      ],
+      "handler_key": "create_eye_stack",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "create_highlight": {
+            "type": "boolean"
+          },
+          "highlight_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "iris_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_parts": {
+            "maximum": 32,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "part_graph_collection_name": {
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "protrusion": {
+            "maximum": 2.0,
+            "minimum": -2.0,
+            "type": "number"
+          },
+          "pupil_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "rings": {
+            "maximum": 64,
+            "minimum": 4,
+            "type": "integer"
+          },
+          "scale": {
+            "maximum": 10.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "sclera_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "segments": {
+            "maximum": 128,
+            "minimum": 8,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "create_eye_stack",
+      "order": 1083,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
         "description": "Inspect persistent semantic sculpt region metadata and weights",
         "mutates_scene": false,
         "permissions": [
@@ -42414,6 +43142,137 @@
       },
       "name": "inspect_semantic_sculpt_regions",
       "order": 1084,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
+        "description": "Create preview-safe editable muzzle stack components from reference part graph muzzle parts",
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Create reusable muzzle feature components from muzzle parts in a reference part graph: paired soft cheek pads, optional nose, mouth curves, and tongue. Use for animals, mascots, plush forms, and cartoon-real creature faces before fur flow or scored reference repair.",
+      "exposure": "catalog",
+      "groups": [
+        "advanced_create",
+        "model_quality",
+        "reference_modeling",
+        "reference_parts",
+        "feature_stacks"
+      ],
+      "handler_key": "create_muzzle_stack",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "create_mouth": {
+            "type": "boolean"
+          },
+          "create_nose": {
+            "type": "boolean"
+          },
+          "create_tongue": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_parts": {
+            "maximum": 32,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "mouth_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "muzzle_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "nose_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "part_graph_collection_name": {
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "rings": {
+            "maximum": 64,
+            "minimum": 4,
+            "type": "integer"
+          },
+          "scale": {
+            "maximum": 10.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "segments": {
+            "maximum": 128,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "tongue_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "name": "create_muzzle_stack",
+      "order": 1085,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -42873,6 +43732,119 @@
       },
       "name": "apply_screen_space_sculpt",
       "order": 1088,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
+        "description": "Create preview-safe editable ear stack components from reference part graph ear parts",
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Create reusable ear feature components from ear parts in a reference part graph: optional outer shells and inner colored patches. Use for soft animal, mascot, plush, or character ears before fur flow, materials, or scored reference repair.",
+      "exposure": "catalog",
+      "groups": [
+        "advanced_create",
+        "model_quality",
+        "reference_modeling",
+        "reference_parts",
+        "feature_stacks"
+      ],
+      "handler_key": "create_ear_stack",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "create_inner_patch": {
+            "type": "boolean"
+          },
+          "create_outer_shell": {
+            "type": "boolean"
+          },
+          "inner_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "inner_scale": {
+            "maximum": 1.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_parts": {
+            "maximum": 32,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "outer_color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "part_graph_collection_name": {
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "rings": {
+            "maximum": 64,
+            "minimum": 4,
+            "type": "integer"
+          },
+          "scale": {
+            "maximum": 10.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "segments": {
+            "maximum": 128,
+            "minimum": 8,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "name": "create_ear_stack",
+      "order": 1089,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -51377,5 +52349,5 @@
       "owner": "scripts_transactions"
     }
   ],
-  "tool_count": 224
+  "tool_count": 227
 }

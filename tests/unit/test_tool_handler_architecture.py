@@ -20,6 +20,9 @@ REFERENCE_PARTS = ROOT / "addon" / "claude_blender" / "reference_parts.py"
 REFERENCE_PART_SCENE = (
     ROOT / "addon" / "claude_blender" / "reference_part_scene.py"
 )
+REFERENCE_FEATURE_STACKS = (
+    ROOT / "addon" / "claude_blender" / "reference_feature_stacks.py"
+)
 SCULPT_FIELDS = ROOT / "addon" / "claude_blender" / "sculpt_fields.py"
 SEMANTIC_SCULPT = ROOT / "addon" / "claude_blender" / "semantic_sculpt.py"
 ADAPTIVE_REMESH = ROOT / "addon" / "claude_blender" / "adaptive_remesh.py"
@@ -112,6 +115,7 @@ class ToolHandlerArchitectureTests(unittest.TestCase):
         self.assertIn("reference_scene", module_names)
         self.assertIn("reference_blockout", module_names)
         self.assertIn("reference_part_scene", module_names)
+        self.assertIn("reference_feature_stacks", module_names)
         self.assertIn("sculpt_fields", module_names)
         self.assertIn("semantic_sculpt", module_names)
         self.assertIn("adaptive_remesh", module_names)
@@ -144,6 +148,10 @@ class ToolHandlerArchitectureTests(unittest.TestCase):
         self.assertLess(
             module_names.index("reference_blockout"),
             module_names.index("reference_part_scene"),
+        )
+        self.assertLess(
+            module_names.index("reference_part_scene"),
+            module_names.index("reference_feature_stacks"),
         )
         self.assertLess(
             module_names.index("reference_multiview"),
@@ -250,6 +258,20 @@ class ToolHandlerArchitectureTests(unittest.TestCase):
         self.assertIn("build_part_aware_base_mesh", part_scene_functions)
         self.assertNotIn("create_reference_part_graph", modeling_functions)
         self.assertNotIn("build_part_aware_base_mesh", modeling_functions)
+
+        feature_stack_functions = {
+            node.name
+            for node in ast.parse(
+                REFERENCE_FEATURE_STACKS.read_text(encoding="utf-8")
+            ).body
+            if isinstance(node, ast.FunctionDef)
+        }
+        self.assertIn("create_eye_stack", feature_stack_functions)
+        self.assertIn("create_muzzle_stack", feature_stack_functions)
+        self.assertIn("create_ear_stack", feature_stack_functions)
+        self.assertNotIn("create_eye_stack", modeling_functions)
+        self.assertNotIn("create_muzzle_stack", modeling_functions)
+        self.assertNotIn("create_ear_stack", modeling_functions)
 
         multiview_tree = ast.parse(
             REFERENCE_MULTIVIEW_SCENE.read_text(encoding="utf-8")

@@ -180,6 +180,9 @@ Operational changes should use typed helpers when validation, rollback, provenan
 - `create_reference_blockout`
 - `create_reference_part_graph`
 - `build_part_aware_base_mesh`
+- `create_eye_stack`
+- `create_muzzle_stack`
+- `create_ear_stack`
 - `define_semantic_sculpt_regions`
 - `inspect_semantic_sculpt_regions`
 - `apply_semantic_sculpt`

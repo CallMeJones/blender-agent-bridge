@@ -7,8 +7,8 @@ Current project snapshot, checked on 2026-08-02:
 - Extension: `Blender Agent Bridge`, manifest id `claude_blender`; version comes from `addon/claude_blender/blender_manifest.toml` and is checked against `build_info.py` and `CHANGELOG.md`.
 - Minimum Blender: `4.2.0`. CI tests 4.2 LTS, 4.5 LTS, and 5.1; newer versions are accepted with capability-based warnings.
 - Local Blender detected on this workstation: `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`.
-- Canonical registry inventory: 224 Blender tool contracts across explicit domain modules.
-- Normal agent catalog inventory: 223 tool definitions; the default surface exposes exactly five gateways. The opt-in `direct` surface adds 24 curated direct helpers.
+- Canonical registry inventory: 227 Blender tool contracts across explicit domain modules.
+- Normal agent catalog inventory: 226 tool definitions; the default surface exposes exactly five gateways. The opt-in `direct` surface adds 24 curated direct helpers.
 - Intentional catalog difference: `run_approved_script` is a compatibility dispatcher path that always refuses the removed per-script flow; it is not exposed in the normal agent helper catalog.
 - The published 0.4.0 artifacts were verified on 2026-07-23. The current unreleased 0.4.1 working line contains 221 unit tests and a 20-test Blender-background suite; tagged CI repeats the supported Blender matrix under Xvfb on Linux.
 

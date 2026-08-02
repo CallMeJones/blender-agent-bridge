@@ -449,6 +449,23 @@ def main():
             <= agent_tools.TOOL_SCHEMA_CHAR_BUDGET
         ), reference_meta
 
+        feature_stack_tools, feature_stack_meta = (
+            agent_tools.select_blender_tool_definitions(
+                "Create eye stack, muzzle stack, and ear stack from the reference part graph.",
+                bundle,
+            )
+        )
+        feature_stack_names = _names(feature_stack_tools)
+        assert "create_reference_part_graph" in feature_stack_names, feature_stack_meta
+        assert "build_part_aware_base_mesh" in feature_stack_names, feature_stack_meta
+        assert "create_eye_stack" in feature_stack_names, feature_stack_meta
+        assert "create_muzzle_stack" in feature_stack_names, feature_stack_meta
+        assert "create_ear_stack" in feature_stack_names, feature_stack_meta
+        assert (
+            feature_stack_meta["schema_chars"]
+            <= agent_tools.TOOL_SCHEMA_CHAR_BUDGET
+        ), feature_stack_meta
+
         semantic_tools, semantic_meta = agent_tools.select_blender_tool_definitions(
             "Define semantic mesh regions from the calibrated reference image, apply a screen-space contour sculpt, and optimize its measured silhouette score.",
             bundle,

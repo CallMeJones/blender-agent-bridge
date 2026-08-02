@@ -38,6 +38,9 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "create_reference_blockout",
             "create_reference_part_graph",
             "build_part_aware_base_mesh",
+            "create_eye_stack",
+            "create_muzzle_stack",
+            "create_ear_stack",
             "adaptive_remesh",
             *_SEMANTIC_SCULPT_TOOL_NAMES,
             "compare_model_to_reference",
@@ -54,7 +57,8 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "building. For raw reference images, normalize intake and masks first. "
             "For calibrated multi-view evidence, construct a visual hull or "
             "depth-constrained surface, run joint measured fitting, create a named "
-            "part graph/base mesh, score every view, and adapt topology only where "
+            "part graph/base mesh, add reusable feature stacks for eyes, muzzle, "
+            "or ears when present, score every view, and adapt topology only where "
             "needed before persistent semantic regions and measured form-aware or "
             "screen-space repairs. Under active trust, cohesive "
             "scripts remain appropriate for bespoke construction that the bounded "
@@ -799,6 +803,7 @@ def plan_model_quality_workflow(
                     "evaluate_multiview_reference_match",
                     "create_reference_part_graph",
                     "build_part_aware_base_mesh",
+                    "create_eye_stack/create_muzzle_stack/create_ear_stack when those parts exist",
                     "adaptive_remesh",
                     "define_semantic_sculpt_regions",
                     "auto_reference_sculpt_repair or apply_form_aware_sculpt/calibrated screen-space sculpt",
