@@ -84,6 +84,7 @@ _MODULE_NAMES = (
     "reference_feature_stacks",
     "advanced_modeling",
     "advanced_rigging",
+    "reference_fur_flow",
     "advanced_scene_editing",
     "advanced_camera_render",
     "advanced_presentation",

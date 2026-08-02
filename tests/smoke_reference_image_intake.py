@@ -15,7 +15,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import tool_dispatcher  # noqa: E402
+from claude_blender import tool_dispatcher, viewport_capture  # noqa: E402
 
 
 def _execute(context, name, args=None, *, expect_ok=True):
@@ -48,6 +48,8 @@ def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     claude_blender.register()
     temp_dir = tempfile.mkdtemp(prefix="reference-intake-smoke-")
+    original_default_capture_dir = viewport_capture.default_capture_dir
+    viewport_capture.default_capture_dir = lambda: os.path.join(temp_dir, "captures")
     try:
         context = bpy.context
         image_path = os.path.join(temp_dir, "reference.png")
@@ -108,6 +110,7 @@ def main():
         )
         assert "exactly one annotation source" in bad["message"]
     finally:
+        viewport_capture.default_capture_dir = original_default_capture_dir
         shutil.rmtree(temp_dir, ignore_errors=True)
         try:
             claude_blender.unregister()

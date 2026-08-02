@@ -10,6 +10,7 @@ from .. import (
     reference_comparison,
     reference_feature_stacks,
     reference_guides,
+    reference_fur_flow,
     reference_image_intake,
     reference_multiview_scene,
     reference_part_scene,
@@ -635,6 +636,70 @@ def create_ear_stack(context, args):
         rings=_bounded_int(args.get("rings"), 16, minimum=4, maximum=64),
         max_parts=_bounded_int(args.get("max_parts"), 8, minimum=1, maximum=32),
         label=str(args.get("label") or "Create ear stack"),
+    )
+
+
+def create_fur_flow_field_from_parts(context, args):
+    return reference_fur_flow.create_fur_flow_field_from_parts(
+        context,
+        part_graph_collection_name=str(
+            args.get("part_graph_collection_name") or ""
+        ),
+        part_names=_name_list(args.get("part_names")),
+        include_roles=_name_list(args.get("include_roles")),
+        preset=str(args.get("preset") or "kitten_soft"),
+        count=_bounded_int(args.get("count"), 600, minimum=1, maximum=5000),
+        max_regions=_bounded_int(args.get("max_regions"), 16, minimum=1, maximum=16),
+        apply_groom=bool(args.get("apply_groom", False)),
+        use_part_vertex_groups=bool(args.get("use_part_vertex_groups", True)),
+        vertex_group_name_prefix=str(
+            args.get("vertex_group_name_prefix") or "Reference Part"
+        ),
+        vertex_group_radius_scale=_bounded_float(
+            args.get("vertex_group_radius_scale"), 1.35, minimum=0.05, maximum=100.0
+        ),
+        vertex_group_falloff_power=_bounded_float(
+            args.get("vertex_group_falloff_power"), 2.0, minimum=0.05, maximum=16.0
+        ),
+        vertex_group_minimum_weight=_bounded_float(
+            args.get("vertex_group_minimum_weight"), 0.001, minimum=0.0, maximum=1.0
+        ),
+        replace_existing_vertex_groups=bool(
+            args.get("replace_existing_vertex_groups", True)
+        ),
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", True)),
+        name_prefix=str(args.get("name_prefix") or "Reference Fur Flow"),
+        material_name=str(args.get("material_name") or ""),
+        color=_float_list(args.get("color"), 4, (0.82, 0.82, 0.78, 1.0)),
+        seed=_bounded_int(args.get("seed"), 17, minimum=0, maximum=1000000),
+        label=str(args.get("label") or "Create fur flow field from parts"),
+    )
+
+
+def create_part_weight_vertex_groups(context, args):
+    return reference_fur_flow.create_part_weight_vertex_groups(
+        context,
+        part_graph_collection_name=str(
+            args.get("part_graph_collection_name") or ""
+        ),
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", True)),
+        part_names=_name_list(args.get("part_names")),
+        include_roles=_name_list(args.get("include_roles")),
+        name_prefix=str(args.get("name_prefix") or "Reference Part"),
+        radius_scale=_bounded_float(
+            args.get("radius_scale"), 1.35, minimum=0.05, maximum=100.0
+        ),
+        falloff_power=_bounded_float(
+            args.get("falloff_power"), 2.0, minimum=0.05, maximum=16.0
+        ),
+        minimum_weight=_bounded_float(
+            args.get("minimum_weight"), 0.001, minimum=0.0, maximum=1.0
+        ),
+        replace_existing=bool(args.get("replace_existing", True)),
+        max_parts=_bounded_int(args.get("max_parts"), 16, minimum=1, maximum=32),
+        label=str(args.get("label") or "Create part weight vertex groups"),
     )
 
 

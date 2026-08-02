@@ -1,5 +1,5 @@
 {
-  "catalog_tool_count": 226,
+  "catalog_tool_count": 228,
   "contracts": {
     "adaptive_remesh": {
       "description": "Adaptively refine sculpt topology by subdividing edges that exceed a bounded local target derived from edge length, semantic-region weight, and face curvature. Retains interpolated semantic point attributes, optionally relaxes spacing and projects vertices back to the source surface, and enforces input, per-pass, and result vertex limits. This is a form-preserving refinement pass; it does not decimate or promise production retopology.",
@@ -4331,7 +4331,7 @@
       "requires_live_preview": true
     },
     "create_directional_fur_curves": {
-      "description": "Create region-aware tapered fur guide curves on selected or named mesh objects. Samples triangles by world-space area and optional vertex-group density, applies tangent flow fields, spacing, clumping, laydown, controlled noise, and root-to-tip taper for smoother coat, cheek, paw, and tail grooms. Legacy single-direction arguments remain supported. Applies immediately with preview revert support.",
+      "description": "Create region-aware tapered fur guide curves on selected or named mesh objects. Samples triangles by world-space area and optional vertex-group density, applies tangent flow fields, spacing, clumping, localized density controls, laydown, controlled noise, and root-to-tip taper for smoother coat, cheek, paw, and tail grooms. Legacy single-direction arguments remain supported. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -4365,6 +4365,37 @@
             "maximum": 16,
             "minimum": 2,
             "type": "integer"
+          },
+          "density_controls": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "location": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "radius": {
+                  "maximum": 10000.0,
+                  "minimum": 0.0001,
+                  "type": "number"
+                },
+                "strength": {
+                  "maximum": 100.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "location"
+              ],
+              "type": "object"
+            },
+            "maxItems": 64,
+            "type": "array"
           },
           "flow_controls": {
             "items": {
@@ -4491,6 +4522,37 @@
                   "minimum": 0.0,
                   "type": "number"
                 },
+                "density_controls": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "location": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "radius": {
+                        "maximum": 10000.0,
+                        "minimum": 0.0001,
+                        "type": "number"
+                      },
+                      "strength": {
+                        "maximum": 100.0,
+                        "minimum": 0.0,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "location"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 64,
+                  "type": "array"
+                },
                 "flow_controls": {
                   "items": {
                     "additionalProperties": false,
@@ -4571,6 +4633,12 @@
                   "maximum": 1.0,
                   "minimum": 0.0,
                   "type": "number"
+                },
+                "part_name": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string"
                 },
                 "root_width": {
                   "maximum": 10.0,
@@ -4988,6 +5056,142 @@
         "type": "object"
       },
       "requires_live_preview": true
+    },
+    "create_fur_flow_field_from_parts": {
+      "description": "Create a part-aware fur-flow field from a reference part graph, including named groom regions, localized density controls, and tangent flow controls for head, muzzle, ear, body, paw, leg, and tail fur. Optionally applies the field immediately through create_directional_fur_curves with preview revert support. Use after create_reference_part_graph or build_part_aware_base_mesh for soft animal, mascot, plush, and cartoon-real creature coats.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "apply_groom": {
+            "type": "boolean"
+          },
+          "color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "count": {
+            "maximum": 5000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "include_roles": {
+            "items": {
+              "enum": [
+                "body",
+                "head",
+                "muzzle",
+                "ear",
+                "paw",
+                "leg",
+                "tail",
+                "generic"
+              ],
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "material_name": {
+            "type": "string"
+          },
+          "max_regions": {
+            "maximum": 16,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "part_graph_collection_name": {
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "preset": {
+            "enum": [
+              "kitten_soft",
+              "short_plush"
+            ],
+            "type": "string"
+          },
+          "replace_existing_vertex_groups": {
+            "type": "boolean"
+          },
+          "seed": {
+            "maximum": 1000000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "selected_only": {
+            "type": "boolean"
+          },
+          "use_part_vertex_groups": {
+            "type": "boolean"
+          },
+          "vertex_group_falloff_power": {
+            "maximum": 16.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "vertex_group_minimum_weight": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "vertex_group_name_prefix": {
+            "type": "string"
+          },
+          "vertex_group_radius_scale": {
+            "maximum": 100.0,
+            "minimum": 0.05,
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
     },
     "create_image_texture_material": {
       "description": "Create or update a Principled BSDF material from exact local image/PBR map paths such as base color, roughness, metallic, normal, alpha, emission, AO, packed ARM/ORM, or bump. Optionally assigns it to selected or named mesh objects and applies immediately with preview revert support.",
@@ -6106,6 +6310,103 @@
         "status_tool": "blender_bridge_status"
       },
       "timeout_seconds": 300
+    },
+    "create_part_weight_vertex_groups": {
+      "description": "Create durable editable vertex groups on selected or named mesh objects from a reference part graph. Weights are computed from soft ellipsoid membership for organic parts, giving later fur, sculpt, material, and repair tools stable named surface masks instead of transient density-only regions. Use after build_part_aware_base_mesh and before create_fur_flow_field_from_parts or region-specific surface edits.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "falloff_power": {
+            "maximum": 16.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "include_roles": {
+            "items": {
+              "enum": [
+                "body",
+                "head",
+                "muzzle",
+                "ear",
+                "paw",
+                "leg",
+                "tail",
+                "generic"
+              ],
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_parts": {
+            "maximum": 32,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "minimum_weight": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "part_graph_collection_name": {
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "radius_scale": {
+            "maximum": 100.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "replace_existing": {
+            "type": "boolean"
+          },
+          "selected_only": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
     },
     "create_primitive": {
       "description": "Create a mesh primitive in the current scene. Applies immediately with preview revert support.",
@@ -23018,7 +23319,7 @@
       "name": "create_multiview_visual_hull"
     },
     {
-      "description": "Create region-aware tapered fur guide curves on selected or named mesh objects. Samples triangles by world-space area and optional vertex-group density, applies tangent flow fields, spacing, clumping, laydown, controlled noise, and root-to-tip taper for smoother coat, cheek, paw, and tail grooms. Legacy single-direction arguments remain supported. Applies immediately with preview revert support.",
+      "description": "Create region-aware tapered fur guide curves on selected or named mesh objects. Samples triangles by world-space area and optional vertex-group density, applies tangent flow fields, spacing, clumping, localized density controls, laydown, controlled noise, and root-to-tip taper for smoother coat, cheek, paw, and tail grooms. Legacy single-direction arguments remain supported. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -23052,6 +23353,37 @@
             "maximum": 16,
             "minimum": 2,
             "type": "integer"
+          },
+          "density_controls": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "location": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "radius": {
+                  "maximum": 10000.0,
+                  "minimum": 0.0001,
+                  "type": "number"
+                },
+                "strength": {
+                  "maximum": 100.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "location"
+              ],
+              "type": "object"
+            },
+            "maxItems": 64,
+            "type": "array"
           },
           "flow_controls": {
             "items": {
@@ -23178,6 +23510,37 @@
                   "minimum": 0.0,
                   "type": "number"
                 },
+                "density_controls": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "location": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "radius": {
+                        "maximum": 10000.0,
+                        "minimum": 0.0001,
+                        "type": "number"
+                      },
+                      "strength": {
+                        "maximum": 100.0,
+                        "minimum": 0.0,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "location"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 64,
+                  "type": "array"
+                },
                 "flow_controls": {
                   "items": {
                     "additionalProperties": false,
@@ -23258,6 +23621,12 @@
                   "maximum": 1.0,
                   "minimum": 0.0,
                   "type": "number"
+                },
+                "part_name": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string"
                 },
                 "root_width": {
                   "maximum": 10.0,
@@ -25507,6 +25876,82 @@
       "name": "add_copy_transform_constraint"
     },
     {
+      "description": "Create durable editable vertex groups on selected or named mesh objects from a reference part graph. Weights are computed from soft ellipsoid membership for organic parts, giving later fur, sculpt, material, and repair tools stable named surface masks instead of transient density-only regions. Use after build_part_aware_base_mesh and before create_fur_flow_field_from_parts or region-specific surface edits.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "falloff_power": {
+            "maximum": 16.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "include_roles": {
+            "items": {
+              "enum": [
+                "body",
+                "head",
+                "muzzle",
+                "ear",
+                "paw",
+                "leg",
+                "tail",
+                "generic"
+              ],
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_parts": {
+            "maximum": 32,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "minimum_weight": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "part_graph_collection_name": {
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "radius_scale": {
+            "maximum": 100.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "replace_existing": {
+            "type": "boolean"
+          },
+          "selected_only": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "name": "create_part_weight_vertex_groups"
+    },
+    {
       "description": "Try up to seven bounded strengths for calibrated screen-space semantic sculpt controls, render and score every candidate against the reference silhouette and optional landmarks, retain only a measured improvement, and restore the original mesh otherwise. Publishes final comparison evidence and leaves an accepted change as a preview.",
       "input_schema": {
         "additionalProperties": false,
@@ -25813,6 +26258,121 @@
         "type": "object"
       },
       "name": "auto_reference_sculpt_repair"
+    },
+    {
+      "description": "Create a part-aware fur-flow field from a reference part graph, including named groom regions, localized density controls, and tangent flow controls for head, muzzle, ear, body, paw, leg, and tail fur. Optionally applies the field immediately through create_directional_fur_curves with preview revert support. Use after create_reference_part_graph or build_part_aware_base_mesh for soft animal, mascot, plush, and cartoon-real creature coats.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "apply_groom": {
+            "type": "boolean"
+          },
+          "color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "count": {
+            "maximum": 5000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "include_roles": {
+            "items": {
+              "enum": [
+                "body",
+                "head",
+                "muzzle",
+                "ear",
+                "paw",
+                "leg",
+                "tail",
+                "generic"
+              ],
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "material_name": {
+            "type": "string"
+          },
+          "max_regions": {
+            "maximum": 16,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "part_graph_collection_name": {
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "preset": {
+            "enum": [
+              "kitten_soft",
+              "short_plush"
+            ],
+            "type": "string"
+          },
+          "replace_existing_vertex_groups": {
+            "type": "boolean"
+          },
+          "seed": {
+            "maximum": 1000000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "selected_only": {
+            "type": "boolean"
+          },
+          "use_part_vertex_groups": {
+            "type": "boolean"
+          },
+          "vertex_group_falloff_power": {
+            "maximum": 16.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "vertex_group_minimum_weight": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "vertex_group_name_prefix": {
+            "type": "string"
+          },
+          "vertex_group_radius_scale": {
+            "maximum": 100.0,
+            "minimum": 0.05,
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "name": "create_fur_flow_field_from_parts"
     },
     {
       "description": "Set render engine, resolution, FPS, frame range, transparency, look-dev quality preset, samples, denoise, and color management. Applies immediately with preview revert support.",
@@ -29533,6 +30093,8 @@
       "create_eye_stack",
       "create_muzzle_stack",
       "create_ear_stack",
+      "create_part_weight_vertex_groups",
+      "create_fur_flow_field_from_parts",
       "adaptive_remesh",
       "define_semantic_sculpt_regions",
       "inspect_semantic_sculpt_regions",
@@ -29644,7 +30206,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "0a0ae6f33603f1ab976c0b028bcc9c9597f4abcf69f1532a7eecdaa56b60c7ab",
+  "registry_digest": "5a95a196c28f1e82f49f4d5d619080316243372861768bfb26d36fd451ef5804",
   "schema_version": 1,
   "specs": [
     {
@@ -40732,7 +41294,7 @@
         "mutates_scene": true,
         "requires_live_preview": true
       },
-      "description": "Create region-aware tapered fur guide curves on selected or named mesh objects. Samples triangles by world-space area and optional vertex-group density, applies tangent flow fields, spacing, clumping, laydown, controlled noise, and root-to-tip taper for smoother coat, cheek, paw, and tail grooms. Legacy single-direction arguments remain supported. Applies immediately with preview revert support.",
+      "description": "Create region-aware tapered fur guide curves on selected or named mesh objects. Samples triangles by world-space area and optional vertex-group density, applies tangent flow fields, spacing, clumping, localized density controls, laydown, controlled noise, and root-to-tip taper for smoother coat, cheek, paw, and tail grooms. Legacy single-direction arguments remain supported. Applies immediately with preview revert support.",
       "exposure": "catalog",
       "groups": [
         "advanced_create",
@@ -40775,6 +41337,37 @@
             "maximum": 16,
             "minimum": 2,
             "type": "integer"
+          },
+          "density_controls": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "location": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "radius": {
+                  "maximum": 10000.0,
+                  "minimum": 0.0001,
+                  "type": "number"
+                },
+                "strength": {
+                  "maximum": 100.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "location"
+              ],
+              "type": "object"
+            },
+            "maxItems": 64,
+            "type": "array"
           },
           "flow_controls": {
             "items": {
@@ -40901,6 +41494,37 @@
                   "minimum": 0.0,
                   "type": "number"
                 },
+                "density_controls": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "location": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "radius": {
+                        "maximum": 10000.0,
+                        "minimum": 0.0001,
+                        "type": "number"
+                      },
+                      "strength": {
+                        "maximum": 100.0,
+                        "minimum": 0.0,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "location"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 64,
+                  "type": "array"
+                },
                 "flow_controls": {
                   "items": {
                     "additionalProperties": false,
@@ -40981,6 +41605,12 @@
                   "maximum": 1.0,
                   "minimum": 0.0,
                   "type": "number"
+                },
+                "part_name": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string"
                 },
                 "root_width": {
                   "maximum": 10.0,
@@ -43926,6 +44556,119 @@
     },
     {
       "contract": {
+        "description": "Create preview-safe part-derived mesh vertex-group masks from reference parts",
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Create durable editable vertex groups on selected or named mesh objects from a reference part graph. Weights are computed from soft ellipsoid membership for organic parts, giving later fur, sculpt, material, and repair tools stable named surface masks instead of transient density-only regions. Use after build_part_aware_base_mesh and before create_fur_flow_field_from_parts or region-specific surface edits.",
+      "exposure": "catalog",
+      "groups": [
+        "advanced_create",
+        "model_quality",
+        "reference_modeling",
+        "reference_parts",
+        "fur_flow",
+        "surface_masks"
+      ],
+      "handler_key": "create_part_weight_vertex_groups",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "falloff_power": {
+            "maximum": 16.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "include_roles": {
+            "items": {
+              "enum": [
+                "body",
+                "head",
+                "muzzle",
+                "ear",
+                "paw",
+                "leg",
+                "tail",
+                "generic"
+              ],
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_parts": {
+            "maximum": 32,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "minimum_weight": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "part_graph_collection_name": {
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "radius_scale": {
+            "maximum": 100.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "replace_existing": {
+            "type": "boolean"
+          },
+          "selected_only": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "name": "create_part_weight_vertex_groups",
+      "order": 1090,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
         "description": "Measure bounded semantic sculpt candidates and retain only a reference-score improvement",
         "duration_hint": "One baseline render, up to seven candidate renders, and one final verification render.",
         "has_side_effects": true,
@@ -44306,6 +45049,157 @@
         "type": "object"
       },
       "name": "auto_reference_sculpt_repair",
+      "order": 1091,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
+        "description": "Create or apply a preview-safe part-aware fur-flow field from reference parts",
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Create a part-aware fur-flow field from a reference part graph, including named groom regions, localized density controls, and tangent flow controls for head, muzzle, ear, body, paw, leg, and tail fur. Optionally applies the field immediately through create_directional_fur_curves with preview revert support. Use after create_reference_part_graph or build_part_aware_base_mesh for soft animal, mascot, plush, and cartoon-real creature coats.",
+      "exposure": "catalog",
+      "groups": [
+        "advanced_create",
+        "model_quality",
+        "reference_modeling",
+        "reference_parts",
+        "fur_flow"
+      ],
+      "handler_key": "create_fur_flow_field_from_parts",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "apply_groom": {
+            "type": "boolean"
+          },
+          "color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "count": {
+            "maximum": 5000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "include_roles": {
+            "items": {
+              "enum": [
+                "body",
+                "head",
+                "muzzle",
+                "ear",
+                "paw",
+                "leg",
+                "tail",
+                "generic"
+              ],
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "material_name": {
+            "type": "string"
+          },
+          "max_regions": {
+            "maximum": 16,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "part_graph_collection_name": {
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "preset": {
+            "enum": [
+              "kitten_soft",
+              "short_plush"
+            ],
+            "type": "string"
+          },
+          "replace_existing_vertex_groups": {
+            "type": "boolean"
+          },
+          "seed": {
+            "maximum": 1000000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "selected_only": {
+            "type": "boolean"
+          },
+          "use_part_vertex_groups": {
+            "type": "boolean"
+          },
+          "vertex_group_falloff_power": {
+            "maximum": 16.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "vertex_group_minimum_weight": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "vertex_group_name_prefix": {
+            "type": "string"
+          },
+          "vertex_group_radius_scale": {
+            "maximum": 100.0,
+            "minimum": 0.05,
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "name": "create_fur_flow_field_from_parts",
       "order": 1091,
       "output_schema": {
         "additionalProperties": true,
@@ -52349,5 +53243,5 @@
       "owner": "scripts_transactions"
     }
   ],
-  "tool_count": 227
+  "tool_count": 229
 }

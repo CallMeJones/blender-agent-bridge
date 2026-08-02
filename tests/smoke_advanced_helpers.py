@@ -72,6 +72,8 @@ ADVANCED_TOOLS = {
     "create_eye_stack",
     "create_muzzle_stack",
     "create_ear_stack",
+    "create_part_weight_vertex_groups",
+    "create_fur_flow_field_from_parts",
     "add_particle_system_to_selected",
     "create_directional_fur_curves",
     "create_basic_armature",

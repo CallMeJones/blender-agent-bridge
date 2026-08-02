@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import functools
 import json
 import os
 import re
@@ -1769,46 +1770,16 @@ def _tool_matches_filters(tool, filters):
     return True
 
 
-def _score_tool_match(tool, query):
-    normalized_query = str(query or "").strip().lower()
-    if not normalized_query:
-        return 0
-    terms = [
+@functools.lru_cache(maxsize=128)
+def _catalog_query_features(normalized_query):
+    terms = tuple(
         term
         for term in re.findall(r"[a-z0-9_]+", normalized_query)
         if term not in CATALOG_SEARCH_STOP_WORDS
-    ]
-    text = _tool_search_text(tool)
-    name = str(tool.get("name") or "").lower()
-    title = str(tool.get("title") or "").lower()
-    category = _tool_category(tool)
+    )
     animation_query = helper_routing.is_animation_workflow_request(normalized_query)
     model_quality_query = helper_routing.is_reference_model_quality_request(normalized_query)
-    advanced_query = _contains_any_phrase(normalized_query, ADVANCED_ROUTE_TERMS) or model_quality_query
-    two_d_query = _contains_any_phrase(normalized_query, TWO_D_ROUTE_TERMS)
-    procedural_query = _contains_any_phrase(normalized_query, PROCEDURAL_ROUTE_TERMS) or model_quality_query
-    simulation_setup_query = _contains_any_phrase(normalized_query, SIMULATION_SETUP_ROUTE_TERMS)
-    camera_move_query = _contains_any_phrase(normalized_query, CAMERA_MOVE_ROUTE_TERMS)
-    uv_unwrap_query = _contains_any_phrase(normalized_query, UV_UNWRAP_ROUTE_TERMS)
-    explicit_script_query = _contains_any_phrase(normalized_query, SCRIPT_EXPLICIT_TERMS)
     authored_content_query = agent_tools.is_open_ended_authored_content(normalized_query)
-    helper_preference_query = helper_routing.prefers_bounded_helpers(normalized_query)
-    external_asset_query = _is_external_asset_route_query(normalized_query)
-    explicit_direct_asset_query = _contains_any_phrase(normalized_query, EXTERNAL_ASSET_DIRECT_TERMS)
-    project_file_operations = helper_routing.project_file_operation_kinds(normalized_query)
-    render_job_query = helper_routing.is_render_job_request(normalized_query)
-    render_setup_query = helper_routing.is_render_setup_request(normalized_query)
-    lookdev_review_query = helper_routing.is_lookdev_review_request(normalized_query)
-    inspection_render_query = helper_routing.is_inspection_render_request(
-        normalized_query
-    )
-    if name == "plan_model_quality_workflow" and not model_quality_query and normalized_query != name:
-        return None
-    leading_term = terms[0].strip(".,:;!?") if terms else ""
-    inspection_only_query = (
-        leading_term in INSPECTION_INTENT_TERMS
-        and not _contains_any_phrase(normalized_query, MUTATION_INTENT_TERMS)
-    )
     workflow_domain_count = sum(
         (
             _contains_any_phrase(normalized_query, WORKFLOW_MATERIAL_TERMS),
@@ -1817,10 +1788,70 @@ def _score_tool_match(tool, query):
             _contains_any_phrase(normalized_query, WORKFLOW_PREVIEW_TERMS),
         )
     )
-    broad_workflow_query = (
-        _contains_any_phrase(normalized_query, WORKFLOW_CREATION_TERMS)
-        and workflow_domain_count >= 3
+    return {
+        "terms": terms,
+        "animation_query": animation_query,
+        "model_quality_query": model_quality_query,
+        "advanced_query": _contains_any_phrase(normalized_query, ADVANCED_ROUTE_TERMS) or model_quality_query,
+        "two_d_query": _contains_any_phrase(normalized_query, TWO_D_ROUTE_TERMS),
+        "procedural_query": _contains_any_phrase(normalized_query, PROCEDURAL_ROUTE_TERMS) or model_quality_query,
+        "simulation_setup_query": _contains_any_phrase(normalized_query, SIMULATION_SETUP_ROUTE_TERMS),
+        "camera_move_query": _contains_any_phrase(normalized_query, CAMERA_MOVE_ROUTE_TERMS),
+        "uv_unwrap_query": _contains_any_phrase(normalized_query, UV_UNWRAP_ROUTE_TERMS),
+        "explicit_script_query": _contains_any_phrase(normalized_query, SCRIPT_EXPLICIT_TERMS),
+        "authored_content_query": authored_content_query,
+        "helper_preference_query": helper_routing.prefers_bounded_helpers(normalized_query),
+        "external_asset_query": _is_external_asset_route_query(normalized_query),
+        "explicit_direct_asset_query": _contains_any_phrase(normalized_query, EXTERNAL_ASSET_DIRECT_TERMS),
+        "project_file_operations": helper_routing.project_file_operation_kinds(normalized_query),
+        "render_job_query": helper_routing.is_render_job_request(normalized_query),
+        "render_setup_query": helper_routing.is_render_setup_request(normalized_query),
+        "lookdev_review_query": helper_routing.is_lookdev_review_request(normalized_query),
+        "inspection_render_query": helper_routing.is_inspection_render_request(normalized_query),
+        "leading_term": terms[0].strip(".,:;!?") if terms else "",
+        "broad_workflow_query": (
+            _contains_any_phrase(normalized_query, WORKFLOW_CREATION_TERMS)
+            and workflow_domain_count >= 3
+        ),
+    }
+
+
+def _score_tool_match(tool, query):
+    normalized_query = str(query or "").strip().lower()
+    if not normalized_query:
+        return 0
+    features = _catalog_query_features(normalized_query)
+    terms = features["terms"]
+    text = _tool_search_text(tool)
+    name = str(tool.get("name") or "").lower()
+    title = str(tool.get("title") or "").lower()
+    category = _tool_category(tool)
+    animation_query = features["animation_query"]
+    model_quality_query = features["model_quality_query"]
+    advanced_query = features["advanced_query"]
+    two_d_query = features["two_d_query"]
+    procedural_query = features["procedural_query"]
+    simulation_setup_query = features["simulation_setup_query"]
+    camera_move_query = features["camera_move_query"]
+    uv_unwrap_query = features["uv_unwrap_query"]
+    explicit_script_query = features["explicit_script_query"]
+    authored_content_query = features["authored_content_query"]
+    helper_preference_query = features["helper_preference_query"]
+    external_asset_query = features["external_asset_query"]
+    explicit_direct_asset_query = features["explicit_direct_asset_query"]
+    project_file_operations = features["project_file_operations"]
+    render_job_query = features["render_job_query"]
+    render_setup_query = features["render_setup_query"]
+    lookdev_review_query = features["lookdev_review_query"]
+    inspection_render_query = features["inspection_render_query"]
+    if name == "plan_model_quality_workflow" and not model_quality_query and normalized_query != name:
+        return None
+    leading_term = features["leading_term"]
+    inspection_only_query = (
+        leading_term in INSPECTION_INTENT_TERMS
+        and not _contains_any_phrase(normalized_query, MUTATION_INTENT_TERMS)
     )
+    broad_workflow_query = features["broad_workflow_query"]
     matched_terms = [term for term in terms if term in text]
     if not matched_terms:
         if animation_query and (name in ANIMATION_ROUTE_TOOLS or category == "animation"):

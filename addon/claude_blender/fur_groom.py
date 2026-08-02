@@ -6,6 +6,8 @@ import bisect
 import math
 import random
 
+from . import reference_parts
+
 
 _EPSILON = 1.0e-9
 
@@ -95,6 +97,58 @@ def blend_flow_controls(point, base_direction, controls):
         weighted = _add(weighted, _scale(direction, weight))
         total_weight += weight
     return _normalized(_scale(weighted, 1.0 / total_weight), base_direction)
+
+
+def blend_density_controls(point, controls, *, base_density=0.0):
+    """Return a bounded density multiplier from localized control volumes."""
+    point = _vector(point)
+    density = _finite_float(base_density, 0.0, minimum=0.0, maximum=100.0)
+    for control in list(controls or [])[:64]:
+        if not isinstance(control, dict):
+            continue
+        location = _vector(control.get("location"))
+        radius = _finite_float(control.get("radius"), 1.0, minimum=_EPSILON)
+        strength = _finite_float(control.get("strength"), 1.0, minimum=0.0, maximum=100.0)
+        distance = _length(_subtract(point, location))
+        if distance >= radius or strength <= 0.0:
+            continue
+        density += strength * (1.0 - distance / radius) ** 2
+    return min(100.0, density)
+
+
+def part_weight_at_point(
+    point,
+    part,
+    *,
+    radius_scale=1.25,
+    falloff_power=2.0,
+    minimum_weight=0.0,
+):
+    """Return a soft ellipsoid membership weight for one reference part."""
+
+    if not isinstance(part, dict):
+        return 0.0
+    point = _vector(point)
+    center = _vector(part.get("center"))
+    radii = tuple(
+        max(_EPSILON, abs(value) * _finite_float(radius_scale, 1.25, minimum=_EPSILON, maximum=100.0))
+        for value in _vector(part.get("radii"), (0.2, 0.2, 0.2))
+    )
+    basis = part.get("basis") if isinstance(part.get("basis"), (list, tuple)) else ()
+    axes = (
+        _normalized(basis[0] if len(basis) > 0 else (1.0, 0.0, 0.0)),
+        _normalized(basis[1] if len(basis) > 1 else (0.0, 1.0, 0.0)),
+        _normalized(basis[2] if len(basis) > 2 else (0.0, 0.0, 1.0)),
+    )
+    delta = _subtract(point, center)
+    distance_squared = sum((_dot(delta, axes[index]) / radii[index]) ** 2 for index in range(3))
+    distance = math.sqrt(max(0.0, distance_squared))
+    if distance >= 1.0:
+        return 0.0
+    power = _finite_float(falloff_power, 2.0, minimum=0.05, maximum=16.0)
+    weight = (1.0 - distance) ** power
+    minimum = _finite_float(minimum_weight, 0.0, minimum=0.0, maximum=1.0)
+    return weight if weight >= minimum else 0.0
 
 
 def allocate_weighted_counts(weights, total):
@@ -355,3 +409,134 @@ def _finite_float(value, default, *, minimum=None, maximum=None):
     if maximum is not None:
         number = min(float(maximum), number)
     return number
+
+
+def part_graph_fur_flow_field(
+    parts,
+    *,
+    preset="kitten_soft",
+    count=600,
+    include_roles=None,
+    max_regions=16,
+):
+    """Build groom regions and localized controls from reference part dictionaries."""
+
+    presets = {
+        "kitten_soft": {
+            "body": (0.12, 0.0045, 0.00055, 1.0, 0.68, 0.22),
+            "head": (0.085, 0.0038, 0.00045, 1.35, 0.72, 0.2),
+            "muzzle": (0.052, 0.0028, 0.00035, 1.6, 0.62, 0.18),
+            "ear": (0.095, 0.0035, 0.00042, 1.25, 0.76, 0.18),
+            "paw": (0.055, 0.0028, 0.00035, 0.8, 0.62, 0.2),
+            "leg": (0.075, 0.0032, 0.0004, 0.85, 0.65, 0.22),
+            "tail": (0.14, 0.0048, 0.0006, 1.2, 0.78, 0.18),
+            "generic": (0.09, 0.0035, 0.00045, 0.7, 0.65, 0.22),
+        },
+        "short_plush": {
+            "body": (0.07, 0.0035, 0.0005, 1.0, 0.6, 0.18),
+            "head": (0.06, 0.0032, 0.00045, 1.2, 0.64, 0.16),
+            "muzzle": (0.04, 0.0025, 0.00035, 1.35, 0.55, 0.14),
+            "ear": (0.07, 0.003, 0.0004, 1.1, 0.68, 0.16),
+            "paw": (0.045, 0.0024, 0.00032, 0.75, 0.58, 0.18),
+            "leg": (0.055, 0.0028, 0.00036, 0.8, 0.6, 0.18),
+            "tail": (0.095, 0.0038, 0.0005, 1.1, 0.7, 0.16),
+            "generic": (0.06, 0.003, 0.0004, 0.7, 0.6, 0.18),
+        },
+    }
+    profile = presets.get(str(preset or "kitten_soft"), presets["kitten_soft"])
+    roles = {str(role) for role in (include_roles or reference_parts.ORGANIC_ROLES)}
+    candidates = []
+    for part in list(parts or [])[:64]:
+        if not isinstance(part, dict):
+            continue
+        role = str(part.get("role") or "generic")
+        if role not in roles or role not in reference_parts.ORGANIC_ROLES:
+            continue
+        radii = tuple(max(0.0001, abs(value)) for value in _vector(part.get("radii"), (0.2, 0.2, 0.2)))
+        length, root_width, tip_width, density, flow_strength, normal_lift = profile.get(role, profile["generic"])
+        weight = max(_EPSILON, radii[0] * radii[1] + radii[0] * radii[2] + radii[1] * radii[2]) * density
+        candidates.append((weight, part, role, radii, length, root_width, tip_width, density, flow_strength, normal_lift))
+
+    limit = max(1, min(16, int(max_regions or 16)))
+    warnings = []
+    if len(candidates) > limit:
+        candidates = sorted(candidates, key=lambda item: item[0], reverse=True)[:limit]
+        warnings.append(f"Limited fur flow regions to max_regions={limit}.")
+    if not candidates:
+        return {
+            "schema_version": 1,
+            "preset": str(preset or "kitten_soft"),
+            "regions": [],
+            "flow_controls": [],
+            "warnings": ["No organic reference parts were available for fur flow."],
+        }
+
+    total_count = max(1, min(5000, int(count or 600)))
+    counts = allocate_weighted_counts([item[0] for item in candidates], total_count)
+    regions = []
+    for index, (candidate, region_count) in enumerate(zip(candidates, counts), 1):
+        _weight, part, role, radii, length, root_width, tip_width, density, flow_strength, normal_lift = candidate
+        center = _vector(part.get("center"))
+        basis = part.get("basis") if isinstance(part.get("basis"), (list, tuple)) else ()
+        right = _normalized(basis[0] if len(basis) > 0 else (1.0, 0.0, 0.0))
+        depth = _normalized(basis[1] if len(basis) > 1 else (0.0, 1.0, 0.0))
+        up = _normalized(basis[2] if len(basis) > 2 else (0.0, 0.0, 1.0))
+        front = _scale(depth, -1.0)
+        side_sign = -1.0 if center[0] < 0.0 else 1.0
+        if role == "muzzle":
+            direction = _add(_scale(right, side_sign * 0.7), _add(_scale(up, -0.25), _scale(front, 0.35)))
+        elif role == "ear":
+            direction = _add(_scale(up, 0.85), _scale(front, 0.25))
+        elif role == "tail":
+            direction = _add(_scale(depth, 0.65), _scale(up, 0.25))
+        elif role in {"body", "leg", "paw"}:
+            direction = _add(_scale(up, -0.85), _scale(front, 0.2))
+        else:
+            direction = _add(_scale(up, -0.75), _scale(front, 0.3))
+        direction = _normalized(direction, (0.0, 0.0, -1.0))
+        radius = max(radii) * (1.9 if role in {"body", "tail"} else 1.55)
+        part_name = str(part.get("name") or f"{role}_{index}")
+        regions.append(
+            {
+                "name": f"{part_name}_fur"[:80],
+                "part_name": part_name,
+                "role": role,
+                "count": region_count,
+                "density": density,
+                "length": length,
+                "root_width": root_width,
+                "tip_width": tip_width,
+                "flow_direction": list(direction),
+                "flow_strength": flow_strength,
+                "normal_lift": normal_lift,
+                "length_randomness": 0.28 if role in {"head", "muzzle", "ear"} else 0.34,
+                "curve_points": 5,
+                "minimum_spacing": 0.0,
+                "auto_spacing": True,
+                "clump_strength": 0.12 if role == "muzzle" else 0.18,
+                "clump_size": 7 if role in {"head", "muzzle", "ear"} else 10,
+                "noise_strength": 0.05 if role == "muzzle" else 0.08,
+                "flow_controls": [
+                    {
+                        "location": list(center),
+                        "direction": list(direction),
+                        "radius": radius,
+                        "strength": 2.0,
+                    }
+                ],
+                "density_controls": [
+                    {
+                        "location": list(center),
+                        "radius": radius,
+                        "strength": density,
+                    }
+                ],
+            }
+        )
+    return {
+        "schema_version": 1,
+        "preset": str(preset or "kitten_soft"),
+        "regions": regions,
+        "flow_controls": [],
+        "warnings": warnings,
+    }

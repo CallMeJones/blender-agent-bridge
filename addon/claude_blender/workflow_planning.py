@@ -41,6 +41,8 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "create_eye_stack",
             "create_muzzle_stack",
             "create_ear_stack",
+            "create_part_weight_vertex_groups",
+            "create_fur_flow_field_from_parts",
             "adaptive_remesh",
             *_SEMANTIC_SCULPT_TOOL_NAMES,
             "compare_model_to_reference",
@@ -58,9 +60,10 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "For calibrated multi-view evidence, construct a visual hull or "
             "depth-constrained surface, run joint measured fitting, create a named "
             "part graph/base mesh, add reusable feature stacks for eyes, muzzle, "
-            "or ears when present, score every view, and adapt topology only where "
-            "needed before persistent semantic regions and measured form-aware or "
-            "screen-space repairs. Under active trust, cohesive "
+            "or ears when present, create part-weight surface masks, generate "
+            "part-aware fur flow for furry subjects, score every view, and adapt "
+            "topology only where needed before persistent semantic regions and "
+            "measured form-aware or screen-space repairs. Under active trust, cohesive "
             "scripts remain appropriate for bespoke construction that the bounded "
             "fields cannot express."
         ),
@@ -804,6 +807,8 @@ def plan_model_quality_workflow(
                     "create_reference_part_graph",
                     "build_part_aware_base_mesh",
                     "create_eye_stack/create_muzzle_stack/create_ear_stack when those parts exist",
+                    "create_part_weight_vertex_groups for durable part-derived surface masks",
+                    "create_fur_flow_field_from_parts before generic directional fur for furry subjects",
                     "adaptive_remesh",
                     "define_semantic_sculpt_regions",
                     "auto_reference_sculpt_repair or apply_form_aware_sculpt/calibrated screen-space sculpt",

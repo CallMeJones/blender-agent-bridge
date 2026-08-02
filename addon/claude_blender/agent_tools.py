@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 try:
     from . import helper_routing, response_controls, tool_registry
@@ -257,6 +258,16 @@ def _contains_keyword(text, keywords):
     return any(keyword in text for keyword in keywords)
 
 
+def _contains_bounded_keyword(text, keywords):
+    return any(
+        re.search(
+            rf"(?<![a-z0-9_]){re.escape(keyword)}(?![a-z0-9_])",
+            text,
+        )
+        for keyword in keywords
+    )
+
+
 def is_open_ended_authored_content(text):
     return helper_routing.is_script_first_authored_request(text)
 
@@ -349,6 +360,35 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
             "create ears",
         },
     )
+    explicit_fur_flow_request = _contains_bounded_keyword(
+        request_text,
+        {
+            "fur flow",
+            "fur-flow",
+            "fur field",
+            "groom field",
+            "part-aware fur",
+            "part aware fur",
+            "fur from parts",
+            "part weight",
+            "part weights",
+            "part masks",
+            "surface masks",
+            "vertex groups from parts",
+        },
+    )
+    broad_reference_fur_request = _contains_bounded_keyword(
+        request_text,
+        {
+            "fur",
+            "furry",
+            "fluffy",
+            "coat",
+            "groom",
+            "grooming",
+            "whiskery",
+        },
+    )
     auto_reference_repair_request = _contains_keyword(
         request_text,
         {
@@ -430,6 +470,9 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
     feature_stack_request = explicit_feature_stack_request or (
         quality_reference_request and broad_reference_feature_request
     )
+    fur_flow_request = explicit_fur_flow_request or (
+        quality_reference_request and broad_reference_fur_request
+    )
     if quality_reference_request:
         selected.update(_REFERENCE_QUALITY_TOOL_NAMES)
         matched_groups.append("advanced_workflow")
@@ -454,6 +497,15 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
     if feature_stack_request:
         selected.update({"create_eye_stack", "create_muzzle_stack", "create_ear_stack"})
         matched_groups.append("feature_stacks")
+    if fur_flow_request:
+        selected.update(
+            {
+                "create_part_weight_vertex_groups",
+                "create_fur_flow_field_from_parts",
+                "create_directional_fur_curves",
+            }
+        )
+        matched_groups.append("fur_flow")
     if auto_reference_repair_request:
         selected.add("auto_reference_sculpt_repair")
         matched_groups.append("reference_scoring")
@@ -497,6 +549,14 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         protected.update({"create_reference_part_graph", "build_part_aware_base_mesh"})
     if feature_stack_request:
         protected.update({"create_eye_stack", "create_muzzle_stack", "create_ear_stack"})
+    if fur_flow_request:
+        protected.update(
+            {
+                "create_part_weight_vertex_groups",
+                "create_fur_flow_field_from_parts",
+                "create_directional_fur_curves",
+            }
+        )
     if auto_reference_repair_request:
         protected.add("auto_reference_sculpt_repair")
     if reference_benchmark_request:
@@ -510,10 +570,11 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         if group in {"vehicle", "product", "character", "refinement", "camera_render", "rigging", "curves_text", "particles", "geometry_nodes", "external_assets", "advanced_workflow", "two_d_storyboard", "procedural_3d", "simulation_setup", "preview_control", "semantic_sculpt"}:
             protected.update(_TOOL_GROUPS.get(group, set()))
     if quality_reference_request:
-        if feature_stack_request:
+        if feature_stack_request or fur_flow_request:
             protected.update(
                 {
                     "plan_model_quality_workflow",
+                    "plan_advanced_scene_workflow",
                     "prepare_reference_images",
                     "inspect_reference_modeling_guides",
                     "create_reference_part_graph",
@@ -521,6 +582,9 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
                     "create_eye_stack",
                     "create_muzzle_stack",
                     "create_ear_stack",
+                    "create_part_weight_vertex_groups",
+                    "create_fur_flow_field_from_parts",
+                    "create_directional_fur_curves",
                     "inspect_modeling_quality",
                     "capture_viewport",
                     "draft_script",
@@ -734,6 +798,8 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "create_eye_stack",
     "create_muzzle_stack",
     "create_ear_stack",
+    "create_part_weight_vertex_groups",
+    "create_fur_flow_field_from_parts",
     "plan_asset_import_workflow",
     "plan_advanced_scene_workflow",
     "animate_object_bounce",

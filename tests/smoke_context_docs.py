@@ -694,9 +694,14 @@ def main():
         huge_text = context_budget.dumps_json_for_prompt(huge_bundle)
         assert len(huge_text) < context_budget.MAX_CONTEXT_JSON_CHARS + 1_000
         assert "truncated" in huge_text
+        request_tools = agent_tools.blender_tool_definitions_for_request(
+            prompt="inspect this scene without making changes",
+            context_bundle=huge_bundle,
+        )
+        assert agent_tools._schema_chars(request_tools) <= agent_tools.TOOL_SCHEMA_CHAR_BUDGET
         assert agent_tools.estimate_request_chars(
             messages=[{"role": "user", "content": huge_text}],
-            tools=agent_tools.blender_tool_definitions(),
+            tools=request_tools,
         ) < context_budget.MAX_CONTEXT_JSON_CHARS + 80_000
 
         claude_blender.unregister()

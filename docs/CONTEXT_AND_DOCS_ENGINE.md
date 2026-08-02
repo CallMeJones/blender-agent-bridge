@@ -237,7 +237,9 @@ Initial helpers:
 - `evaluate_reference_model_benchmark(profile, run_id, collection_name, camera_name, object_names, outline_name, reference_mask_source, landmark_targets, max_axis, mask_threshold)`
 - `create_reference_blockout(collection_name, camera_name, mass_names, mass_settings, depth_ratio, blend_mode, voxel_size)`
 - `add_particle_system_to_selected(name, count, frame_start, frame_end, lifetime)`
-- `create_directional_fur_curves(object_names, selected_only, count, length, root_width, tip_width, flow_direction, flow_controls, minimum_spacing, auto_spacing, clump_strength, clump_size, noise_strength, regions)`
+- `create_part_weight_vertex_groups(part_graph_collection_name, object_names, selected_only, part_names, include_roles, name_prefix, radius_scale, falloff_power, minimum_weight, replace_existing, max_parts)`
+- `create_fur_flow_field_from_parts(part_graph_collection_name, part_names, include_roles, preset, count, max_regions, apply_groom, use_part_vertex_groups, vertex_group_name_prefix, vertex_group_radius_scale, vertex_group_falloff_power, vertex_group_minimum_weight, replace_existing_vertex_groups, object_names)`
+- `create_directional_fur_curves(object_names, selected_only, count, length, root_width, tip_width, flow_direction, flow_controls, density_controls, minimum_spacing, auto_spacing, clump_strength, clump_size, noise_strength, regions)`
 - `create_basic_armature(name, location, rotation)`
 - `add_copy_transform_constraint(target_name, constraint_type)`
 - `set_render_settings(engine, resolution, fps, frame_start, frame_end, film_transparent, quality_preset, samples, denoise, view_transform, look, exposure, gamma)`

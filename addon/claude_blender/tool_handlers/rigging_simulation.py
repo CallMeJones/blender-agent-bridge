@@ -286,6 +286,7 @@ def create_directional_fur_curves(context, args):
         clump_size=_bounded_int(args.get("clump_size"), 8, minimum=1, maximum=100),
         noise_strength=_bounded_float(args.get("noise_strength"), 0.08, minimum=0.0, maximum=1.0),
         flow_controls=args.get("flow_controls") if isinstance(args.get("flow_controls"), list) else [],
+        density_controls=args.get("density_controls") if isinstance(args.get("density_controls"), list) else [],
         regions=args.get("regions") if isinstance(args.get("regions"), list) else [],
         material_name=str(args.get("material_name") or ""),
         color=_float_list(args.get("color"), 4, (0.82, 0.82, 0.78, 1.0)),

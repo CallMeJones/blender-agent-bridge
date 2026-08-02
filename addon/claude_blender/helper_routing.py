@@ -906,6 +906,8 @@ HELPER_FIRST_SCRIPT_RULES = (
             "create_eye_stack",
             "create_muzzle_stack",
             "create_ear_stack",
+            "create_part_weight_vertex_groups",
+            "create_fur_flow_field_from_parts",
             "create_directional_fur_curves",
             "apply_procedural_array_stack",
             "edit_mesh",
@@ -1090,6 +1092,8 @@ HELPER_FIRST_SCRIPT_RULES = (
             "create_eye_stack",
             "create_muzzle_stack",
             "create_ear_stack",
+            "create_part_weight_vertex_groups",
+            "create_fur_flow_field_from_parts",
         ],
     },
     {

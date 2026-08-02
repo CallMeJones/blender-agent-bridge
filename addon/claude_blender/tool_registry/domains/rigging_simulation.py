@@ -27,10 +27,28 @@ _FLOW_CONTROL_SCHEMA = {
     'additionalProperties': False,
 }
 
+_DENSITY_CONTROL_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'location': {
+            'type': 'array',
+            'items': {'type': 'number'},
+            'minItems': 3,
+            'maxItems': 3,
+        },
+        'radius': {'type': 'number', 'minimum': 0.0001, 'maximum': 10000.0},
+        'strength': {'type': 'number', 'minimum': 0.0, 'maximum': 100.0},
+    },
+    'required': ['location'],
+    'additionalProperties': False,
+}
+
 _GROOM_REGION_SCHEMA = {
     'type': 'object',
     'properties': {
         'name': {'type': 'string'},
+        'part_name': {'type': 'string'},
+        'role': {'type': 'string'},
         'vertex_group': {'type': 'string'},
         'count': {'type': 'integer', 'minimum': 0, 'maximum': 5000},
         'density': {'type': 'number', 'minimum': 0.0, 'maximum': 100.0},
@@ -55,6 +73,11 @@ _GROOM_REGION_SCHEMA = {
         'flow_controls': {
             'type': 'array',
             'items': _FLOW_CONTROL_SCHEMA,
+            'maxItems': 64,
+        },
+        'density_controls': {
+            'type': 'array',
+            'items': _DENSITY_CONTROL_SCHEMA,
             'maxItems': 64,
         },
     },
@@ -488,7 +511,8 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'get_rigging_details'
  {'name': 'create_directional_fur_curves',
   'description': 'Create region-aware tapered fur guide curves on selected or named mesh objects. Samples triangles by '
                  'world-space area and optional vertex-group density, applies tangent flow fields, spacing, clumping, '
-                 'laydown, controlled noise, and root-to-tip taper for smoother coat, cheek, paw, and tail grooms. '
+                 'localized density controls, laydown, controlled noise, and root-to-tip taper for smoother coat, '
+                 'cheek, paw, and tail grooms. '
                  'Legacy single-direction arguments remain supported. Applies immediately with preview revert support.',
   'input_schema': {'type': 'object',
                    'properties': {'object_names': {'type': 'array', 'items': {'type': 'string'}},
@@ -514,6 +538,9 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'get_rigging_details'
                                   'flow_controls': {'type': 'array',
                                                     'items': _FLOW_CONTROL_SCHEMA,
                                                     'maxItems': 64},
+                                  'density_controls': {'type': 'array',
+                                                       'items': _DENSITY_CONTROL_SCHEMA,
+                                                       'maxItems': 64},
                                   'regions': {'type': 'array',
                                               'items': _GROOM_REGION_SCHEMA,
                                               'maxItems': 16},

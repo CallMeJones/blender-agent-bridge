@@ -19,8 +19,8 @@ SNAPSHOT_PATH = os.path.join(ROOT, "tests", "snapshots", "tool_registry.json")
 class ToolRegistryTests(unittest.TestCase):
     def test_inventory_is_complete_and_domain_owned(self):
         specs = tool_registry.REGISTRY.specs()
-        self.assertEqual(227, len(specs))
-        self.assertEqual(226, len(tool_registry.definitions()))
+        self.assertEqual(229, len(specs))
+        self.assertEqual(228, len(tool_registry.definitions()))
         self.assertEqual(12, len(tool_registry.DOMAIN_MODULES))
         self.assertEqual({spec.name for spec in specs}, set(bridge_protocol.TOOL_CONTRACTS))
         self.assertEqual(
@@ -149,6 +149,22 @@ class ToolRegistryTests(unittest.TestCase):
             with self.subTest(tool=name):
                 self.assertEqual("modeling", tool_registry.REGISTRY.get(name).owner)
                 self.assertIn("feature_stacks", tool_registry.REGISTRY.get(name).groups)
+        self.assertEqual(
+            "modeling",
+            tool_registry.REGISTRY.get("create_fur_flow_field_from_parts").owner,
+        )
+        self.assertEqual(
+            "modeling",
+            tool_registry.REGISTRY.get("create_part_weight_vertex_groups").owner,
+        )
+        self.assertIn(
+            "fur_flow",
+            tool_registry.REGISTRY.get("create_fur_flow_field_from_parts").groups,
+        )
+        self.assertIn(
+            "surface_masks",
+            tool_registry.REGISTRY.get("create_part_weight_vertex_groups").groups,
+        )
 
     def test_sculpt_and_reference_fit_do_not_advertise_unsafe_shape_key_edits(self):
         for name in (
@@ -163,6 +179,8 @@ class ToolRegistryTests(unittest.TestCase):
             "create_eye_stack",
             "create_muzzle_stack",
             "create_ear_stack",
+            "create_part_weight_vertex_groups",
+            "create_fur_flow_field_from_parts",
         ):
             with self.subTest(tool=name):
                 properties = tool_registry.REGISTRY.get(name).input_schema["properties"]

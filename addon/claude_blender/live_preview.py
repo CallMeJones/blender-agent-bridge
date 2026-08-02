@@ -580,6 +580,38 @@ def _record_mesh_data_snapshot(obj):
     return snapshot
 
 
+def _record_object_vertex_groups(obj):
+    transaction = begin()
+    if obj is None or obj.type != "MESH" or obj.data is None:
+        return
+    key = f"object:{obj.name}:vertex_groups"
+    if key in transaction["before_state"]:
+        return
+    source_groups = list(obj.vertex_groups)
+    weights_by_group = {group.index: [] for group in source_groups}
+    for vertex in obj.data.vertices:
+        for assignment in vertex.groups:
+            weights = weights_by_group.get(assignment.group)
+            if weights is not None:
+                weights.append((int(vertex.index), float(assignment.weight)))
+    groups = []
+    for group in source_groups:
+        groups.append(
+            {
+                "name": group.name,
+                "lock_weight": bool(getattr(group, "lock_weight", False)),
+                "weights": weights_by_group[group.index],
+            }
+        )
+    transaction["before_state"][key] = {
+        "kind": "object_vertex_groups",
+        "object_name": obj.name,
+        "active_index": int(getattr(obj.vertex_groups, "active_index", 0)),
+        "groups": groups,
+    }
+    transaction["changed_data_blocks"].append(obj.name)
+
+
 def _record_material(material):
     transaction = begin()
     key = f"material:{material.name}:diffuse"
@@ -1588,6 +1620,11 @@ def revert(context):
         return {"ok": False, "message": "No pending preview transaction"}
     rollback_warnings = []
     before_values = list(transaction["before_state"].values())
+    # Mesh snapshots carry deform weights. Restore object-level group definitions
+    # and weights after mesh data so a later topology snapshot cannot overwrite them.
+    before_values.sort(
+        key=lambda before: before.get("kind") == "object_vertex_groups"
+    )
     timeline_scene_names = {
         before["scene_name"]
         for before in before_values
@@ -1850,6 +1887,30 @@ def revert(context):
             if current_mesh and current_mesh != snapshot and current_mesh.users == 0:
                 bpy.data.meshes.remove(current_mesh)
             snapshot.name = before["mesh_name"]
+        elif before.get("kind") == "object_vertex_groups":
+            obj = bpy.data.objects.get(before["object_name"])
+            if obj is None or obj.type != "MESH":
+                rollback_warnings.append(f"Missing mesh object for vertex-group restore: {before['object_name']}")
+                continue
+            for group in list(obj.vertex_groups):
+                obj.vertex_groups.remove(group)
+            vertex_count = len(obj.data.vertices)
+            for group_state in before.get("groups") or []:
+                group = obj.vertex_groups.new(name=str(group_state.get("name") or "Group"))
+                for vertex_index, weight in group_state.get("weights") or []:
+                    vertex_index = int(vertex_index)
+                    if 0 <= vertex_index < vertex_count:
+                        group.add([vertex_index], float(weight), "REPLACE")
+                if hasattr(group, "lock_weight"):
+                    group.lock_weight = bool(group_state.get("lock_weight", False))
+            if len(obj.vertex_groups):
+                obj.vertex_groups.active_index = max(
+                    0,
+                    min(
+                        len(obj.vertex_groups) - 1,
+                        int(before.get("active_index", 0)),
+                    ),
+                )
         elif before.get("kind") == "shader_material":
             material = bpy.data.materials.get(before["material_name"])
             if material:

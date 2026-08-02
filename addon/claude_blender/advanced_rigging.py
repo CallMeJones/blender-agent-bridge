@@ -10,6 +10,7 @@ import re
 
 import bpy
 from mathutils import Vector
+from mathutils.kdtree import KDTree
 
 from . import fur_groom, live_preview
 
@@ -1067,6 +1068,22 @@ def _groom_flow_controls(controls):
     return normalized
 
 
+def _groom_density_controls(controls):
+    normalized = []
+    source = controls if isinstance(controls, (list, tuple)) else []
+    for control in source[:64]:
+        if not isinstance(control, dict):
+            continue
+        normalized.append(
+            {
+                "location": _coerce_vector(control.get("location"), (0.0, 0.0, 0.0)),
+                "radius": _groom_float(control.get("radius"), 1.0, minimum=0.0001, maximum=10000.0),
+                "strength": _groom_float(control.get("strength"), 1.0, minimum=0.0, maximum=100.0),
+            }
+        )
+    return normalized
+
+
 def _groom_regions(
     regions,
     *,
@@ -1084,9 +1101,12 @@ def _groom_regions(
     clump_size,
     noise_strength,
     flow_controls,
+    density_controls,
 ):
     source = regions if isinstance(regions, (list, tuple)) else []
     source = list(source[:16]) or [{}]
+    shared_flow_controls = _groom_flow_controls(flow_controls)
+    shared_density_controls = _groom_density_controls(density_controls)
     normalized = []
     for index, raw in enumerate(source):
         raw = raw if isinstance(raw, dict) else {}
@@ -1144,10 +1164,73 @@ def _groom_regions(
                     minimum=0.0,
                     maximum=1.0,
                 ),
-                "flow_controls": _groom_flow_controls(flow_controls) + _groom_flow_controls(raw.get("flow_controls")),
+                "flow_controls": shared_flow_controls
+                + _groom_flow_controls(raw.get("flow_controls")),
+                "density_controls": shared_density_controls
+                + _groom_density_controls(raw.get("density_controls")),
             }
         )
     return normalized
+
+
+def _triangle_centroid(triangle):
+    vertices = list(triangle.get("vertices") or [])
+    if len(vertices) != 3:
+        return (0.0, 0.0, 0.0)
+    return tuple(
+        sum(float(vertex[index]) for vertex in vertices) / 3.0
+        for index in range(3)
+    )
+
+
+def _apply_region_density_controls(triangles, controls):
+    controls = _groom_density_controls(controls)
+    if not controls:
+        return triangles
+    weighted = []
+    for triangle in triangles:
+        density = fur_groom.blend_density_controls(
+            _triangle_centroid(triangle),
+            controls,
+            base_density=0.0,
+        )
+        if density <= 0.0:
+            continue
+        copy = dict(triangle)
+        copy["weight"] = float(copy.get("weight", 1.0)) * density
+        weighted.append(copy)
+    return weighted
+
+
+def _vertex_group_weights(vertices, group_index):
+    weights = []
+    for vertex in vertices:
+        assignment = next(
+            (item for item in vertex.groups if item.group == group_index),
+            None,
+        )
+        weights.append(float(assignment.weight) if assignment else 0.0)
+    return weights
+
+
+def _evaluated_vertex_group_weights(obj, mesh, group):
+    weights = _vertex_group_weights(mesh.vertices, group.index)
+    if any(weight > 0.0 for weight in weights):
+        return weights
+
+    source_vertices = list(obj.data.vertices)
+    source_weights = _vertex_group_weights(source_vertices, group.index)
+    if not source_vertices or not any(weight > 0.0 for weight in source_weights):
+        return weights
+
+    source_tree = KDTree(len(source_vertices))
+    for vertex in source_vertices:
+        source_tree.insert(vertex.co, vertex.index)
+    source_tree.balance()
+    return [
+        source_weights[source_tree.find(vertex.co)[1]]
+        for vertex in mesh.vertices
+    ]
 
 
 def _surface_triangles(obj, vertex_group_name=""):
@@ -1163,6 +1246,13 @@ def _surface_triangles(obj, vertex_group_name=""):
     )
     try:
         mesh.calc_loop_triangles()
+        group_weights = (
+            _evaluated_vertex_group_weights(obj, mesh, group)
+            if group is not None
+            else None
+        )
+        if group is not None and not any(weight > 0.0 for weight in group_weights):
+            return [], f"Vertex group has no usable weights on {obj.name}: {vertex_group_name}"
         normal_matrix = (
             evaluated.matrix_world.to_3x3().inverted_safe().transposed()
         )
@@ -1186,19 +1276,10 @@ def _surface_triangles(obj, vertex_group_name=""):
             weight = 1.0
             vertex_weights = None
             if group is not None:
-                vertex_weights = []
-                for vertex_index in triangle_indices:
-                    assignment = next(
-                        (
-                            item
-                            for item in mesh.vertices[vertex_index].groups
-                            if item.group == group.index
-                        ),
-                        None,
-                    )
-                    vertex_weights.append(
-                        float(assignment.weight) if assignment else 0.0
-                    )
+                vertex_weights = [
+                    group_weights[vertex_index]
+                    for vertex_index in triangle_indices
+                ]
                 weight = sum(vertex_weights) / len(vertex_weights)
                 if weight <= 0.0:
                     continue
@@ -1256,6 +1337,7 @@ def create_directional_fur_curves(
     clump_size=8,
     noise_strength=0.08,
     flow_controls=None,
+    density_controls=None,
     regions=None,
     material_name="",
     color=(0.82, 0.82, 0.78, 1.0),
@@ -1285,6 +1367,7 @@ def create_directional_fur_curves(
         clump_size=clump_size,
         noise_strength=noise_strength,
         flow_controls=flow_controls,
+        density_controls=density_controls,
     )
     object_budgets = fur_groom.allocate_weighted_counts([1.0] * len(meshes), total_count)
     operation = live_preview.begin_isolated(label, context)
@@ -1333,6 +1416,10 @@ def create_directional_fur_curves(
                         }
                     )
                     continue
+                triangles = _apply_region_density_controls(
+                    triangles,
+                    region["density_controls"],
+                )
                 weighted_area = 0.0
                 for triangle in triangles:
                     density = float(triangle.get("weight", 1.0))

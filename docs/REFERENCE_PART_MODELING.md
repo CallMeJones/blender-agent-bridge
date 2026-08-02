@@ -17,6 +17,12 @@ detail, fur, or repair passes.
 - `create_muzzle_stack`: creates paired cheek pads, nose, mouth curves, and
   optional tongue geometry from muzzle parts.
 - `create_ear_stack`: creates ear shells and inner-ear patches from ear parts.
+- `create_part_weight_vertex_groups`: creates durable editable vertex groups
+  from organic parts so fur, materials, sculpt repair, and later tooling can
+  target named surface regions.
+- `create_fur_flow_field_from_parts`: converts organic parts into named fur
+  regions, localized density controls, and tangent flow controls. It can return
+  the field for review or apply it through `create_directional_fur_curves`.
 
 ## Recommended Placement
 
@@ -27,9 +33,11 @@ detail, fur, or repair passes.
 5. `create_reference_part_graph`
 6. `build_part_aware_base_mesh`
 7. `create_eye_stack`, `create_muzzle_stack`, or `create_ear_stack`
-8. `adaptive_remesh`
-9. semantic/form-aware sculpt and fur flow tools
-10. `evaluate_multiview_reference_match`
+8. `create_part_weight_vertex_groups`
+9. `create_fur_flow_field_from_parts` for furry subjects
+10. `adaptive_remesh`
+11. semantic/form-aware sculpt and repair tools
+12. `evaluate_multiview_reference_match`
 
 ## Boundary
 
@@ -43,3 +51,9 @@ Feature stacks are deterministic construction helpers. They create editable
 components in the expected locations from the current part graph; they do not
 judge whether those features visually match the reference. Run scored reference
 comparison after creating or editing them.
+
+Part-weight vertex groups and fur-flow fields are deterministic groom presets,
+not image-understanding. They use part centers, radii, roles, and basis axes to
+localize strand density and direction. They should be inspected visually, then
+refined with better part hints or hand-edited weight maps when exact groom
+boundaries matter.

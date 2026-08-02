@@ -183,6 +183,8 @@ Operational changes should use typed helpers when validation, rollback, provenan
 - `create_eye_stack`
 - `create_muzzle_stack`
 - `create_ear_stack`
+- `create_part_weight_vertex_groups`
+- `create_fur_flow_field_from_parts`
 - `define_semantic_sculpt_regions`
 - `inspect_semantic_sculpt_regions`
 - `apply_semantic_sculpt`

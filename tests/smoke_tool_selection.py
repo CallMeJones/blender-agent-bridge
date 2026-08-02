@@ -466,6 +466,28 @@ def main():
             <= agent_tools.TOOL_SCHEMA_CHAR_BUDGET
         ), feature_stack_meta
 
+        fur_flow_tools, fur_flow_meta = (
+            agent_tools.select_blender_tool_definitions(
+                "Make a cute fluffy kitten from reference images with part-aware fur flow.",
+            )
+        )
+        fur_flow_names = _names(fur_flow_tools)
+        assert "create_part_weight_vertex_groups" in fur_flow_names, fur_flow_meta
+        assert "create_fur_flow_field_from_parts" in fur_flow_names, fur_flow_meta
+        assert "create_directional_fur_curves" in fur_flow_names, fur_flow_meta
+        assert (
+            fur_flow_meta["schema_chars"] <= agent_tools.TOOL_SCHEMA_CHAR_BUDGET
+        ), fur_flow_meta
+
+        furniture_tools, furniture_meta = (
+            agent_tools.select_blender_tool_definitions(
+                "Create realistic furniture from reference images.",
+            )
+        )
+        assert "fur_flow" not in furniture_meta["matched_groups"], furniture_meta
+        assert "create_part_weight_vertex_groups" not in _names(furniture_tools)
+        assert "create_fur_flow_field_from_parts" not in _names(furniture_tools)
+
         semantic_tools, semantic_meta = agent_tools.select_blender_tool_definitions(
             "Define semantic mesh regions from the calibrated reference image, apply a screen-space contour sculpt, and optimize its measured silhouette score.",
             bundle,
