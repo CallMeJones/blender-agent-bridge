@@ -25,7 +25,7 @@ When image path, landmarks, or annotation points are available:
 5. Inspect the result with `inspect_reference_modeling_guides(include_points=true)` before writing an authored modeling script.
 6. Feed the inspected collection metadata into the script; do not make the script rediscover guide objects by vague selection state.
 
-For two or more orthographic references, use `create_multiview_reference_guides` with a distinct axis or custom camera basis for every view. Reuse exact landmark names across views. Treat high residuals, nearly parallel rays, and unresolved landmarks as calibration problems; correct the source annotations or view scale before moving reconstructed 3D landmarks by eye.
+For two or more orthographic references, use `create_multiview_reference_guides` with a distinct axis or custom camera basis for every view. Reuse exact landmark names across views. Treat high residuals, nearly parallel rays, and unresolved landmarks as calibration problems; correct the source annotations or view scale before moving reconstructed 3D landmarks by eye. When two or more non-parallel views contain closed silhouettes, call `create_multiview_visual_hull` to intersect them into the primary watertight volume. A front/back pair alone cannot bound depth.
 
 If annotation data is missing, create a `reference_brief` that explicitly lists the missing guide inputs and use the planner to request or proceed with lower-confidence guide seeds.
 
@@ -34,11 +34,15 @@ If annotation data is missing, create a `reference_brief` that explicitly lists 
 For organic subjects, prefer continuous deformed forms over stacked primitives:
 
 - Build broad ellipsoid or metaball-like masses that match silhouette first.
+- Prefer `create_multiview_depth_surface` when explicitly calibrated depth exists and `create_multiview_visual_hull` otherwise. Run `fit_surface_to_multiview_references` to reduce broad cross-view error before using `adaptive_remesh` for bounded local density where edge length and curvature require it.
 - When helpers are requested, `create_reference_blockout` can turn named mass ellipses into camera-oriented editable forms and an optional voxel-remesh union. Keep per-mass depth and deformation settings reference-derived.
 - Blend or join adjacent soft forms only after their measured positions are acceptable.
 - Place landmarks from guide empties before adding expressive detail.
 - Keep visible features, openings, attachments, supports, and extensions tied to named guide points or measured ratios.
 - Preserve the source camera/framing as a comparison view and keep front/side diagnostic views stable across repair passes.
+- Use `fit_surface_to_multiview_references` for broad silhouette, depth, or reconstructed-landmark disagreement across views. Turn remaining localized critiques into persistent named regions with `define_semantic_sculpt_regions`, then inspect their weighted coverage before deformation.
+- Use `apply_semantic_sculpt` for measured 3D fields and `apply_form_aware_sculpt` for topology-aware tangent relax, pinch, or crease. Use `apply_screen_space_sculpt` for a known calibrated contour pull, or `optimize_screen_space_sculpt` when candidate strengths should be scored and rejected unless they improve the reference metrics.
+- `adaptive_remesh` interpolates semantic point attributes; inspect coverage afterward. Redefine semantic regions after other topology-changing operations that alter vertex identity.
 
 Do not add fur, hair, whiskers, fabric fibers, or glossy finish to hide a weak silhouette, wrong eye placement, or broken mass transition.
 

@@ -16,6 +16,19 @@ ADVANCED_FACADE = ROOT / "addon" / "claude_blender" / "advanced_helpers.py"
 ADVANCED_MODELING = ROOT / "addon" / "claude_blender" / "advanced_modeling.py"
 REFERENCE_GUIDES = ROOT / "addon" / "claude_blender" / "reference_guides.py"
 REFERENCE_BLOCKOUT = ROOT / "addon" / "claude_blender" / "reference_blockout.py"
+SCULPT_FIELDS = ROOT / "addon" / "claude_blender" / "sculpt_fields.py"
+SEMANTIC_SCULPT = ROOT / "addon" / "claude_blender" / "semantic_sculpt.py"
+ADAPTIVE_REMESH = ROOT / "addon" / "claude_blender" / "adaptive_remesh.py"
+VISUAL_HULL = ROOT / "addon" / "claude_blender" / "visual_hull.py"
+DEPTH_FIELDS = ROOT / "addon" / "claude_blender" / "depth_fields.py"
+REFERENCE_FITTING = ROOT / "addon" / "claude_blender" / "reference_fitting.py"
+REFERENCE_VISUAL_HULL = (
+    ROOT / "addon" / "claude_blender" / "reference_visual_hull.py"
+)
+REFERENCE_DEPTH = ROOT / "addon" / "claude_blender" / "reference_depth.py"
+REFERENCE_SURFACE_FITTING = (
+    ROOT / "addon" / "claude_blender" / "reference_surface_fitting.py"
+)
 REFERENCE_BENCHMARK_SCENE = (
     ROOT / "addon" / "claude_blender" / "reference_benchmark_scene.py"
 )
@@ -85,8 +98,17 @@ class ToolHandlerArchitectureTests(unittest.TestCase):
         self.assertIn("fur_groom", module_names)
         self.assertIn("reference_multiview", module_names)
         self.assertIn("reference_multiview_scene", module_names)
+        self.assertIn("visual_hull", module_names)
+        self.assertIn("depth_fields", module_names)
+        self.assertIn("reference_fitting", module_names)
+        self.assertIn("reference_depth", module_names)
+        self.assertIn("reference_visual_hull", module_names)
+        self.assertIn("reference_surface_fitting", module_names)
         self.assertIn("reference_scene", module_names)
         self.assertIn("reference_blockout", module_names)
+        self.assertIn("sculpt_fields", module_names)
+        self.assertIn("semantic_sculpt", module_names)
+        self.assertIn("adaptive_remesh", module_names)
         self.assertIn("reference_benchmarks", module_names)
         self.assertIn("reference_benchmark_scene", module_names)
         self.assertLess(
@@ -114,12 +136,52 @@ class ToolHandlerArchitectureTests(unittest.TestCase):
             module_names.index("reference_multiview_scene"),
         )
         self.assertLess(
+            module_names.index("visual_hull"),
+            module_names.index("reference_visual_hull"),
+        )
+        self.assertLess(
+            module_names.index("depth_fields"),
+            module_names.index("visual_hull"),
+        )
+        self.assertLess(
+            module_names.index("visual_hull"),
+            module_names.index("reference_fitting"),
+        )
+        self.assertLess(
+            module_names.index("reference_depth"),
+            module_names.index("reference_visual_hull"),
+        )
+        self.assertLess(
+            module_names.index("reference_fitting"),
+            module_names.index("reference_surface_fitting"),
+        )
+        self.assertLess(
+            module_names.index("reference_comparison"),
+            module_names.index("reference_surface_fitting"),
+        )
+        self.assertLess(
+            module_names.index("reference_multiview_scene"),
+            module_names.index("reference_visual_hull"),
+        )
+        self.assertLess(
             module_names.index("reference_benchmarks"),
             module_names.index("reference_benchmark_scene"),
         )
         self.assertLess(
             module_names.index("reference_comparison"),
             module_names.index("reference_benchmark_scene"),
+        )
+        self.assertLess(
+            module_names.index("sculpt_fields"),
+            module_names.index("semantic_sculpt"),
+        )
+        self.assertLess(
+            module_names.index("reference_comparison"),
+            module_names.index("semantic_sculpt"),
+        )
+        self.assertLess(
+            module_names.index("semantic_sculpt"),
+            module_names.index("adaptive_remesh"),
         )
         self.assertLess(
             module_names.index("reference_guides"),
@@ -186,6 +248,82 @@ class ToolHandlerArchitectureTests(unittest.TestCase):
         self.assertNotIn(
             "evaluate_reference_model_benchmark",
             modeling_functions,
+        )
+
+        sculpt_field_tree = ast.parse(SCULPT_FIELDS.read_text(encoding="utf-8"))
+        sculpt_field_functions = {
+            node.name
+            for node in sculpt_field_tree.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        semantic_tree = ast.parse(SEMANTIC_SCULPT.read_text(encoding="utf-8"))
+        semantic_functions = {
+            node.name
+            for node in semantic_tree.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        self.assertIn("sphere_weights", sculpt_field_functions)
+        self.assertIn("define_semantic_sculpt_regions", semantic_functions)
+        self.assertIn("apply_semantic_sculpt", semantic_functions)
+        self.assertIn("apply_form_aware_sculpt", semantic_functions)
+        self.assertIn("apply_screen_space_sculpt", semantic_functions)
+        public_semantic_functions = {
+            name
+            for name in semantic_functions
+            if not name.startswith("_") and name not in {"register", "unregister"}
+        }
+        self.assertFalse(public_semantic_functions & modeling_functions)
+
+        visual_hull_functions = {
+            node.name
+            for node in ast.parse(VISUAL_HULL.read_text(encoding="utf-8")).body
+            if isinstance(node, ast.FunctionDef)
+        }
+        visual_hull_scene_functions = {
+            node.name
+            for node in ast.parse(
+                REFERENCE_VISUAL_HULL.read_text(encoding="utf-8")
+            ).body
+            if isinstance(node, ast.FunctionDef)
+        }
+        adaptive_functions = {
+            node.name
+            for node in ast.parse(ADAPTIVE_REMESH.read_text(encoding="utf-8")).body
+            if isinstance(node, ast.FunctionDef)
+        }
+        self.assertIn("carve_visual_hull", visual_hull_functions)
+        self.assertIn("create_multiview_visual_hull", visual_hull_scene_functions)
+        self.assertIn("create_multiview_depth_surface", visual_hull_scene_functions)
+        self.assertIn("adaptive_remesh", adaptive_functions)
+
+        depth_functions = {
+            node.name
+            for node in ast.parse(DEPTH_FIELDS.read_text(encoding="utf-8")).body
+            if isinstance(node, ast.FunctionDef)
+        }
+        fitting_functions = {
+            node.name
+            for node in ast.parse(REFERENCE_FITTING.read_text(encoding="utf-8")).body
+            if isinstance(node, ast.FunctionDef)
+        }
+        depth_scene_functions = {
+            node.name
+            for node in ast.parse(REFERENCE_DEPTH.read_text(encoding="utf-8")).body
+            if isinstance(node, ast.FunctionDef)
+        }
+        fitting_scene_functions = {
+            node.name
+            for node in ast.parse(
+                REFERENCE_SURFACE_FITTING.read_text(encoding="utf-8")
+            ).body
+            if isinstance(node, ast.FunctionDef)
+        }
+        self.assertIn("sample_depth", depth_functions)
+        self.assertIn("fit_surface_to_references", fitting_functions)
+        self.assertIn("attach_depth_sources", depth_scene_functions)
+        self.assertIn(
+            "fit_surface_to_multiview_references",
+            fitting_scene_functions,
         )
 
     def test_domain_handlers_import_domain_helpers_not_advanced_facade(self):

@@ -198,6 +198,8 @@ Clients with skill support can load those bodies and references only when releva
 
 Every MCP client can discover `evaluate_reference_model_benchmark` through `search_blender_tools`, fetch its canonical schema, and invoke it through the gateway. The helper renders through the calibrated guide camera, publishes mask and redline resources, and evaluates versioned `blockout`, `refined`, or `review` metric profiles. Only the latest non-overridden evaluation can satisfy a running reference benchmark; custom thresholds are diagnostic only.
 
+Every MCP client can also discover the reconstruction and sculpt sequence: `create_multiview_visual_hull`, `create_multiview_depth_surface`, `fit_surface_to_multiview_references`, `adaptive_remesh`, `define_semantic_sculpt_regions`, `inspect_semantic_sculpt_regions`, `apply_semantic_sculpt`, `apply_form_aware_sculpt`, `apply_screen_space_sculpt`, and `optimize_screen_space_sculpt`. These tools let an image-capable client construct a bounded primary volume, fuse explicitly calibrated depth, derive joint corrections from all views, adapt topology, express named regions, and apply measured local repairs while Blender owns calibration, vertex resolution, topology limits, projection, candidate scoring, and preview rollback. They do not require an external image-to-3D model. See [MULTIVIEW_RECONSTRUCTION.md](MULTIVIEW_RECONSTRUCTION.md) and [SEMANTIC_SCULPTING.md](SEMANTIC_SCULPTING.md).
+
 JSON returned as MCP tool text, bridge HTTP responses, and JSON resources uses compact serialization. This removes formatting whitespace only: clients receive identical names, values, arrays, objects, schemas, warnings, and resource metadata after parsing.
 
 ### Large Inspection Response Controls

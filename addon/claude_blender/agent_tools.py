@@ -21,6 +21,7 @@ AGENT_GUIDANCE = (
     "When runtime script trust is active, prefer one cohesive trusted Blender Python script for authored object generation, modeling, animation, materials, custom nodes, rigging, and look development unless the user explicitly requests helpers, a helper path, or no Python. In mixed requests, keep that authored script path and use exact helpers separately for project files, imports, long renders, persistent bakes, evidence, preview decisions, and isolated edits; an operational suffix must not demote the authored work to a helper chain. "
     "Generated Python runs only while runtime script trust is active. Trust Agent Scripts is equivalent to Blender's Run Script command and permits filesystem, network, subprocess, project-file, persistent-cache, and full Blender API access. Put complete source in draft_script.code, inspect bpy.app.version, validate version-sensitive RNA enums before assignment, and report the exact refusal or execution error when it does not run. For cohesive scripts likely to exceed the bridge timeout, use start_trusted_script_job, poll status, and apply the copied-file result only after explicit user approval. "
     "For substantial authored work, use a compact execution trace and durable model-quality review state when reference evidence is involved; these remain available through gateway schema lookup and invocation without widening tools/list. "
+    "For calibrated multi-view references, construct a bounded visual hull or depth-constrained surface, run measured joint multi-view fitting, then add adaptive topology or localized semantic form repair. Use persistent semantic regions and one deterministic 3D, form-aware, or calibrated screen-space sculpt call for remaining local errors, then recapture evidence before another repair. "
     "Use low-resolution evidence for routine review unless the user asks for final quality. Do not claim an artifact, save, import, render, checkpoint, or script run succeeded unless the tool result verifies it. "
     "When work is complete, summarize what changed, what remains pending, and any user decision still required."
 )
@@ -81,11 +82,15 @@ _REFERENCE_QUALITY_TOOL_NAMES = {
     "get_blend_file_diagnostics",
     "create_reference_guides_from_annotations",
     "create_multiview_reference_guides",
+    "create_multiview_visual_hull",
+    "create_multiview_depth_surface",
+    "fit_surface_to_multiview_references",
     "create_reference_modeling_guides",
     "inspect_reference_modeling_guides",
     "compare_model_to_reference",
     "evaluate_reference_model_benchmark",
     "create_reference_blockout",
+    "adaptive_remesh",
     "create_directional_fur_curves",
     "inspect_modeling_quality",
     "capture_viewport",
@@ -111,8 +116,19 @@ _REFERENCE_QUALITY_REQUIRED_TOOL_NAMES = {
     "capture_object_inspection_renders",
     "draft_script",
 }
-
 _TOOL_GROUPS = tool_registry.group_map()
+_SEMANTIC_SCULPT_TOOL_NAMES = set(_TOOL_GROUPS["semantic_sculpt"])
+_SEMANTIC_SCULPT_REQUIRED_TOOL_NAMES = _SEMANTIC_SCULPT_TOOL_NAMES | {
+    "plan_model_quality_workflow",
+    "create_reference_guides_from_annotations",
+    "inspect_reference_modeling_guides",
+    "compare_model_to_reference",
+    "capture_viewport",
+    "commit_preview",
+    "revert_preview",
+}
+_SEMANTIC_SCULPT_KEYWORDS = set(helper_routing.SEMANTIC_SCULPT_HELPER_TERMS)
+
 _ANIMATION_ONLY_TOOL_NAMES = {
     spec.name
     for spec in tool_registry.REGISTRY.specs()
@@ -129,7 +145,7 @@ _GROUP_KEYWORDS = {
     "deep_inspect": {"inspect", "analyze", "analyse", "summarize", "summary", "details", "world model", "what", "list", "screenshot", "viewport", "visual", "visual evidence", "evidence resource", "resource uri", "image", "capture", "playblast", "review", "diagnostic", "diagnostics", "quality", "mesh quality", "modeling quality", "validate model", "non-manifold", "loose geometry", "missing materials", "missing external", "linked library", "linked libraries", "blend file", "data-block", "datablock", "backup", "workspace", "layout json", "underside", "gear"},
     "external_assets": {"asset", "assets", "asset catalog", "asset library", "external asset", "external assets", "asset cache", "cache diagnostics", "poly haven", "polyhaven", "sketchfab", "hdri", "hdris", "environment map", "texture", "textures", "model library", "download model", "download asset", "import model", "import asset", "import hdri", "import texture", "sketchfab uid"},
     "advanced_create": {"advanced", "advanced 3d", "advanced 2d", "geometry nodes", "geometry-node", "node network", "shape key", "text", "curve", "particle", "armature", "constraint", "rig", "driver", "callout", "dimension", "label", "palette", "swatch", "organize", "collection", "cutout", "storyboard", "animatic", "procedural array", "object design", "design brief", "design mapper", "object family", "object kit", "kit", "kitbash", "scatter grid", "radial array", "mechanical", "mechanical part", "joint", "control panel", "modular", "wall panel", "pipe run", "desk lamp", "lamp", "architect lamp", "task lamp", "clamp lamp", "spring arm", "spring arms", "counterweight", "wide shade", "appliance", "coffee machine", "espresso", "electronics", "console", "furniture", "chair", "table", "shelf", "design grammar", "variant", "product prop", "prop generator", "edit mesh", "extrude", "inset", "loop cut", "loop-cut", "knife", "proportional edit", "bridge", "dissolve", "merge", "curve to mesh", "convert curve", "boolean", "cutter", "mirror", "symmetry", "symmetrize", "solidify", "screw", "directed shot", "shot template"},
-    "refinement": {"refine", "polish", "smooth", "high poly", "high-poly", "detail", "bevel", "subdivision", "subsurf", "seam", "panel", "dimension", "callout", "stage", "palette", "lighting", "modifier stack", "edit mesh", "extrude", "inset", "bridge", "dissolve", "merge", "boolean", "cutter", "mirror", "symmetry", "symmetrize", "solidify", "thickness"},
+    "refinement": {"refine", "polish", "smooth", "high poly", "high-poly", "detail", "bevel", "subdivision", "subsurf", "adaptive remesh", "adaptive remeshing", "seam", "panel", "dimension", "callout", "stage", "palette", "lighting", "modifier stack", "edit mesh", "extrude", "inset", "bridge", "dissolve", "merge", "boolean", "cutter", "mirror", "symmetry", "symmetrize", "solidify", "thickness"},
     "vehicle": {"car", "vehicle", "truck", "wheel", "tire", "tyre", "rim", "headlight", "taillight", "windshield", "door", "grille"},
     "product": {"product", "catalog", "catalogue", "packshot", "presentation", "hero shot", "studio shot"},
     "character": {"character", "humanoid", "person", "head", "face", "eyes", "shoulder", "body", "toon", "avatar"},
@@ -248,6 +264,41 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
     selected = set(_CORE_TOOL_NAMES)
     text = _selection_text(prompt, context_bundle)
     request_text = str(prompt or "").strip().lower()
+    semantic_sculpt_request = _contains_keyword(
+        request_text,
+        _SEMANTIC_SCULPT_KEYWORDS,
+    )
+    visual_hull_request = _contains_keyword(
+        request_text,
+        {"visual hull", "silhouette carving", "multi-view volume", "multiview volume"},
+    )
+    depth_fusion_request = _contains_keyword(
+        request_text,
+        {
+            "depth fusion",
+            "depth map",
+            "depth maps",
+            "depth surface",
+            "sparse depth",
+            "depth-constrained",
+        },
+    )
+    reference_fit_request = _contains_keyword(
+        request_text,
+        {
+            "multi-view fit",
+            "multiview fit",
+            "fit surface to reference",
+            "fit the surface",
+            "reference fitting",
+            "reference fitter",
+            "joint silhouette",
+        },
+    )
+    adaptive_remesh_request = _contains_keyword(
+        request_text,
+        {"adaptive remesh", "adaptive remeshing", "sculpt topology"},
+    )
     script_first_authored_request = helper_routing.is_script_first_authored_request(
         request_text
     )
@@ -309,6 +360,21 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
     if quality_reference_request:
         selected.update(_REFERENCE_QUALITY_TOOL_NAMES)
         matched_groups.append("advanced_workflow")
+    if semantic_sculpt_request:
+        selected.update(_SEMANTIC_SCULPT_TOOL_NAMES)
+        matched_groups.append("semantic_sculpt")
+    if visual_hull_request:
+        selected.add("create_multiview_visual_hull")
+        matched_groups.append("visual_hull")
+    if depth_fusion_request:
+        selected.add("create_multiview_depth_surface")
+        matched_groups.append("depth_fusion")
+    if reference_fit_request:
+        selected.add("fit_surface_to_multiview_references")
+        matched_groups.append("reference_fitting")
+    if adaptive_remesh_request:
+        selected.add("adaptive_remesh")
+        matched_groups.append("adaptive_topology")
 
     if helper_routing.should_include_draft_script(request_text, matched_groups):
         selected.update(_FALLBACK_TOOL_NAMES)
@@ -334,16 +400,28 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
 
     budget = max(4000, int(max_schema_chars or TOOL_SCHEMA_CHAR_BUDGET))
     protected = set(_CORE_TOOL_NAMES)
+    if visual_hull_request:
+        protected.add("create_multiview_visual_hull")
+    if depth_fusion_request:
+        protected.add("create_multiview_depth_surface")
+    if reference_fit_request:
+        protected.add("fit_surface_to_multiview_references")
+    if adaptive_remesh_request:
+        protected.add("adaptive_remesh")
     specific_refinement_groups = {"vehicle", "product", "character"}.intersection(matched_groups)
     for group in matched_groups:
         if quality_reference_request:
             continue
         if group == "refinement" and specific_refinement_groups:
             continue
-        if group in {"vehicle", "product", "character", "refinement", "camera_render", "rigging", "curves_text", "particles", "geometry_nodes", "external_assets", "advanced_workflow", "two_d_storyboard", "procedural_3d", "simulation_setup", "preview_control"}:
+        if group in {"vehicle", "product", "character", "refinement", "camera_render", "rigging", "curves_text", "particles", "geometry_nodes", "external_assets", "advanced_workflow", "two_d_storyboard", "procedural_3d", "simulation_setup", "preview_control", "semantic_sculpt"}:
             protected.update(_TOOL_GROUPS.get(group, set()))
     if quality_reference_request:
-        protected.update(_REFERENCE_QUALITY_REQUIRED_TOOL_NAMES)
+        protected.update(
+            _SEMANTIC_SCULPT_REQUIRED_TOOL_NAMES
+            if semantic_sculpt_request
+            else _REFERENCE_QUALITY_REQUIRED_TOOL_NAMES
+        )
     if _contains_keyword(text, _RENDER_OUTPUT_KEYWORDS):
         protected.add("configure_render_outputs")
     if _contains_keyword(text, _PROCEDURAL_TEXTURE_KEYWORDS):

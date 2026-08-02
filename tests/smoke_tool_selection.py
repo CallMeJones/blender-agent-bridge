@@ -450,6 +450,46 @@ def main():
             <= agent_tools.TOOL_SCHEMA_CHAR_BUDGET
         ), reference_meta
 
+        semantic_tools, semantic_meta = agent_tools.select_blender_tool_definitions(
+            "Define semantic mesh regions from the calibrated reference image, apply a screen-space contour sculpt, and optimize its measured silhouette score.",
+            bundle,
+        )
+        semantic_names = _names(semantic_tools)
+        assert {
+            "define_semantic_sculpt_regions",
+            "inspect_semantic_sculpt_regions",
+            "apply_semantic_sculpt",
+            "apply_form_aware_sculpt",
+            "apply_screen_space_sculpt",
+            "optimize_screen_space_sculpt",
+        }.issubset(semantic_names), (semantic_names, semantic_meta)
+        assert semantic_meta["schema_chars"] <= agent_tools.TOOL_SCHEMA_CHAR_BUDGET
+
+        constrained_semantic_tools, constrained_semantic_meta = (
+            agent_tools.select_blender_tool_definitions(
+                "Use semantic sculpt",
+                bundle,
+                max_schema_chars=4000,
+            )
+        )
+        assert {
+            "define_semantic_sculpt_regions",
+            "inspect_semantic_sculpt_regions",
+            "apply_semantic_sculpt",
+            "apply_form_aware_sculpt",
+            "apply_screen_space_sculpt",
+            "optimize_screen_space_sculpt",
+        }.issubset(_names(constrained_semantic_tools)), constrained_semantic_meta
+
+        scripted_semantic_tools, scripted_semantic_meta = (
+            agent_tools.select_blender_tool_definitions(
+                "Write a Python script that defines semantic mesh regions and applies a screen-space sculpt.",
+                bundle,
+            )
+        )
+        assert "draft_script" in _names(scripted_semantic_tools), scripted_semantic_meta
+        assert "script_authoring" in scripted_semantic_meta["matched_groups"]
+
         benchmark_tools, benchmark_meta = agent_tools.select_blender_tool_definitions(
             "Evaluate the calibrated reference comparison against the refined benchmark quality gate profile.",
             bundle,
@@ -483,6 +523,30 @@ def main():
             multiview_meta["schema_chars"]
             <= agent_tools.TOOL_SCHEMA_CHAR_BUDGET
         ), multiview_meta
+
+        visual_hull_tools, visual_hull_meta = agent_tools.select_blender_tool_definitions(
+            "Carve a visual hull from the calibrated multi-view silhouettes.",
+            bundle,
+        )
+        assert "create_multiview_visual_hull" in _names(visual_hull_tools), visual_hull_meta
+
+        depth_surface_tools, depth_surface_meta = agent_tools.select_blender_tool_definitions(
+            "Fuse the calibrated front and side depth maps into a depth-constrained surface.",
+            bundle,
+        )
+        assert "create_multiview_depth_surface" in _names(depth_surface_tools), depth_surface_meta
+
+        reference_fit_tools, reference_fit_meta = agent_tools.select_blender_tool_definitions(
+            "Fit the surface to the multi-view references with a joint silhouette objective.",
+            bundle,
+        )
+        assert "fit_surface_to_multiview_references" in _names(reference_fit_tools), reference_fit_meta
+
+        adaptive_tools, adaptive_meta = agent_tools.select_blender_tool_definitions(
+            "Use adaptive remeshing to add sculpt topology around curved forms.",
+            bundle,
+        )
+        assert "adaptive_remesh" in _names(adaptive_tools), adaptive_meta
 
         fur_tools, fur_meta = agent_tools.select_blender_tool_definitions(
             "Add short directional fur and groom flow guides to the selected plush kitten mesh.",

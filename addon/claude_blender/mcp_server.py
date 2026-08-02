@@ -952,7 +952,10 @@ PROMPTS = {
             "its construction_strategy, next_tool_calls, and deferred_tool_calls instead of stopping at the plan. When "
             "script trust is active and the user did not request helpers, author one cohesive draft_script for primary "
             "construction and broad repairs. Read bpy.app.version and validate version-sensitive RNA enum identifiers "
-            "before assignment. Inspect the baseline scene, "
+            "before assignment. For localized image-space form repair, define persistent named regions with "
+            "define_semantic_sculpt_regions, inspect their coverage, and choose exactly one of apply_semantic_sculpt, "
+            "apply_screen_space_sculpt, or optimize_screen_space_sculpt. Prefer the optimizer when calibrated silhouette "
+            "evidence is available because it retains only a measured improvement. Inspect the baseline scene, "
             "refresh after construction, resolve actual existing and newly created target names, and pass them into "
             "later inspections and evidence calls. Gate surface detail behind silhouette, proportion, landmark, and form "
             "scores at or above the quality floor. Capture a reference-matched viewport plus stable front and side/profile "
@@ -1957,6 +1960,49 @@ def _score_tool_match(tool, query):
             ):
                 score += 6500
             elif (
+                name == "fit_surface_to_multiview_references"
+                and any(
+                    term in normalized_query
+                    for term in (
+                        "multi-view fit",
+                        "multiview fit",
+                        "fit surface",
+                        "reference fitting",
+                        "reference fitter",
+                        "joint silhouette",
+                    )
+                )
+            ):
+                score += 7000
+            elif (
+                name == "create_multiview_depth_surface"
+                and any(
+                    term in normalized_query
+                    for term in (
+                        "depth fusion",
+                        "depth map",
+                        "depth maps",
+                        "depth surface",
+                        "sparse depth",
+                        "depth-constrained",
+                    )
+                )
+            ):
+                score += 6900
+            elif (
+                name == "create_multiview_visual_hull"
+                and any(
+                    term in normalized_query
+                    for term in (
+                        "visual hull",
+                        "silhouette carving",
+                        "multi-view volume",
+                        "multiview volume",
+                    )
+                )
+            ):
+                score += 6800
+            elif (
                 name == "create_multiview_reference_guides"
                 and any(
                     term in normalized_query
@@ -1971,6 +2017,11 @@ def _score_tool_match(tool, query):
                 )
             ):
                 score += 6500
+            elif name == "adaptive_remesh" and any(
+                term in normalized_query
+                for term in ("adaptive remesh", "adaptive remeshing", "sculpt topology")
+            ):
+                score += 6800
             elif (
                 name == "evaluate_reference_model_benchmark"
                 and any(

@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from .. import (
+    adaptive_remesh as adaptive_remesh_tool,
     advanced_modeling as advanced_helpers,
     preferences,
     reference_blockout,
     reference_comparison,
     reference_guides,
     reference_multiview_scene,
+    reference_surface_fitting,
+    reference_visual_hull,
+    semantic_sculpt,
 )
 from .support import _bounded_float, _bounded_int, _float_list, _name_list, _optional_float_list
 
@@ -161,6 +165,175 @@ def create_multiview_reference_guides(context, args):
     )
 
 
+def create_multiview_visual_hull(context, args):
+    overrides = args.get("outline_overrides")
+    return reference_visual_hull.create_multiview_visual_hull(
+        context,
+        collection_name=str(args.get("collection_name") or ""),
+        view_names=_name_list(args.get("view_names")),
+        outline_overrides=overrides if isinstance(overrides, list) else [],
+        object_name=str(args.get("object_name") or "Reference Visual Hull"),
+        bounds_center=_optional_float_list(
+            args.get("bounds_center"), 3, (0.0, 0.0, 0.0)
+        ),
+        bounds_size=_optional_float_list(
+            args.get("bounds_size"), 3, (1.0, 1.0, 1.0)
+        ),
+        bounds_padding=_bounded_float(
+            args.get("bounds_padding"), 0.05, minimum=0.0, maximum=0.5
+        ),
+        resolution=_bounded_int(
+            args.get("resolution"), 48, minimum=8, maximum=80
+        ),
+        component_mode=str(args.get("component_mode") or "largest"),
+        minimum_component_voxels=_bounded_int(
+            args.get("minimum_component_voxels"), 8, minimum=1, maximum=100000
+        ),
+        smooth_iterations=_bounded_int(
+            args.get("smooth_iterations"), 2, minimum=0, maximum=10
+        ),
+        minimum_view_angle_degrees=_bounded_float(
+            args.get("minimum_view_angle_degrees"),
+            1.0,
+            minimum=0.1,
+            maximum=90.0,
+        ),
+        color=_float_list(args.get("color"), 4, (0.52, 0.58, 0.68, 1.0)),
+        label=str(args.get("label") or "Create multi-view visual hull"),
+    )
+
+
+def create_multiview_depth_surface(context, args):
+    overrides = args.get("outline_overrides")
+    depth_sources = args.get("depth_sources")
+    return reference_visual_hull.create_multiview_depth_surface(
+        context,
+        collection_name=str(args.get("collection_name") or ""),
+        view_names=_name_list(args.get("view_names")),
+        outline_overrides=overrides if isinstance(overrides, list) else [],
+        depth_sources=depth_sources if isinstance(depth_sources, list) else [],
+        object_name=str(args.get("object_name") or "Reference Depth Surface"),
+        bounds_center=_optional_float_list(
+            args.get("bounds_center"), 3, (0.0, 0.0, 0.0)
+        ),
+        bounds_size=_optional_float_list(
+            args.get("bounds_size"), 3, (1.0, 1.0, 1.0)
+        ),
+        bounds_padding=_bounded_float(
+            args.get("bounds_padding"), 0.05, minimum=0.0, maximum=0.5
+        ),
+        resolution=_bounded_int(
+            args.get("resolution"), 48, minimum=8, maximum=80
+        ),
+        component_mode=str(args.get("component_mode") or "largest"),
+        minimum_component_voxels=_bounded_int(
+            args.get("minimum_component_voxels"), 8, minimum=1, maximum=100000
+        ),
+        smooth_iterations=_bounded_int(
+            args.get("smooth_iterations"), 2, minimum=0, maximum=10
+        ),
+        minimum_view_angle_degrees=_bounded_float(
+            args.get("minimum_view_angle_degrees"),
+            1.0,
+            minimum=0.1,
+            maximum=90.0,
+        ),
+        max_depth_axis=_bounded_int(
+            args.get("max_depth_axis"), 256, minimum=16, maximum=1024
+        ),
+        color=_float_list(args.get("color"), 4, (0.48, 0.62, 0.7, 1.0)),
+        label=str(args.get("label") or "Create multi-view depth surface"),
+    )
+
+
+def fit_surface_to_multiview_references(context, args):
+    prefs = preferences.get_preferences(context)
+    overrides = args.get("outline_overrides")
+    depth_sources = args.get("depth_sources")
+    step_candidates = args.get("step_candidates")
+    pinned = args.get("pinned_vertex_indices")
+    return reference_surface_fitting.fit_surface_to_multiview_references(
+        context,
+        object_name=str(args.get("object_name") or ""),
+        collection_name=str(args.get("collection_name") or ""),
+        view_names=_name_list(args.get("view_names")),
+        outline_overrides=overrides if isinstance(overrides, list) else [],
+        depth_sources=depth_sources if isinstance(depth_sources, list) else [],
+        landmark_names=_name_list(args.get("landmark_names")),
+        iterations=_bounded_int(args.get("iterations"), 6, minimum=1, maximum=12),
+        step_candidates=(
+            step_candidates if isinstance(step_candidates, list) else [0.25, 0.5, 1.0]
+        ),
+        minimum_improvement=_bounded_float(
+            args.get("minimum_improvement"), 0.00001, minimum=0.0, maximum=1.0
+        ),
+        silhouette_weight=_bounded_float(
+            args.get("silhouette_weight"), 1.0, minimum=0.000001, maximum=100.0
+        ),
+        depth_weight=_bounded_float(
+            args.get("depth_weight"), 0.5, minimum=0.0, maximum=100.0
+        ),
+        landmark_weight=_bounded_float(
+            args.get("landmark_weight"), 0.5, minimum=0.0, maximum=100.0
+        ),
+        worst_view_weight=_bounded_float(
+            args.get("worst_view_weight"), 0.25, minimum=0.0, maximum=100.0
+        ),
+        per_view_regression_tolerance=_bounded_float(
+            args.get("per_view_regression_tolerance"),
+            0.002,
+            minimum=0.0,
+            maximum=1.0,
+        ),
+        regularization=_bounded_float(
+            args.get("regularization"), 0.35, minimum=0.0, maximum=1.0
+        ),
+        propagation_steps=_bounded_int(
+            args.get("propagation_steps"), 4, minimum=0, maximum=12
+        ),
+        propagation_decay=_bounded_float(
+            args.get("propagation_decay"), 0.8, minimum=0.0, maximum=1.0
+        ),
+        feature_preservation=_bounded_float(
+            args.get("feature_preservation"), 0.25, minimum=0.0, maximum=1.0
+        ),
+        maximum_step=_bounded_float(
+            args.get("maximum_step"), 0.0, minimum=0.0, maximum=1000.0
+        ),
+        maximum_total_displacement=_bounded_float(
+            args.get("maximum_total_displacement"),
+            0.0,
+            minimum=0.0,
+            maximum=1000.0,
+        ),
+        preserve_volume=_bounded_float(
+            args.get("preserve_volume"), 0.0, minimum=0.0, maximum=1.0
+        ),
+        pinned_vertex_indices=pinned if isinstance(pinned, list) else [],
+        max_depth_axis=_bounded_int(
+            args.get("max_depth_axis"), 256, minimum=16, maximum=1024
+        ),
+        capture_evidence=bool(args.get("capture_evidence", False)),
+        evidence_max_axis=_bounded_int(
+            args.get("evidence_max_axis"), 256, minimum=64, maximum=1024
+        ),
+        evidence_mask_threshold=_bounded_float(
+            args.get("evidence_mask_threshold"), 0.5, minimum=0.01, maximum=0.99
+        ),
+        evidence_regression_tolerance=_bounded_float(
+            args.get("evidence_regression_tolerance"),
+            0.002,
+            minimum=0.0,
+            maximum=1.0,
+        ),
+        capture_dir=getattr(prefs, "capture_cache_dir", None),
+        max_vertices=_bounded_int(
+            args.get("max_vertices"), 100000, minimum=1, maximum=100000
+        ),
+        label=str(args.get("label") or "Fit surface to multi-view references"),
+    )
+
+
 def inspect_reference_modeling_guides(context, args):
     return reference_guides.inspect_reference_modeling_guides(
         context,
@@ -230,6 +403,207 @@ def create_reference_blockout(context, args):
             args.get("color"), 4, (0.55, 0.6, 0.68, 1.0)
         ),
         label=str(args.get("label") or "Create reference blockout"),
+    )
+
+
+def adaptive_remesh(context, args):
+    return adaptive_remesh_tool.adaptive_remesh(
+        context,
+        object_name=str(args.get("object_name") or ""),
+        region_names=_name_list(args.get("region_names")),
+        target_edge_length=_bounded_float(
+            args.get("target_edge_length"), 0.08, minimum=0.000001, maximum=1000.0
+        ),
+        passes=_bounded_int(args.get("passes"), 2, minimum=1, maximum=6),
+        region_detail=_bounded_float(
+            args.get("region_detail"), 0.75, minimum=0.0, maximum=1.0
+        ),
+        curvature_detail=_bounded_float(
+            args.get("curvature_detail"), 0.5, minimum=0.0, maximum=1.0
+        ),
+        relax_iterations=_bounded_int(
+            args.get("relax_iterations"), 0, minimum=0, maximum=20
+        ),
+        relax_factor=_bounded_float(
+            args.get("relax_factor"), 0.2, minimum=0.0, maximum=1.0
+        ),
+        project_to_source=bool(args.get("project_to_source", True)),
+        max_vertices=_bounded_int(
+            args.get("max_vertices"), 250000, minimum=1, maximum=250000
+        ),
+        max_result_vertices=_bounded_int(
+            args.get("max_result_vertices"), 500000, minimum=1, maximum=500000
+        ),
+        label=str(args.get("label") or "Adaptive remesh"),
+    )
+
+
+def define_semantic_sculpt_regions(context, args):
+    return semantic_sculpt.define_semantic_sculpt_regions(
+        context,
+        object_name=str(args.get("object_name") or ""),
+        regions=args.get("regions") if isinstance(args.get("regions"), list) else [],
+        max_vertices=_bounded_int(
+            args.get("max_vertices"), 250000, minimum=1, maximum=250000
+        ),
+        label=str(args.get("label") or "Define semantic sculpt regions"),
+    )
+
+
+def inspect_semantic_sculpt_regions(context, args):
+    return semantic_sculpt.inspect_semantic_sculpt_regions(
+        context,
+        object_name=str(args.get("object_name") or ""),
+        include_weights=bool(args.get("include_weights", False)),
+        max_weights=_bounded_int(
+            args.get("max_weights"), 256, minimum=1, maximum=4096
+        ),
+    )
+
+
+def _screen_sculpt_options(args, *, default_max_vertices):
+    return {
+        "object_name": str(args.get("object_name") or ""),
+        "collection_name": str(args.get("collection_name") or ""),
+        "camera_name": str(args.get("camera_name") or ""),
+        "region_names": _name_list(args.get("region_names")),
+        "controls": (
+            args.get("controls") if isinstance(args.get("controls"), list) else []
+        ),
+        "origin": str(args.get("origin") or "top_left"),
+        "allow_all_vertices": bool(args.get("allow_all_vertices", False)),
+        "front_faces_only": bool(args.get("front_faces_only", True)),
+        "front_face_threshold": _bounded_float(
+            args.get("front_face_threshold"), -0.25, minimum=-1.0, maximum=1.0
+        ),
+        "maximum_world_displacement": _bounded_float(
+            args.get("maximum_world_displacement"),
+            0.0,
+            minimum=0.0,
+            maximum=1000.0,
+        ),
+        "symmetry_axis": str(args.get("symmetry_axis") or "NONE"),
+        "symmetry_tolerance": _bounded_float(
+            args.get("symmetry_tolerance"), 1e-4, minimum=1e-8, maximum=1.0
+        ),
+        "preserve_volume": _bounded_float(
+            args.get("preserve_volume"), 0.0, minimum=0.0, maximum=1.0
+        ),
+        "max_vertices": _bounded_int(
+            args.get("max_vertices"),
+            default_max_vertices,
+            minimum=1,
+            maximum=250000,
+        ),
+    }
+
+
+def apply_semantic_sculpt(context, args):
+    arguments = args.get("arguments")
+    return semantic_sculpt.apply_semantic_sculpt(
+        context,
+        object_name=str(args.get("object_name") or ""),
+        region_names=_name_list(args.get("region_names")),
+        operation=str(args.get("operation") or "translate"),
+        arguments=arguments if isinstance(arguments, dict) else {},
+        allow_all_vertices=bool(args.get("allow_all_vertices", False)),
+        max_vertices=_bounded_int(
+            args.get("max_vertices"), 250000, minimum=1, maximum=250000
+        ),
+        label=str(args.get("label") or "Apply semantic sculpt"),
+    )
+
+
+def apply_form_aware_sculpt(context, args):
+    return semantic_sculpt.apply_form_aware_sculpt(
+        context,
+        object_name=str(args.get("object_name") or ""),
+        region_names=_name_list(args.get("region_names")),
+        operation=str(args.get("operation") or "tangent_relax"),
+        strength=_bounded_float(
+            args.get("strength"), 0.25, minimum=-1.0, maximum=1.0
+        ),
+        crease_depth=_bounded_float(
+            args.get("crease_depth"), 0.0, minimum=-1000.0, maximum=1000.0
+        ),
+        center=_optional_float_list(args.get("center"), 3, (0.0, 0.0, 0.0)),
+        coordinate_space=str(args.get("coordinate_space") or "local"),
+        iterations=_bounded_int(args.get("iterations"), 1, minimum=1, maximum=50),
+        falloff_steps=_bounded_int(
+            args.get("falloff_steps"), 0, minimum=0, maximum=64
+        ),
+        falloff_decay=_bounded_float(
+            args.get("falloff_decay"), 0.75, minimum=0.0, maximum=1.0
+        ),
+        feature_preservation=_bounded_float(
+            args.get("feature_preservation"), 0.5, minimum=0.0, maximum=1.0
+        ),
+        maximum_world_displacement=_bounded_float(
+            args.get("maximum_world_displacement"),
+            0.0,
+            minimum=0.0,
+            maximum=1000.0,
+        ),
+        symmetry_axis=str(args.get("symmetry_axis") or "NONE"),
+        symmetry_tolerance=_bounded_float(
+            args.get("symmetry_tolerance"), 1e-4, minimum=1e-8, maximum=1.0
+        ),
+        preserve_volume=_bounded_float(
+            args.get("preserve_volume"), 0.0, minimum=0.0, maximum=1.0
+        ),
+        allow_all_vertices=bool(args.get("allow_all_vertices", False)),
+        max_vertices=_bounded_int(
+            args.get("max_vertices"), 250000, minimum=1, maximum=250000
+        ),
+        label=str(args.get("label") or "Apply form-aware sculpt"),
+    )
+
+
+def apply_screen_space_sculpt(context, args):
+    return semantic_sculpt.apply_screen_space_sculpt(
+        context,
+        strength=_bounded_float(
+            args.get("strength"), 1.0, minimum=-4.0, maximum=4.0
+        ),
+        label=str(args.get("label") or "Apply screen-space sculpt"),
+        **_screen_sculpt_options(args, default_max_vertices=250000),
+    )
+
+
+def optimize_screen_space_sculpt(context, args):
+    prefs = preferences.get_preferences(context)
+    return semantic_sculpt.optimize_screen_space_sculpt(
+        context,
+        outline_name=str(args.get("outline_name") or ""),
+        reference_mask_source=str(args.get("reference_mask_source") or "auto"),
+        strength_candidates=(
+            args.get("strength_candidates")
+            if isinstance(args.get("strength_candidates"), list)
+            else []
+        ),
+        minimum_improvement=_bounded_float(
+            args.get("minimum_improvement"), 0.0005, minimum=0.0, maximum=1.0
+        ),
+        edge_weight=_bounded_float(
+            args.get("edge_weight"), 0.25, minimum=0.0, maximum=10.0
+        ),
+        landmark_weight=_bounded_float(
+            args.get("landmark_weight"), 0.1, minimum=0.0, maximum=10.0
+        ),
+        landmark_targets=(
+            args.get("landmark_targets")
+            if isinstance(args.get("landmark_targets"), list)
+            else []
+        ),
+        max_axis=_bounded_int(
+            args.get("max_axis"), 256, minimum=64, maximum=1024
+        ),
+        mask_threshold=_bounded_float(
+            args.get("mask_threshold"), 0.5, minimum=0.01, maximum=0.99
+        ),
+        capture_dir=getattr(prefs, "capture_cache_dir", None),
+        label=str(args.get("label") or "Optimize screen-space sculpt"),
+        **_screen_sculpt_options(args, default_max_vertices=100000),
     )
 
 

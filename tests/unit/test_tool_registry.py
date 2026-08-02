@@ -19,8 +19,8 @@ SNAPSHOT_PATH = os.path.join(ROOT, "tests", "snapshots", "tool_registry.json")
 class ToolRegistryTests(unittest.TestCase):
     def test_inventory_is_complete_and_domain_owned(self):
         specs = tool_registry.REGISTRY.specs()
-        self.assertEqual(209, len(specs))
-        self.assertEqual(208, len(tool_registry.definitions()))
+        self.assertEqual(219, len(specs))
+        self.assertEqual(218, len(tool_registry.definitions()))
         self.assertEqual(12, len(tool_registry.DOMAIN_MODULES))
         self.assertEqual({spec.name for spec in specs}, set(bridge_protocol.TOOL_CONTRACTS))
         self.assertEqual(
@@ -64,6 +64,19 @@ class ToolRegistryTests(unittest.TestCase):
         json.dumps(tool_registry.definitions(), sort_keys=True)
         json.dumps(tool_registry.contracts(), sort_keys=True)
 
+    def test_semantic_sculpt_family_is_registry_owned(self):
+        self.assertEqual(
+            {
+                "define_semantic_sculpt_regions",
+                "inspect_semantic_sculpt_regions",
+                "apply_semantic_sculpt",
+                "apply_form_aware_sculpt",
+                "apply_screen_space_sculpt",
+                "optimize_screen_space_sculpt",
+            },
+            tool_registry.group_map()["semantic_sculpt"],
+        )
+
     def test_registry_state_isolated_from_nested_metadata_mutation(self):
         original_digest = tool_registry.REGISTRY.digest()
         original_definitions = tool_registry.definitions()
@@ -93,6 +106,8 @@ class ToolRegistryTests(unittest.TestCase):
             "create_reference_modeling_guides",
             "create_reference_guides_from_annotations",
             "create_multiview_reference_guides",
+            "create_multiview_depth_surface",
+            "fit_surface_to_multiview_references",
         ):
             with self.subTest(tool=name):
                 contract = bridge_protocol.normalized_tool_contract(name)
@@ -108,6 +123,20 @@ class ToolRegistryTests(unittest.TestCase):
             with self.subTest(tool=name):
                 annotations = bridge_protocol.mcp_annotations_for_tool(name)
                 self.assertIn("files:read", annotations["permissions"])
+
+    def test_sculpt_and_reference_fit_do_not_advertise_unsafe_shape_key_edits(self):
+        for name in (
+            "define_semantic_sculpt_regions",
+            "apply_semantic_sculpt",
+            "apply_form_aware_sculpt",
+            "apply_screen_space_sculpt",
+            "optimize_screen_space_sculpt",
+            "adaptive_remesh",
+            "fit_surface_to_multiview_references",
+        ):
+            with self.subTest(tool=name):
+                properties = tool_registry.REGISTRY.get(name).input_schema["properties"]
+                self.assertNotIn("allow_shape_keys", properties)
 
     def test_handler_parity_requires_every_handler(self):
         handlers = {spec.name: (lambda _context, _args: None) for spec in tool_registry.REGISTRY.specs()}

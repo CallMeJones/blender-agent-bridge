@@ -77,6 +77,7 @@ def main():
         "Create a procedural material with helpers.",
         "Use the helper path to build a robot.",
         "Use helper-based tools to animate the selected object.",
+        "Define semantic mesh regions and apply a calibrated screen-space sculpt.",
     ):
         assert helper_routing.prefers_bounded_helpers(helper_override), helper_override
         assert not helper_routing.is_script_first_authored_request(helper_override), helper_override
@@ -88,6 +89,7 @@ def main():
     for script_preference in (
         "Do not use helpers; build the robot with a cohesive script.",
         "Use a script, not the helper path, to animate the character.",
+        "Write a Python script that defines semantic mesh regions and applies a screen-space sculpt.",
     ):
         assert not helper_routing.prefers_bounded_helpers(
             script_preference

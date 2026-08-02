@@ -42,6 +42,20 @@ EXPLICIT_SCRIPT_FALLBACK_KEYWORDS = {
 
 SCRIPT_FALLBACK_KEYWORDS = SCRIPT_REQUEST_KEYWORDS | EXPLICIT_SCRIPT_FALLBACK_KEYWORDS
 
+SEMANTIC_SCULPT_HELPER_TERMS = {
+    "crease brush",
+    "contour sculpt",
+    "form aware brush",
+    "form-aware brush",
+    "pinch brush",
+    "screen space sculpt",
+    "screen-space sculpt",
+    "semantic mesh region",
+    "semantic region",
+    "semantic sculpt",
+    "tangent relax",
+}
+
 EXPLICIT_HELPER_PREFERENCE_TERMS = {
     "bounded helper",
     "bounded helpers",
@@ -534,7 +548,9 @@ REFERENCE_MODEL_ACTION_TERMS = {
     "analyze",
     "analyse",
     "build",
+    "carve",
     "compare",
+    "construct",
     "create",
     "evaluate",
     "improve",
@@ -547,6 +563,8 @@ REFERENCE_MODEL_ACTION_TERMS = {
     "rebuild",
     "recreate",
     "refine",
+    "remesh",
+    "remeshing",
     "remodel",
     "repair",
     "review",
@@ -580,6 +598,16 @@ REFERENCE_MODEL_SOURCE_TERMS = {
     "reference views",
     "multi-view reference",
     "multiview reference",
+    "visual hull",
+    "depth fusion",
+    "depth map",
+    "depth maps",
+    "depth surface",
+    "sparse depth",
+    "reference fitting",
+    "reference fitter",
+    "multi-view fit",
+    "multiview fit",
     "front and side reference",
     "front side reference",
     "orthographic reference views",
@@ -611,6 +639,16 @@ REFERENCE_MODEL_QUALITY_TERMS = {
     "reference match",
     "silhouette",
     "surface quality",
+    "adaptive remesh",
+    "adaptive remeshing",
+    "form aware sculpt",
+    "form-aware sculpt",
+    "visual hull",
+    "depth fusion",
+    "depth surface",
+    "reference fitting",
+    "multi-view fit",
+    "multiview fit",
     "visual match",
 }
 
@@ -815,6 +853,9 @@ HELPER_FIRST_SCRIPT_RULES = (
             "inspect_modeling_quality",
             "create_reference_guides_from_annotations",
             "create_multiview_reference_guides",
+            "create_multiview_visual_hull",
+            "create_multiview_depth_surface",
+            "fit_surface_to_multiview_references",
             "create_reference_modeling_guides",
             "inspect_reference_modeling_guides",
             "compare_model_to_reference",
@@ -1278,7 +1319,11 @@ def has_explicit_helper_gap(text):
 def prefers_bounded_helpers(text):
     if contains_any_guard_term(text, EXPLICIT_SCRIPT_PREFERENCE_TERMS):
         return False
-    return contains_any_guard_term(text, EXPLICIT_HELPER_PREFERENCE_TERMS)
+    if contains_any_guard_term(text, EXPLICIT_HELPER_PREFERENCE_TERMS):
+        return True
+    if contains_any_guard_term(text, SCRIPT_REQUEST_KEYWORDS):
+        return False
+    return contains_any_guard_term(text, SEMANTIC_SCULPT_HELPER_TERMS)
 
 
 def project_file_operation_kinds(text):

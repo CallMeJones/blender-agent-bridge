@@ -12,6 +12,8 @@ Start with the top-level `README.md`, then use these deeper notes for developmen
 - [clients/README.md](clients/README.md) - verified bundled and `uvx` setup guides for Codex, Claude, Cursor, VS Code/Cline/Roo, ChatGPT, Gemini CLI, OpenCode, and Ollama hosts.
 - [SHOWCASE.md](SHOWCASE.md) - curated community showcase and submission requirements.
 - [ADDING_A_TOOL.md](ADDING_A_TOOL.md) - canonical registry, handler, safety, snapshot, and test workflow for contributors.
+- [MULTIVIEW_RECONSTRUCTION.md](MULTIVIEW_RECONSTRUCTION.md) - calibrated silhouette/depth fusion, joint surface fitting, bounded adaptive topology, and form-aware brush fields.
+- [SEMANTIC_SCULPTING.md](SEMANTIC_SCULPTING.md) - model-neutral semantic regions, deterministic 3D fields, calibrated contour pulls, and measured optimization.
 - [GOOD_FIRST_ISSUES.md](GOOD_FIRST_ISSUES.md) - bounded tasks maintainers can promote into labelled contributor issues.
 
 ## Current Implementation Notes

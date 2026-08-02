@@ -1146,6 +1146,26 @@ def main():
                 False,
             ),
             (
+                "Carve a visual hull from calibrated multi-view silhouettes.",
+                {"create_multiview_visual_hull"},
+                False,
+            ),
+            (
+                "Fuse calibrated depth maps into a depth-constrained multi-view surface.",
+                {"create_multiview_depth_surface"},
+                False,
+            ),
+            (
+                "Fit the surface to multi-view references with a joint silhouette objective.",
+                {"fit_surface_to_multiview_references"},
+                False,
+            ),
+            (
+                "Use adaptive remeshing to add sculpt topology around curved forms.",
+                {"adaptive_remesh"},
+                False,
+            ),
+            (
                 "Create an advanced procedural hard-surface array with a geometry-nodes scatter grid.",
                 {"apply_procedural_array_stack", "add_geometry_nodes_modifier"},
                 True,
@@ -1203,6 +1223,17 @@ def main():
             (
                 "Evaluate the calibrated reference model against the refined benchmark quality gate profile.",
                 {"evaluate_reference_model_benchmark"},
+                False,
+            ),
+            (
+                "Define semantic mesh regions, inspect their coverage, and optimize a calibrated screen-space contour sculpt.",
+                {
+                    "define_semantic_sculpt_regions",
+                    "inspect_semantic_sculpt_regions",
+                    "apply_semantic_sculpt",
+                    "apply_screen_space_sculpt",
+                    "optimize_screen_space_sculpt",
+                },
                 False,
             ),
         )

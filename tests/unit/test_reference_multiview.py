@@ -22,6 +22,17 @@ class ReferenceMultiViewTests(unittest.TestCase):
             self.assertAlmostEqual(sum(a * b for a, b in zip(right, forward)), 0.0)
             self.assertAlmostEqual(sum(a * b for a, b in zip(right, up)), 0.0)
             self.assertAlmostEqual(sum(a * b for a, b in zip(forward, up)), 0.0)
+            self.assertEqual(
+                tuple(
+                    round(value, 7)
+                    for value in (
+                        forward[1] * up[2] - forward[2] * up[1],
+                        forward[2] * up[0] - forward[0] * up[2],
+                        forward[0] * up[1] - forward[1] * up[0],
+                    )
+                ),
+                right,
+            )
         right, forward, up = reference_multiview.view_basis(
             "CUSTOM",
             view_direction=(0.0, 2.0, 0.0),

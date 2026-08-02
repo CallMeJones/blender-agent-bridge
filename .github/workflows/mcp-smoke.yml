@@ -41,17 +41,26 @@ jobs:
           addon\claude_blender\bridge_server.py
           addon\claude_blender\audit_log.py
           addon\claude_blender\connection_diagnostics.py
+          addon\claude_blender\depth_fields.py
           addon\claude_blender\fur_groom.py
           addon\claude_blender\reference_benchmark_scene.py
           addon\claude_blender\reference_benchmarks.py
           addon\claude_blender\reference_blockout.py
           addon\claude_blender\reference_comparison.py
+          addon\claude_blender\reference_depth.py
+          addon\claude_blender\reference_fitting.py
           addon\claude_blender\reference_forms.py
           addon\claude_blender\reference_guides.py
           addon\claude_blender\reference_metrics.py
           addon\claude_blender\reference_multiview.py
           addon\claude_blender\reference_multiview_scene.py
           addon\claude_blender\reference_scene.py
+          addon\claude_blender\reference_surface_fitting.py
+          addon\claude_blender\reference_visual_hull.py
+          addon\claude_blender\sculpt_fields.py
+          addon\claude_blender\semantic_sculpt.py
+          addon\claude_blender\adaptive_remesh.py
+          addon\claude_blender\visual_hull.py
           addon\claude_blender\script_analysis.py
           scripts\build_extension_zip.py
           scripts\build_extension_repository.py
@@ -248,6 +257,7 @@ jobs:
             smoke_presentation_helpers
             smoke_script_runner
             smoke_quality_observability
+            smoke_semantic_sculpt
             smoke_trusted_script_jobs
             smoke_context_docs
             smoke_ui_layout
@@ -268,6 +278,7 @@ jobs:
               smoke_presentation_helpers
               smoke_render_jobs
               smoke_safe_editing_helpers
+              smoke_semantic_sculpt
               smoke_script_runner
               smoke_quality_observability
               smoke_trusted_script_jobs

@@ -56,6 +56,9 @@ ADVANCED_TOOLS = {
     "create_curve_path",
     "create_reference_guides_from_annotations",
     "create_multiview_reference_guides",
+    "create_multiview_visual_hull",
+    "create_multiview_depth_surface",
+    "fit_surface_to_multiview_references",
     "create_reference_modeling_guides",
     "inspect_reference_modeling_guides",
     "compare_model_to_reference",
@@ -766,6 +769,7 @@ def main():
             "block_major_masses",
             "refresh_targets",
             "form_evidence_gate",
+            "semantic_form_repair",
             "surface_and_detail_pass",
             "evidence_score_repair",
             "preview_decision",
@@ -797,6 +801,22 @@ def main():
             assert planned_call["gateway_call"]["name"] == "invoke_blender_tool", planned_call
             assert planned_call["gateway_call"]["arguments"]["name"] == planned_call["name"], planned_call
         assert any(call["phase"] == "refresh_targets" for call in quality_plan["deferred_tool_calls"]), quality_plan
+        semantic_phase = next(
+            phase for phase in quality_plan["phases"] if phase["name"] == "semantic_form_repair"
+        )
+        assert {
+            "apply_semantic_sculpt",
+            "apply_form_aware_sculpt",
+            "apply_screen_space_sculpt",
+            "optimize_screen_space_sculpt",
+        } == {
+            call["name"] for call in semantic_phase["choose_one_repair_call"]
+        }, quality_plan
+        assert any(
+            call["name"] == "define_semantic_sculpt_regions"
+            and call["phase"] == "semantic_form_repair"
+            for call in quality_plan["deferred_tool_calls"]
+        ), quality_plan
         construction_script_calls = [
             call
             for call in quality_plan["deferred_tool_calls"]
@@ -2284,7 +2304,7 @@ def main():
             "version": 1,
             "coordinate_space": "normalized",
             "origin": "top_left",
-            "landmarks": [{"name": "shared", "point": [0.6, 0.4]}],
+            "landmarks": [{"name": "shared", "point": [0.6, 0.6]}],
         }
         multiview_guides = _execute(
             context,
@@ -2330,7 +2350,7 @@ def main():
         assert shared_landmark["confidence"] == "within_residual_limit", multiview_guides
         assert len(shared_landmark["connectors"]) == 3, multiview_guides
         assert abs(shared_landmark["location"][0] - 0.6) < 1e-5, multiview_guides
-        assert abs(shared_landmark["location"][1] - 0.3) < 1e-5, multiview_guides
+        assert abs(shared_landmark["location"][1] + 0.3) < 1e-5, multiview_guides
         assert abs(shared_landmark["location"][2] - 1.8) < 1e-5, multiview_guides
         assert multiview_guides["unresolved_landmarks"][0]["name"] == "front_only", multiview_guides
         multiview_master = bpy.data.collections[multiview_guides["collection"]]
@@ -2354,6 +2374,185 @@ def main():
         )
         assert inspected_multiview["totals"]["landmarks_3d"] == 1, inspected_multiview
         assert inspected_multiview["totals"]["reconstruction_rays"] == 3, inspected_multiview
+
+        visual_hull = _execute(
+            context,
+            "create_multiview_visual_hull",
+            {
+                "collection_name": multiview_master.name,
+                "object_name": "Agent Bridge Kitten Visual Hull",
+                "resolution": 24,
+                "smooth_iterations": 1,
+            },
+        )
+        hull_object = bpy.data.objects[visual_hull["object"]]
+        assert hull_object.get("reference_visual_hull"), visual_hull
+        assert [view["name"] for view in visual_hull["views"]] == ["front", "left"]
+        assert "top_custom" in visual_hull["warnings"][0], visual_hull
+        assert visual_hull["stats"]["occupied_voxels"] > 0, visual_hull
+        assert len(hull_object.data.vertices) == visual_hull["stats"]["vertex_count"]
+        hull_edge_counts = {}
+        for polygon in hull_object.data.polygons:
+            indices = list(polygon.vertices)
+            for index, first in enumerate(indices):
+                edge = tuple(sorted((first, indices[(index + 1) % len(indices)])))
+                hull_edge_counts[edge] = hull_edge_counts.get(edge, 0) + 1
+        assert hull_edge_counts and all(count == 2 for count in hull_edge_counts.values()), visual_hull
+
+        depth_surface = _execute(
+            context,
+            "create_multiview_depth_surface",
+            {
+                "collection_name": multiview_master.name,
+                "object_name": "Agent Bridge Kitten Depth Surface",
+                "resolution": 20,
+                "smooth_iterations": 1,
+                "depth_sources": [
+                    {
+                        "view_name": "front",
+                        "mode": "front",
+                        "image_path": annotation_image_path,
+                        "near_depth": -0.1,
+                        "far_depth": -0.1,
+                        "channel": "alpha",
+                    }
+                ],
+            },
+        )
+        depth_object = bpy.data.objects[depth_surface["object"]]
+        assert depth_object.get("reference_depth_surface"), depth_surface
+        assert depth_surface["stats"]["depth_layer_count"] == 1, depth_surface
+        assert depth_surface["stats"]["depth_evaluations"] > 0, depth_surface
+        assert depth_surface["stats"]["depth_layer_evaluations"][0]["evaluation_count"] > 0
+
+        unused_depth_surface = json.loads(
+            tool_dispatcher.execute_tool(
+                context,
+                "create_multiview_depth_surface",
+                {
+                    "collection_name": multiview_master.name,
+                    "object_name": "Agent Bridge Unused Depth Surface",
+                    "resolution": 16,
+                    "smooth_iterations": 0,
+                    "depth_sources": [
+                        {
+                            "view_name": "front",
+                            "mode": "front",
+                            "image_path": annotation_image_path,
+                            "near_depth": -0.1,
+                            "far_depth": -0.1,
+                            "channel": "alpha",
+                        },
+                        {
+                            "view_name": "front",
+                            "mode": "back",
+                            "name": "outside sparse probe",
+                            "samples": [
+                                {
+                                    "point": [0.0, 0.0],
+                                    "depth": 0.1,
+                                    "radius": 0.001,
+                                }
+                            ],
+                        },
+                    ],
+                },
+            )
+        )
+        assert not unused_depth_surface["ok"], unused_depth_surface
+        assert "outside sparse probe" in unused_depth_surface["message"], unused_depth_surface
+        assert bpy.data.objects.get("Agent Bridge Unused Depth Surface") is None
+
+        shape_key_fit_probe = hull_object.copy()
+        shape_key_fit_probe.data = hull_object.data.copy()
+        shape_key_fit_probe.name = "Agent Bridge Shape Key Fit Probe"
+        context.scene.collection.objects.link(shape_key_fit_probe)
+        shape_key_fit_probe.shape_key_add(name="Basis")
+        shape_key_fit_probe.shape_key_add(name="Raised")
+        shape_key_fit_failure = json.loads(
+            tool_dispatcher.execute_tool(
+                context,
+                "fit_surface_to_multiview_references",
+                {
+                    "object_name": shape_key_fit_probe.name,
+                    "collection_name": multiview_master.name,
+                    "view_names": ["front", "left"],
+                },
+            )
+        )
+        assert not shape_key_fit_failure["ok"], shape_key_fit_failure
+        assert "shape keys" in shape_key_fit_failure["message"].lower()
+        shape_key_fit_mesh = shape_key_fit_probe.data
+        bpy.data.objects.remove(shape_key_fit_probe, do_unlink=True)
+        bpy.data.meshes.remove(shape_key_fit_mesh)
+
+        unused_fit_depth = json.loads(
+            tool_dispatcher.execute_tool(
+                context,
+                "fit_surface_to_multiview_references",
+                {
+                    "object_name": hull_object.name,
+                    "collection_name": multiview_master.name,
+                    "view_names": ["front", "left"],
+                    "iterations": 1,
+                    "step_candidates": [0.5],
+                    "depth_sources": [
+                        {
+                            "view_name": "front",
+                            "mode": "front",
+                            "image_path": annotation_image_path,
+                            "near_depth": -0.1,
+                            "far_depth": -0.1,
+                            "channel": "alpha",
+                        },
+                        {
+                            "view_name": "front",
+                            "mode": "back",
+                            "name": "outside fit probe",
+                            "samples": [
+                                {
+                                    "point": [0.0, 0.0],
+                                    "depth": 0.1,
+                                    "radius": 0.001,
+                                }
+                            ],
+                        },
+                    ],
+                },
+            )
+        )
+        assert not unused_fit_depth["ok"], unused_fit_depth
+        assert "outside fit probe" in unused_fit_depth["message"], unused_fit_depth
+
+        subject_center = Vector((0.0, 0.0, 1.5))
+        for vertex in hull_object.data.vertices:
+            vertex.co = subject_center + (vertex.co - subject_center) * 0.82
+        hull_object.data.update(calc_edges=True)
+        fitted = _execute(
+            context,
+            "fit_surface_to_multiview_references",
+            {
+                "object_name": hull_object.name,
+                "collection_name": multiview_master.name,
+                "view_names": ["front", "left"],
+                "iterations": 3,
+                "step_candidates": [0.5, 1.0],
+                "feature_preservation": 0.0,
+                "propagation_steps": 2,
+                "per_view_regression_tolerance": 0.01,
+                "maximum_total_displacement": 0.5,
+                "capture_evidence": True,
+                "evidence_max_axis": 64,
+            },
+        )
+        assert fitted["changed"] is True, fitted
+        assert fitted["objective_improvement"] > 0.0, fitted
+        assert (
+            fitted["final"]["objective"] < fitted["baseline"]["objective"]
+        ), fitted
+        assert hull_object.get("reference_multiview_fit_metadata_json"), fitted
+        assert fitted["evidence"]["before"]["successful_view_count"] == 2, fitted
+        assert fitted["evidence"]["after"]["successful_view_count"] == 2, fitted
 
         failed_multiview_inventory = (
             set(bpy.data.objects.keys()),

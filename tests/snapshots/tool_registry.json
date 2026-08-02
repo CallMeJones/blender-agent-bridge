@@ -1,6 +1,97 @@
 {
-  "catalog_tool_count": 208,
+  "catalog_tool_count": 218,
   "contracts": {
+    "adaptive_remesh": {
+      "description": "Adaptively refine sculpt topology by subdividing edges that exceed a bounded local target derived from edge length, semantic-region weight, and face curvature. Retains interpolated semantic point attributes, optionally relaxes spacing and projects vertices back to the source surface, and enforces input, per-pass, and result vertex limits. This is a form-preserving refinement pass; it does not decimate or promise production retopology.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "curvature_detail": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_result_vertices": {
+            "maximum": 500000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "passes": {
+            "maximum": 6,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "project_to_source": {
+            "type": "boolean"
+          },
+          "region_detail": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "relax_factor": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "relax_iterations": {
+            "maximum": 20,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "target_edge_length": {
+            "maximum": 1000.0,
+            "minimum": 1e-06,
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_name",
+          "target_edge_length"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
+    },
     "add_action_cycles": {
       "description": "Add cycles modifiers to action f-curves so an animation loops. Applies immediately with preview revert support.",
       "input_schema": {
@@ -1655,6 +1746,139 @@
       },
       "requires_live_preview": true
     },
+    "apply_form_aware_sculpt": {
+      "description": "Apply a topology-aware tangent relax, tangent pinch, or crease field to named semantic regions. Brush influence can diffuse through adjacency, protects measured high-curvature features, supports an explicit local or world-space center, symmetry, final displacement caps, and bounded volume compensation. Applies immediately with mesh-snapshot preview rollback.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_all_vertices": {
+            "type": "boolean"
+          },
+          "center": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "coordinate_space": {
+            "enum": [
+              "local",
+              "world"
+            ],
+            "type": "string"
+          },
+          "crease_depth": {
+            "maximum": 1000.0,
+            "minimum": -1000.0,
+            "type": "number"
+          },
+          "falloff_decay": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "falloff_steps": {
+            "maximum": 64,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "feature_preservation": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "iterations": {
+            "maximum": 50,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maximum_world_displacement": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "operation": {
+            "enum": [
+              "tangent_relax",
+              "pinch",
+              "crease"
+            ],
+            "type": "string"
+          },
+          "preserve_volume": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "strength": {
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "type": "number"
+          },
+          "symmetry_axis": {
+            "enum": [
+              "NONE",
+              "X",
+              "Y",
+              "Z"
+            ],
+            "type": "string"
+          },
+          "symmetry_tolerance": {
+            "maximum": 1.0,
+            "minimum": 1e-08,
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_name",
+          "operation"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
+    },
     "apply_lighting_preset": {
       "description": "Create a bounded production lighting preset around a target object. Presets include product_softbox, dramatic_rim, and gallery_even. Applies immediately with preview revert support.",
       "input_schema": {
@@ -1990,6 +2214,293 @@
         "type": "object"
       },
       "requires_live_preview": true
+    },
+    "apply_screen_space_sculpt": {
+      "description": "Project one or more bounded source-to-target pulls from a calibrated reference camera onto named semantic mesh regions. Supports front-facing filtering, mirrored deformation, displacement caps, and volume compensation so an image-capable client can correct visible contours without choosing raw vertices. Applies immediately with preview rollback.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_all_vertices": {
+            "type": "boolean"
+          },
+          "camera_name": {
+            "type": "string"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "controls": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "radius": {
+                  "maximum": 2.0,
+                  "minimum": 0.001,
+                  "type": "number"
+                },
+                "source": {
+                  "items": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "strength": {
+                  "maximum": 4.0,
+                  "minimum": -4.0,
+                  "type": "number"
+                },
+                "target": {
+                  "items": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "source",
+                "target"
+              ],
+              "type": "object"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": "array"
+          },
+          "front_face_threshold": {
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "type": "number"
+          },
+          "front_faces_only": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maximum_world_displacement": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "origin": {
+            "enum": [
+              "top_left",
+              "bottom_left"
+            ],
+            "type": "string"
+          },
+          "preserve_volume": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "strength": {
+            "maximum": 4.0,
+            "minimum": -4.0,
+            "type": "number"
+          },
+          "symmetry_axis": {
+            "enum": [
+              "NONE",
+              "X",
+              "Y",
+              "Z"
+            ],
+            "type": "string"
+          },
+          "symmetry_tolerance": {
+            "maximum": 1.0,
+            "minimum": 1e-08,
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_name",
+          "controls"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
+    },
+    "apply_semantic_sculpt": {
+      "description": "Apply one deterministic weighted sculpt field to named semantic regions on a mesh. Supports translation, normal inflation, Laplacian smoothing, and plane flattening with optional mirrored deformation and bounded volume compensation. Applies immediately with mesh-snapshot preview rollback.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_all_vertices": {
+            "type": "boolean"
+          },
+          "arguments": {
+            "additionalProperties": false,
+            "properties": {
+              "amount": {
+                "maximum": 1000.0,
+                "minimum": -1000.0,
+                "type": "number"
+              },
+              "coordinate_space": {
+                "enum": [
+                  "local",
+                  "world"
+                ],
+                "type": "string"
+              },
+              "factor": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              "iterations": {
+                "maximum": 50,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "plane_normal": {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              },
+              "plane_point": {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              },
+              "preserve_volume": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              "symmetry_axis": {
+                "enum": [
+                  "NONE",
+                  "X",
+                  "Y",
+                  "Z"
+                ],
+                "type": "string"
+              },
+              "symmetry_tolerance": {
+                "maximum": 1.0,
+                "minimum": 1e-08,
+                "type": "number"
+              },
+              "vector": {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "operation": {
+            "enum": [
+              "translate",
+              "inflate",
+              "smooth",
+              "flatten"
+            ],
+            "type": "string"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          }
+        },
+        "required": [
+          "object_name",
+          "operation"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
     },
     "apply_trusted_script_job_result": {
       "description": "Checkpoint the current live file, then open a completed trusted-script job result. Requires an explicit true confirmation that the user approved replacing the live Blender file. Active runtime script trust is preserved across the file change.",
@@ -4347,6 +4858,259 @@
       },
       "requires_live_preview": true
     },
+    "create_multiview_depth_surface": {
+      "description": "Fuse one or more explicitly calibrated front/back depth images or sparse signed depth samples with two to six cyclic multi-view silhouettes. Depth values are measured in world units from each view center along its forward vector. The bounded voxel intersection remains watertight, filters disconnected occupancy, requires every depth source to overlap, and creates a reversible preview without invoking a learned depth model.",
+      "duration_hint": "Loads and downsamples at most twelve local depth sources, spatially indexes sparse samples, then carves at most 512000 grid cells under aggregate silhouette and depth workload caps.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "bounds_center": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "bounds_padding": {
+            "maximum": 0.5,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "bounds_size": {
+            "items": {
+              "minimum": 1e-06,
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "color": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          },
+          "component_mode": {
+            "enum": [
+              "largest",
+              "all"
+            ],
+            "type": "string"
+          },
+          "depth_sources": {
+            "items": {
+              "additionalProperties": false,
+              "oneOf": [
+                {
+                  "required": [
+                    "image_path",
+                    "near_depth",
+                    "far_depth"
+                  ]
+                },
+                {
+                  "required": [
+                    "samples"
+                  ]
+                }
+              ],
+              "properties": {
+                "alpha_threshold": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "channel": {
+                  "enum": [
+                    "luminance",
+                    "red",
+                    "green",
+                    "blue",
+                    "alpha"
+                  ],
+                  "type": "string"
+                },
+                "far_depth": {
+                  "type": "number"
+                },
+                "image_path": {
+                  "description": "Explicit local grayscale depth image path supplied by the user or another trusted source.",
+                  "type": "string"
+                },
+                "invalid_above": {
+                  "type": "number"
+                },
+                "invalid_below": {
+                  "type": "number"
+                },
+                "invert": {
+                  "type": "boolean"
+                },
+                "mode": {
+                  "enum": [
+                    "front",
+                    "back"
+                  ],
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "near_depth": {
+                  "type": "number"
+                },
+                "samples": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "depth": {
+                        "description": "Signed world distance from the calibrated view center along its forward vector.",
+                        "type": "number"
+                      },
+                      "point": {
+                        "items": {
+                          "maximum": 1.0,
+                          "minimum": 0.0,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "radius": {
+                        "exclusiveMinimum": 0.0,
+                        "maximum": 2.0,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "point",
+                      "depth"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 4096,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "tolerance": {
+                  "maximum": 1000.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "view_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "view_name",
+                "mode"
+              ],
+              "type": "object"
+            },
+            "maxItems": 12,
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_depth_axis": {
+            "maximum": 1024,
+            "minimum": 16,
+            "type": "integer"
+          },
+          "minimum_component_voxels": {
+            "maximum": 100000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "minimum_view_angle_degrees": {
+            "maximum": 90.0,
+            "minimum": 0.1,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "outline_overrides": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "outline_name": {
+                  "type": "string"
+                },
+                "view_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "view_name",
+                "outline_name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "type": "array"
+          },
+          "resolution": {
+            "maximum": 80,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "smooth_iterations": {
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "view_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "required": [
+          "depth_sources"
+        ],
+        "type": "object"
+      },
+      "long_running": true,
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "path_policy": "Every optional depth image_path must be a local path explicitly supplied by the user, a file picker, a prior capture, or another trusted local source. Sparse depth samples are parsed in memory.",
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write",
+        "files:read"
+      ],
+      "requires_live_preview": true,
+      "requires_user_path": true,
+      "supports_headless": true
+    },
     "create_multiview_reference_guides": {
       "description": "Create two to six calibrated reference-image guide collections and reconstruct shared landmark names as 3D empties. Supports front/back/left/right/top/bottom presets or custom orthographic bases, keeps each image, outline, and camera isolated by view, solves landmark rays by least squares, reports residual and view-angle quality, and can add hidden reconstruction connectors. Applies immediately with preview revert support.",
       "input_schema": {
@@ -4542,6 +5306,133 @@
       ],
       "requires_live_preview": true,
       "requires_user_path": true
+    },
+    "create_multiview_visual_hull": {
+      "description": "Intersect two to six calibrated cyclic silhouettes from a multi-view reference collection into a bounded watertight voxel boundary mesh. Automatically chooses the largest outline per view or accepts explicit overrides, rejects parallel view sets, filters disconnected occupancy, and applies bounded surface relaxation. Use this as the deterministic primary volume before adaptive topology and semantic form repair.",
+      "duration_hint": "Carves at most 512000 grid cells under a 100-million silhouette-edge workload cap and may take several seconds at high resolution.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "bounds_center": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "bounds_padding": {
+            "maximum": 0.5,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "bounds_size": {
+            "items": {
+              "minimum": 1e-06,
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "color": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          },
+          "component_mode": {
+            "enum": [
+              "largest",
+              "all"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "minimum_component_voxels": {
+            "maximum": 100000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "minimum_view_angle_degrees": {
+            "maximum": 90.0,
+            "minimum": 0.1,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "outline_overrides": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "outline_name": {
+                  "type": "string"
+                },
+                "view_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "view_name",
+                "outline_name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "type": "array"
+          },
+          "resolution": {
+            "maximum": 80,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "smooth_iterations": {
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "view_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "long_running": true,
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
     },
     "create_new_blender_project": {
       "description": "Create a new Blender project folder and .blend file at a user-confirmed path. This replaces the active Blender session, so confirm_discard_current and user_confirmed_path must be true; creates a checkpoint first by default.",
@@ -6267,6 +7158,284 @@
       },
       "requires_live_preview": true
     },
+    "define_semantic_sculpt_regions": {
+      "description": "Create, update, or delete persistent weighted semantic regions on one mesh from local/world spheres, boxes, explicit vertex indices, calibrated screen polygons, or reference-landmark spheres. Regions are stored as point attributes and become stable targets for bounded sculpt operations. Applies immediately with preview revert support.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "regions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "maxLength": 120,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "selector": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "camera_name": {
+                      "type": "string"
+                    },
+                    "center": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "collection_name": {
+                      "type": "string"
+                    },
+                    "coordinate_space": {
+                      "enum": [
+                        "local",
+                        "world"
+                      ],
+                      "type": "string"
+                    },
+                    "feather": {
+                      "maximum": 10000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "landmark_name": {
+                      "type": "string"
+                    },
+                    "maximum": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "minimum": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "origin": {
+                      "enum": [
+                        "top_left",
+                        "bottom_left"
+                      ],
+                      "type": "string"
+                    },
+                    "points": {
+                      "items": {
+                        "items": {
+                          "maximum": 1.0,
+                          "minimum": 0.0,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "maxItems": 256,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-06,
+                      "type": "number"
+                    },
+                    "type": {
+                      "enum": [
+                        "sphere",
+                        "box",
+                        "vertex_indices",
+                        "landmark_sphere",
+                        "screen_polygon"
+                      ],
+                      "type": "string"
+                    },
+                    "vertex_indices": {
+                      "items": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "maxItems": 250000,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "selectors": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "camera_name": {
+                        "type": "string"
+                      },
+                      "center": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "collection_name": {
+                        "type": "string"
+                      },
+                      "coordinate_space": {
+                        "enum": [
+                          "local",
+                          "world"
+                        ],
+                        "type": "string"
+                      },
+                      "feather": {
+                        "maximum": 10000.0,
+                        "minimum": 0.0,
+                        "type": "number"
+                      },
+                      "landmark_name": {
+                        "type": "string"
+                      },
+                      "maximum": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "minimum": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "origin": {
+                        "enum": [
+                          "top_left",
+                          "bottom_left"
+                        ],
+                        "type": "string"
+                      },
+                      "points": {
+                        "items": {
+                          "items": {
+                            "maximum": 1.0,
+                            "minimum": 0.0,
+                            "type": "number"
+                          },
+                          "maxItems": 2,
+                          "minItems": 2,
+                          "type": "array"
+                        },
+                        "maxItems": 256,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "radius": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-06,
+                        "type": "number"
+                      },
+                      "type": {
+                        "enum": [
+                          "sphere",
+                          "box",
+                          "vertex_indices",
+                          "landmark_sphere",
+                          "screen_polygon"
+                        ],
+                        "type": "string"
+                      },
+                      "vertex_indices": {
+                        "items": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "maxItems": 250000,
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 16,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "write_mode": {
+                  "enum": [
+                    "replace",
+                    "add",
+                    "subtract",
+                    "intersect",
+                    "delete"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "object_name",
+          "regions"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
+    },
     "delete_external_asset_job": {
       "description": "Delete completed, failed, or cancelled external asset job metadata/log files. Dry-run by default.",
       "has_side_effects": true,
@@ -7245,6 +8414,327 @@
         "filesystem:write"
       ],
       "supports_headless": true
+    },
+    "fit_surface_to_multiview_references": {
+      "description": "Automatically derive silhouette, optional calibrated depth, and reconstructed-landmark corrections from every selected reference view, diffuse them through a feature-aware Laplacian field, and try bounded coarse-to-fine step sizes. A candidate is accepted only when the aggregate objective improves without exceeding the per-view regression tolerance; otherwise the mesh is restored. Every depth source must overlap eligible surface vertices, and shape-key meshes are rejected. Optional rendered redlines provide before/after verification.",
+      "duration_hint": "Runs at most twelve iterations with five bounded candidates per iteration across at most six views under an aggregate depth-work cap. Optional evidence adds one before and one after render per view.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "capture_evidence": {
+            "type": "boolean"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "depth_sources": {
+            "items": {
+              "additionalProperties": false,
+              "oneOf": [
+                {
+                  "required": [
+                    "image_path",
+                    "near_depth",
+                    "far_depth"
+                  ]
+                },
+                {
+                  "required": [
+                    "samples"
+                  ]
+                }
+              ],
+              "properties": {
+                "alpha_threshold": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "channel": {
+                  "enum": [
+                    "luminance",
+                    "red",
+                    "green",
+                    "blue",
+                    "alpha"
+                  ],
+                  "type": "string"
+                },
+                "far_depth": {
+                  "type": "number"
+                },
+                "image_path": {
+                  "description": "Explicit local grayscale depth image path supplied by the user or another trusted source.",
+                  "type": "string"
+                },
+                "invalid_above": {
+                  "type": "number"
+                },
+                "invalid_below": {
+                  "type": "number"
+                },
+                "invert": {
+                  "type": "boolean"
+                },
+                "mode": {
+                  "enum": [
+                    "front",
+                    "back"
+                  ],
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "near_depth": {
+                  "type": "number"
+                },
+                "samples": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "depth": {
+                        "description": "Signed world distance from the calibrated view center along its forward vector.",
+                        "type": "number"
+                      },
+                      "point": {
+                        "items": {
+                          "maximum": 1.0,
+                          "minimum": 0.0,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "radius": {
+                        "exclusiveMinimum": 0.0,
+                        "maximum": 2.0,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "point",
+                      "depth"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 4096,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "tolerance": {
+                  "maximum": 1000.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "view_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "view_name",
+                "mode"
+              ],
+              "type": "object"
+            },
+            "maxItems": 12,
+            "type": "array"
+          },
+          "depth_weight": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "evidence_mask_threshold": {
+            "maximum": 0.99,
+            "minimum": 0.01,
+            "type": "number"
+          },
+          "evidence_max_axis": {
+            "maximum": 1024,
+            "minimum": 64,
+            "type": "integer"
+          },
+          "evidence_regression_tolerance": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "feature_preservation": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "iterations": {
+            "maximum": 12,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "landmark_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 128,
+            "type": "array"
+          },
+          "landmark_weight": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "max_depth_axis": {
+            "maximum": 1024,
+            "minimum": 16,
+            "type": "integer"
+          },
+          "max_vertices": {
+            "maximum": 100000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maximum_step": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "maximum_total_displacement": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "minimum_improvement": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "outline_overrides": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "outline_name": {
+                  "type": "string"
+                },
+                "view_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "view_name",
+                "outline_name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "type": "array"
+          },
+          "per_view_regression_tolerance": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "pinned_vertex_indices": {
+            "items": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 100000,
+            "type": "array"
+          },
+          "preserve_volume": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "propagation_decay": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "propagation_steps": {
+            "maximum": 12,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "regularization": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "silhouette_weight": {
+            "maximum": 100.0,
+            "minimum": 1e-06,
+            "type": "number"
+          },
+          "step_candidates": {
+            "items": {
+              "exclusiveMinimum": 0.0,
+              "maximum": 2.0,
+              "type": "number"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "type": "array"
+          },
+          "view_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 2,
+            "type": "array"
+          },
+          "worst_view_weight": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_name"
+        ],
+        "type": "object"
+      },
+      "long_running": true,
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "path_policy": "Every optional depth image_path must be a local path explicitly supplied by the user, a file picker, a prior capture, or another trusted local source. Evidence renders are written only when capture_evidence is true.",
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write",
+        "files:read",
+        "files:write"
+      ],
+      "requires_live_preview": true,
+      "requires_user_path": true,
+      "supports_headless": true,
+      "timeout_recovery": {
+        "evidence_resource": "blender://inspection-renders/latest/metadata",
+        "poll_after_seconds": 5,
+        "recoverable": true,
+        "status_tool": "blender_bridge_status"
+      }
     },
     "focus_object_in_viewport": {
       "description": "Frame a named object in the first 3D viewport and optionally select it. Requires an interactive Blender UI and fails soft in background mode.",
@@ -9266,6 +10756,48 @@
         "type": "object"
       }
     },
+    "inspect_semantic_sculpt_regions": {
+      "description": "Inspect persistent semantic sculpt regions on one mesh, including weighted vertex counts and optional bounded per-vertex weights. Does not mutate the scene.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_weights": {
+            "type": "boolean"
+          },
+          "max_weights": {
+            "maximum": 4096,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "object_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "object_name"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read"
+      ],
+      "supports_headless": true
+    },
     "inspect_simulation_bake": {
       "description": "Sample evaluated simulation state across a bounded frame range and report cache/bake readiness without mutating persistent point caches.",
       "input_schema": {
@@ -10094,6 +11626,217 @@
         "status_tool": "blender_bridge_status"
       },
       "timeout_seconds": 300
+    },
+    "optimize_screen_space_sculpt": {
+      "description": "Try up to seven bounded strengths for calibrated screen-space semantic sculpt controls, render and score every candidate against the reference silhouette and optional landmarks, retain only a measured improvement, and restore the original mesh otherwise. Publishes final comparison evidence and leaves an accepted change as a preview.",
+      "duration_hint": "One baseline render, up to seven candidate renders, and one final verification render.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_all_vertices": {
+            "type": "boolean"
+          },
+          "camera_name": {
+            "type": "string"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "controls": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "radius": {
+                  "maximum": 2.0,
+                  "minimum": 0.001,
+                  "type": "number"
+                },
+                "source": {
+                  "items": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "strength": {
+                  "maximum": 4.0,
+                  "minimum": -4.0,
+                  "type": "number"
+                },
+                "target": {
+                  "items": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "source",
+                "target"
+              ],
+              "type": "object"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": "array"
+          },
+          "edge_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "front_face_threshold": {
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "type": "number"
+          },
+          "front_faces_only": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "landmark_targets": {
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 128,
+            "type": "array"
+          },
+          "landmark_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "mask_threshold": {
+            "maximum": 0.99,
+            "minimum": 0.01,
+            "type": "number"
+          },
+          "max_axis": {
+            "maximum": 1024,
+            "minimum": 64,
+            "type": "integer"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maximum_world_displacement": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "minimum_improvement": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "origin": {
+            "enum": [
+              "top_left",
+              "bottom_left"
+            ],
+            "type": "string"
+          },
+          "outline_name": {
+            "type": "string"
+          },
+          "preserve_volume": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "reference_mask_source": {
+            "enum": [
+              "auto",
+              "outline",
+              "alpha"
+            ],
+            "type": "string"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "strength_candidates": {
+            "items": {
+              "maximum": 4.0,
+              "minimum": -4.0,
+              "type": "number"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "type": "array"
+          },
+          "symmetry_axis": {
+            "enum": [
+              "NONE",
+              "X",
+              "Y",
+              "Z"
+            ],
+            "type": "string"
+          },
+          "symmetry_tolerance": {
+            "maximum": 1.0,
+            "minimum": 1e-08,
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_name",
+          "controls",
+          "strength_candidates"
+        ],
+        "type": "object"
+      },
+      "long_running": true,
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write",
+        "files:read",
+        "files:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true,
+      "timeout_recovery": {
+        "evidence_resource": "blender://inspection-renders/latest/metadata",
+        "poll_after_seconds": 5,
+        "recoverable": true,
+        "status_tool": "blender_bridge_status"
+      }
     },
     "organize_scene_for_production": {
       "description": "Link scene or selected objects into production-oriented type collections without deleting original links. Applies immediately with preview revert support.",
@@ -19840,6 +21583,110 @@
       "name": "create_multiview_reference_guides"
     },
     {
+      "description": "Intersect two to six calibrated cyclic silhouettes from a multi-view reference collection into a bounded watertight voxel boundary mesh. Automatically chooses the largest outline per view or accepts explicit overrides, rejects parallel view sets, filters disconnected occupancy, and applies bounded surface relaxation. Use this as the deterministic primary volume before adaptive topology and semantic form repair.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "bounds_center": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "bounds_padding": {
+            "maximum": 0.5,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "bounds_size": {
+            "items": {
+              "minimum": 1e-06,
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "color": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          },
+          "component_mode": {
+            "enum": [
+              "largest",
+              "all"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "minimum_component_voxels": {
+            "maximum": 100000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "minimum_view_angle_degrees": {
+            "maximum": 90.0,
+            "minimum": 0.1,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "outline_overrides": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "outline_name": {
+                  "type": "string"
+                },
+                "view_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "view_name",
+                "outline_name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "type": "array"
+          },
+          "resolution": {
+            "maximum": 80,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "smooth_iterations": {
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "view_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "name": "create_multiview_visual_hull"
+    },
+    {
       "description": "Create region-aware tapered fur guide curves on selected or named mesh objects. Samples triangles by world-space area and optional vertex-group density, applies tangent flow fields, spacing, clumping, laydown, controlled noise, and root-to-tip taper for smoother coat, cheek, paw, and tail grooms. Legacy single-direction arguments remain supported. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
@@ -20152,6 +21999,232 @@
       "name": "inspect_reference_modeling_guides"
     },
     {
+      "description": "Fuse one or more explicitly calibrated front/back depth images or sparse signed depth samples with two to six cyclic multi-view silhouettes. Depth values are measured in world units from each view center along its forward vector. The bounded voxel intersection remains watertight, filters disconnected occupancy, requires every depth source to overlap, and creates a reversible preview without invoking a learned depth model.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "bounds_center": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "bounds_padding": {
+            "maximum": 0.5,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "bounds_size": {
+            "items": {
+              "minimum": 1e-06,
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "color": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          },
+          "component_mode": {
+            "enum": [
+              "largest",
+              "all"
+            ],
+            "type": "string"
+          },
+          "depth_sources": {
+            "items": {
+              "additionalProperties": false,
+              "oneOf": [
+                {
+                  "required": [
+                    "image_path",
+                    "near_depth",
+                    "far_depth"
+                  ]
+                },
+                {
+                  "required": [
+                    "samples"
+                  ]
+                }
+              ],
+              "properties": {
+                "alpha_threshold": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "channel": {
+                  "enum": [
+                    "luminance",
+                    "red",
+                    "green",
+                    "blue",
+                    "alpha"
+                  ],
+                  "type": "string"
+                },
+                "far_depth": {
+                  "type": "number"
+                },
+                "image_path": {
+                  "description": "Explicit local grayscale depth image path supplied by the user or another trusted source.",
+                  "type": "string"
+                },
+                "invalid_above": {
+                  "type": "number"
+                },
+                "invalid_below": {
+                  "type": "number"
+                },
+                "invert": {
+                  "type": "boolean"
+                },
+                "mode": {
+                  "enum": [
+                    "front",
+                    "back"
+                  ],
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "near_depth": {
+                  "type": "number"
+                },
+                "samples": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "depth": {
+                        "description": "Signed world distance from the calibrated view center along its forward vector.",
+                        "type": "number"
+                      },
+                      "point": {
+                        "items": {
+                          "maximum": 1.0,
+                          "minimum": 0.0,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "radius": {
+                        "exclusiveMinimum": 0.0,
+                        "maximum": 2.0,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "point",
+                      "depth"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 4096,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "tolerance": {
+                  "maximum": 1000.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "view_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "view_name",
+                "mode"
+              ],
+              "type": "object"
+            },
+            "maxItems": 12,
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_depth_axis": {
+            "maximum": 1024,
+            "minimum": 16,
+            "type": "integer"
+          },
+          "minimum_component_voxels": {
+            "maximum": 100000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "minimum_view_angle_degrees": {
+            "maximum": 90.0,
+            "minimum": 0.1,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "outline_overrides": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "outline_name": {
+                  "type": "string"
+                },
+                "view_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "view_name",
+                "outline_name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "type": "array"
+          },
+          "resolution": {
+            "maximum": 80,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "smooth_iterations": {
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "view_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "required": [
+          "depth_sources"
+        ],
+        "type": "object"
+      },
+      "name": "create_multiview_depth_surface"
+    },
+    {
       "description": "Render named model targets through a calibrated reference-guide camera, compare their binary silhouette with an annotated outline or useful reference alpha, measure overlap, edge distance, centroid and optional landmark errors, and publish model-mask, reference-mask, and redline PNG resources. Use after each broad construction or repair pass so the next edit is driven by named image-space errors instead of an unmeasured visual impression.",
       "input_schema": {
         "additionalProperties": false,
@@ -20233,6 +22306,293 @@
         "type": "object"
       },
       "name": "compare_model_to_reference"
+    },
+    {
+      "description": "Automatically derive silhouette, optional calibrated depth, and reconstructed-landmark corrections from every selected reference view, diffuse them through a feature-aware Laplacian field, and try bounded coarse-to-fine step sizes. A candidate is accepted only when the aggregate objective improves without exceeding the per-view regression tolerance; otherwise the mesh is restored. Every depth source must overlap eligible surface vertices, and shape-key meshes are rejected. Optional rendered redlines provide before/after verification.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "capture_evidence": {
+            "type": "boolean"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "depth_sources": {
+            "items": {
+              "additionalProperties": false,
+              "oneOf": [
+                {
+                  "required": [
+                    "image_path",
+                    "near_depth",
+                    "far_depth"
+                  ]
+                },
+                {
+                  "required": [
+                    "samples"
+                  ]
+                }
+              ],
+              "properties": {
+                "alpha_threshold": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "channel": {
+                  "enum": [
+                    "luminance",
+                    "red",
+                    "green",
+                    "blue",
+                    "alpha"
+                  ],
+                  "type": "string"
+                },
+                "far_depth": {
+                  "type": "number"
+                },
+                "image_path": {
+                  "description": "Explicit local grayscale depth image path supplied by the user or another trusted source.",
+                  "type": "string"
+                },
+                "invalid_above": {
+                  "type": "number"
+                },
+                "invalid_below": {
+                  "type": "number"
+                },
+                "invert": {
+                  "type": "boolean"
+                },
+                "mode": {
+                  "enum": [
+                    "front",
+                    "back"
+                  ],
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "near_depth": {
+                  "type": "number"
+                },
+                "samples": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "depth": {
+                        "description": "Signed world distance from the calibrated view center along its forward vector.",
+                        "type": "number"
+                      },
+                      "point": {
+                        "items": {
+                          "maximum": 1.0,
+                          "minimum": 0.0,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "radius": {
+                        "exclusiveMinimum": 0.0,
+                        "maximum": 2.0,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "point",
+                      "depth"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 4096,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "tolerance": {
+                  "maximum": 1000.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "view_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "view_name",
+                "mode"
+              ],
+              "type": "object"
+            },
+            "maxItems": 12,
+            "type": "array"
+          },
+          "depth_weight": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "evidence_mask_threshold": {
+            "maximum": 0.99,
+            "minimum": 0.01,
+            "type": "number"
+          },
+          "evidence_max_axis": {
+            "maximum": 1024,
+            "minimum": 64,
+            "type": "integer"
+          },
+          "evidence_regression_tolerance": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "feature_preservation": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "iterations": {
+            "maximum": 12,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "landmark_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 128,
+            "type": "array"
+          },
+          "landmark_weight": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "max_depth_axis": {
+            "maximum": 1024,
+            "minimum": 16,
+            "type": "integer"
+          },
+          "max_vertices": {
+            "maximum": 100000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maximum_step": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "maximum_total_displacement": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "minimum_improvement": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "outline_overrides": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "outline_name": {
+                  "type": "string"
+                },
+                "view_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "view_name",
+                "outline_name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "type": "array"
+          },
+          "per_view_regression_tolerance": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "pinned_vertex_indices": {
+            "items": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 100000,
+            "type": "array"
+          },
+          "preserve_volume": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "propagation_decay": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "propagation_steps": {
+            "maximum": 12,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "regularization": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "silhouette_weight": {
+            "maximum": 100.0,
+            "minimum": 1e-06,
+            "type": "number"
+          },
+          "step_candidates": {
+            "items": {
+              "exclusiveMinimum": 0.0,
+              "maximum": 2.0,
+              "type": "number"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "type": "array"
+          },
+          "view_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 2,
+            "type": "array"
+          },
+          "worst_view_weight": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_name"
+        ],
+        "type": "object"
+      },
+      "name": "fit_surface_to_multiview_references"
     },
     {
       "description": "Create a simple one-bone armature object. Applies immediately with preview revert support.",
@@ -20426,6 +22786,714 @@
       "name": "create_reference_blockout"
     },
     {
+      "description": "Adaptively refine sculpt topology by subdividing edges that exceed a bounded local target derived from edge length, semantic-region weight, and face curvature. Retains interpolated semantic point attributes, optionally relaxes spacing and projects vertices back to the source surface, and enforces input, per-pass, and result vertex limits. This is a form-preserving refinement pass; it does not decimate or promise production retopology.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "curvature_detail": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_result_vertices": {
+            "maximum": 500000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "passes": {
+            "maximum": 6,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "project_to_source": {
+            "type": "boolean"
+          },
+          "region_detail": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "relax_factor": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "relax_iterations": {
+            "maximum": 20,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "target_edge_length": {
+            "maximum": 1000.0,
+            "minimum": 1e-06,
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_name",
+          "target_edge_length"
+        ],
+        "type": "object"
+      },
+      "name": "adaptive_remesh"
+    },
+    {
+      "description": "Create, update, or delete persistent weighted semantic regions on one mesh from local/world spheres, boxes, explicit vertex indices, calibrated screen polygons, or reference-landmark spheres. Regions are stored as point attributes and become stable targets for bounded sculpt operations. Applies immediately with preview revert support.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "regions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "maxLength": 120,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "selector": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "camera_name": {
+                      "type": "string"
+                    },
+                    "center": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "collection_name": {
+                      "type": "string"
+                    },
+                    "coordinate_space": {
+                      "enum": [
+                        "local",
+                        "world"
+                      ],
+                      "type": "string"
+                    },
+                    "feather": {
+                      "maximum": 10000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "landmark_name": {
+                      "type": "string"
+                    },
+                    "maximum": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "minimum": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "origin": {
+                      "enum": [
+                        "top_left",
+                        "bottom_left"
+                      ],
+                      "type": "string"
+                    },
+                    "points": {
+                      "items": {
+                        "items": {
+                          "maximum": 1.0,
+                          "minimum": 0.0,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "maxItems": 256,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-06,
+                      "type": "number"
+                    },
+                    "type": {
+                      "enum": [
+                        "sphere",
+                        "box",
+                        "vertex_indices",
+                        "landmark_sphere",
+                        "screen_polygon"
+                      ],
+                      "type": "string"
+                    },
+                    "vertex_indices": {
+                      "items": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "maxItems": 250000,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "selectors": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "camera_name": {
+                        "type": "string"
+                      },
+                      "center": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "collection_name": {
+                        "type": "string"
+                      },
+                      "coordinate_space": {
+                        "enum": [
+                          "local",
+                          "world"
+                        ],
+                        "type": "string"
+                      },
+                      "feather": {
+                        "maximum": 10000.0,
+                        "minimum": 0.0,
+                        "type": "number"
+                      },
+                      "landmark_name": {
+                        "type": "string"
+                      },
+                      "maximum": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "minimum": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "origin": {
+                        "enum": [
+                          "top_left",
+                          "bottom_left"
+                        ],
+                        "type": "string"
+                      },
+                      "points": {
+                        "items": {
+                          "items": {
+                            "maximum": 1.0,
+                            "minimum": 0.0,
+                            "type": "number"
+                          },
+                          "maxItems": 2,
+                          "minItems": 2,
+                          "type": "array"
+                        },
+                        "maxItems": 256,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "radius": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-06,
+                        "type": "number"
+                      },
+                      "type": {
+                        "enum": [
+                          "sphere",
+                          "box",
+                          "vertex_indices",
+                          "landmark_sphere",
+                          "screen_polygon"
+                        ],
+                        "type": "string"
+                      },
+                      "vertex_indices": {
+                        "items": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "maxItems": 250000,
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 16,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "write_mode": {
+                  "enum": [
+                    "replace",
+                    "add",
+                    "subtract",
+                    "intersect",
+                    "delete"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "object_name",
+          "regions"
+        ],
+        "type": "object"
+      },
+      "name": "define_semantic_sculpt_regions"
+    },
+    {
+      "description": "Inspect persistent semantic sculpt regions on one mesh, including weighted vertex counts and optional bounded per-vertex weights. Does not mutate the scene.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_weights": {
+            "type": "boolean"
+          },
+          "max_weights": {
+            "maximum": 4096,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "object_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "object_name"
+        ],
+        "type": "object"
+      },
+      "name": "inspect_semantic_sculpt_regions"
+    },
+    {
+      "description": "Apply one deterministic weighted sculpt field to named semantic regions on a mesh. Supports translation, normal inflation, Laplacian smoothing, and plane flattening with optional mirrored deformation and bounded volume compensation. Applies immediately with mesh-snapshot preview rollback.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_all_vertices": {
+            "type": "boolean"
+          },
+          "arguments": {
+            "additionalProperties": false,
+            "properties": {
+              "amount": {
+                "maximum": 1000.0,
+                "minimum": -1000.0,
+                "type": "number"
+              },
+              "coordinate_space": {
+                "enum": [
+                  "local",
+                  "world"
+                ],
+                "type": "string"
+              },
+              "factor": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              "iterations": {
+                "maximum": 50,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "plane_normal": {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              },
+              "plane_point": {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              },
+              "preserve_volume": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              "symmetry_axis": {
+                "enum": [
+                  "NONE",
+                  "X",
+                  "Y",
+                  "Z"
+                ],
+                "type": "string"
+              },
+              "symmetry_tolerance": {
+                "maximum": 1.0,
+                "minimum": 1e-08,
+                "type": "number"
+              },
+              "vector": {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "operation": {
+            "enum": [
+              "translate",
+              "inflate",
+              "smooth",
+              "flatten"
+            ],
+            "type": "string"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          }
+        },
+        "required": [
+          "object_name",
+          "operation"
+        ],
+        "type": "object"
+      },
+      "name": "apply_semantic_sculpt"
+    },
+    {
+      "description": "Apply a topology-aware tangent relax, tangent pinch, or crease field to named semantic regions. Brush influence can diffuse through adjacency, protects measured high-curvature features, supports an explicit local or world-space center, symmetry, final displacement caps, and bounded volume compensation. Applies immediately with mesh-snapshot preview rollback.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_all_vertices": {
+            "type": "boolean"
+          },
+          "center": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "coordinate_space": {
+            "enum": [
+              "local",
+              "world"
+            ],
+            "type": "string"
+          },
+          "crease_depth": {
+            "maximum": 1000.0,
+            "minimum": -1000.0,
+            "type": "number"
+          },
+          "falloff_decay": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "falloff_steps": {
+            "maximum": 64,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "feature_preservation": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "iterations": {
+            "maximum": 50,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maximum_world_displacement": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "operation": {
+            "enum": [
+              "tangent_relax",
+              "pinch",
+              "crease"
+            ],
+            "type": "string"
+          },
+          "preserve_volume": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "strength": {
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "type": "number"
+          },
+          "symmetry_axis": {
+            "enum": [
+              "NONE",
+              "X",
+              "Y",
+              "Z"
+            ],
+            "type": "string"
+          },
+          "symmetry_tolerance": {
+            "maximum": 1.0,
+            "minimum": 1e-08,
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_name",
+          "operation"
+        ],
+        "type": "object"
+      },
+      "name": "apply_form_aware_sculpt"
+    },
+    {
+      "description": "Project one or more bounded source-to-target pulls from a calibrated reference camera onto named semantic mesh regions. Supports front-facing filtering, mirrored deformation, displacement caps, and volume compensation so an image-capable client can correct visible contours without choosing raw vertices. Applies immediately with preview rollback.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_all_vertices": {
+            "type": "boolean"
+          },
+          "camera_name": {
+            "type": "string"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "controls": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "radius": {
+                  "maximum": 2.0,
+                  "minimum": 0.001,
+                  "type": "number"
+                },
+                "source": {
+                  "items": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "strength": {
+                  "maximum": 4.0,
+                  "minimum": -4.0,
+                  "type": "number"
+                },
+                "target": {
+                  "items": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "source",
+                "target"
+              ],
+              "type": "object"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": "array"
+          },
+          "front_face_threshold": {
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "type": "number"
+          },
+          "front_faces_only": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maximum_world_displacement": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "origin": {
+            "enum": [
+              "top_left",
+              "bottom_left"
+            ],
+            "type": "string"
+          },
+          "preserve_volume": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "strength": {
+            "maximum": 4.0,
+            "minimum": -4.0,
+            "type": "number"
+          },
+          "symmetry_axis": {
+            "enum": [
+              "NONE",
+              "X",
+              "Y",
+              "Z"
+            ],
+            "type": "string"
+          },
+          "symmetry_tolerance": {
+            "maximum": 1.0,
+            "minimum": 1e-08,
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_name",
+          "controls"
+        ],
+        "type": "object"
+      },
+      "name": "apply_screen_space_sculpt"
+    },
+    {
       "description": "Add a Copy Location/Rotation/Scale/Transforms constraint from selected object(s) to a target. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
@@ -20459,6 +23527,185 @@
         "type": "object"
       },
       "name": "add_copy_transform_constraint"
+    },
+    {
+      "description": "Try up to seven bounded strengths for calibrated screen-space semantic sculpt controls, render and score every candidate against the reference silhouette and optional landmarks, retain only a measured improvement, and restore the original mesh otherwise. Publishes final comparison evidence and leaves an accepted change as a preview.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_all_vertices": {
+            "type": "boolean"
+          },
+          "camera_name": {
+            "type": "string"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "controls": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "radius": {
+                  "maximum": 2.0,
+                  "minimum": 0.001,
+                  "type": "number"
+                },
+                "source": {
+                  "items": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "strength": {
+                  "maximum": 4.0,
+                  "minimum": -4.0,
+                  "type": "number"
+                },
+                "target": {
+                  "items": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "source",
+                "target"
+              ],
+              "type": "object"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": "array"
+          },
+          "edge_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "front_face_threshold": {
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "type": "number"
+          },
+          "front_faces_only": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "landmark_targets": {
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 128,
+            "type": "array"
+          },
+          "landmark_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "mask_threshold": {
+            "maximum": 0.99,
+            "minimum": 0.01,
+            "type": "number"
+          },
+          "max_axis": {
+            "maximum": 1024,
+            "minimum": 64,
+            "type": "integer"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maximum_world_displacement": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "minimum_improvement": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "origin": {
+            "enum": [
+              "top_left",
+              "bottom_left"
+            ],
+            "type": "string"
+          },
+          "outline_name": {
+            "type": "string"
+          },
+          "preserve_volume": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "reference_mask_source": {
+            "enum": [
+              "auto",
+              "outline",
+              "alpha"
+            ],
+            "type": "string"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "strength_candidates": {
+            "items": {
+              "maximum": 4.0,
+              "minimum": -4.0,
+              "type": "number"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "type": "array"
+          },
+          "symmetry_axis": {
+            "enum": [
+              "NONE",
+              "X",
+              "Y",
+              "Z"
+            ],
+            "type": "string"
+          },
+          "symmetry_tolerance": {
+            "maximum": 1.0,
+            "minimum": 1e-08,
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_name",
+          "controls",
+          "strength_candidates"
+        ],
+        "type": "object"
+      },
+      "name": "optimize_screen_space_sculpt"
     },
     {
       "description": "Set render engine, resolution, FPS, frame range, transparency, look-dev quality preset, samples, denoise, and color management. Applies immediately with preview revert support.",
@@ -24166,9 +27413,19 @@
       "create_reference_modeling_guides",
       "create_reference_guides_from_annotations",
       "create_multiview_reference_guides",
+      "create_multiview_visual_hull",
+      "create_multiview_depth_surface",
+      "fit_surface_to_multiview_references",
       "inspect_reference_modeling_guides",
       "compare_model_to_reference",
       "create_reference_blockout",
+      "adaptive_remesh",
+      "define_semantic_sculpt_regions",
+      "inspect_semantic_sculpt_regions",
+      "apply_semantic_sculpt",
+      "apply_form_aware_sculpt",
+      "apply_screen_space_sculpt",
+      "optimize_screen_space_sculpt",
       "apply_procedural_array_stack",
       "boolean_op",
       "mirror_model",
@@ -24272,7 +27529,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "dcf1389bd921756f1691809898b9f288067c000ac11be64526fd90c2bd574d5f",
+  "registry_digest": "06a347717e093e42ed47669ccdf1d63cf84525edb91e070bcfa2a8cc6713f53e",
   "schema_version": 1,
   "specs": [
     {
@@ -34995,6 +38252,148 @@
     },
     {
       "contract": {
+        "description": "Create a bounded visual-hull mesh from calibrated multi-view silhouette guides",
+        "duration_hint": "Carves at most 512000 grid cells under a 100-million silhouette-edge workload cap and may take several seconds at high resolution.",
+        "long_running": true,
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Intersect two to six calibrated cyclic silhouettes from a multi-view reference collection into a bounded watertight voxel boundary mesh. Automatically chooses the largest outline per view or accepts explicit overrides, rejects parallel view sets, filters disconnected occupancy, and applies bounded surface relaxation. Use this as the deterministic primary volume before adaptive topology and semantic form repair.",
+      "exposure": "catalog",
+      "groups": [
+        "advanced_create",
+        "procedural_3d",
+        "model_quality",
+        "reference_modeling",
+        "visual_hull"
+      ],
+      "handler_key": "create_multiview_visual_hull",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "bounds_center": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "bounds_padding": {
+            "maximum": 0.5,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "bounds_size": {
+            "items": {
+              "minimum": 1e-06,
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "color": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          },
+          "component_mode": {
+            "enum": [
+              "largest",
+              "all"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "minimum_component_voxels": {
+            "maximum": 100000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "minimum_view_angle_degrees": {
+            "maximum": 90.0,
+            "minimum": 0.1,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "outline_overrides": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "outline_name": {
+                  "type": "string"
+                },
+                "view_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "view_name",
+                "outline_name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "type": "array"
+          },
+          "resolution": {
+            "maximum": 80,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "smooth_iterations": {
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "view_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "name": "create_multiview_visual_hull",
+      "order": 1074,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
         "description": "Create region-aware directional tapered fur guide curves with preview rollback",
         "mutates_scene": true,
         "requires_live_preview": true
@@ -35368,6 +38767,275 @@
     },
     {
       "contract": {
+        "description": "Create a depth-constrained visual-hull surface from calibrated local evidence",
+        "duration_hint": "Loads and downsamples at most twelve local depth sources, spatially indexes sparse samples, then carves at most 512000 grid cells under aggregate silhouette and depth workload caps.",
+        "has_side_effects": true,
+        "long_running": true,
+        "mutates_scene": true,
+        "path_policy": "Every optional depth image_path must be a local path explicitly supplied by the user, a file picker, a prior capture, or another trusted local source. Sparse depth samples are parsed in memory.",
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write",
+          "files:read"
+        ],
+        "requires_live_preview": true,
+        "requires_user_path": true,
+        "supports_headless": true
+      },
+      "description": "Fuse one or more explicitly calibrated front/back depth images or sparse signed depth samples with two to six cyclic multi-view silhouettes. Depth values are measured in world units from each view center along its forward vector. The bounded voxel intersection remains watertight, filters disconnected occupancy, requires every depth source to overlap, and creates a reversible preview without invoking a learned depth model.",
+      "exposure": "catalog",
+      "groups": [
+        "advanced_create",
+        "procedural_3d",
+        "model_quality",
+        "reference_modeling",
+        "visual_hull",
+        "depth_fusion"
+      ],
+      "handler_key": "create_multiview_depth_surface",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "bounds_center": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "bounds_padding": {
+            "maximum": 0.5,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "bounds_size": {
+            "items": {
+              "minimum": 1e-06,
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "color": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          },
+          "component_mode": {
+            "enum": [
+              "largest",
+              "all"
+            ],
+            "type": "string"
+          },
+          "depth_sources": {
+            "items": {
+              "additionalProperties": false,
+              "oneOf": [
+                {
+                  "required": [
+                    "image_path",
+                    "near_depth",
+                    "far_depth"
+                  ]
+                },
+                {
+                  "required": [
+                    "samples"
+                  ]
+                }
+              ],
+              "properties": {
+                "alpha_threshold": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "channel": {
+                  "enum": [
+                    "luminance",
+                    "red",
+                    "green",
+                    "blue",
+                    "alpha"
+                  ],
+                  "type": "string"
+                },
+                "far_depth": {
+                  "type": "number"
+                },
+                "image_path": {
+                  "description": "Explicit local grayscale depth image path supplied by the user or another trusted source.",
+                  "type": "string"
+                },
+                "invalid_above": {
+                  "type": "number"
+                },
+                "invalid_below": {
+                  "type": "number"
+                },
+                "invert": {
+                  "type": "boolean"
+                },
+                "mode": {
+                  "enum": [
+                    "front",
+                    "back"
+                  ],
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "near_depth": {
+                  "type": "number"
+                },
+                "samples": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "depth": {
+                        "description": "Signed world distance from the calibrated view center along its forward vector.",
+                        "type": "number"
+                      },
+                      "point": {
+                        "items": {
+                          "maximum": 1.0,
+                          "minimum": 0.0,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "radius": {
+                        "exclusiveMinimum": 0.0,
+                        "maximum": 2.0,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "point",
+                      "depth"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 4096,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "tolerance": {
+                  "maximum": 1000.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "view_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "view_name",
+                "mode"
+              ],
+              "type": "object"
+            },
+            "maxItems": 12,
+            "type": "array"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_depth_axis": {
+            "maximum": 1024,
+            "minimum": 16,
+            "type": "integer"
+          },
+          "minimum_component_voxels": {
+            "maximum": 100000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "minimum_view_angle_degrees": {
+            "maximum": 90.0,
+            "minimum": 0.1,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "outline_overrides": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "outline_name": {
+                  "type": "string"
+                },
+                "view_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "view_name",
+                "outline_name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "type": "array"
+          },
+          "resolution": {
+            "maximum": 80,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "smooth_iterations": {
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "view_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 2,
+            "type": "array"
+          }
+        },
+        "required": [
+          "depth_sources"
+        ],
+        "type": "object"
+      },
+      "name": "create_multiview_depth_surface",
+      "order": 1076,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
         "description": "Render and compare a model silhouette against calibrated reference guides, then publish durable redline evidence",
         "duration_hint": "One bounded still render plus image-space comparison, normally a few seconds at 512px but dependent on scene/render complexity.",
         "has_side_effects": true,
@@ -35476,6 +39144,342 @@
       },
       "name": "compare_model_to_reference",
       "order": 1077,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
+        "description": "Measure and fit one mesh jointly against calibrated multi-view reference evidence",
+        "duration_hint": "Runs at most twelve iterations with five bounded candidates per iteration across at most six views under an aggregate depth-work cap. Optional evidence adds one before and one after render per view.",
+        "has_side_effects": true,
+        "long_running": true,
+        "mutates_scene": true,
+        "path_policy": "Every optional depth image_path must be a local path explicitly supplied by the user, a file picker, a prior capture, or another trusted local source. Evidence renders are written only when capture_evidence is true.",
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write",
+          "files:read",
+          "files:write"
+        ],
+        "requires_live_preview": true,
+        "requires_user_path": true,
+        "supports_headless": true,
+        "timeout_recovery": {
+          "evidence_resource": "blender://inspection-renders/latest/metadata",
+          "poll_after_seconds": 5,
+          "recoverable": true,
+          "status_tool": "blender_bridge_status"
+        }
+      },
+      "description": "Automatically derive silhouette, optional calibrated depth, and reconstructed-landmark corrections from every selected reference view, diffuse them through a feature-aware Laplacian field, and try bounded coarse-to-fine step sizes. A candidate is accepted only when the aggregate objective improves without exceeding the per-view regression tolerance; otherwise the mesh is restored. Every depth source must overlap eligible surface vertices, and shape-key meshes are rejected. Optional rendered redlines provide before/after verification.",
+      "exposure": "catalog",
+      "groups": [
+        "refinement",
+        "model_quality",
+        "reference_modeling",
+        "reference_fitting",
+        "depth_fusion"
+      ],
+      "handler_key": "fit_surface_to_multiview_references",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "capture_evidence": {
+            "type": "boolean"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "depth_sources": {
+            "items": {
+              "additionalProperties": false,
+              "oneOf": [
+                {
+                  "required": [
+                    "image_path",
+                    "near_depth",
+                    "far_depth"
+                  ]
+                },
+                {
+                  "required": [
+                    "samples"
+                  ]
+                }
+              ],
+              "properties": {
+                "alpha_threshold": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "channel": {
+                  "enum": [
+                    "luminance",
+                    "red",
+                    "green",
+                    "blue",
+                    "alpha"
+                  ],
+                  "type": "string"
+                },
+                "far_depth": {
+                  "type": "number"
+                },
+                "image_path": {
+                  "description": "Explicit local grayscale depth image path supplied by the user or another trusted source.",
+                  "type": "string"
+                },
+                "invalid_above": {
+                  "type": "number"
+                },
+                "invalid_below": {
+                  "type": "number"
+                },
+                "invert": {
+                  "type": "boolean"
+                },
+                "mode": {
+                  "enum": [
+                    "front",
+                    "back"
+                  ],
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "near_depth": {
+                  "type": "number"
+                },
+                "samples": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "depth": {
+                        "description": "Signed world distance from the calibrated view center along its forward vector.",
+                        "type": "number"
+                      },
+                      "point": {
+                        "items": {
+                          "maximum": 1.0,
+                          "minimum": 0.0,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "radius": {
+                        "exclusiveMinimum": 0.0,
+                        "maximum": 2.0,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "point",
+                      "depth"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 4096,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "tolerance": {
+                  "maximum": 1000.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "view_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "view_name",
+                "mode"
+              ],
+              "type": "object"
+            },
+            "maxItems": 12,
+            "type": "array"
+          },
+          "depth_weight": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "evidence_mask_threshold": {
+            "maximum": 0.99,
+            "minimum": 0.01,
+            "type": "number"
+          },
+          "evidence_max_axis": {
+            "maximum": 1024,
+            "minimum": 64,
+            "type": "integer"
+          },
+          "evidence_regression_tolerance": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "feature_preservation": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "iterations": {
+            "maximum": 12,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "landmark_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 128,
+            "type": "array"
+          },
+          "landmark_weight": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "max_depth_axis": {
+            "maximum": 1024,
+            "minimum": 16,
+            "type": "integer"
+          },
+          "max_vertices": {
+            "maximum": 100000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maximum_step": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "maximum_total_displacement": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "minimum_improvement": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "outline_overrides": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "outline_name": {
+                  "type": "string"
+                },
+                "view_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "view_name",
+                "outline_name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "type": "array"
+          },
+          "per_view_regression_tolerance": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "pinned_vertex_indices": {
+            "items": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "maxItems": 100000,
+            "type": "array"
+          },
+          "preserve_volume": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "propagation_decay": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "propagation_steps": {
+            "maximum": 12,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "regularization": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "silhouette_weight": {
+            "maximum": 100.0,
+            "minimum": 1e-06,
+            "type": "number"
+          },
+          "step_candidates": {
+            "items": {
+              "exclusiveMinimum": 0.0,
+              "maximum": 2.0,
+              "type": "number"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "type": "array"
+          },
+          "view_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 2,
+            "type": "array"
+          },
+          "worst_view_weight": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_name"
+        ],
+        "type": "object"
+      },
+      "name": "fit_surface_to_multiview_references",
+      "order": 1079,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -35748,6 +39752,916 @@
     },
     {
       "contract": {
+        "description": "Adaptively refine mesh topology with mesh-snapshot rollback",
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Adaptively refine sculpt topology by subdividing edges that exceed a bounded local target derived from edge length, semantic-region weight, and face curvature. Retains interpolated semantic point attributes, optionally relaxes spacing and projects vertices back to the source surface, and enforces input, per-pass, and result vertex limits. This is a form-preserving refinement pass; it does not decimate or promise production retopology.",
+      "exposure": "catalog",
+      "groups": [
+        "refinement",
+        "model_quality",
+        "reference_modeling",
+        "adaptive_topology"
+      ],
+      "handler_key": "adaptive_remesh",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "curvature_detail": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_result_vertices": {
+            "maximum": 500000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "passes": {
+            "maximum": 6,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "project_to_source": {
+            "type": "boolean"
+          },
+          "region_detail": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "relax_factor": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "relax_iterations": {
+            "maximum": 20,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "target_edge_length": {
+            "maximum": 1000.0,
+            "minimum": 1e-06,
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_name",
+          "target_edge_length"
+        ],
+        "type": "object"
+      },
+      "name": "adaptive_remesh",
+      "order": 1081,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
+        "description": "Create, update, or delete semantic mesh regions with mesh-snapshot rollback",
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Create, update, or delete persistent weighted semantic regions on one mesh from local/world spheres, boxes, explicit vertex indices, calibrated screen polygons, or reference-landmark spheres. Regions are stored as point attributes and become stable targets for bounded sculpt operations. Applies immediately with preview revert support.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "reference_modeling",
+        "semantic_sculpt"
+      ],
+      "handler_key": "define_semantic_sculpt_regions",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "regions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "maxLength": 120,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "selector": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "camera_name": {
+                      "type": "string"
+                    },
+                    "center": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "collection_name": {
+                      "type": "string"
+                    },
+                    "coordinate_space": {
+                      "enum": [
+                        "local",
+                        "world"
+                      ],
+                      "type": "string"
+                    },
+                    "feather": {
+                      "maximum": 10000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "landmark_name": {
+                      "type": "string"
+                    },
+                    "maximum": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "minimum": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "origin": {
+                      "enum": [
+                        "top_left",
+                        "bottom_left"
+                      ],
+                      "type": "string"
+                    },
+                    "points": {
+                      "items": {
+                        "items": {
+                          "maximum": 1.0,
+                          "minimum": 0.0,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "maxItems": 256,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-06,
+                      "type": "number"
+                    },
+                    "type": {
+                      "enum": [
+                        "sphere",
+                        "box",
+                        "vertex_indices",
+                        "landmark_sphere",
+                        "screen_polygon"
+                      ],
+                      "type": "string"
+                    },
+                    "vertex_indices": {
+                      "items": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "maxItems": 250000,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "selectors": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "camera_name": {
+                        "type": "string"
+                      },
+                      "center": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "collection_name": {
+                        "type": "string"
+                      },
+                      "coordinate_space": {
+                        "enum": [
+                          "local",
+                          "world"
+                        ],
+                        "type": "string"
+                      },
+                      "feather": {
+                        "maximum": 10000.0,
+                        "minimum": 0.0,
+                        "type": "number"
+                      },
+                      "landmark_name": {
+                        "type": "string"
+                      },
+                      "maximum": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "minimum": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "origin": {
+                        "enum": [
+                          "top_left",
+                          "bottom_left"
+                        ],
+                        "type": "string"
+                      },
+                      "points": {
+                        "items": {
+                          "items": {
+                            "maximum": 1.0,
+                            "minimum": 0.0,
+                            "type": "number"
+                          },
+                          "maxItems": 2,
+                          "minItems": 2,
+                          "type": "array"
+                        },
+                        "maxItems": 256,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "radius": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-06,
+                        "type": "number"
+                      },
+                      "type": {
+                        "enum": [
+                          "sphere",
+                          "box",
+                          "vertex_indices",
+                          "landmark_sphere",
+                          "screen_polygon"
+                        ],
+                        "type": "string"
+                      },
+                      "vertex_indices": {
+                        "items": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "maxItems": 250000,
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 16,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "write_mode": {
+                  "enum": [
+                    "replace",
+                    "add",
+                    "subtract",
+                    "intersect",
+                    "delete"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "object_name",
+          "regions"
+        ],
+        "type": "object"
+      },
+      "name": "define_semantic_sculpt_regions",
+      "order": 1082,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
+        "description": "Inspect persistent semantic sculpt region metadata and weights",
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read"
+        ],
+        "supports_headless": true
+      },
+      "description": "Inspect persistent semantic sculpt regions on one mesh, including weighted vertex counts and optional bounded per-vertex weights. Does not mutate the scene.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "reference_modeling",
+        "semantic_sculpt"
+      ],
+      "handler_key": "inspect_semantic_sculpt_regions",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_weights": {
+            "type": "boolean"
+          },
+          "max_weights": {
+            "maximum": 4096,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "object_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "object_name"
+        ],
+        "type": "object"
+      },
+      "name": "inspect_semantic_sculpt_regions",
+      "order": 1084,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
+        "description": "Apply deterministic weighted mesh deformation with preview rollback",
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Apply one deterministic weighted sculpt field to named semantic regions on a mesh. Supports translation, normal inflation, Laplacian smoothing, and plane flattening with optional mirrored deformation and bounded volume compensation. Applies immediately with mesh-snapshot preview rollback.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "reference_modeling",
+        "semantic_sculpt"
+      ],
+      "handler_key": "apply_semantic_sculpt",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_all_vertices": {
+            "type": "boolean"
+          },
+          "arguments": {
+            "additionalProperties": false,
+            "properties": {
+              "amount": {
+                "maximum": 1000.0,
+                "minimum": -1000.0,
+                "type": "number"
+              },
+              "coordinate_space": {
+                "enum": [
+                  "local",
+                  "world"
+                ],
+                "type": "string"
+              },
+              "factor": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              "iterations": {
+                "maximum": 50,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "plane_normal": {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              },
+              "plane_point": {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              },
+              "preserve_volume": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              "symmetry_axis": {
+                "enum": [
+                  "NONE",
+                  "X",
+                  "Y",
+                  "Z"
+                ],
+                "type": "string"
+              },
+              "symmetry_tolerance": {
+                "maximum": 1.0,
+                "minimum": 1e-08,
+                "type": "number"
+              },
+              "vector": {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 3,
+                "minItems": 3,
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "operation": {
+            "enum": [
+              "translate",
+              "inflate",
+              "smooth",
+              "flatten"
+            ],
+            "type": "string"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          }
+        },
+        "required": [
+          "object_name",
+          "operation"
+        ],
+        "type": "object"
+      },
+      "name": "apply_semantic_sculpt",
+      "order": 1086,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
+        "description": "Apply topology-aware semantic brush fields with preview rollback",
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Apply a topology-aware tangent relax, tangent pinch, or crease field to named semantic regions. Brush influence can diffuse through adjacency, protects measured high-curvature features, supports an explicit local or world-space center, symmetry, final displacement caps, and bounded volume compensation. Applies immediately with mesh-snapshot preview rollback.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "reference_modeling",
+        "semantic_sculpt"
+      ],
+      "handler_key": "apply_form_aware_sculpt",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_all_vertices": {
+            "type": "boolean"
+          },
+          "center": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "coordinate_space": {
+            "enum": [
+              "local",
+              "world"
+            ],
+            "type": "string"
+          },
+          "crease_depth": {
+            "maximum": 1000.0,
+            "minimum": -1000.0,
+            "type": "number"
+          },
+          "falloff_decay": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "falloff_steps": {
+            "maximum": 64,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "feature_preservation": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "iterations": {
+            "maximum": 50,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maximum_world_displacement": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "operation": {
+            "enum": [
+              "tangent_relax",
+              "pinch",
+              "crease"
+            ],
+            "type": "string"
+          },
+          "preserve_volume": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "strength": {
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "type": "number"
+          },
+          "symmetry_axis": {
+            "enum": [
+              "NONE",
+              "X",
+              "Y",
+              "Z"
+            ],
+            "type": "string"
+          },
+          "symmetry_tolerance": {
+            "maximum": 1.0,
+            "minimum": 1e-08,
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_name",
+          "operation"
+        ],
+        "type": "object"
+      },
+      "name": "apply_form_aware_sculpt",
+      "order": 1087,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
+        "description": "Apply calibrated screen-space mesh deformation with preview rollback",
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Project one or more bounded source-to-target pulls from a calibrated reference camera onto named semantic mesh regions. Supports front-facing filtering, mirrored deformation, displacement caps, and volume compensation so an image-capable client can correct visible contours without choosing raw vertices. Applies immediately with preview rollback.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "reference_modeling",
+        "semantic_sculpt"
+      ],
+      "handler_key": "apply_screen_space_sculpt",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_all_vertices": {
+            "type": "boolean"
+          },
+          "camera_name": {
+            "type": "string"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "controls": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "radius": {
+                  "maximum": 2.0,
+                  "minimum": 0.001,
+                  "type": "number"
+                },
+                "source": {
+                  "items": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "strength": {
+                  "maximum": 4.0,
+                  "minimum": -4.0,
+                  "type": "number"
+                },
+                "target": {
+                  "items": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "source",
+                "target"
+              ],
+              "type": "object"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": "array"
+          },
+          "front_face_threshold": {
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "type": "number"
+          },
+          "front_faces_only": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maximum_world_displacement": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "origin": {
+            "enum": [
+              "top_left",
+              "bottom_left"
+            ],
+            "type": "string"
+          },
+          "preserve_volume": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "strength": {
+            "maximum": 4.0,
+            "minimum": -4.0,
+            "type": "number"
+          },
+          "symmetry_axis": {
+            "enum": [
+              "NONE",
+              "X",
+              "Y",
+              "Z"
+            ],
+            "type": "string"
+          },
+          "symmetry_tolerance": {
+            "maximum": 1.0,
+            "minimum": 1e-08,
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_name",
+          "controls"
+        ],
+        "type": "object"
+      },
+      "name": "apply_screen_space_sculpt",
+      "order": 1088,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
         "description": "Add a copy transform-style constraint to selected objects",
         "mutates_scene": true,
         "requires_live_preview": true
@@ -35808,6 +40722,230 @@
         "type": "object"
       },
       "owner": "rigging_simulation"
+    },
+    {
+      "contract": {
+        "description": "Measure bounded semantic sculpt candidates and retain only a reference-score improvement",
+        "duration_hint": "One baseline render, up to seven candidate renders, and one final verification render.",
+        "has_side_effects": true,
+        "long_running": true,
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write",
+          "files:read",
+          "files:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true,
+        "timeout_recovery": {
+          "evidence_resource": "blender://inspection-renders/latest/metadata",
+          "poll_after_seconds": 5,
+          "recoverable": true,
+          "status_tool": "blender_bridge_status"
+        }
+      },
+      "description": "Try up to seven bounded strengths for calibrated screen-space semantic sculpt controls, render and score every candidate against the reference silhouette and optional landmarks, retain only a measured improvement, and restore the original mesh otherwise. Publishes final comparison evidence and leaves an accepted change as a preview.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "reference_modeling",
+        "semantic_sculpt"
+      ],
+      "handler_key": "optimize_screen_space_sculpt",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_all_vertices": {
+            "type": "boolean"
+          },
+          "camera_name": {
+            "type": "string"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "controls": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "radius": {
+                  "maximum": 2.0,
+                  "minimum": 0.001,
+                  "type": "number"
+                },
+                "source": {
+                  "items": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "strength": {
+                  "maximum": 4.0,
+                  "minimum": -4.0,
+                  "type": "number"
+                },
+                "target": {
+                  "items": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "source",
+                "target"
+              ],
+              "type": "object"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": "array"
+          },
+          "edge_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "front_face_threshold": {
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "type": "number"
+          },
+          "front_faces_only": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "landmark_targets": {
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 128,
+            "type": "array"
+          },
+          "landmark_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "mask_threshold": {
+            "maximum": 0.99,
+            "minimum": 0.01,
+            "type": "number"
+          },
+          "max_axis": {
+            "maximum": 1024,
+            "minimum": 64,
+            "type": "integer"
+          },
+          "max_vertices": {
+            "maximum": 250000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maximum_world_displacement": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "minimum_improvement": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "origin": {
+            "enum": [
+              "top_left",
+              "bottom_left"
+            ],
+            "type": "string"
+          },
+          "outline_name": {
+            "type": "string"
+          },
+          "preserve_volume": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "reference_mask_source": {
+            "enum": [
+              "auto",
+              "outline",
+              "alpha"
+            ],
+            "type": "string"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "strength_candidates": {
+            "items": {
+              "maximum": 4.0,
+              "minimum": -4.0,
+              "type": "number"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "type": "array"
+          },
+          "symmetry_axis": {
+            "enum": [
+              "NONE",
+              "X",
+              "Y",
+              "Z"
+            ],
+            "type": "string"
+          },
+          "symmetry_tolerance": {
+            "maximum": 1.0,
+            "minimum": 1e-08,
+            "type": "number"
+          }
+        },
+        "required": [
+          "object_name",
+          "controls",
+          "strength_candidates"
+        ],
+        "type": "object"
+      },
+      "name": "optimize_screen_space_sculpt",
+      "order": 1090,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
     },
     {
       "contract": {
@@ -43835,5 +48973,5 @@
       "owner": "scripts_transactions"
     }
   ],
-  "tool_count": 209
+  "tool_count": 219
 }

@@ -4,7 +4,20 @@ from __future__ import annotations
 
 import bpy
 
-from . import helper_routing, presentation_support, script_execution, script_runner
+from . import (
+    helper_routing,
+    presentation_support,
+    script_execution,
+    script_runner,
+    tool_registry,
+)
+
+
+_SEMANTIC_SCULPT_TOOL_NAMES = [
+    spec.name
+    for spec in tool_registry.REGISTRY.specs()
+    if "semantic_sculpt" in spec.groups
+]
 
 
 ADVANCED_WORKFLOW_DOMAINS = {
@@ -15,17 +28,31 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "list_scene_objects",
             "get_blend_file_diagnostics",
             "create_reference_guides_from_annotations",
+            "create_multiview_reference_guides",
+            "create_multiview_visual_hull",
+            "create_multiview_depth_surface",
+            "fit_surface_to_multiview_references",
             "create_reference_modeling_guides",
             "inspect_reference_modeling_guides",
-            "compare_model_to_reference",
             "create_reference_blockout",
+            "adaptive_remesh",
+            *_SEMANTIC_SCULPT_TOOL_NAMES,
+            "compare_model_to_reference",
             "inspect_modeling_quality",
             "plan_advanced_scene_workflow",
             "capture_viewport",
             "capture_object_inspection_renders",
             "get_visual_evidence_resources",
         ],
-        "script_boundary": "Use an LLM-authored reference brief and model-quality rubric before building. Under active trust, prefer cohesive scripts for authored construction and broad repair; keep inspection, evidence, and preview decisions on bounded helpers.",
+        "script_boundary": (
+            "Use an LLM-authored reference brief and model-quality rubric before "
+            "building. For calibrated multi-view evidence, construct a visual hull or "
+            "depth-constrained surface, run joint measured fitting, and adapt topology "
+            "only where needed before persistent semantic regions and measured "
+            "form-aware or screen-space repairs. Under active trust, cohesive "
+            "scripts remain appropriate for bespoke construction that the bounded "
+            "fields cannot express."
+        ),
     },
     "2d_storyboard": {
         "keywords": {"2d", "two dimensional", "storyboard", "animatic", "storyboard panel", "storyboard panels", "2d panel", "2d panels", "grease pencil", "grease-pencil", "cutout", "cut-out", "motion graphic"},
@@ -567,6 +594,159 @@ def plan_model_quality_workflow(
         },
         gateway_ready=True,
     )
+    semantic_region_definition_call = _planned_tool_call(
+        "define_semantic_sculpt_regions",
+        {},
+        reason=(
+            "Convert the visual critique into persistent named mesh regions before "
+            "applying a bounded repair."
+        ),
+        mutates_scene=True,
+        requires_live_preview=True,
+        deferred=True,
+        input_handoff={
+            "arguments_template": {
+                "object_name": "<one_resolved_target_object>",
+                "regions": "<image_derived_region_definitions>",
+            },
+            "resolve_from": [
+                "refresh_targets.target_resolution",
+                "calibrated reference guides",
+                "the highest-impact form_evidence_gate critique",
+            ],
+            "client_must_replace_placeholders": True,
+            "block_if_empty": True,
+        },
+        gateway_ready=True,
+    )
+    semantic_region_definition_call["conditional"] = (
+        "invoke only when form evidence identifies a localized shape repair"
+    )
+    semantic_region_inspection_call = _planned_tool_call(
+        "inspect_semantic_sculpt_regions",
+        {},
+        reason="Verify the named region and its weighted coverage before deformation.",
+        deferred=True,
+        depends_on="define_semantic_sculpt_regions",
+        input_handoff={
+            "arguments_template": {
+                "object_name": "<one_resolved_target_object>",
+                "include_weights": False,
+            },
+            "resolve_from": "define_semantic_sculpt_regions result",
+            "client_must_replace_placeholders": True,
+            "block_if_empty": True,
+        },
+        gateway_ready=True,
+    )
+    semantic_region_inspection_call["conditional"] = (
+        "invoke after defining or updating a semantic region"
+    )
+    semantic_repair_choices = [
+        _planned_tool_call(
+            "apply_semantic_sculpt",
+            {},
+            reason="Apply a measured 3D translate, inflate, smooth, or flatten field.",
+            mutates_scene=True,
+            requires_live_preview=True,
+            deferred=True,
+            input_handoff={
+                "arguments_template": {
+                    "object_name": "<one_resolved_target_object>",
+                    "region_names": "<verified_semantic_region_names>",
+                    "operation": "<translate_inflate_smooth_or_flatten>",
+                    "arguments": "<reference_derived_operation_arguments>",
+                },
+                "resolve_from": [
+                    "inspect_semantic_sculpt_regions result",
+                    "the measured 3D repair target",
+                ],
+                "client_must_replace_placeholders": True,
+                "block_if_empty": True,
+            },
+            gateway_ready=True,
+        ),
+        _planned_tool_call(
+            "apply_form_aware_sculpt",
+            {},
+            reason=(
+                "Apply a topology-aware tangent relax, pinch, or crease while "
+                "protecting measured high-curvature form."
+            ),
+            mutates_scene=True,
+            requires_live_preview=True,
+            deferred=True,
+            input_handoff={
+                "arguments_template": {
+                    "object_name": "<one_resolved_target_object>",
+                    "region_names": "<verified_semantic_region_names>",
+                    "operation": "<tangent_relax_pinch_or_crease>",
+                    "strength": "<bounded_reference_derived_strength>",
+                },
+                "resolve_from": [
+                    "inspect_semantic_sculpt_regions result",
+                    "the measured local form or feature error",
+                ],
+                "client_must_replace_placeholders": True,
+                "block_if_empty": True,
+            },
+            gateway_ready=True,
+        ),
+        _planned_tool_call(
+            "apply_screen_space_sculpt",
+            {},
+            reason="Apply one calibrated image-space contour correction in preview.",
+            mutates_scene=True,
+            requires_live_preview=True,
+            deferred=True,
+            input_handoff={
+                "arguments_template": {
+                    "object_name": "<one_resolved_target_object>",
+                    "collection_name": "<calibrated_guide_collection>",
+                    "camera_name": "<calibrated_reference_camera>",
+                    "region_names": "<verified_semantic_region_names>",
+                    "controls": "<source_target_screen_controls>",
+                },
+                "resolve_from": [
+                    "inspect_semantic_sculpt_regions result",
+                    "calibrated reference guides",
+                    "the measured contour error",
+                ],
+                "client_must_replace_placeholders": True,
+                "block_if_empty": True,
+            },
+            gateway_ready=True,
+        ),
+        _planned_tool_call(
+            "optimize_screen_space_sculpt",
+            {},
+            reason=(
+                "Measure bounded contour strengths and retain only a reference-score "
+                "improvement."
+            ),
+            mutates_scene=True,
+            requires_live_preview=True,
+            deferred=True,
+            input_handoff={
+                "arguments_template": {
+                    "object_name": "<one_resolved_target_object>",
+                    "collection_name": "<calibrated_guide_collection>",
+                    "camera_name": "<calibrated_reference_camera>",
+                    "region_names": "<verified_semantic_region_names>",
+                    "controls": "<source_target_screen_controls>",
+                    "strength_candidates": [0.5, 1.0, 1.5],
+                },
+                "resolve_from": [
+                    "inspect_semantic_sculpt_regions result",
+                    "calibrated reference guides",
+                    "compare_model_to_reference redline and metrics",
+                ],
+                "client_must_replace_placeholders": True,
+                "block_if_empty": True,
+            },
+            gateway_ready=True,
+        ),
+    ]
     phases = [
         {
             "name": "execution_trace",
@@ -599,6 +779,25 @@ def plan_model_quality_workflow(
             "blocked_until": None if brief_ready else "reference brief is complete",
             "execution_strategy": construction_strategy,
             "tool_calls": construction_calls,
+            "calibrated_multiview_path": {
+                "selection_rule": (
+                    "Use when two or more non-parallel annotated silhouettes are available; "
+                    "it supersedes a guessed single-view depth blockout."
+                ),
+                "sequence": [
+                    "create_multiview_reference_guides",
+                    "create_multiview_depth_surface when calibrated depth evidence exists; otherwise create_multiview_visual_hull",
+                    "fit_surface_to_multiview_references",
+                    "adaptive_remesh",
+                    "define_semantic_sculpt_regions",
+                    "apply_form_aware_sculpt or a calibrated screen-space sculpt",
+                ],
+                "preview_each_mutation": True,
+                "fit_acceptance": (
+                    "retain only aggregate objective improvements that stay within the configured per-view regression tolerance"
+                ),
+                "inspect_region_coverage_after_topology": True,
+            },
             "script_handoff": {
                 "status": (
                     "preferred_pending_client_authored_code"
@@ -686,6 +885,27 @@ def plan_model_quality_workflow(
                 "max_repair_passes": 3,
                 "recapture_after_each_pass": True,
             },
+        },
+        {
+            "name": "semantic_form_repair",
+            "blocked_until": (
+                "form_evidence_gate identifies a below-floor localized shape error, "
+                "resolved targets exist, and calibrated guide inputs are available"
+            ),
+            "tool_calls": [
+                semantic_region_definition_call,
+                semantic_region_inspection_call,
+            ],
+            "choose_one_repair_call": semantic_repair_choices,
+            "repair_order": [
+                "define or update the smallest meaningful named region",
+                "inspect weighted coverage",
+                "use joint multi-view fitting for broad cross-view error; otherwise choose exactly one localized 3D field, form-aware brush, direct screen pull, or measured optimizer call",
+                "recapture the same evidence and rescore before another repair",
+            ],
+            "topology_warning": (
+                "adaptive_remesh retains interpolated semantic attributes; inspect or redefine regions after any other topology-changing operation."
+            ),
         },
         {
             "name": "surface_and_detail_pass",
@@ -828,6 +1048,17 @@ def plan_model_quality_workflow(
             "Use the actual reference image and captured evidence to score every applicable criterion; the planner does not infer visual anatomy or surface treatment.",
             "Do not begin surface detail until every applicable form_evidence_gate score meets the quality floor.",
             "Repair scores below the quality floor and recapture evidence, up to the bounded repair-pass limit.",
+            (
+                "For localized form errors, define and inspect semantic regions, then choose exactly one of "
+                "apply_semantic_sculpt, apply_form_aware_sculpt, apply_screen_space_sculpt, or optimize_screen_space_sculpt."
+            ),
+            (
+                "For broad silhouette or calibrated depth disagreement across views, use fit_surface_to_multiview_references before localized semantic repair."
+            ),
+            (
+                "Prefer optimize_screen_space_sculpt when calibrated silhouette evidence "
+                "is available; it restores the mesh when no candidate improves the score."
+            ),
             (
                 "Advance the durable model-quality review through start, blind packet, evaluation, repair record, "
                 "and re-evaluation until it reports ready_for_user_review or blocked_quality_floor."

@@ -11,7 +11,7 @@ Apply the five-tool Blender Bridge contract. If it is not already active, read [
 
 For image-to-form work, create measurable guide scaffolding before sculpting. Read [references/guide-first-workflow.md](references/guide-first-workflow.md) whenever the task includes an image reference, clicked/annotated landmarks, organic sculpting, or fur/hair/groom direction.
 
-When front, side, top, or other calibrated reference views are available, reconstruct shared landmark names with `create_multiview_reference_guides` before authored modeling. Preserve per-view collections and cameras, inspect residuals and ray angles, and repair annotations or calibration when reconstruction confidence is low.
+When front, side, top, or other calibrated reference views are available, reconstruct shared landmark names with `create_multiview_reference_guides`. Preserve per-view collections and cameras, inspect residuals and ray angles, and repair annotations or calibration when reconstruction confidence is low. When at least two non-parallel views also contain closed silhouettes, use `create_multiview_depth_surface` if explicitly calibrated depth exists and `create_multiview_visual_hull` otherwise. Run `fit_surface_to_multiview_references` before adaptive remeshing or localized repair so broad silhouette, depth, and landmark disagreement is solved jointly. Do not replace this evidence-backed path with guessed hidden depth.
 
 ## Non-Negotiable Contract
 
@@ -37,7 +37,7 @@ Passing the quality gates means `ready_for_user_review`, not committed or saved.
 4. Create or inspect reference guide scaffolding when the source is visual and guide inputs are available.
 5. Fetch and invoke `plan_model_quality_workflow`.
 6. Follow its `next_tool_calls` and resolve deferred calls only when their blockers clear.
-7. Build primary masses and silhouette before landmarks or surface detail.
+7. Build primary masses and silhouette before surface detail; prefer calibrated depth fusion when measured depth exists and a visual hull otherwise, then run joint multi-view fitting.
 8. Refresh scene objects and resolve the union of existing targets, construction-returned names, and new scene-diff objects.
 9. Pass resolved names into every later inspection, surface, and evidence call.
 10. Start durable scoring only after current target names and matched evidence URIs are available.
@@ -53,6 +53,8 @@ Do not invent focal lengths, numeric tolerances, material parameters, anatomy, d
 Use `create_reference_guides_from_annotations` when a reference image and landmark/outline JSON are available; let it normalize the annotation coordinate system, create the image plane and orthographic comparison camera, and persist calibration metadata. Use `create_reference_modeling_guides` only for already-normalized or manually assembled guide inputs. Use `inspect_reference_modeling_guides` before authored construction or repair scripts so scripts receive exact guide names, world points, calibration, and the saved `reference_brief` seed instead of re-parsing the scene.
 
 When bounded helpers are explicitly requested or trusted scripting is unavailable, use `create_reference_blockout` for primary camera-oriented masses. Derive every mass from named guide ellipses or the primary outline fallback, use per-mass settings only when the reference supports them, and keep the result in preview. The helper is a blockout scaffold; authored scripts still own subject-specific secondary forms and transitions.
+
+Use `fit_surface_to_multiview_references` for broad errors visible across calibrated views. For localized form repair, use `define_semantic_sculpt_regions` to convert image-space polygons, reference landmarks, spatial bounds, or explicit indices into persistent named mesh regions. Inspect coverage with `inspect_semantic_sculpt_regions`, then choose exactly one repair path: `apply_semantic_sculpt` for a measured 3D field, `apply_form_aware_sculpt` for tangent relax, pinch, or crease, `apply_screen_space_sculpt` for a known calibrated contour pull, or `optimize_screen_space_sculpt` to retain only a measured silhouette/landmark improvement. Recapture the same evidence before another repair. `adaptive_remesh` retains interpolated semantic attributes, but inspect coverage after it; inspect or redefine regions after other topology-changing operations. Delete obsolete regions with `write_mode: delete` so persistent attributes do not accumulate.
 
 After each broad form or repair pass, invoke `compare_model_to_reference` through the calibrated guide camera. Use its redline image, silhouette overlap, edge-distance metrics, named error regions, and optional landmark vectors to choose the next repair. At declared blockout, refined, and review checkpoints, invoke `evaluate_reference_model_benchmark` with the corresponding versioned profile. Custom threshold overrides are diagnostic and must not be used to certify a benchmark run. The durable blind review remains the final completion gate.
 

@@ -2,13 +2,13 @@
 
 This guide is the runbook for asking Codex to test Blender Agent Bridge end to end. It is designed to cover every feature family, every bridge path, and every tool surface, then drive failures into focused fixes and reruns.
 
-Current project snapshot, checked on 2026-07-23:
+Current project snapshot, checked on 2026-08-02:
 
 - Extension: `Blender Agent Bridge`, manifest id `claude_blender`; version comes from `addon/claude_blender/blender_manifest.toml` and is checked against `build_info.py` and `CHANGELOG.md`.
 - Minimum Blender: `4.2.0`. CI tests 4.2 LTS, 4.5 LTS, and 5.1; newer versions are accepted with capability-based warnings.
 - Local Blender detected on this workstation: `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`.
-- Canonical registry inventory: 182 Blender tool contracts across explicit domain modules.
-- Normal agent catalog inventory: 181 tool definitions; the default surface exposes exactly five gateways. The opt-in `direct` surface adds 24 curated direct helpers.
+- Canonical registry inventory: 219 Blender tool contracts across explicit domain modules.
+- Normal agent catalog inventory: 218 tool definitions; the default surface exposes exactly five gateways. The opt-in `direct` surface adds 24 curated direct helpers.
 - Intentional catalog difference: `run_approved_script` is a compatibility dispatcher path that always refuses the removed per-script flow; it is not exposed in the normal agent helper catalog.
 - The published 0.4.0 artifacts were verified on 2026-07-23. The current unreleased 0.4.1 working line contains 94 unit tests and an 18-test Blender-background suite; tagged CI repeats the supported Blender matrix under Xvfb on Linux.
 
@@ -156,6 +156,7 @@ $BlenderTests = @(
   "tests\smoke_presentation_helpers.py",
   "tests\smoke_render_jobs.py",
   "tests\smoke_safe_editing_helpers.py",
+  "tests\smoke_semantic_sculpt.py",
   "tests\smoke_script_runner.py",
   "tests\smoke_tool_selection.py",
   "tests\smoke_ui_layout.py",
@@ -609,8 +610,19 @@ Tools:
 create_text_object
 create_curve_path
 create_reference_guides_from_annotations
+create_multiview_reference_guides
+create_multiview_visual_hull
+create_multiview_depth_surface
+fit_surface_to_multiview_references
 create_reference_modeling_guides
 inspect_reference_modeling_guides
+adaptive_remesh
+define_semantic_sculpt_regions
+inspect_semantic_sculpt_regions
+apply_semantic_sculpt
+apply_form_aware_sculpt
+apply_screen_space_sculpt
+optimize_screen_space_sculpt
 apply_procedural_array_stack
 create_camera_dolly_animation
 add_particle_system_to_selected
@@ -636,6 +648,7 @@ add_track_to_constraint
 Owner tests:
 
 - `tests\smoke_advanced_helpers.py`
+- `tests\smoke_semantic_sculpt.py`
 - `tests\smoke_presentation_helpers.py`
 - `tests\smoke_safe_editing_helpers.py`
 
@@ -646,6 +659,10 @@ Required scenarios:
 - Helpers create bounded, reversible data-blocks and reject unsupported complex operations.
 - Reusable text, curve, camera, and scene helpers remain reversible when composed for 2D work.
 - Procedural stack helpers add bounded array/bevel/weighted-normal modifiers without destructive mesh edits.
+- Semantic regions persist as weighted point attributes; deterministic 3D and calibrated screen-space operations preserve unrelated vertices and restore correctly through preview rollback.
+- Calibrated side cameras remain right-handed, silhouette/depth carving stays watertight and bounded, local depth images stay under the aggregate pixel limit, sparse depth uses bounded spatial buckets, and every supplied depth layer must overlap.
+- Joint multi-view fitting improves the aggregate geometric objective without exceeding the aggregate depth-work limit or per-view regression tolerance, collapsing faces below the area-ratio guard, or reversing face orientation; shape-key meshes are rejected and optional before/after evidence must render successfully for every selected view.
+- Screen-space optimization rejects non-improving candidates, accepts the best measured strength, and leaves only accepted geometry pending.
 - Cloth setup adds a modifier only; cache inspection and persistent bake remain separate explicit steps.
 - Presentation and scene-organization helpers create expected named objects, materials, and collections without embedding a finished-content style.
 - Rollback restores created objects, materials, modifiers, constraints, collections, cameras, and lights.
