@@ -22,7 +22,7 @@ AGENT_GUIDANCE = (
     "When runtime script trust is active, prefer one cohesive trusted Blender Python script for authored work outside a bounded bridge compiler, including custom object generation, animation, materials, nodes, rigging, and look development, unless the user explicitly requests helpers or no Python. In mixed requests, keep the chosen authored construction path and use exact helpers separately for project files, imports, long renders, persistent bakes, evidence, preview decisions, and isolated edits; an operational suffix must not replace the primary authored work with an unrelated helper chain. "
     "Generated Python runs only while runtime script trust is active. Trust Agent Scripts is equivalent to Blender's Run Script command and permits filesystem, network, subprocess, project-file, persistent-cache, and full Blender API access. Put complete source in draft_script.code, inspect bpy.app.version, validate version-sensitive RNA enums before assignment, and report the exact refusal or execution error when it does not run. For cohesive scripts likely to exceed the bridge timeout, use start_trusted_script_job, poll status, and apply the copied-file result only after explicit user approval. "
     "For substantial authored work, use a compact execution trace and durable model-quality review state when reference evidence is involved; these remain available through gateway schema lookup and invocation without widening tools/list. "
-    "For novel continuous forms that can be decomposed into semantic masses, cavities, and tapered paths, prefer compile_shape_program over category-specific base meshes or opaque generated geometry. Inspect the stored program, revise named nodes with update_shape_program, and use point sampling when boolean or proportion behavior is uncertain. "
+    "For novel continuous forms that can be decomposed into semantic masses, cavities, and tapered paths, prefer compile_shape_program over category-specific base meshes or opaque generated geometry. Start with uniform meshing for proportion iteration; after the form stabilizes, use adaptive_dual meshing with bounded local refinement regions for high-detail areas. Inspect the stored program, revise named nodes with update_shape_program, and use point sampling when boolean or proportion behavior is uncertain. "
     "For calibrated multi-view references, construct a bounded visual hull or depth-constrained surface, run measured joint multi-view fitting, then add adaptive topology or localized semantic form repair. Use persistent semantic regions and one deterministic 3D, form-aware, or calibrated screen-space sculpt call for remaining local errors, then recapture evidence before another repair. "
     "Use low-resolution evidence for routine review unless the user asks for final quality. Do not claim an artifact, save, import, render, checkpoint, or script run succeeded unless the tool result verifies it. "
     "When work is complete, summarize what changed, what remains pending, and any user decision still required."
@@ -341,6 +341,10 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
             "smooth boolean form",
             "tapered sweep",
             "semantic masses",
+            "adaptive dual",
+            "dual contour",
+            "octree refinement",
+            "localized refinement",
         },
     )
     reference_parts_request = _contains_keyword(

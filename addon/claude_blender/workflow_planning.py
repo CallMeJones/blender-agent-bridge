@@ -63,7 +63,8 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "building. For raw reference images, normalize intake and masks first. "
             "For calibrated multi-view evidence, construct a visual hull or "
             "depth-constrained surface, run joint measured fitting, author a persistent "
-            "implicit shape program for novel continuous forms, and inspect/revise named "
+            "implicit shape program for novel continuous forms, then use bounded adaptive-dual "
+            "regions only after broad proportions stabilize. Inspect and revise named "
             "nodes before topology-dependent detail. Use a part graph/base mesh only when "
             "that decomposition is useful, add reusable feature stacks for eyes, muzzle, "
             "or ears when present, create part-weight surface masks, generate "
@@ -86,7 +87,7 @@ ADVANCED_WORKFLOW_DOMAINS = {
         "script_boundary": "Under active trust, prefer one cohesive script for authored 2D/storyboard construction; use helpers for inspection, evidence, and explicitly requested isolated operations.",
     },
     "procedural_3d": {
-        "keywords": {"advanced 3d", "procedural", "implicit shape", "implicit model", "shape program", "shape graph", "signed distance field", "sdf model", "array", "scatter", "kit", "object kit", "kitbash", "mechanical", "mechanical joint", "mechanical part", "control panel", "modular", "wall panel", "pipe run", "hard surface", "hard-surface", "geometry nodes", "node group", "modifier stack", "edit mesh", "extrude", "inset", "loop cut", "loop-cut", "knife", "proportional edit", "bridge", "dissolve", "merge", "curve to mesh", "convert curve", "boolean", "cutter", "mirror", "symmetry", "symmetrize", "solidify", "screw", "thread", "spiral", "wall thickness"},
+        "keywords": {"advanced 3d", "procedural", "implicit shape", "implicit model", "shape program", "shape graph", "signed distance field", "sdf model", "adaptive dual", "dual contour", "octree refinement", "localized refinement", "array", "scatter", "kit", "object kit", "kitbash", "mechanical", "mechanical joint", "mechanical part", "control panel", "modular", "wall panel", "pipe run", "hard surface", "hard-surface", "geometry nodes", "node group", "modifier stack", "edit mesh", "extrude", "inset", "loop cut", "loop-cut", "knife", "proportional edit", "bridge", "dissolve", "merge", "curve to mesh", "convert curve", "boolean", "cutter", "mirror", "symmetry", "symmetrize", "solidify", "screw", "thread", "spiral", "wall thickness"},
         "tools": [
             "get_geometry_nodes_details",
             "compile_shape_program",
@@ -106,7 +107,7 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "add_bevel_and_subsurf",
             "organize_scene_for_production",
         ],
-        "script_boundary": "Use persistent shape programs for bounded continuous forms the semantic SDF vocabulary can express. After inspection, use one cohesive trusted script for custom nodes, multi-object construction, or geometry outside that vocabulary; keep exact helpers for isolated operations.",
+        "script_boundary": "Use persistent shape programs for bounded continuous forms the semantic SDF vocabulary can express. Prefer uniform meshing while proportions move and adaptive_dual with local regions after they stabilize. After inspection, use one cohesive trusted script for custom nodes, multi-object construction, or geometry outside that vocabulary; keep exact helpers for isolated operations.",
     },
     "advanced_animation": {
         "keywords": {"advanced animation", "shot", "blocking", "dolly", "crane", "truck", "camera move", "camera animation", "nla", "retime", "f-curve", "pose", "acting", "motion arc"},

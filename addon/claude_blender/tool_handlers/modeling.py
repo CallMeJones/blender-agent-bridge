@@ -29,6 +29,7 @@ def compile_shape_program(context, args):
         context,
         program=program if isinstance(program, dict) else {},
         object_name=str(args.get("object_name") or "Implicit Shape"),
+        meshing_mode=str(args.get("meshing_mode") or "uniform"),
         resolution=_bounded_int(
             args.get("resolution"), 48, minimum=8, maximum=96
         ),
@@ -37,6 +38,23 @@ def compile_shape_program(context, args):
         ),
         smooth_iterations=_bounded_int(
             args.get("smooth_iterations"), 1, minimum=0, maximum=10
+        ),
+        adaptive_base_depth=_bounded_int(
+            args.get("adaptive_base_depth"), 5, minimum=3, maximum=7
+        ),
+        adaptive_max_depth=_bounded_int(
+            args.get("adaptive_max_depth"), 7, minimum=3, maximum=9
+        ),
+        adaptive_error_threshold=_bounded_float(
+            args.get("adaptive_error_threshold"),
+            0.05,
+            minimum=0.001,
+            maximum=0.5,
+        ),
+        refinement_regions=(
+            args.get("refinement_regions")
+            if isinstance(args.get("refinement_regions"), list)
+            else []
         ),
         material_name=str(args.get("material_name") or ""),
         color=_float_list(args.get("color"), 4, (0.56, 0.62, 0.72, 1.0)),
@@ -58,6 +76,7 @@ def update_shape_program(context, args):
         context,
         object_name=str(args.get("object_name") or ""),
         program=program if isinstance(program, dict) else {},
+        meshing_mode=str(args.get("meshing_mode") or "uniform"),
         resolution=_bounded_int(
             args.get("resolution"), 48, minimum=8, maximum=96
         ),
@@ -66,6 +85,23 @@ def update_shape_program(context, args):
         ),
         smooth_iterations=_bounded_int(
             args.get("smooth_iterations"), 1, minimum=0, maximum=10
+        ),
+        adaptive_base_depth=_bounded_int(
+            args.get("adaptive_base_depth"), 5, minimum=3, maximum=7
+        ),
+        adaptive_max_depth=_bounded_int(
+            args.get("adaptive_max_depth"), 7, minimum=3, maximum=9
+        ),
+        adaptive_error_threshold=_bounded_float(
+            args.get("adaptive_error_threshold"),
+            0.05,
+            minimum=0.001,
+            maximum=0.5,
+        ),
+        refinement_regions=(
+            args.get("refinement_regions")
+            if isinstance(args.get("refinement_regions"), list)
+            else []
         ),
         label=str(args.get("label") or "Update shape program"),
     )

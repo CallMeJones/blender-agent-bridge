@@ -1,12 +1,12 @@
 # Implicit Shape Programs
 
-Implicit shape programs let the connected MCP client describe a novel continuous form as a compact semantic graph. Blender Agent Bridge validates that graph, evaluates its signed-distance field (SDF), extracts a watertight triangle mesh, and stores the canonical program on the object for later revision.
+Implicit shape programs let the connected MCP client describe a novel continuous form as a compact semantic graph. Blender Agent Bridge validates that graph, evaluates its signed-distance field (SDF), extracts a watertight polygon mesh, and stores the canonical program on the object for later revision.
 
 This is an LLM-native modeling path. It does not call Hunyuan3D, TRELLIS, another provider, or a category-specific base-mesh library. The connected LLM supplies the semantic decomposition; the bridge performs bounded geometry math and preview-safe scene mutation.
 
 ## Tools
 
-- `compile_shape_program` creates one continuous mesh and stores its canonical program, digest, and compiler settings.
+- `compile_shape_program` creates one continuous uniform or adaptive-dual mesh and stores its canonical program, digest, and compiler settings.
 - `inspect_shape_program` returns the stored graph, semantic summary, mesh counts, and digest-integrity warnings.
 - `update_shape_program` recompiles an existing shape object while preserving its object transform, materials, and modifiers.
 - `sample_shape_program_sdf` probes up to 512 object-local program-space points without mutating Blender. Negative distances are inside the form.
@@ -81,15 +81,48 @@ Nodes may use `parent_id`. Parent transforms move and scale semantic children as
 
 Every node also supports local `location`, XYZ Euler `rotation` in radians, positive `scale`, `enabled`, and an optional `semantic_role` label.
 
+## Adaptive Dual Contouring
+
+Uniform marching tetrahedra remains the default because it is predictable while proportions are changing. Set `meshing_mode` to `adaptive_dual` after the broad form stabilizes. Adaptive mode builds a sparse octree, places one QEF vertex from Hermite intersections and normals in each surface leaf, and connects vertices around sign-changing minimal octree edges. Mixed triangles and quads are preserved instead of adding transition diagonals.
+
+```json
+{
+  "meshing_mode": "adaptive_dual",
+  "adaptive_base_depth": 4,
+  "adaptive_max_depth": 7,
+  "adaptive_error_threshold": 0.05,
+  "refinement_regions": [
+    {
+      "name": "feature_cluster",
+      "type": "sphere",
+      "center": [0.0, -0.45, 1.35],
+      "radius": 0.9,
+      "depth": 7
+    },
+    {
+      "name": "lower_contacts",
+      "type": "box",
+      "min": [-0.9, -0.8, -1.1],
+      "max": [0.9, 0.2, -0.35],
+      "depth": 6
+    }
+  ]
+}
+```
+
+`adaptive_base_depth` is the minimum surface depth; depth 5 corresponds to 32 root divisions. `adaptive_max_depth` is the hard ceiling for automatic QEF-error refinement, explicit regions, and bounded topology repair. Lower error thresholds refine more curved or inconsistent cells. Explicit regions refine only potentially surface-containing cells they intersect, not their full volume.
+
+The result reports surface leaves by depth, QEF residuals, automatic/region/topology refinement counts, skipped minimal-edge segments, and per-region surface/target-depth counts. A region with zero surface leaves did not affect the mesh and should be moved or removed. The compiler rejects unpaired, inconsistently oriented, or non-manifold mesh edges instead of returning a cracked result.
+
 ## Recommended Reference Workflow
 
 1. Prepare and calibrate the reference images.
 2. Decompose visible structure into named masses, cavities, and paths.
 3. Author a low-node-count shape program with generous bounds.
-4. Compile at resolution 20-32 for silhouette iteration.
+4. Compile in uniform mode at resolution 20-32 for silhouette iteration.
 5. Render or compare all calibrated views.
 6. Inspect the stored program and revise named nodes rather than replacing the mesh blindly.
-7. Increase compile resolution only after proportions stabilize.
+7. After proportions stabilize, switch to adaptive-dual mode and target measured local detail with refinement regions.
 8. Commit the shape, then apply adaptive remeshing, semantic repair, feature stacks, materials, and fur as needed.
 
 `update_shape_program` changes topology. It clears vertex groups whose indices no longer describe the regenerated surface and reports their names. Preview revert restores the prior mesh, metadata, and weights. Shape-key meshes are refused.
@@ -101,12 +134,14 @@ Compilation is deliberately bounded:
 - 64 nodes per program;
 - 64 points per sweep;
 - resolution 8-96 along the longest bounds axis;
-- fixed grid-sample, node-evaluation, vertex, and face ceilings;
+- adaptive base depth 3-7 and maximum depth 3-9;
+- at most 16 adaptive sphere/box refinement regions;
+- fixed grid-sample, octree-cell, SDF-work, vertex, and face ceilings;
 - rejection when the surface reaches a compile boundary;
-- closed marching-tetrahedra output with shared lattice vertices.
+- closed uniform marching-tetrahedra or adaptive minimal-edge dual output.
 
 Use the smallest bounds that still leave clear space around the form. Oversized bounds waste resolution; undersized bounds are rejected instead of producing an open mesh.
 
 ## Current Limits
 
-The v1 decoder is a uniform grid, not an adaptive octree, so very thin details need tighter bounds or a higher resolution. The primitive vocabulary expresses continuous mass and path structure, not arbitrary engraved detail, pores, individual hair, or learned hidden-surface inference. Use calibrated visual hull/depth tools for multi-view evidence, semantic sculpt tools for measured local correction, and fur-flow/groom tools after the core surface is stable.
+Adaptive mode reduces empty-volume work and concentrates topology, but it is still a bounded CPU decoder rather than a learned 3D prior. Extremely ambiguous topology may require a higher base depth or uniform mode, and maximum-depth/cell/work limits can refuse oversized requests. The primitive vocabulary expresses continuous mass and path structure, not arbitrary engraved detail, pores, individual hair, or learned hidden-surface inference. Use calibrated visual hull/depth tools for multi-view evidence, semantic sculpt tools for measured local correction, and fur-flow/groom tools after the core surface is stable.

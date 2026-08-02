@@ -285,7 +285,7 @@ def main():
         assert "draft_script" in procedural_names, procedural_meta
 
         implicit_tools, implicit_meta = agent_tools.select_blender_tool_definitions(
-            "Use an implicit shape program and signed distance field to build semantic masses, cavities, and a tapered sweep.",
+            "Use an implicit shape program with adaptive dual contouring and localized octree refinement to build semantic masses, cavities, and a tapered sweep.",
             bundle,
         )
         implicit_names = _names(implicit_tools)

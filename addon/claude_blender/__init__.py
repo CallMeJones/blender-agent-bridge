@@ -67,6 +67,7 @@ _MODULE_NAMES = (
     "reference_metrics",
     "reference_forms",
     "shape_program",
+    "shape_program_adaptive",
     "reference_parts",
     "sculpt_fields",
     "depth_fields",

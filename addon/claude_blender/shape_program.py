@@ -559,14 +559,68 @@ def _evaluate_prepared(program, point, by_id=None, transform_chains=None):
     return result
 
 
+class PreparedShapeProgram:
+    """Validated shape program with cached transforms and workload metadata."""
+
+    __slots__ = (
+        "program",
+        "by_id",
+        "transform_chains",
+        "enabled_nodes",
+        "node_units",
+        "primitive_units",
+        "transform_units",
+        "work_units_per_sample",
+    )
+
+    def __init__(self, program):
+        self.program = normalize_shape_program(program)
+        self.by_id = {node["id"]: node for node in self.program["nodes"]}
+        self.transform_chains = _transform_chains(
+            self.program["nodes"], self.by_id
+        )
+        self.enabled_nodes = tuple(
+            node for node in self.program["nodes"] if node["enabled"]
+        )
+        self.node_units = len(self.enabled_nodes)
+        self.primitive_units = sum(
+            len(node["points"]) - 1 if node["type"] == "sweep" else 1
+            for node in self.enabled_nodes
+        )
+        self.transform_units = sum(
+            len(self.transform_chains[node["id"]])
+            for node in self.enabled_nodes
+        )
+        self.work_units_per_sample = self.primitive_units + self.transform_units
+
+    def evaluate_unchecked(self, point):
+        """Evaluate a known finite program-space point without revalidation."""
+
+        return _evaluate_prepared(
+            self.program,
+            point,
+            self.by_id,
+            self.transform_chains,
+        )
+
+    def evaluate(self, point, *, field="point"):
+        """Validate and evaluate one object-local program-space point."""
+
+        return self.evaluate_unchecked(
+            _vector(point, field, maximum_absolute=_MAX_COORDINATE)
+        )
+
+
+def prepare_shape_program(program):
+    """Return a reusable evaluator for repeated sampling or mesh extraction."""
+
+    return PreparedShapeProgram(program)
+
+
 def evaluate_shape_program(program, point):
     """Return signed distance at one program-space point; negative is inside."""
 
-    normalized = normalize_shape_program(program)
-    return _evaluate_prepared(
-        normalized,
-        _vector(point, "point", maximum_absolute=_MAX_COORDINATE),
-    )
+    return prepare_shape_program(program).evaluate(point)
 
 
 def sample_shape_program(program, points):
@@ -574,19 +628,11 @@ def sample_shape_program(program, points):
 
     if not isinstance(points, list) or len(points) > 512:
         raise ShapeProgramError("points must be a list containing at most 512 entries")
-    normalized = normalize_shape_program(program)
-    by_id = {node["id"]: node for node in normalized["nodes"]}
-    transform_chains = _transform_chains(normalized["nodes"], by_id)
+    prepared = prepare_shape_program(program)
     return [
-        _evaluate_prepared(
-            normalized,
-            _vector(
-                point,
-                f"points[{index}]",
-                maximum_absolute=_MAX_COORDINATE,
-            ),
-            by_id,
-            transform_chains,
+        prepared.evaluate(
+            point,
+            field=f"points[{index}]",
         )
         for index, point in enumerate(points)
     ]
@@ -654,7 +700,9 @@ def _mesh_neighbors(vertex_count, faces):
     return [tuple(items) for items in neighbors]
 
 
-def _smooth_mesh(vertices, faces, iterations):
+def smooth_shape_mesh(vertices, faces, iterations):
+    """Apply bounded topology-preserving smoothing to one shape mesh."""
+
     iterations = max(0, min(10, int(iterations)))
     if not iterations:
         return list(vertices)
@@ -681,24 +729,16 @@ def _smooth_mesh(vertices, faces, iterations):
 def mesh_shape_program(program, *, resolution=48, iso_level=0.0, smooth_iterations=1):
     """Compile a validated shape program into a closed triangle mesh."""
 
-    normalized = normalize_shape_program(program)
+    prepared = prepare_shape_program(program)
+    normalized = prepared.program
     iso_level = _number(iso_level, "iso_level", minimum=-1000.0, maximum=1000.0)
     minimum, dimensions, sample_dimensions, steps, sample_count = _grid_spec(
         normalized["bounds"], resolution
     )
-    enabled_nodes = [node for node in normalized["nodes"] if node["enabled"]]
-    enabled_count = len(enabled_nodes)
-    by_id = {node["id"]: node for node in normalized["nodes"]}
-    transform_chains = _transform_chains(normalized["nodes"], by_id)
-    evaluation_units = sum(
-        len(node["points"]) - 1 if node["type"] == "sweep" else 1
-        for node in enabled_nodes
-    )
-    transform_units = sum(len(transform_chains[node["id"]]) for node in enabled_nodes)
-    node_evaluation_count = sample_count * enabled_count
-    primitive_evaluation_count = sample_count * evaluation_units
-    transform_evaluation_count = sample_count * transform_units
-    estimated_work_units = primitive_evaluation_count + transform_evaluation_count
+    node_evaluation_count = sample_count * prepared.node_units
+    primitive_evaluation_count = sample_count * prepared.primitive_units
+    transform_evaluation_count = sample_count * prepared.transform_units
+    estimated_work_units = sample_count * prepared.work_units_per_sample
     if estimated_work_units > MAX_SDF_EVALUATIONS:
         raise ShapeProgramError(
             "Shape compile requires approximately "
@@ -718,12 +758,7 @@ def mesh_shape_program(program, *, resolution=48, iso_level=0.0, smooth_iteratio
             y = minimum[1] + y_index * steps[1]
             for x_index in range(x_samples):
                 point = (minimum[0] + x_index * steps[0], y, z)
-                value = _evaluate_prepared(
-                    normalized,
-                    point,
-                    by_id,
-                    transform_chains,
-                )
+                value = prepared.evaluate_unchecked(point)
                 values[sample_index(x_index, y_index, z_index)] = value
                 if (
                     x_index in (0, x_samples - 1)
@@ -857,11 +892,12 @@ def mesh_shape_program(program, *, resolution=48, iso_level=0.0, smooth_iteratio
         raise ShapeProgramError(
             "Shape program produced no surface inside the requested bounds"
         )
-    vertices = _smooth_mesh(vertices, faces, smooth_iterations)
+    vertices = smooth_shape_mesh(vertices, faces, smooth_iterations)
     return {
         "vertices": vertices,
         "faces": faces,
         "stats": {
+            "meshing_mode": "uniform_tetrahedra",
             "resolution": int(resolution),
             "grid_dimensions": dimensions,
             "sample_count": sample_count,

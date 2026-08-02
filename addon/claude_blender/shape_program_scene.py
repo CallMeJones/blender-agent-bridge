@@ -6,7 +6,7 @@ import json
 
 import bpy
 
-from . import live_preview, shape_program
+from . import live_preview, shape_program, shape_program_adaptive
 from .advanced_support import _material_for_color
 
 
@@ -54,7 +54,12 @@ def _record_program_metadata(obj):
 def _write_mesh(mesh, result):
     mesh.clear_geometry()
     mesh.from_pydata(result["vertices"], [], result["faces"])
-    mesh.validate(verbose=False)
+    corrected = mesh.validate(verbose=False)
+    if corrected and result["stats"].get("meshing_mode") == "adaptive_dual":
+        raise shape_program.ShapeProgramError(
+            "Blender found invalid adaptive mesh geometry; increase base depth "
+            "or use uniform meshing"
+        )
     mesh.update(calc_edges=True)
     for polygon in mesh.polygons:
         polygon.use_smooth = True
@@ -86,14 +91,58 @@ def _cleanup_created(obj, mesh, material):
         pass
 
 
+def _mesh_program(
+    program,
+    *,
+    meshing_mode,
+    resolution,
+    iso_level,
+    smooth_iterations,
+    adaptive_base_depth,
+    adaptive_max_depth,
+    adaptive_error_threshold,
+    refinement_regions,
+):
+    mode = str(meshing_mode or "uniform").strip().lower()
+    if mode == "uniform":
+        if refinement_regions:
+            raise shape_program.ShapeProgramError(
+                "refinement_regions require meshing_mode='adaptive_dual'"
+            )
+        return shape_program.mesh_shape_program(
+            program,
+            resolution=resolution,
+            iso_level=iso_level,
+            smooth_iterations=smooth_iterations,
+        )
+    if mode == "adaptive_dual":
+        return shape_program_adaptive.mesh_shape_program_adaptive(
+            program,
+            base_depth=adaptive_base_depth,
+            max_depth=adaptive_max_depth,
+            error_threshold=adaptive_error_threshold,
+            refinement_regions=refinement_regions,
+            iso_level=iso_level,
+            smooth_iterations=smooth_iterations,
+        )
+    raise shape_program.ShapeProgramError(
+        "meshing_mode must be 'uniform' or 'adaptive_dual'"
+    )
+
+
 def compile_shape_program(
     context,
     *,
     program,
     object_name="Implicit Shape",
+    meshing_mode="uniform",
     resolution=48,
     iso_level=0.0,
     smooth_iterations=1,
+    adaptive_base_depth=5,
+    adaptive_max_depth=7,
+    adaptive_error_threshold=0.05,
+    refinement_regions=None,
     material_name="",
     color=(0.56, 0.62, 0.72, 1.0),
     label="Compile shape program",
@@ -101,11 +150,16 @@ def compile_shape_program(
     """Compile a new persistent shape-program object as a live preview."""
 
     try:
-        result = shape_program.mesh_shape_program(
+        result = _mesh_program(
             program,
+            meshing_mode=meshing_mode,
             resolution=resolution,
             iso_level=iso_level,
             smooth_iterations=smooth_iterations,
+            adaptive_base_depth=adaptive_base_depth,
+            adaptive_max_depth=adaptive_max_depth,
+            adaptive_error_threshold=adaptive_error_threshold,
+            refinement_regions=refinement_regions,
         )
     except (TypeError, ValueError, OverflowError) as exc:
         return {
@@ -234,9 +288,14 @@ def update_shape_program(
     *,
     object_name,
     program,
+    meshing_mode="uniform",
     resolution=48,
     iso_level=0.0,
     smooth_iterations=1,
+    adaptive_base_depth=5,
+    adaptive_max_depth=7,
+    adaptive_error_threshold=0.05,
+    refinement_regions=None,
     label="Update shape program",
 ):
     """Recompile an existing shape-program mesh with full preview rollback."""
@@ -277,11 +336,16 @@ def update_shape_program(
             "object": obj.name,
         }
     try:
-        result = shape_program.mesh_shape_program(
+        result = _mesh_program(
             program,
+            meshing_mode=meshing_mode,
             resolution=resolution,
             iso_level=iso_level,
             smooth_iterations=smooth_iterations,
+            adaptive_base_depth=adaptive_base_depth,
+            adaptive_max_depth=adaptive_max_depth,
+            adaptive_error_threshold=adaptive_error_threshold,
+            refinement_regions=refinement_regions,
         )
     except (TypeError, ValueError, OverflowError) as exc:
         return {

@@ -3892,11 +3892,29 @@
       }
     },
     "compile_shape_program": {
-      "description": "Compile a bounded semantic implicit-shape program into one continuous watertight mesh. The connected LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, superquadrics, and tapered sweeps with smooth union, subtraction, and intersection. Stores the canonical program on the object for later inspection and revision.",
-      "duration_hint": "Bounded SDF grid evaluation and watertight mesh extraction.",
+      "description": "Compile a bounded semantic implicit-shape program into one continuous watertight mesh using uniform marching tetrahedra or adaptive octree dual contouring with localized high-resolution regions. The connected LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, superquadrics, and tapered sweeps with smooth union, subtraction, and intersection. Stores the canonical program on the object for later inspection and revision.",
+      "duration_hint": "Bounded uniform or adaptive SDF evaluation and watertight mesh extraction.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "adaptive_base_depth": {
+            "description": "Minimum adaptive surface depth; 5 is equivalent to 32 root divisions.",
+            "maximum": 7,
+            "minimum": 3,
+            "type": "integer"
+          },
+          "adaptive_error_threshold": {
+            "description": "Relative QEF residual and normal-spread threshold; lower values refine more cells.",
+            "maximum": 0.5,
+            "minimum": 0.001,
+            "type": "number"
+          },
+          "adaptive_max_depth": {
+            "description": "Maximum automatic or region-requested octree depth.",
+            "maximum": 9,
+            "minimum": 3,
+            "type": "integer"
+          },
           "color": {
             "items": {
               "maximum": 1.0,
@@ -3916,6 +3934,14 @@
             "type": "string"
           },
           "material_name": {
+            "type": "string"
+          },
+          "meshing_mode": {
+            "description": "Uniform marching tetrahedra or adaptive octree dual contouring.",
+            "enum": [
+              "uniform",
+              "adaptive_dual"
+            ],
             "type": "string"
           },
           "object_name": {
@@ -4184,8 +4210,76 @@
             ],
             "type": "object"
           },
+          "refinement_regions": {
+            "description": "Optional localized target-depth regions for adaptive_dual mode.",
+            "items": {
+              "additionalProperties": false,
+              "description": "Sphere uses center/radius; box uses min/max. Coordinates are object-local program space.",
+              "properties": {
+                "center": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "depth": {
+                  "description": "Target octree depth inside this region.",
+                  "maximum": 9,
+                  "minimum": 3,
+                  "type": "integer"
+                },
+                "max": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "min": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "name": {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "radius": {
+                  "maximum": 10000.0,
+                  "minimum": 1e-05,
+                  "type": "number"
+                },
+                "type": {
+                  "enum": [
+                    "sphere",
+                    "box"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "depth"
+              ],
+              "type": "object"
+            },
+            "maxItems": 16,
+            "type": "array"
+          },
           "resolution": {
-            "description": "Grid cells along the longest bounds axis.",
+            "description": "Uniform-mode grid cells along the longest bounds axis.",
             "maximum": 96,
             "minimum": 8,
             "type": "integer"
@@ -4223,7 +4317,13 @@
         "preview:write"
       ],
       "requires_live_preview": true,
-      "supports_headless": true
+      "supports_headless": true,
+      "timeout_recovery": {
+        "poll_after_seconds": 5,
+        "recoverable": true,
+        "status_tool": "blender_bridge_status"
+      },
+      "timeout_seconds": 300
     },
     "configure_render_outputs": {
       "description": "Enable or disable ViewLayer render passes and configure shader AOVs. Use this for render-pass, cryptomatte, depth/normal/AO, or custom AOV requests before custom compositor/render Python. Applies immediately with preview revert support.",
@@ -17705,17 +17805,43 @@
       "requires_live_preview": true
     },
     "update_shape_program": {
-      "description": "Replace the canonical program on an existing compiled implicit-shape object and regenerate its continuous mesh with full mesh, metadata, and vertex-group preview rollback. Preserves object transform, materials, and modifiers.",
-      "duration_hint": "Bounded SDF grid evaluation and watertight mesh replacement.",
+      "description": "Replace the canonical program on an existing compiled implicit-shape object and regenerate its continuous uniform or adaptive mesh with full mesh, metadata, and vertex-group preview rollback. Preserves object transform, materials, and modifiers.",
+      "duration_hint": "Bounded uniform or adaptive SDF evaluation and watertight mesh replacement.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "adaptive_base_depth": {
+            "description": "Minimum adaptive surface depth; 5 is equivalent to 32 root divisions.",
+            "maximum": 7,
+            "minimum": 3,
+            "type": "integer"
+          },
+          "adaptive_error_threshold": {
+            "description": "Relative QEF residual and normal-spread threshold; lower values refine more cells.",
+            "maximum": 0.5,
+            "minimum": 0.001,
+            "type": "number"
+          },
+          "adaptive_max_depth": {
+            "description": "Maximum automatic or region-requested octree depth.",
+            "maximum": 9,
+            "minimum": 3,
+            "type": "integer"
+          },
           "iso_level": {
             "maximum": 1000.0,
             "minimum": -1000.0,
             "type": "number"
           },
           "label": {
+            "type": "string"
+          },
+          "meshing_mode": {
+            "description": "Uniform marching tetrahedra or adaptive octree dual contouring.",
+            "enum": [
+              "uniform",
+              "adaptive_dual"
+            ],
             "type": "string"
           },
           "object_name": {
@@ -17984,8 +18110,76 @@
             ],
             "type": "object"
           },
+          "refinement_regions": {
+            "description": "Optional localized target-depth regions for adaptive_dual mode.",
+            "items": {
+              "additionalProperties": false,
+              "description": "Sphere uses center/radius; box uses min/max. Coordinates are object-local program space.",
+              "properties": {
+                "center": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "depth": {
+                  "description": "Target octree depth inside this region.",
+                  "maximum": 9,
+                  "minimum": 3,
+                  "type": "integer"
+                },
+                "max": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "min": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "name": {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "radius": {
+                  "maximum": 10000.0,
+                  "minimum": 1e-05,
+                  "type": "number"
+                },
+                "type": {
+                  "enum": [
+                    "sphere",
+                    "box"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "depth"
+              ],
+              "type": "object"
+            },
+            "maxItems": 16,
+            "type": "array"
+          },
           "resolution": {
-            "description": "Grid cells along the longest bounds axis.",
+            "description": "Uniform-mode grid cells along the longest bounds axis.",
             "maximum": 96,
             "minimum": 8,
             "type": "integer"
@@ -18024,7 +18218,13 @@
         "preview:write"
       ],
       "requires_live_preview": true,
-      "supports_headless": true
+      "supports_headless": true,
+      "timeout_recovery": {
+        "poll_after_seconds": 5,
+        "recoverable": true,
+        "status_tool": "blender_bridge_status"
+      },
+      "timeout_seconds": 300
     },
     "uv_unwrap": {
       "description": "Create or update preview-safe UV coordinate maps on mesh objects using bounded deterministic smart, cube, or planar projection. Applies immediately with mesh-data preview rollback.",
@@ -20805,10 +21005,28 @@
       "name": "assign_material_to_selected"
     },
     {
-      "description": "Compile a bounded semantic implicit-shape program into one continuous watertight mesh. The connected LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, superquadrics, and tapered sweeps with smooth union, subtraction, and intersection. Stores the canonical program on the object for later inspection and revision.",
+      "description": "Compile a bounded semantic implicit-shape program into one continuous watertight mesh using uniform marching tetrahedra or adaptive octree dual contouring with localized high-resolution regions. The connected LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, superquadrics, and tapered sweeps with smooth union, subtraction, and intersection. Stores the canonical program on the object for later inspection and revision.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "adaptive_base_depth": {
+            "description": "Minimum adaptive surface depth; 5 is equivalent to 32 root divisions.",
+            "maximum": 7,
+            "minimum": 3,
+            "type": "integer"
+          },
+          "adaptive_error_threshold": {
+            "description": "Relative QEF residual and normal-spread threshold; lower values refine more cells.",
+            "maximum": 0.5,
+            "minimum": 0.001,
+            "type": "number"
+          },
+          "adaptive_max_depth": {
+            "description": "Maximum automatic or region-requested octree depth.",
+            "maximum": 9,
+            "minimum": 3,
+            "type": "integer"
+          },
           "color": {
             "items": {
               "maximum": 1.0,
@@ -20828,6 +21046,14 @@
             "type": "string"
           },
           "material_name": {
+            "type": "string"
+          },
+          "meshing_mode": {
+            "description": "Uniform marching tetrahedra or adaptive octree dual contouring.",
+            "enum": [
+              "uniform",
+              "adaptive_dual"
+            ],
             "type": "string"
           },
           "object_name": {
@@ -21096,8 +21322,76 @@
             ],
             "type": "object"
           },
+          "refinement_regions": {
+            "description": "Optional localized target-depth regions for adaptive_dual mode.",
+            "items": {
+              "additionalProperties": false,
+              "description": "Sphere uses center/radius; box uses min/max. Coordinates are object-local program space.",
+              "properties": {
+                "center": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "depth": {
+                  "description": "Target octree depth inside this region.",
+                  "maximum": 9,
+                  "minimum": 3,
+                  "type": "integer"
+                },
+                "max": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "min": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "name": {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "radius": {
+                  "maximum": 10000.0,
+                  "minimum": 1e-05,
+                  "type": "number"
+                },
+                "type": {
+                  "enum": [
+                    "sphere",
+                    "box"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "depth"
+              ],
+              "type": "object"
+            },
+            "maxItems": 16,
+            "type": "array"
+          },
           "resolution": {
-            "description": "Grid cells along the longest bounds axis.",
+            "description": "Uniform-mode grid cells along the longest bounds axis.",
             "maximum": 96,
             "minimum": 8,
             "type": "integer"
@@ -21189,16 +21483,42 @@
       "name": "create_collection"
     },
     {
-      "description": "Replace the canonical program on an existing compiled implicit-shape object and regenerate its continuous mesh with full mesh, metadata, and vertex-group preview rollback. Preserves object transform, materials, and modifiers.",
+      "description": "Replace the canonical program on an existing compiled implicit-shape object and regenerate its continuous uniform or adaptive mesh with full mesh, metadata, and vertex-group preview rollback. Preserves object transform, materials, and modifiers.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "adaptive_base_depth": {
+            "description": "Minimum adaptive surface depth; 5 is equivalent to 32 root divisions.",
+            "maximum": 7,
+            "minimum": 3,
+            "type": "integer"
+          },
+          "adaptive_error_threshold": {
+            "description": "Relative QEF residual and normal-spread threshold; lower values refine more cells.",
+            "maximum": 0.5,
+            "minimum": 0.001,
+            "type": "number"
+          },
+          "adaptive_max_depth": {
+            "description": "Maximum automatic or region-requested octree depth.",
+            "maximum": 9,
+            "minimum": 3,
+            "type": "integer"
+          },
           "iso_level": {
             "maximum": 1000.0,
             "minimum": -1000.0,
             "type": "number"
           },
           "label": {
+            "type": "string"
+          },
+          "meshing_mode": {
+            "description": "Uniform marching tetrahedra or adaptive octree dual contouring.",
+            "enum": [
+              "uniform",
+              "adaptive_dual"
+            ],
             "type": "string"
           },
           "object_name": {
@@ -21467,8 +21787,76 @@
             ],
             "type": "object"
           },
+          "refinement_regions": {
+            "description": "Optional localized target-depth regions for adaptive_dual mode.",
+            "items": {
+              "additionalProperties": false,
+              "description": "Sphere uses center/radius; box uses min/max. Coordinates are object-local program space.",
+              "properties": {
+                "center": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "depth": {
+                  "description": "Target octree depth inside this region.",
+                  "maximum": 9,
+                  "minimum": 3,
+                  "type": "integer"
+                },
+                "max": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "min": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "name": {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "radius": {
+                  "maximum": 10000.0,
+                  "minimum": 1e-05,
+                  "type": "number"
+                },
+                "type": {
+                  "enum": [
+                    "sphere",
+                    "box"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "depth"
+              ],
+              "type": "object"
+            },
+            "maxItems": 16,
+            "type": "array"
+          },
           "resolution": {
-            "description": "Grid cells along the longest bounds axis.",
+            "description": "Uniform-mode grid cells along the longest bounds axis.",
             "maximum": 96,
             "minimum": 8,
             "type": "integer"
@@ -32130,7 +32518,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "3d38a6b1aa7d834afa68e0af157fe9f7c7fe82c786709b9dfca6a7da30deddbd",
+  "registry_digest": "9169c3e7448ffb193fdf4acf926095569b86214e4914c4057cf881dd787d43df",
   "schema_version": 1,
   "specs": [
     {
@@ -37548,7 +37936,7 @@
     },
     {
       "contract": {
-        "duration_hint": "Bounded SDF grid evaluation and watertight mesh extraction.",
+        "duration_hint": "Bounded uniform or adaptive SDF evaluation and watertight mesh extraction.",
         "long_running": true,
         "mutates_scene": true,
         "permissions": [
@@ -37557,9 +37945,15 @@
           "preview:write"
         ],
         "requires_live_preview": true,
-        "supports_headless": true
+        "supports_headless": true,
+        "timeout_recovery": {
+          "poll_after_seconds": 5,
+          "recoverable": true,
+          "status_tool": "blender_bridge_status"
+        },
+        "timeout_seconds": 300
       },
-      "description": "Compile a bounded semantic implicit-shape program into one continuous watertight mesh. The connected LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, superquadrics, and tapered sweeps with smooth union, subtraction, and intersection. Stores the canonical program on the object for later inspection and revision.",
+      "description": "Compile a bounded semantic implicit-shape program into one continuous watertight mesh using uniform marching tetrahedra or adaptive octree dual contouring with localized high-resolution regions. The connected LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, superquadrics, and tapered sweeps with smooth union, subtraction, and intersection. Stores the canonical program on the object for later inspection and revision.",
       "exposure": "catalog",
       "groups": [
         "advanced_create",
@@ -37572,6 +37966,24 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "adaptive_base_depth": {
+            "description": "Minimum adaptive surface depth; 5 is equivalent to 32 root divisions.",
+            "maximum": 7,
+            "minimum": 3,
+            "type": "integer"
+          },
+          "adaptive_error_threshold": {
+            "description": "Relative QEF residual and normal-spread threshold; lower values refine more cells.",
+            "maximum": 0.5,
+            "minimum": 0.001,
+            "type": "number"
+          },
+          "adaptive_max_depth": {
+            "description": "Maximum automatic or region-requested octree depth.",
+            "maximum": 9,
+            "minimum": 3,
+            "type": "integer"
+          },
           "color": {
             "items": {
               "maximum": 1.0,
@@ -37591,6 +38003,14 @@
             "type": "string"
           },
           "material_name": {
+            "type": "string"
+          },
+          "meshing_mode": {
+            "description": "Uniform marching tetrahedra or adaptive octree dual contouring.",
+            "enum": [
+              "uniform",
+              "adaptive_dual"
+            ],
             "type": "string"
           },
           "object_name": {
@@ -37859,8 +38279,76 @@
             ],
             "type": "object"
           },
+          "refinement_regions": {
+            "description": "Optional localized target-depth regions for adaptive_dual mode.",
+            "items": {
+              "additionalProperties": false,
+              "description": "Sphere uses center/radius; box uses min/max. Coordinates are object-local program space.",
+              "properties": {
+                "center": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "depth": {
+                  "description": "Target octree depth inside this region.",
+                  "maximum": 9,
+                  "minimum": 3,
+                  "type": "integer"
+                },
+                "max": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "min": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "name": {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "radius": {
+                  "maximum": 10000.0,
+                  "minimum": 1e-05,
+                  "type": "number"
+                },
+                "type": {
+                  "enum": [
+                    "sphere",
+                    "box"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "depth"
+              ],
+              "type": "object"
+            },
+            "maxItems": 16,
+            "type": "array"
+          },
           "resolution": {
-            "description": "Grid cells along the longest bounds axis.",
+            "description": "Uniform-mode grid cells along the longest bounds axis.",
             "maximum": 96,
             "minimum": 8,
             "type": "integer"
@@ -38053,7 +38541,7 @@
     },
     {
       "contract": {
-        "duration_hint": "Bounded SDF grid evaluation and watertight mesh replacement.",
+        "duration_hint": "Bounded uniform or adaptive SDF evaluation and watertight mesh replacement.",
         "long_running": true,
         "mutates_scene": true,
         "permissions": [
@@ -38062,9 +38550,15 @@
           "preview:write"
         ],
         "requires_live_preview": true,
-        "supports_headless": true
+        "supports_headless": true,
+        "timeout_recovery": {
+          "poll_after_seconds": 5,
+          "recoverable": true,
+          "status_tool": "blender_bridge_status"
+        },
+        "timeout_seconds": 300
       },
-      "description": "Replace the canonical program on an existing compiled implicit-shape object and regenerate its continuous mesh with full mesh, metadata, and vertex-group preview rollback. Preserves object transform, materials, and modifiers.",
+      "description": "Replace the canonical program on an existing compiled implicit-shape object and regenerate its continuous uniform or adaptive mesh with full mesh, metadata, and vertex-group preview rollback. Preserves object transform, materials, and modifiers.",
       "exposure": "catalog",
       "groups": [
         "advanced_create",
@@ -38078,12 +38572,38 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "adaptive_base_depth": {
+            "description": "Minimum adaptive surface depth; 5 is equivalent to 32 root divisions.",
+            "maximum": 7,
+            "minimum": 3,
+            "type": "integer"
+          },
+          "adaptive_error_threshold": {
+            "description": "Relative QEF residual and normal-spread threshold; lower values refine more cells.",
+            "maximum": 0.5,
+            "minimum": 0.001,
+            "type": "number"
+          },
+          "adaptive_max_depth": {
+            "description": "Maximum automatic or region-requested octree depth.",
+            "maximum": 9,
+            "minimum": 3,
+            "type": "integer"
+          },
           "iso_level": {
             "maximum": 1000.0,
             "minimum": -1000.0,
             "type": "number"
           },
           "label": {
+            "type": "string"
+          },
+          "meshing_mode": {
+            "description": "Uniform marching tetrahedra or adaptive octree dual contouring.",
+            "enum": [
+              "uniform",
+              "adaptive_dual"
+            ],
             "type": "string"
           },
           "object_name": {
@@ -38352,8 +38872,76 @@
             ],
             "type": "object"
           },
+          "refinement_regions": {
+            "description": "Optional localized target-depth regions for adaptive_dual mode.",
+            "items": {
+              "additionalProperties": false,
+              "description": "Sphere uses center/radius; box uses min/max. Coordinates are object-local program space.",
+              "properties": {
+                "center": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "depth": {
+                  "description": "Target octree depth inside this region.",
+                  "maximum": 9,
+                  "minimum": 3,
+                  "type": "integer"
+                },
+                "max": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "min": {
+                  "items": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "name": {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "radius": {
+                  "maximum": 10000.0,
+                  "minimum": 1e-05,
+                  "type": "number"
+                },
+                "type": {
+                  "enum": [
+                    "sphere",
+                    "box"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "depth"
+              ],
+              "type": "object"
+            },
+            "maxItems": 16,
+            "type": "array"
+          },
           "resolution": {
-            "description": "Grid cells along the longest bounds axis.",
+            "description": "Uniform-mode grid cells along the longest bounds axis.",
             "maximum": 96,
             "minimum": 8,
             "type": "integer"

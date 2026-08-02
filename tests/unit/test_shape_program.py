@@ -89,6 +89,30 @@ class ShapeProgramTests(unittest.TestCase):
         self.assertLess(shape_program.evaluate_shape_program(program, [2.0, 0.0, 0.0]), 0.0)
         self.assertGreater(shape_program.evaluate_shape_program(program, [0.0, 0.0, 0.0]), 0.0)
 
+    def test_prepared_evaluator_reuses_canonical_transform_state(self):
+        program = _program(
+            [
+                {"id": "body", "type": "sphere", "radius": 1.0},
+                {
+                    "id": "tail",
+                    "type": "sweep",
+                    "parent_id": "body",
+                    "points": [[0, 0, 0], [0, 0, 1], [0.5, 0, 1.5]],
+                    "radii": [0.2, 0.15, 0.05],
+                },
+            ]
+        )
+        prepared = shape_program.prepare_shape_program(program)
+        point = [0.1, 0.0, 0.3]
+        self.assertEqual(
+            prepared.evaluate(point),
+            shape_program.evaluate_shape_program(program, point),
+        )
+        self.assertEqual(prepared.node_units, 2)
+        self.assertEqual(prepared.primitive_units, 3)
+        self.assertEqual(prepared.transform_units, 3)
+        self.assertEqual(prepared.work_units_per_sample, 6)
+
     def test_normalization_rejects_ambiguous_or_unsafe_graphs(self):
         with self.assertRaisesRegex(shape_program.ShapeProgramError, "Duplicate"):
             shape_program.normalize_shape_program(

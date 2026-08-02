@@ -243,7 +243,7 @@ def main():
     assert "inspect_modeling_quality" in quality_guard["recommended_tools"], quality_guard
 
     implicit_guard = helper_routing.helper_first_script_advisory(
-        "Use helpers only to create an implicit shape program instead of writing an SDF script."
+        "Use helpers only to create an implicit shape program with adaptive dual contouring and localized octree refinement instead of writing an SDF script."
     )
     assert implicit_guard["code"] == "procedural_3d_helper_required", implicit_guard
     assert "compile_shape_program" in implicit_guard["recommended_tools"], implicit_guard

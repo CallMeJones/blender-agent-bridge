@@ -1166,7 +1166,7 @@ def main():
                 False,
             ),
             (
-                "Use an implicit shape program and signed distance field to compile, inspect, sample, and update semantic masses and tapered sweeps.",
+                "Use an implicit shape program with adaptive dual contouring and localized octree refinement to compile, inspect, sample, and update semantic masses and tapered sweeps.",
                 {
                     "compile_shape_program",
                     "inspect_shape_program",
@@ -2628,6 +2628,8 @@ def main():
         assert "construction_strategy" in reference_prompt_text, reference_prompt
         assert "prefer compile_shape_program" in reference_prompt_text, reference_prompt
         assert "revise exact named nodes with update_shape_program" in reference_prompt_text, reference_prompt
+        assert "adaptive_dual" in reference_prompt_text, reference_prompt
+        assert "local refinement regions" in reference_prompt_text, reference_prompt
         assert "bpy.app.version" in reference_prompt_text, reference_prompt
         assert "RNA enum identifiers" in reference_prompt_text, reference_prompt
         assert "canned category bases" in reference_prompt_text, reference_prompt

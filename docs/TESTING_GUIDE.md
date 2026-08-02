@@ -10,7 +10,7 @@ Current project snapshot, checked on 2026-08-02:
 - Canonical registry inventory: 233 Blender tool contracts across explicit domain modules.
 - Normal agent catalog inventory: 232 tool definitions; the default surface exposes exactly five gateways. The opt-in `direct` surface adds 24 curated direct helpers.
 - Intentional catalog difference: `run_approved_script` is a compatibility dispatcher path that always refuses the removed per-script flow; it is not exposed in the normal agent helper catalog.
-- The published 0.4.0 artifacts were verified on 2026-07-23. The current unreleased 0.4.1 working line contains 235 unit tests and a 22-test Blender-background suite; tagged CI repeats the supported Blender matrix under Xvfb on Linux.
+- The published 0.4.0 artifacts were verified on 2026-07-23. The current unreleased 0.4.1 working line contains 244 unit tests and a 22-test Blender-background suite; tagged CI repeats the supported Blender matrix under Xvfb on Linux.
 
 ## How To Ask Codex To Run This
 

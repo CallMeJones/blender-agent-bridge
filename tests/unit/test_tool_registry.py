@@ -141,6 +141,7 @@ class ToolRegistryTests(unittest.TestCase):
             "reference_parts",
             tool_registry.REGISTRY.get("create_reference_part_graph").groups,
         )
+
         self.assertIn(
             "reference_parts",
             tool_registry.REGISTRY.get("build_part_aware_base_mesh").groups,
@@ -165,6 +166,23 @@ class ToolRegistryTests(unittest.TestCase):
             "surface_masks",
             tool_registry.REGISTRY.get("create_part_weight_vertex_groups").groups,
         )
+
+    def test_shape_program_contract_exposes_adaptive_meshing_and_recovery(self):
+        for name in ("compile_shape_program", "update_shape_program"):
+            with self.subTest(tool=name):
+                spec = tool_registry.REGISTRY.get(name)
+                properties = spec.input_schema["properties"]
+                contract = bridge_protocol.normalized_tool_contract(name)
+                self.assertEqual(
+                    ["uniform", "adaptive_dual"],
+                    properties["meshing_mode"]["enum"],
+                )
+                self.assertIn("refinement_regions", properties)
+                self.assertEqual(300, contract["timeout_seconds"])
+                self.assertEqual(
+                    "blender_bridge_status",
+                    contract["timeout_recovery"]["status_tool"],
+                )
 
     def test_sculpt_and_reference_fit_do_not_advertise_unsafe_shape_key_edits(self):
         for name in (

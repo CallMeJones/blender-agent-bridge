@@ -103,12 +103,20 @@ def _coordinates(obj):
 
 
 def _assert_closed(obj):
-    edge_use = Counter(
-        tuple(sorted((polygon.vertices[index], polygon.vertices[(index + 1) % 3])))
-        for polygon in obj.data.polygons
-        for index in range(3)
+    edge_use = Counter()
+    edge_directions = Counter()
+    for polygon in obj.data.polygons:
+        for index, first in enumerate(polygon.vertices):
+            second = polygon.vertices[(index + 1) % len(polygon.vertices)]
+            edge = tuple(sorted((first, second)))
+            edge_use[edge] += 1
+            edge_directions[edge] += 1 if (first, second) == edge else -1
+    assert edge_use and all(count == 2 for count in edge_use.values()), Counter(
+        edge_use.values()
     )
-    assert edge_use and all(count == 2 for count in edge_use.values()), Counter(edge_use.values())
+    assert all(balance == 0 for balance in edge_directions.values()), Counter(
+        edge_directions.values()
+    )
 
 
 def main():
@@ -176,6 +184,62 @@ def main():
         assert _coordinates(obj) == original_coordinates
         assert list(obj.vertex_groups.keys()) == ["Topology Dependent"]
         assert abs(obj.vertex_groups["Topology Dependent"].weight(0) - 0.75) < 1.0e-6
+
+        uniform_refusal = _execute(
+            context,
+            "compile_shape_program",
+            {
+                "program": program,
+                "refinement_regions": [
+                    {
+                        "name": "head",
+                        "type": "sphere",
+                        "center": [0, 0, 1.35],
+                        "radius": 1.0,
+                        "depth": 5,
+                    }
+                ],
+            },
+            expect_ok=False,
+        )
+        assert "adaptive_dual" in uniform_refusal["message"], uniform_refusal
+
+        adaptive = _execute(
+            context,
+            "compile_shape_program",
+            {
+                "program": program,
+                "object_name": "Adaptive Shape Program Kitten",
+                "meshing_mode": "adaptive_dual",
+                "adaptive_base_depth": 3,
+                "adaptive_max_depth": 5,
+                "adaptive_error_threshold": 0.15,
+                "refinement_regions": [
+                    {
+                        "name": "head",
+                        "type": "sphere",
+                        "center": [0, 0, 1.35],
+                        "radius": 1.0,
+                        "depth": 5,
+                    }
+                ],
+                "smooth_iterations": 0,
+            },
+        )
+        adaptive_name = adaptive["object"]
+        adaptive_obj = bpy.data.objects[adaptive_name]
+        assert adaptive["stats"]["meshing_mode"] == "adaptive_dual", adaptive
+        assert adaptive["stats"]["region_refined_cell_count"] > 0, adaptive
+        assert len(adaptive["stats"]["surface_depth_histogram"]) > 1, adaptive
+        _assert_closed(adaptive_obj)
+        adaptive_inspection = _execute(
+            context,
+            "inspect_shape_program",
+            {"object_name": adaptive_name, "include_program": False},
+        )
+        assert adaptive_inspection["compile_stats"]["meshing_mode"] == "adaptive_dual"
+        _execute(context, "revert_preview")
+        assert bpy.data.objects.get(adaptive_name) is None
 
         linked = obj.copy()
         linked.name = "Linked Shape Program Kitten"

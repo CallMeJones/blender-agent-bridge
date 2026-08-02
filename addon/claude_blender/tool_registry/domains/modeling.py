@@ -270,16 +270,67 @@ _SHAPE_PROGRAM_SCHEMA = {
 }
 
 
+_ADAPTIVE_REFINEMENT_REGION_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'name': {'type': 'string', 'maxLength': 120},
+        'type': {'type': 'string', 'enum': ['sphere', 'box']},
+        'depth': {
+            'type': 'integer',
+            'minimum': 3,
+            'maximum': 9,
+            'description': 'Target octree depth inside this region.',
+        },
+        'center': _SHAPE_VECTOR3_SCHEMA,
+        'radius': {'type': 'number', 'minimum': 0.00001, 'maximum': 10000.0},
+        'min': _SHAPE_VECTOR3_SCHEMA,
+        'max': _SHAPE_VECTOR3_SCHEMA,
+    },
+    'required': ['type', 'depth'],
+    'additionalProperties': False,
+    'description': 'Sphere uses center/radius; box uses min/max. Coordinates are object-local program space.',
+}
+
+
 _SHAPE_COMPILE_PROPERTIES = {
     'program': _SHAPE_PROGRAM_SCHEMA,
+    'meshing_mode': {
+        'type': 'string',
+        'enum': ['uniform', 'adaptive_dual'],
+        'description': 'Uniform marching tetrahedra or adaptive octree dual contouring.',
+    },
     'resolution': {
         'type': 'integer',
         'minimum': 8,
         'maximum': 96,
-        'description': 'Grid cells along the longest bounds axis.',
+        'description': 'Uniform-mode grid cells along the longest bounds axis.',
     },
     'iso_level': {'type': 'number', 'minimum': -1000.0, 'maximum': 1000.0},
     'smooth_iterations': {'type': 'integer', 'minimum': 0, 'maximum': 10},
+    'adaptive_base_depth': {
+        'type': 'integer',
+        'minimum': 3,
+        'maximum': 7,
+        'description': 'Minimum adaptive surface depth; 5 is equivalent to 32 root divisions.',
+    },
+    'adaptive_max_depth': {
+        'type': 'integer',
+        'minimum': 3,
+        'maximum': 9,
+        'description': 'Maximum automatic or region-requested octree depth.',
+    },
+    'adaptive_error_threshold': {
+        'type': 'number',
+        'minimum': 0.001,
+        'maximum': 0.5,
+        'description': 'Relative QEF residual and normal-spread threshold; lower values refine more cells.',
+    },
+    'refinement_regions': {
+        'type': 'array',
+        'items': _ADAPTIVE_REFINEMENT_REGION_SCHEMA,
+        'maxItems': 16,
+        'description': 'Optional localized target-depth regions for adaptive_dual mode.',
+    },
 }
 
 
@@ -515,7 +566,8 @@ _MULTIVIEW_FIT_SELECTION_PROPERTIES = {
 
 SPECS = tuple(ToolSpec(**payload) for payload in [
  {'name': 'compile_shape_program',
-  'description': 'Compile a bounded semantic implicit-shape program into one continuous watertight mesh. The connected '
+  'description': 'Compile a bounded semantic implicit-shape program into one continuous watertight mesh using uniform '
+                 'marching tetrahedra or adaptive octree dual contouring with localized high-resolution regions. The connected '
                  'LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, '
                  'superquadrics, and tapered sweeps with smooth union, subtraction, and intersection. Stores the '
                  'canonical program on the object for later inspection and revision.',
@@ -532,7 +584,11 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
                'permissions': ['scene:read', 'scene:mutate', 'preview:write'],
                'supports_headless': True,
                'long_running': True,
-               'duration_hint': 'Bounded SDF grid evaluation and watertight mesh extraction.'},
+               'timeout_seconds': 300,
+               'duration_hint': 'Bounded uniform or adaptive SDF evaluation and watertight mesh extraction.',
+               'timeout_recovery': {'recoverable': True,
+                                    'poll_after_seconds': 5,
+                                    'status_tool': 'blender_bridge_status'}},
   'handler_key': 'compile_shape_program',
   'order': 600,
   'groups': ('advanced_create', 'procedural_3d', 'model_quality', 'reference_modeling', 'implicit_modeling'),
@@ -557,7 +613,7 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
   'owner': 'modeling'},
  {'name': 'update_shape_program',
   'description': 'Replace the canonical program on an existing compiled implicit-shape object and regenerate its '
-                 'continuous mesh with full mesh, metadata, and vertex-group preview rollback. Preserves object '
+                 'continuous uniform or adaptive mesh with full mesh, metadata, and vertex-group preview rollback. Preserves object '
                  'transform, materials, and modifiers.',
   'input_schema': {'type': 'object',
                    'properties': {**_SHAPE_COMPILE_PROPERTIES,
@@ -570,7 +626,11 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
                'permissions': ['scene:read', 'scene:mutate', 'preview:write'],
                'supports_headless': True,
                'long_running': True,
-               'duration_hint': 'Bounded SDF grid evaluation and watertight mesh replacement.'},
+               'timeout_seconds': 300,
+               'duration_hint': 'Bounded uniform or adaptive SDF evaluation and watertight mesh replacement.',
+               'timeout_recovery': {'recoverable': True,
+                                    'poll_after_seconds': 5,
+                                    'status_tool': 'blender_bridge_status'}},
   'handler_key': 'update_shape_program',
   'order': 620,
   'groups': ('advanced_create', 'refinement', 'procedural_3d', 'model_quality', 'reference_modeling', 'implicit_modeling'),
