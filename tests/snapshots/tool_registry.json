@@ -1,5 +1,5 @@
 {
-  "catalog_tool_count": 218,
+  "catalog_tool_count": 221,
   "contracts": {
     "adaptive_remesh": {
       "description": "Adaptively refine sculpt topology by subdividing edges that exceed a bounded local target derived from edge length, semantic-region weight, and face curvature. Retains interpolated semantic point attributes, optionally relaxes spacing and projects vertices back to the source surface, and enforces input, per-pass, and result vertex limits. This is a form-preserving refinement pass; it does not decimate or promise production retopology.",
@@ -2716,6 +2716,167 @@
         "type": "object"
       },
       "requires_live_preview": true
+    },
+    "auto_reference_sculpt_repair": {
+      "description": "Run one measured repair pass from reference evidence: evaluate all selected calibrated views, choose the worst view, generate coarse bounded screen-space controls from redline silhouette regions, try candidate sculpt strengths, retain only an improved score, then re-evaluate the full view set. This is a deterministic repair coordinator, not a generative model.",
+      "duration_hint": "One multi-view baseline, up to seven candidate renders in the worst view, and one multi-view verification pass.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_all_vertices": {
+            "description": "Allow bounded front-facing all-vertex repair when semantic regions are not available.",
+            "type": "boolean"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "control_step": {
+            "maximum": 0.2,
+            "minimum": 0.001,
+            "type": "number"
+          },
+          "edge_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "landmark_targets": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "location": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "object_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 128,
+            "type": "array"
+          },
+          "landmark_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "mask_threshold": {
+            "maximum": 0.99,
+            "minimum": 0.01,
+            "type": "number"
+          },
+          "max_axis": {
+            "maximum": 1024,
+            "minimum": 64,
+            "type": "integer"
+          },
+          "max_controls": {
+            "maximum": 8,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maximum_world_displacement": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "minimum_improvement": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "outline_name": {
+            "type": "string"
+          },
+          "reference_mask_source": {
+            "enum": [
+              "auto",
+              "outline",
+              "alpha"
+            ],
+            "type": "string"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "strength_candidates": {
+            "items": {
+              "maximum": 4.0,
+              "minimum": -4.0,
+              "type": "number"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "type": "array"
+          },
+          "view_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "type": "array"
+          }
+        },
+        "required": [
+          "object_name",
+          "collection_name"
+        ],
+        "type": "object"
+      },
+      "long_running": true,
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write",
+        "files:read",
+        "files:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true,
+      "timeout_recovery": {
+        "evidence_resource": "blender://inspection-renders/latest/metadata",
+        "poll_after_seconds": 5,
+        "recoverable": true,
+        "status_tool": "blender_bridge_status"
+      }
     },
     "autosave_current_blend_file": {
       "description": "Autosave the current open .blend in place. It has no filepath argument and refuses unsaved scenes.",
@@ -8111,6 +8272,137 @@
       },
       "requires_live_preview": true
     },
+    "evaluate_multiview_reference_match": {
+      "description": "Render a model through every calibrated reference-guide camera in a single-view or multi-view collection, compare silhouettes and optional landmarks, apply the versioned reference benchmark profile per view, and return aggregate, worst-view, gate, redline, and repair-priority evidence. Use this after blockout, visual-hull, depth fitting, and each sculpt repair pass to decide the next measured correction.",
+      "duration_hint": "One bounded still render and image comparison per selected reference view.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "benchmark_profile": {
+            "enum": [
+              "blockout",
+              "refined",
+              "review"
+            ],
+            "type": "string"
+          },
+          "collection_name": {
+            "description": "Exact calibrated reference-guide collection. May be a multi-view master or single-view guide collection.",
+            "type": "string"
+          },
+          "edge_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "landmark_targets": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "location": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "object_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 128,
+            "type": "array"
+          },
+          "landmark_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "mask_threshold": {
+            "maximum": 0.99,
+            "minimum": 0.01,
+            "type": "number"
+          },
+          "max_axis": {
+            "maximum": 1024,
+            "minimum": 64,
+            "type": "integer"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "outline_name": {
+            "type": "string"
+          },
+          "reference_mask_source": {
+            "enum": [
+              "auto",
+              "outline",
+              "alpha"
+            ],
+            "type": "string"
+          },
+          "selected_only": {
+            "type": "boolean"
+          },
+          "threshold_overrides": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "view_names": {
+            "description": "Optional view, camera, or child-collection names.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "long_running": true,
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "files:read",
+        "files:write"
+      ],
+      "supports_headless": true,
+      "timeout_recovery": {
+        "evidence_resource": "blender://inspection-renders/latest/metadata",
+        "poll_after_seconds": 5,
+        "recoverable": true,
+        "status_tool": "blender_bridge_status"
+      }
+    },
     "evaluate_reference_model_benchmark": {
       "description": "Render a model through a calibrated reference camera, publish the mask/redline evidence, evaluate silhouette, edge, centroid, regional, and optional landmark metrics against versioned blockout, refined, or review thresholds, and optionally record the result on a running reference benchmark.",
       "duration_hint": "One bounded still render plus deterministic metric evaluation.",
@@ -12424,6 +12716,212 @@
         "type": "object"
       },
       "requires_live_preview": true
+    },
+    "prepare_reference_images": {
+      "description": "Normalize one to six real reference images into client-neutral guide inputs, generating a bounded cyclic silhouette outline and primary mass from alpha, a supplied mask image, luminance, or an explicit background color when annotation JSON is not supplied. Optionally creates calibrated single-view or multi-view guide scenes. Use this as the image-intake front door before visual hull, depth fitting, blockout, scoring, or sculpt repair.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "active_view": {
+            "type": "string"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "create_guides": {
+            "description": "When false, only returns normalized prepared view objects for another client or later tool call.",
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_mask_axis": {
+            "maximum": 512,
+            "minimum": 16,
+            "type": "integer"
+          },
+          "references": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "annotations": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "annotations_json": {
+                  "type": "string"
+                },
+                "annotations_path": {
+                  "type": "string"
+                },
+                "axis": {
+                  "description": "View axis used when multiple prepared images are turned into calibrated multi-view guides.",
+                  "enum": [
+                    "FRONT",
+                    "BACK",
+                    "LEFT",
+                    "RIGHT",
+                    "TOP",
+                    "BOTTOM",
+                    "CUSTOM"
+                  ],
+                  "type": "string"
+                },
+                "background_color": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "camera_margin": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "default_coordinate_space": {
+                  "enum": [
+                    "pixel",
+                    "normalized"
+                  ],
+                  "type": "string"
+                },
+                "default_origin": {
+                  "enum": [
+                    "top_left",
+                    "bottom_left"
+                  ],
+                  "type": "string"
+                },
+                "guide_offset": {
+                  "maximum": 10.0,
+                  "minimum": -10.0,
+                  "type": "number"
+                },
+                "image_alpha": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "image_path": {
+                  "description": "Local reference image path supplied by the user, a file picker, prior capture, or trusted local source.",
+                  "type": "string"
+                },
+                "include_image_plane": {
+                  "type": "boolean"
+                },
+                "mask_mode": {
+                  "enum": [
+                    "auto",
+                    "alpha",
+                    "luminance",
+                    "background_color"
+                  ],
+                  "type": "string"
+                },
+                "mask_path": {
+                  "description": "Optional local foreground mask image. When annotations are omitted, this mask can generate a cyclic silhouette outline and primary mass.",
+                  "type": "string"
+                },
+                "mask_threshold": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "mass_name": {
+                  "type": "string"
+                },
+                "max_outline_points": {
+                  "maximum": 192,
+                  "minimum": 12,
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "outline_name": {
+                  "type": "string"
+                },
+                "plane_height": {
+                  "maximum": 100.0,
+                  "minimum": 0.01,
+                  "type": "number"
+                },
+                "subject": {
+                  "type": "string"
+                },
+                "up_direction": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "view_direction": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "image_path"
+              ],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "type": "array"
+          },
+          "require_annotations": {
+            "description": "When true, disables generated masks and requires supplied annotation JSON.",
+            "type": "boolean"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "subject_center": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "required": [
+          "references"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "path_policy": "Every image_path, mask_path, and annotations_path must be a local path explicitly supplied by the user, a file picker, a prior capture, or another trusted local source. The generated silhouette path is deterministic and does not call an external model.",
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write",
+        "files:read"
+      ],
+      "requires_live_preview": true,
+      "requires_user_path": true
     },
     "prune_external_asset_cache": {
       "description": "Preview or delete old/excess external asset cache directories by age or total size. Dry-run by default.",
@@ -21410,6 +21908,189 @@
       "name": "create_reference_guides_from_annotations"
     },
     {
+      "description": "Normalize one to six real reference images into client-neutral guide inputs, generating a bounded cyclic silhouette outline and primary mass from alpha, a supplied mask image, luminance, or an explicit background color when annotation JSON is not supplied. Optionally creates calibrated single-view or multi-view guide scenes. Use this as the image-intake front door before visual hull, depth fitting, blockout, scoring, or sculpt repair.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "active_view": {
+            "type": "string"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "create_guides": {
+            "description": "When false, only returns normalized prepared view objects for another client or later tool call.",
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_mask_axis": {
+            "maximum": 512,
+            "minimum": 16,
+            "type": "integer"
+          },
+          "references": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "annotations": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "annotations_json": {
+                  "type": "string"
+                },
+                "annotations_path": {
+                  "type": "string"
+                },
+                "axis": {
+                  "description": "View axis used when multiple prepared images are turned into calibrated multi-view guides.",
+                  "enum": [
+                    "FRONT",
+                    "BACK",
+                    "LEFT",
+                    "RIGHT",
+                    "TOP",
+                    "BOTTOM",
+                    "CUSTOM"
+                  ],
+                  "type": "string"
+                },
+                "background_color": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "camera_margin": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "default_coordinate_space": {
+                  "enum": [
+                    "pixel",
+                    "normalized"
+                  ],
+                  "type": "string"
+                },
+                "default_origin": {
+                  "enum": [
+                    "top_left",
+                    "bottom_left"
+                  ],
+                  "type": "string"
+                },
+                "guide_offset": {
+                  "maximum": 10.0,
+                  "minimum": -10.0,
+                  "type": "number"
+                },
+                "image_alpha": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "image_path": {
+                  "description": "Local reference image path supplied by the user, a file picker, prior capture, or trusted local source.",
+                  "type": "string"
+                },
+                "include_image_plane": {
+                  "type": "boolean"
+                },
+                "mask_mode": {
+                  "enum": [
+                    "auto",
+                    "alpha",
+                    "luminance",
+                    "background_color"
+                  ],
+                  "type": "string"
+                },
+                "mask_path": {
+                  "description": "Optional local foreground mask image. When annotations are omitted, this mask can generate a cyclic silhouette outline and primary mass.",
+                  "type": "string"
+                },
+                "mask_threshold": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "mass_name": {
+                  "type": "string"
+                },
+                "max_outline_points": {
+                  "maximum": 192,
+                  "minimum": 12,
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "outline_name": {
+                  "type": "string"
+                },
+                "plane_height": {
+                  "maximum": 100.0,
+                  "minimum": 0.01,
+                  "type": "number"
+                },
+                "subject": {
+                  "type": "string"
+                },
+                "up_direction": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "view_direction": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "image_path"
+              ],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "type": "array"
+          },
+          "require_annotations": {
+            "description": "When true, disables generated masks and requires supplied annotation JSON.",
+            "type": "boolean"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "subject_center": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "required": [
+          "references"
+        ],
+        "type": "object"
+      },
+      "name": "prepare_reference_images"
+    },
+    {
       "description": "Create two to six calibrated reference-image guide collections and reconstruct shared landmark names as 3D empties. Supports front/back/left/right/top/bottom presets or custom orthographic bases, keeps each image, outline, and camera isolated by view, solves landmark rays by least squares, reports residual and view-angle quality, and can add hidden reconstruction connectors. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
@@ -22306,6 +22987,108 @@
         "type": "object"
       },
       "name": "compare_model_to_reference"
+    },
+    {
+      "description": "Render a model through every calibrated reference-guide camera in a single-view or multi-view collection, compare silhouettes and optional landmarks, apply the versioned reference benchmark profile per view, and return aggregate, worst-view, gate, redline, and repair-priority evidence. Use this after blockout, visual-hull, depth fitting, and each sculpt repair pass to decide the next measured correction.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "benchmark_profile": {
+            "enum": [
+              "blockout",
+              "refined",
+              "review"
+            ],
+            "type": "string"
+          },
+          "collection_name": {
+            "description": "Exact calibrated reference-guide collection. May be a multi-view master or single-view guide collection.",
+            "type": "string"
+          },
+          "edge_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "landmark_targets": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "location": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "object_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 128,
+            "type": "array"
+          },
+          "landmark_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "mask_threshold": {
+            "maximum": 0.99,
+            "minimum": 0.01,
+            "type": "number"
+          },
+          "max_axis": {
+            "maximum": 1024,
+            "minimum": 64,
+            "type": "integer"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "outline_name": {
+            "type": "string"
+          },
+          "reference_mask_source": {
+            "enum": [
+              "auto",
+              "outline",
+              "alpha"
+            ],
+            "type": "string"
+          },
+          "selected_only": {
+            "type": "boolean"
+          },
+          "threshold_overrides": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "view_names": {
+            "description": "Optional view, camera, or child-collection names.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "name": "evaluate_multiview_reference_match"
     },
     {
       "description": "Automatically derive silhouette, optional calibrated depth, and reconstructed-landmark corrections from every selected reference view, diffuse them through a feature-aware Laplacian field, and try bounded coarse-to-fine step sizes. A candidate is accepted only when the aggregate objective improves without exceeding the per-view regression tolerance; otherwise the mesh is restored. Every depth source must overlap eligible surface vertices, and shape-key meshes are rejected. Optional rendered redlines provide before/after verification.",
@@ -23706,6 +24489,135 @@
         "type": "object"
       },
       "name": "optimize_screen_space_sculpt"
+    },
+    {
+      "description": "Run one measured repair pass from reference evidence: evaluate all selected calibrated views, choose the worst view, generate coarse bounded screen-space controls from redline silhouette regions, try candidate sculpt strengths, retain only an improved score, then re-evaluate the full view set. This is a deterministic repair coordinator, not a generative model.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_all_vertices": {
+            "description": "Allow bounded front-facing all-vertex repair when semantic regions are not available.",
+            "type": "boolean"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "control_step": {
+            "maximum": 0.2,
+            "minimum": 0.001,
+            "type": "number"
+          },
+          "edge_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "landmark_targets": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "location": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "object_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 128,
+            "type": "array"
+          },
+          "landmark_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "mask_threshold": {
+            "maximum": 0.99,
+            "minimum": 0.01,
+            "type": "number"
+          },
+          "max_axis": {
+            "maximum": 1024,
+            "minimum": 64,
+            "type": "integer"
+          },
+          "max_controls": {
+            "maximum": 8,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maximum_world_displacement": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "minimum_improvement": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "outline_name": {
+            "type": "string"
+          },
+          "reference_mask_source": {
+            "enum": [
+              "auto",
+              "outline",
+              "alpha"
+            ],
+            "type": "string"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "strength_candidates": {
+            "items": {
+              "maximum": 4.0,
+              "minimum": -4.0,
+              "type": "number"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "type": "array"
+          },
+          "view_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "type": "array"
+          }
+        },
+        "required": [
+          "object_name",
+          "collection_name"
+        ],
+        "type": "object"
+      },
+      "name": "auto_reference_sculpt_repair"
     },
     {
       "description": "Set render engine, resolution, FPS, frame range, transparency, look-dev quality preset, samples, denoise, and color management. Applies immediately with preview revert support.",
@@ -27412,12 +28324,14 @@
       "create_curve_path",
       "create_reference_modeling_guides",
       "create_reference_guides_from_annotations",
+      "prepare_reference_images",
       "create_multiview_reference_guides",
       "create_multiview_visual_hull",
       "create_multiview_depth_surface",
       "fit_surface_to_multiview_references",
       "inspect_reference_modeling_guides",
       "compare_model_to_reference",
+      "evaluate_multiview_reference_match",
       "create_reference_blockout",
       "adaptive_remesh",
       "define_semantic_sculpt_regions",
@@ -27426,6 +28340,7 @@
       "apply_form_aware_sculpt",
       "apply_screen_space_sculpt",
       "optimize_screen_space_sculpt",
+      "auto_reference_sculpt_repair",
       "apply_procedural_array_stack",
       "boolean_op",
       "mirror_model",
@@ -27529,7 +28444,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "06a347717e093e42ed47669ccdf1d63cf84525edb91e070bcfa2a8cc6713f53e",
+  "registry_digest": "f5cb80fddf22782d8edba9063821d050a043155641aa26b3fd87317125dc1889",
   "schema_version": 1,
   "specs": [
     {
@@ -38042,6 +38957,225 @@
     },
     {
       "contract": {
+        "description": "Validate and normalize local reference images, optional masks, and annotation JSON into calibrated guide inputs",
+        "mutates_scene": true,
+        "path_policy": "Every image_path, mask_path, and annotations_path must be a local path explicitly supplied by the user, a file picker, a prior capture, or another trusted local source. The generated silhouette path is deterministic and does not call an external model.",
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write",
+          "files:read"
+        ],
+        "requires_live_preview": true,
+        "requires_user_path": true
+      },
+      "description": "Normalize one to six real reference images into client-neutral guide inputs, generating a bounded cyclic silhouette outline and primary mass from alpha, a supplied mask image, luminance, or an explicit background color when annotation JSON is not supplied. Optionally creates calibrated single-view or multi-view guide scenes. Use this as the image-intake front door before visual hull, depth fitting, blockout, scoring, or sculpt repair.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "reference_modeling",
+        "reference_intake"
+      ],
+      "handler_key": "prepare_reference_images",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "active_view": {
+            "type": "string"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "create_guides": {
+            "description": "When false, only returns normalized prepared view objects for another client or later tool call.",
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_mask_axis": {
+            "maximum": 512,
+            "minimum": 16,
+            "type": "integer"
+          },
+          "references": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "annotations": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "annotations_json": {
+                  "type": "string"
+                },
+                "annotations_path": {
+                  "type": "string"
+                },
+                "axis": {
+                  "description": "View axis used when multiple prepared images are turned into calibrated multi-view guides.",
+                  "enum": [
+                    "FRONT",
+                    "BACK",
+                    "LEFT",
+                    "RIGHT",
+                    "TOP",
+                    "BOTTOM",
+                    "CUSTOM"
+                  ],
+                  "type": "string"
+                },
+                "background_color": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "camera_margin": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "default_coordinate_space": {
+                  "enum": [
+                    "pixel",
+                    "normalized"
+                  ],
+                  "type": "string"
+                },
+                "default_origin": {
+                  "enum": [
+                    "top_left",
+                    "bottom_left"
+                  ],
+                  "type": "string"
+                },
+                "guide_offset": {
+                  "maximum": 10.0,
+                  "minimum": -10.0,
+                  "type": "number"
+                },
+                "image_alpha": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "image_path": {
+                  "description": "Local reference image path supplied by the user, a file picker, prior capture, or trusted local source.",
+                  "type": "string"
+                },
+                "include_image_plane": {
+                  "type": "boolean"
+                },
+                "mask_mode": {
+                  "enum": [
+                    "auto",
+                    "alpha",
+                    "luminance",
+                    "background_color"
+                  ],
+                  "type": "string"
+                },
+                "mask_path": {
+                  "description": "Optional local foreground mask image. When annotations are omitted, this mask can generate a cyclic silhouette outline and primary mass.",
+                  "type": "string"
+                },
+                "mask_threshold": {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                "mass_name": {
+                  "type": "string"
+                },
+                "max_outline_points": {
+                  "maximum": 192,
+                  "minimum": 12,
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "outline_name": {
+                  "type": "string"
+                },
+                "plane_height": {
+                  "maximum": 100.0,
+                  "minimum": 0.01,
+                  "type": "number"
+                },
+                "subject": {
+                  "type": "string"
+                },
+                "up_direction": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "view_direction": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "image_path"
+              ],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "type": "array"
+          },
+          "require_annotations": {
+            "description": "When true, disables generated masks and requires supplied annotation JSON.",
+            "type": "boolean"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "subject_center": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "required": [
+          "references"
+        ],
+        "type": "object"
+      },
+      "name": "prepare_reference_images",
+      "order": 1072,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
         "description": "Create calibrated multi-view guide collections and least-squares 3D landmarks",
         "mutates_scene": true,
         "path_policy": "Every view image_path and optional annotations_path must be a local path explicitly supplied by the user, a file picker, a prior capture, or another trusted local source. Annotation objects and JSON text are parsed in memory.",
@@ -39144,6 +40278,150 @@
       },
       "name": "compare_model_to_reference",
       "order": 1077,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
+        "description": "Measure multi-view render-to-reference fit and return aggregate benchmark evidence",
+        "duration_hint": "One bounded still render and image comparison per selected reference view.",
+        "has_side_effects": true,
+        "long_running": true,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read",
+          "files:read",
+          "files:write"
+        ],
+        "supports_headless": true,
+        "timeout_recovery": {
+          "evidence_resource": "blender://inspection-renders/latest/metadata",
+          "poll_after_seconds": 5,
+          "recoverable": true,
+          "status_tool": "blender_bridge_status"
+        }
+      },
+      "description": "Render a model through every calibrated reference-guide camera in a single-view or multi-view collection, compare silhouettes and optional landmarks, apply the versioned reference benchmark profile per view, and return aggregate, worst-view, gate, redline, and repair-priority evidence. Use this after blockout, visual-hull, depth fitting, and each sculpt repair pass to decide the next measured correction.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "reference_modeling",
+        "reference_scoring"
+      ],
+      "handler_key": "evaluate_multiview_reference_match",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "benchmark_profile": {
+            "enum": [
+              "blockout",
+              "refined",
+              "review"
+            ],
+            "type": "string"
+          },
+          "collection_name": {
+            "description": "Exact calibrated reference-guide collection. May be a multi-view master or single-view guide collection.",
+            "type": "string"
+          },
+          "edge_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "landmark_targets": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "location": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "object_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 128,
+            "type": "array"
+          },
+          "landmark_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "mask_threshold": {
+            "maximum": 0.99,
+            "minimum": 0.01,
+            "type": "number"
+          },
+          "max_axis": {
+            "maximum": 1024,
+            "minimum": 64,
+            "type": "integer"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "outline_name": {
+            "type": "string"
+          },
+          "reference_mask_source": {
+            "enum": [
+              "auto",
+              "outline",
+              "alpha"
+            ],
+            "type": "string"
+          },
+          "selected_only": {
+            "type": "boolean"
+          },
+          "threshold_overrides": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "view_names": {
+            "description": "Optional view, camera, or child-collection names.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "name": "evaluate_multiview_reference_match",
+      "order": 1078,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -40931,6 +42209,181 @@
       },
       "name": "optimize_screen_space_sculpt",
       "order": 1090,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
+        "description": "Generate reference-derived sculpt controls and retain only measured score improvement",
+        "duration_hint": "One multi-view baseline, up to seven candidate renders in the worst view, and one multi-view verification pass.",
+        "has_side_effects": true,
+        "long_running": true,
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write",
+          "files:read",
+          "files:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true,
+        "timeout_recovery": {
+          "evidence_resource": "blender://inspection-renders/latest/metadata",
+          "poll_after_seconds": 5,
+          "recoverable": true,
+          "status_tool": "blender_bridge_status"
+        }
+      },
+      "description": "Run one measured repair pass from reference evidence: evaluate all selected calibrated views, choose the worst view, generate coarse bounded screen-space controls from redline silhouette regions, try candidate sculpt strengths, retain only an improved score, then re-evaluate the full view set. This is a deterministic repair coordinator, not a generative model.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "reference_modeling",
+        "semantic_sculpt",
+        "reference_scoring"
+      ],
+      "handler_key": "auto_reference_sculpt_repair",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_all_vertices": {
+            "description": "Allow bounded front-facing all-vertex repair when semantic regions are not available.",
+            "type": "boolean"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "control_step": {
+            "maximum": 0.2,
+            "minimum": 0.001,
+            "type": "number"
+          },
+          "edge_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "landmark_targets": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "location": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "object_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 128,
+            "type": "array"
+          },
+          "landmark_weight": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "mask_threshold": {
+            "maximum": 0.99,
+            "minimum": 0.01,
+            "type": "number"
+          },
+          "max_axis": {
+            "maximum": 1024,
+            "minimum": 64,
+            "type": "integer"
+          },
+          "max_controls": {
+            "maximum": 8,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maximum_world_displacement": {
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "minimum_improvement": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "outline_name": {
+            "type": "string"
+          },
+          "reference_mask_source": {
+            "enum": [
+              "auto",
+              "outline",
+              "alpha"
+            ],
+            "type": "string"
+          },
+          "region_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "strength_candidates": {
+            "items": {
+              "maximum": 4.0,
+              "minimum": -4.0,
+              "type": "number"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "type": "array"
+          },
+          "view_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "type": "array"
+          }
+        },
+        "required": [
+          "object_name",
+          "collection_name"
+        ],
+        "type": "object"
+      },
+      "name": "auto_reference_sculpt_repair",
+      "order": 1091,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -48973,5 +50426,5 @@
       "owner": "scripts_transactions"
     }
   ],
-  "tool_count": 219
+  "tool_count": 222
 }

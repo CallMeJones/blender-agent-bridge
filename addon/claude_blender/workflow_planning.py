@@ -27,6 +27,7 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "plan_model_quality_workflow",
             "list_scene_objects",
             "get_blend_file_diagnostics",
+            "prepare_reference_images",
             "create_reference_guides_from_annotations",
             "create_multiview_reference_guides",
             "create_multiview_visual_hull",
@@ -38,6 +39,8 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "adaptive_remesh",
             *_SEMANTIC_SCULPT_TOOL_NAMES,
             "compare_model_to_reference",
+            "evaluate_multiview_reference_match",
+            "auto_reference_sculpt_repair",
             "inspect_modeling_quality",
             "plan_advanced_scene_workflow",
             "capture_viewport",
@@ -46,10 +49,11 @@ ADVANCED_WORKFLOW_DOMAINS = {
         ],
         "script_boundary": (
             "Use an LLM-authored reference brief and model-quality rubric before "
-            "building. For calibrated multi-view evidence, construct a visual hull or "
-            "depth-constrained surface, run joint measured fitting, and adapt topology "
-            "only where needed before persistent semantic regions and measured "
-            "form-aware or screen-space repairs. Under active trust, cohesive "
+            "building. For raw reference images, normalize intake and masks first. "
+            "For calibrated multi-view evidence, construct a visual hull or "
+            "depth-constrained surface, run joint measured fitting, score every view, "
+            "and adapt topology only where needed before persistent semantic regions "
+            "and measured form-aware or screen-space repairs. Under active trust, cohesive "
             "scripts remain appropriate for bespoke construction that the bounded "
             "fields cannot express."
         ),
@@ -785,12 +789,15 @@ def plan_model_quality_workflow(
                     "it supersedes a guessed single-view depth blockout."
                 ),
                 "sequence": [
+                    "prepare_reference_images when ordinary images or masks need normalized guide inputs",
                     "create_multiview_reference_guides",
                     "create_multiview_depth_surface when calibrated depth evidence exists; otherwise create_multiview_visual_hull",
                     "fit_surface_to_multiview_references",
+                    "evaluate_multiview_reference_match",
                     "adaptive_remesh",
                     "define_semantic_sculpt_regions",
-                    "apply_form_aware_sculpt or a calibrated screen-space sculpt",
+                    "auto_reference_sculpt_repair or apply_form_aware_sculpt/calibrated screen-space sculpt",
+                    "evaluate_multiview_reference_match",
                 ],
                 "preview_each_mutation": True,
                 "fit_acceptance": (
@@ -1046,11 +1053,12 @@ def plan_model_quality_workflow(
                 "target-dependent inspection and evidence calls only after refresh_targets is non-empty."
             ),
             "Use the actual reference image and captured evidence to score every applicable criterion; the planner does not infer visual anatomy or surface treatment.",
+            "Use prepare_reference_images before guide creation when the client has images, alpha masks, or mask images but no annotation JSON.",
             "Do not begin surface detail until every applicable form_evidence_gate score meets the quality floor.",
             "Repair scores below the quality floor and recapture evidence, up to the bounded repair-pass limit.",
             (
                 "For localized form errors, define and inspect semantic regions, then choose exactly one of "
-                "apply_semantic_sculpt, apply_form_aware_sculpt, apply_screen_space_sculpt, or optimize_screen_space_sculpt."
+                "apply_semantic_sculpt, apply_form_aware_sculpt, apply_screen_space_sculpt, optimize_screen_space_sculpt, or auto_reference_sculpt_repair."
             ),
             (
                 "For broad silhouette or calibrated depth disagreement across views, use fit_surface_to_multiview_references before localized semantic repair."

@@ -19,8 +19,8 @@ SNAPSHOT_PATH = os.path.join(ROOT, "tests", "snapshots", "tool_registry.json")
 class ToolRegistryTests(unittest.TestCase):
     def test_inventory_is_complete_and_domain_owned(self):
         specs = tool_registry.REGISTRY.specs()
-        self.assertEqual(219, len(specs))
-        self.assertEqual(218, len(tool_registry.definitions()))
+        self.assertEqual(222, len(specs))
+        self.assertEqual(221, len(tool_registry.definitions()))
         self.assertEqual(12, len(tool_registry.DOMAIN_MODULES))
         self.assertEqual({spec.name for spec in specs}, set(bridge_protocol.TOOL_CONTRACTS))
         self.assertEqual(
@@ -73,6 +73,7 @@ class ToolRegistryTests(unittest.TestCase):
                 "apply_form_aware_sculpt",
                 "apply_screen_space_sculpt",
                 "optimize_screen_space_sculpt",
+                "auto_reference_sculpt_repair",
             },
             tool_registry.group_map()["semantic_sculpt"],
         )
@@ -104,6 +105,7 @@ class ToolRegistryTests(unittest.TestCase):
     def test_reference_file_access_contracts_are_explicit(self):
         for name in (
             "create_reference_modeling_guides",
+            "prepare_reference_images",
             "create_reference_guides_from_annotations",
             "create_multiview_reference_guides",
             "create_multiview_depth_surface",
@@ -118,7 +120,9 @@ class ToolRegistryTests(unittest.TestCase):
 
         for name in (
             "compare_model_to_reference",
+            "evaluate_multiview_reference_match",
             "evaluate_reference_model_benchmark",
+            "auto_reference_sculpt_repair",
         ):
             with self.subTest(tool=name):
                 annotations = bridge_protocol.mcp_annotations_for_tool(name)

@@ -13,6 +13,7 @@ Start with the top-level `README.md`, then use these deeper notes for developmen
 - [SHOWCASE.md](SHOWCASE.md) - curated community showcase and submission requirements.
 - [ADDING_A_TOOL.md](ADDING_A_TOOL.md) - canonical registry, handler, safety, snapshot, and test workflow for contributors.
 - [MULTIVIEW_RECONSTRUCTION.md](MULTIVIEW_RECONSTRUCTION.md) - calibrated silhouette/depth fusion, joint surface fitting, bounded adaptive topology, and form-aware brush fields.
+- [REFERENCE_IMAGE_INTAKE.md](REFERENCE_IMAGE_INTAKE.md) - deterministic image/mask intake, multi-view scoring, and score-retained sculpt repair.
 - [SEMANTIC_SCULPTING.md](SEMANTIC_SCULPTING.md) - model-neutral semantic regions, deterministic 3D fields, calibrated contour pulls, and measured optimization.
 - [GOOD_FIRST_ISSUES.md](GOOD_FIRST_ISSUES.md) - bounded tasks maintainers can promote into labelled contributor issues.
 

@@ -9,6 +9,7 @@ from .. import (
     reference_blockout,
     reference_comparison,
     reference_guides,
+    reference_image_intake,
     reference_multiview_scene,
     reference_surface_fitting,
     reference_visual_hull,
@@ -110,6 +111,27 @@ def create_reference_guides_from_annotations(context, args):
         label=args.get(
             "label", "Create reference guides from annotations"
         ),
+    )
+
+
+def prepare_reference_images(context, args):
+    return reference_image_intake.prepare_reference_images(
+        context,
+        references=args.get("references") if isinstance(args.get("references"), list) else [],
+        subject=str(args.get("subject") or "reference model"),
+        collection_name=str(
+            args.get("collection_name") or "Reference Image Intake Guides"
+        ),
+        subject_center=_float_list(
+            args.get("subject_center"), 3, (0.0, 0.0, 1.5)
+        ),
+        active_view=str(args.get("active_view") or ""),
+        create_guides=bool(args.get("create_guides", True)),
+        require_annotations=bool(args.get("require_annotations", False)),
+        max_mask_axis=_bounded_int(
+            args.get("max_mask_axis"), 256, minimum=16, maximum=512
+        ),
+        label=str(args.get("label") or "Prepare reference images"),
     )
 
 
@@ -367,6 +389,87 @@ def compare_model_to_reference(context, args):
             args.get("mask_threshold"), 0.5, minimum=0.01, maximum=0.99
         ),
         capture_dir=getattr(prefs, "capture_cache_dir", None),
+    )
+
+
+def evaluate_multiview_reference_match(context, args):
+    prefs = preferences.get_preferences(context)
+    return reference_image_intake.evaluate_multiview_reference_match(
+        context,
+        collection_name=str(args.get("collection_name") or ""),
+        object_names=_name_list(args.get("object_names")),
+        selected_only=bool(args.get("selected_only", True)),
+        view_names=_name_list(args.get("view_names")),
+        outline_name=str(args.get("outline_name") or ""),
+        reference_mask_source=str(args.get("reference_mask_source") or "auto"),
+        landmark_targets=(
+            args.get("landmark_targets")
+            if isinstance(args.get("landmark_targets"), list)
+            else []
+        ),
+        benchmark_profile=str(args.get("benchmark_profile") or "refined"),
+        threshold_overrides=(
+            args.get("threshold_overrides")
+            if isinstance(args.get("threshold_overrides"), dict)
+            else {}
+        ),
+        max_axis=_bounded_int(args.get("max_axis"), 384, minimum=64, maximum=1024),
+        mask_threshold=_bounded_float(
+            args.get("mask_threshold"), 0.5, minimum=0.01, maximum=0.99
+        ),
+        edge_weight=_bounded_float(
+            args.get("edge_weight"), 0.25, minimum=0.0, maximum=10.0
+        ),
+        landmark_weight=_bounded_float(
+            args.get("landmark_weight"), 0.1, minimum=0.0, maximum=10.0
+        ),
+        capture_dir=getattr(prefs, "capture_cache_dir", None),
+    )
+
+
+def auto_reference_sculpt_repair(context, args):
+    prefs = preferences.get_preferences(context)
+    return reference_image_intake.auto_reference_sculpt_repair(
+        context,
+        object_name=str(args.get("object_name") or ""),
+        collection_name=str(args.get("collection_name") or ""),
+        view_names=_name_list(args.get("view_names")),
+        region_names=_name_list(args.get("region_names")),
+        allow_all_vertices=bool(args.get("allow_all_vertices", False)),
+        outline_name=str(args.get("outline_name") or ""),
+        reference_mask_source=str(args.get("reference_mask_source") or "auto"),
+        strength_candidates=(
+            args.get("strength_candidates")
+            if isinstance(args.get("strength_candidates"), list)
+            else []
+        ),
+        minimum_improvement=_bounded_float(
+            args.get("minimum_improvement"), 0.0005, minimum=0.0, maximum=1.0
+        ),
+        max_controls=_bounded_int(args.get("max_controls"), 4, minimum=1, maximum=8),
+        control_step=_bounded_float(
+            args.get("control_step"), 0.045, minimum=0.001, maximum=0.2
+        ),
+        maximum_world_displacement=_bounded_float(
+            args.get("maximum_world_displacement"), 0.05, minimum=0.0, maximum=10.0
+        ),
+        max_axis=_bounded_int(args.get("max_axis"), 256, minimum=64, maximum=1024),
+        mask_threshold=_bounded_float(
+            args.get("mask_threshold"), 0.5, minimum=0.01, maximum=0.99
+        ),
+        edge_weight=_bounded_float(
+            args.get("edge_weight"), 0.25, minimum=0.0, maximum=10.0
+        ),
+        landmark_weight=_bounded_float(
+            args.get("landmark_weight"), 0.1, minimum=0.0, maximum=10.0
+        ),
+        landmark_targets=(
+            args.get("landmark_targets")
+            if isinstance(args.get("landmark_targets"), list)
+            else []
+        ),
+        capture_dir=getattr(prefs, "capture_cache_dir", None),
+        label=str(args.get("label") or "Auto reference sculpt repair"),
     )
 
 

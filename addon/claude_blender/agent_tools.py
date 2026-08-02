@@ -80,6 +80,7 @@ _REFERENCE_QUALITY_TOOL_NAMES = {
     "plan_advanced_scene_workflow",
     "list_scene_objects",
     "get_blend_file_diagnostics",
+    "prepare_reference_images",
     "create_reference_guides_from_annotations",
     "create_multiview_reference_guides",
     "create_multiview_visual_hull",
@@ -88,6 +89,8 @@ _REFERENCE_QUALITY_TOOL_NAMES = {
     "create_reference_modeling_guides",
     "inspect_reference_modeling_guides",
     "compare_model_to_reference",
+    "evaluate_multiview_reference_match",
+    "auto_reference_sculpt_repair",
     "evaluate_reference_model_benchmark",
     "create_reference_blockout",
     "adaptive_remesh",
@@ -104,13 +107,12 @@ _REFERENCE_QUALITY_REQUIRED_TOOL_NAMES = {
     "plan_model_quality_workflow",
     "plan_advanced_scene_workflow",
     "create_reference_guides_from_annotations",
+    "prepare_reference_images",
     "create_multiview_reference_guides",
-    "create_reference_modeling_guides",
     "inspect_reference_modeling_guides",
     "compare_model_to_reference",
-    "evaluate_reference_model_benchmark",
+    "evaluate_multiview_reference_match",
     "create_reference_blockout",
-    "create_directional_fur_curves",
     "inspect_modeling_quality",
     "capture_viewport",
     "capture_object_inspection_renders",
@@ -118,11 +120,15 @@ _REFERENCE_QUALITY_REQUIRED_TOOL_NAMES = {
 }
 _TOOL_GROUPS = tool_registry.group_map()
 _SEMANTIC_SCULPT_TOOL_NAMES = set(_TOOL_GROUPS["semantic_sculpt"])
-_SEMANTIC_SCULPT_REQUIRED_TOOL_NAMES = _SEMANTIC_SCULPT_TOOL_NAMES | {
+_SEMANTIC_SCULPT_REQUIRED_TOOL_NAMES = (
+    _SEMANTIC_SCULPT_TOOL_NAMES - {"auto_reference_sculpt_repair"}
+) | {
     "plan_model_quality_workflow",
     "create_reference_guides_from_annotations",
+    "prepare_reference_images",
     "inspect_reference_modeling_guides",
     "compare_model_to_reference",
+    "evaluate_multiview_reference_match",
     "capture_viewport",
     "commit_preview",
     "revert_preview",
@@ -299,6 +305,26 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         request_text,
         {"adaptive remesh", "adaptive remeshing", "sculpt topology"},
     )
+    auto_reference_repair_request = _contains_keyword(
+        request_text,
+        {
+            "auto reference repair",
+            "automatic reference repair",
+            "auto sculpt repair",
+            "automatic sculpt repair",
+            "redline repair",
+        },
+    )
+    reference_benchmark_request = _contains_keyword(
+        request_text,
+        {
+            "reference benchmark",
+            "benchmark profile",
+            "quality gate profile",
+            "benchmark quality gate",
+            "evaluate reference benchmark",
+        },
+    )
     script_first_authored_request = helper_routing.is_script_first_authored_request(
         request_text
     )
@@ -375,6 +401,12 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
     if adaptive_remesh_request:
         selected.add("adaptive_remesh")
         matched_groups.append("adaptive_topology")
+    if auto_reference_repair_request:
+        selected.add("auto_reference_sculpt_repair")
+        matched_groups.append("reference_scoring")
+    if reference_benchmark_request:
+        selected.add("evaluate_reference_model_benchmark")
+        matched_groups.append("reference_benchmark")
 
     if helper_routing.should_include_draft_script(request_text, matched_groups):
         selected.update(_FALLBACK_TOOL_NAMES)
@@ -408,6 +440,10 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         protected.add("fit_surface_to_multiview_references")
     if adaptive_remesh_request:
         protected.add("adaptive_remesh")
+    if auto_reference_repair_request:
+        protected.add("auto_reference_sculpt_repair")
+    if reference_benchmark_request:
+        protected.add("evaluate_reference_model_benchmark")
     specific_refinement_groups = {"vehicle", "product", "character"}.intersection(matched_groups)
     for group in matched_groups:
         if quality_reference_request:

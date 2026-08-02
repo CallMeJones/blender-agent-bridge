@@ -436,14 +436,13 @@ def main():
             bundle,
         )
         reference_names = _names(reference_tools)
+        assert "prepare_reference_images" in reference_names, reference_meta
         assert "create_reference_guides_from_annotations" in reference_names, reference_meta
         assert "create_multiview_reference_guides" in reference_names, reference_meta
-        assert "create_reference_modeling_guides" in reference_names, reference_meta
         assert "inspect_reference_modeling_guides" in reference_names, reference_meta
         assert "compare_model_to_reference" in reference_names, reference_meta
-        assert "evaluate_reference_model_benchmark" in reference_names, reference_meta
+        assert "evaluate_multiview_reference_match" in reference_names, reference_meta
         assert "create_reference_blockout" in reference_names, reference_meta
-        assert "create_directional_fur_curves" in reference_names, reference_meta
         assert "plan_model_quality_workflow" in reference_names, reference_meta
         assert (
             reference_meta["schema_chars"]
