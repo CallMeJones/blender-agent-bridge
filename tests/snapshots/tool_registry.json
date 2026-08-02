@@ -1,5 +1,5 @@
 {
-  "catalog_tool_count": 221,
+  "catalog_tool_count": 223,
   "contracts": {
     "adaptive_remesh": {
       "description": "Adaptively refine sculpt topology by subdividing edges that exceed a bounded local target derived from edge length, semantic-region weight, and face curvature. Retains interpolated semantic point attributes, optionally relaxes spacing and projects vertices back to the source surface, and enforces input, per-pass, and result vertex limits. This is a form-preserving refinement pass; it does not decimate or promise production retopology.",
@@ -3172,6 +3172,83 @@
         "type": "object"
       },
       "requires_live_preview": true
+    },
+    "build_part_aware_base_mesh": {
+      "description": "Build sculptable base geometry from a stored reference part graph. Organic roles are converted to deformed ellipsoid components and optionally blended into a soft voxel-remesh union; feature roles such as eyes and nose can remain separate for later material/detail work. Use before adaptive remeshing, form-aware sculpt fields, fur flow, and scored repair.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "blend_organic_parts": {
+            "type": "boolean"
+          },
+          "include_feature_parts": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "part_graph_collection_name": {
+            "description": "Exact collection created by create_reference_part_graph. May be omitted only when exactly one exists.",
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "rings": {
+            "maximum": 64,
+            "minimum": 4,
+            "type": "integer"
+          },
+          "segments": {
+            "maximum": 128,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "show_components": {
+            "type": "boolean"
+          },
+          "smooth_iterations": {
+            "maximum": 20,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "voxel_size": {
+            "maximum": 10.0,
+            "minimum": 0.001,
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
     },
     "cancel_external_asset_import_job": {
       "description": "Cancel a queued external asset import job. Imports already running on Blender's main thread cannot be interrupted safely.",
@@ -6680,6 +6757,250 @@
       ],
       "requires_live_preview": true,
       "requires_user_path": true
+    },
+    "create_reference_part_graph": {
+      "description": "Infer a bounded editable part graph from calibrated reference guides: named parts, roles, centers, radii, camera-basis axes, parent links, symmetry keys, source evidence, and heuristic warnings. Use after reference image intake or annotation guides and before part-aware base mesh construction, feature stacks, fur flow, or part-targeted repair.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "active_view": {
+            "description": "Optional child view name when collection_name is a multi-view master.",
+            "type": "string"
+          },
+          "camera_name": {
+            "description": "Optional calibrated camera override.",
+            "type": "string"
+          },
+          "collection_name": {
+            "description": "Exact calibrated reference-guide collection. May be a single-view guide collection or a multi-view master; multi-view masters use active_view or the first child guide.",
+            "type": "string"
+          },
+          "create_markers": {
+            "type": "boolean"
+          },
+          "depth_ratio": {
+            "maximum": 3.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "mass_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "mass_settings": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "controls": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "direction": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "falloff": {
+                        "maximum": 2.0,
+                        "minimum": 0.01,
+                        "type": "number"
+                      },
+                      "offset": {
+                        "maximum": 2.0,
+                        "minimum": -2.0,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "direction",
+                      "offset"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 32,
+                  "type": "array"
+                },
+                "depth_ratio": {
+                  "maximum": 3.0,
+                  "minimum": 0.05,
+                  "type": "number"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "offset": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "scale": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "max_parts": {
+            "maximum": 64,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "part_hints": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "basis": {
+                  "items": {
+                    "items": {
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "center": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "controls": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "direction": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "falloff": {
+                        "maximum": 2.0,
+                        "minimum": 0.01,
+                        "type": "number"
+                      },
+                      "offset": {
+                        "maximum": 2.0,
+                        "minimum": -2.0,
+                        "type": "number"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "maxItems": 16,
+                  "type": "array"
+                },
+                "material_role": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "parent": {
+                  "type": "string"
+                },
+                "radii": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "role": {
+                  "enum": [
+                    "body",
+                    "head",
+                    "muzzle",
+                    "ear",
+                    "eye",
+                    "nose",
+                    "paw",
+                    "leg",
+                    "tail",
+                    "generic"
+                  ],
+                  "type": "string"
+                },
+                "symmetry_key": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "subject_profile": {
+            "enum": [
+              "auto",
+              "cute_quadruped",
+              "generic_character",
+              "generic_object"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
     },
     "create_reveal_animation": {
       "description": "Create a scale reveal and optional material alpha fade. Applies immediately with preview revert support.",
@@ -23639,6 +23960,285 @@
       "name": "adaptive_remesh"
     },
     {
+      "description": "Infer a bounded editable part graph from calibrated reference guides: named parts, roles, centers, radii, camera-basis axes, parent links, symmetry keys, source evidence, and heuristic warnings. Use after reference image intake or annotation guides and before part-aware base mesh construction, feature stacks, fur flow, or part-targeted repair.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "active_view": {
+            "description": "Optional child view name when collection_name is a multi-view master.",
+            "type": "string"
+          },
+          "camera_name": {
+            "description": "Optional calibrated camera override.",
+            "type": "string"
+          },
+          "collection_name": {
+            "description": "Exact calibrated reference-guide collection. May be a single-view guide collection or a multi-view master; multi-view masters use active_view or the first child guide.",
+            "type": "string"
+          },
+          "create_markers": {
+            "type": "boolean"
+          },
+          "depth_ratio": {
+            "maximum": 3.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "mass_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "mass_settings": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "controls": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "direction": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "falloff": {
+                        "maximum": 2.0,
+                        "minimum": 0.01,
+                        "type": "number"
+                      },
+                      "offset": {
+                        "maximum": 2.0,
+                        "minimum": -2.0,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "direction",
+                      "offset"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 32,
+                  "type": "array"
+                },
+                "depth_ratio": {
+                  "maximum": 3.0,
+                  "minimum": 0.05,
+                  "type": "number"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "offset": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "scale": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "max_parts": {
+            "maximum": 64,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "part_hints": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "basis": {
+                  "items": {
+                    "items": {
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "center": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "controls": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "direction": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "falloff": {
+                        "maximum": 2.0,
+                        "minimum": 0.01,
+                        "type": "number"
+                      },
+                      "offset": {
+                        "maximum": 2.0,
+                        "minimum": -2.0,
+                        "type": "number"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "maxItems": 16,
+                  "type": "array"
+                },
+                "material_role": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "parent": {
+                  "type": "string"
+                },
+                "radii": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "role": {
+                  "enum": [
+                    "body",
+                    "head",
+                    "muzzle",
+                    "ear",
+                    "eye",
+                    "nose",
+                    "paw",
+                    "leg",
+                    "tail",
+                    "generic"
+                  ],
+                  "type": "string"
+                },
+                "symmetry_key": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "subject_profile": {
+            "enum": [
+              "auto",
+              "cute_quadruped",
+              "generic_character",
+              "generic_object"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "create_reference_part_graph"
+    },
+    {
+      "description": "Build sculptable base geometry from a stored reference part graph. Organic roles are converted to deformed ellipsoid components and optionally blended into a soft voxel-remesh union; feature roles such as eyes and nose can remain separate for later material/detail work. Use before adaptive remeshing, form-aware sculpt fields, fur flow, and scored repair.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "blend_organic_parts": {
+            "type": "boolean"
+          },
+          "include_feature_parts": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "part_graph_collection_name": {
+            "description": "Exact collection created by create_reference_part_graph. May be omitted only when exactly one exists.",
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "rings": {
+            "maximum": 64,
+            "minimum": 4,
+            "type": "integer"
+          },
+          "segments": {
+            "maximum": 128,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "show_components": {
+            "type": "boolean"
+          },
+          "smooth_iterations": {
+            "maximum": 20,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "voxel_size": {
+            "maximum": 10.0,
+            "minimum": 0.001,
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "name": "build_part_aware_base_mesh"
+    },
+    {
       "description": "Create, update, or delete persistent weighted semantic regions on one mesh from local/world spheres, boxes, explicit vertex indices, calibrated screen polygons, or reference-landmark spheres. Regions are stored as point attributes and become stable targets for bounded sculpt operations. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
@@ -28333,6 +28933,8 @@
       "compare_model_to_reference",
       "evaluate_multiview_reference_match",
       "create_reference_blockout",
+      "create_reference_part_graph",
+      "build_part_aware_base_mesh",
       "adaptive_remesh",
       "define_semantic_sculpt_regions",
       "inspect_semantic_sculpt_regions",
@@ -28444,7 +29046,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "f5cb80fddf22782d8edba9063821d050a043155641aa26b3fd87317125dc1889",
+  "registry_digest": "250acf6448794fcaaf04f2b2afeff3e6039945e8094901730603b1df0842f205",
   "schema_version": 1,
   "specs": [
     {
@@ -41135,6 +41737,355 @@
     },
     {
       "contract": {
+        "description": "Create a reference-derived part graph collection with preview revert support",
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Infer a bounded editable part graph from calibrated reference guides: named parts, roles, centers, radii, camera-basis axes, parent links, symmetry keys, source evidence, and heuristic warnings. Use after reference image intake or annotation guides and before part-aware base mesh construction, feature stacks, fur flow, or part-targeted repair.",
+      "exposure": "catalog",
+      "groups": [
+        "model_quality",
+        "reference_modeling",
+        "reference_parts"
+      ],
+      "handler_key": "create_reference_part_graph",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "active_view": {
+            "description": "Optional child view name when collection_name is a multi-view master.",
+            "type": "string"
+          },
+          "camera_name": {
+            "description": "Optional calibrated camera override.",
+            "type": "string"
+          },
+          "collection_name": {
+            "description": "Exact calibrated reference-guide collection. May be a single-view guide collection or a multi-view master; multi-view masters use active_view or the first child guide.",
+            "type": "string"
+          },
+          "create_markers": {
+            "type": "boolean"
+          },
+          "depth_ratio": {
+            "maximum": 3.0,
+            "minimum": 0.05,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "mass_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "mass_settings": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "controls": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "direction": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "falloff": {
+                        "maximum": 2.0,
+                        "minimum": 0.01,
+                        "type": "number"
+                      },
+                      "offset": {
+                        "maximum": 2.0,
+                        "minimum": -2.0,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "direction",
+                      "offset"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 32,
+                  "type": "array"
+                },
+                "depth_ratio": {
+                  "maximum": 3.0,
+                  "minimum": 0.05,
+                  "type": "number"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "offset": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "scale": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "max_parts": {
+            "maximum": 64,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "part_hints": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "basis": {
+                  "items": {
+                    "items": {
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "center": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "controls": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "direction": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "falloff": {
+                        "maximum": 2.0,
+                        "minimum": 0.01,
+                        "type": "number"
+                      },
+                      "offset": {
+                        "maximum": 2.0,
+                        "minimum": -2.0,
+                        "type": "number"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "maxItems": 16,
+                  "type": "array"
+                },
+                "material_role": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "parent": {
+                  "type": "string"
+                },
+                "radii": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "type": "array"
+                },
+                "role": {
+                  "enum": [
+                    "body",
+                    "head",
+                    "muzzle",
+                    "ear",
+                    "eye",
+                    "nose",
+                    "paw",
+                    "leg",
+                    "tail",
+                    "generic"
+                  ],
+                  "type": "string"
+                },
+                "symmetry_key": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "subject_profile": {
+            "enum": [
+              "auto",
+              "cute_quadruped",
+              "generic_character",
+              "generic_object"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "create_reference_part_graph",
+      "order": 1081,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
+        "description": "Build part-aware organic base geometry from a reference part graph with preview revert support",
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Build sculptable base geometry from a stored reference part graph. Organic roles are converted to deformed ellipsoid components and optionally blended into a soft voxel-remesh union; feature roles such as eyes and nose can remain separate for later material/detail work. Use before adaptive remeshing, form-aware sculpt fields, fur flow, and scored repair.",
+      "exposure": "catalog",
+      "groups": [
+        "advanced_create",
+        "procedural_3d",
+        "model_quality",
+        "reference_modeling",
+        "reference_parts"
+      ],
+      "handler_key": "build_part_aware_base_mesh",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "blend_organic_parts": {
+            "type": "boolean"
+          },
+          "include_feature_parts": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "name_prefix": {
+            "type": "string"
+          },
+          "part_graph_collection_name": {
+            "description": "Exact collection created by create_reference_part_graph. May be omitted only when exactly one exists.",
+            "type": "string"
+          },
+          "part_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "rings": {
+            "maximum": 64,
+            "minimum": 4,
+            "type": "integer"
+          },
+          "segments": {
+            "maximum": 128,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "show_components": {
+            "type": "boolean"
+          },
+          "smooth_iterations": {
+            "maximum": 20,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "voxel_size": {
+            "maximum": 10.0,
+            "minimum": 0.001,
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "name": "build_part_aware_base_mesh",
+      "order": 1082,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
         "description": "Create, update, or delete semantic mesh regions with mesh-snapshot rollback",
         "mutates_scene": true,
         "permissions": [
@@ -50426,5 +51377,5 @@
       "owner": "scripts_transactions"
     }
   ],
-  "tool_count": 222
+  "tool_count": 224
 }

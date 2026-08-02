@@ -192,6 +192,27 @@ def _source_forms(
     return forms, warnings
 
 
+def source_reference_forms(
+    collection,
+    *,
+    camera,
+    mass_names=None,
+    mass_settings=None,
+    depth_ratio=0.7,
+    max_forms=16,
+):
+    """Resolve guide masses into soft form specs for downstream reference tools."""
+
+    return _source_forms(
+        collection,
+        camera=camera,
+        mass_names=mass_names or [],
+        mass_settings=mass_settings or [],
+        depth_ratio=max(0.05, min(3.0, float(depth_ratio or 0.7))),
+        max_forms=max_forms,
+    )
+
+
 def make_deformed_ellipsoid(
     context,
     *,

@@ -19,8 +19,8 @@ SNAPSHOT_PATH = os.path.join(ROOT, "tests", "snapshots", "tool_registry.json")
 class ToolRegistryTests(unittest.TestCase):
     def test_inventory_is_complete_and_domain_owned(self):
         specs = tool_registry.REGISTRY.specs()
-        self.assertEqual(222, len(specs))
-        self.assertEqual(221, len(tool_registry.definitions()))
+        self.assertEqual(224, len(specs))
+        self.assertEqual(223, len(tool_registry.definitions()))
         self.assertEqual(12, len(tool_registry.DOMAIN_MODULES))
         self.assertEqual({spec.name for spec in specs}, set(bridge_protocol.TOOL_CONTRACTS))
         self.assertEqual(
@@ -128,6 +128,24 @@ class ToolRegistryTests(unittest.TestCase):
                 annotations = bridge_protocol.mcp_annotations_for_tool(name)
                 self.assertIn("files:read", annotations["permissions"])
 
+    def test_reference_part_tools_are_registry_owned(self):
+        self.assertEqual(
+            "modeling",
+            tool_registry.REGISTRY.get("create_reference_part_graph").owner,
+        )
+        self.assertEqual(
+            "modeling",
+            tool_registry.REGISTRY.get("build_part_aware_base_mesh").owner,
+        )
+        self.assertIn(
+            "reference_parts",
+            tool_registry.REGISTRY.get("create_reference_part_graph").groups,
+        )
+        self.assertIn(
+            "reference_parts",
+            tool_registry.REGISTRY.get("build_part_aware_base_mesh").groups,
+        )
+
     def test_sculpt_and_reference_fit_do_not_advertise_unsafe_shape_key_edits(self):
         for name in (
             "define_semantic_sculpt_regions",
@@ -137,6 +155,7 @@ class ToolRegistryTests(unittest.TestCase):
             "optimize_screen_space_sculpt",
             "adaptive_remesh",
             "fit_surface_to_multiview_references",
+            "build_part_aware_base_mesh",
         ):
             with self.subTest(tool=name):
                 properties = tool_registry.REGISTRY.get(name).input_schema["properties"]

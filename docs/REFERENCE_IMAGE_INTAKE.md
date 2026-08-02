@@ -28,7 +28,9 @@ should provide annotation JSON or a mask image.
 1. Call `prepare_reference_images`.
 2. Build with `create_multiview_visual_hull` or `create_multiview_depth_surface`.
 3. Fit with `fit_surface_to_multiview_references`.
-4. Score with `evaluate_multiview_reference_match`.
-5. Repair with semantic regions plus `auto_reference_sculpt_repair` or lower-level
+4. Create named parts with `create_reference_part_graph`.
+5. Build sculptable forms with `build_part_aware_base_mesh`.
+6. Score with `evaluate_multiview_reference_match`.
+7. Repair with semantic regions plus `auto_reference_sculpt_repair` or lower-level
    sculpt tools.
-6. Score again before claiming the model matches the reference.
+8. Score again before claiming the model matches the reference.

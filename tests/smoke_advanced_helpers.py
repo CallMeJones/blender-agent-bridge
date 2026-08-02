@@ -67,6 +67,8 @@ ADVANCED_TOOLS = {
     "auto_reference_sculpt_repair",
     "evaluate_reference_model_benchmark",
     "create_reference_blockout",
+    "create_reference_part_graph",
+    "build_part_aware_base_mesh",
     "add_particle_system_to_selected",
     "create_directional_fur_curves",
     "create_basic_armature",

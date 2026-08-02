@@ -16,6 +16,10 @@ ADVANCED_FACADE = ROOT / "addon" / "claude_blender" / "advanced_helpers.py"
 ADVANCED_MODELING = ROOT / "addon" / "claude_blender" / "advanced_modeling.py"
 REFERENCE_GUIDES = ROOT / "addon" / "claude_blender" / "reference_guides.py"
 REFERENCE_BLOCKOUT = ROOT / "addon" / "claude_blender" / "reference_blockout.py"
+REFERENCE_PARTS = ROOT / "addon" / "claude_blender" / "reference_parts.py"
+REFERENCE_PART_SCENE = (
+    ROOT / "addon" / "claude_blender" / "reference_part_scene.py"
+)
 SCULPT_FIELDS = ROOT / "addon" / "claude_blender" / "sculpt_fields.py"
 SEMANTIC_SCULPT = ROOT / "addon" / "claude_blender" / "semantic_sculpt.py"
 ADAPTIVE_REMESH = ROOT / "addon" / "claude_blender" / "adaptive_remesh.py"
@@ -95,6 +99,7 @@ class ToolHandlerArchitectureTests(unittest.TestCase):
         self.assertIn("inspection_render", module_names)
         self.assertIn("reference_comparison", module_names)
         self.assertIn("reference_forms", module_names)
+        self.assertIn("reference_parts", module_names)
         self.assertIn("fur_groom", module_names)
         self.assertIn("reference_multiview", module_names)
         self.assertIn("reference_multiview_scene", module_names)
@@ -106,6 +111,7 @@ class ToolHandlerArchitectureTests(unittest.TestCase):
         self.assertIn("reference_surface_fitting", module_names)
         self.assertIn("reference_scene", module_names)
         self.assertIn("reference_blockout", module_names)
+        self.assertIn("reference_part_scene", module_names)
         self.assertIn("sculpt_fields", module_names)
         self.assertIn("semantic_sculpt", module_names)
         self.assertIn("adaptive_remesh", module_names)
@@ -128,8 +134,16 @@ class ToolHandlerArchitectureTests(unittest.TestCase):
             module_names.index("reference_blockout"),
         )
         self.assertLess(
+            module_names.index("reference_parts"),
+            module_names.index("reference_part_scene"),
+        )
+        self.assertLess(
             module_names.index("reference_scene"),
             module_names.index("reference_blockout"),
+        )
+        self.assertLess(
+            module_names.index("reference_blockout"),
+            module_names.index("reference_part_scene"),
         )
         self.assertLess(
             module_names.index("reference_multiview"),
@@ -218,6 +232,24 @@ class ToolHandlerArchitectureTests(unittest.TestCase):
         }
         self.assertIn("create_reference_blockout", blockout_functions)
         self.assertNotIn("create_reference_blockout", modeling_functions)
+
+        parts_functions = {
+            node.name
+            for node in ast.parse(REFERENCE_PARTS.read_text(encoding="utf-8")).body
+            if isinstance(node, ast.FunctionDef)
+        }
+        part_scene_functions = {
+            node.name
+            for node in ast.parse(
+                REFERENCE_PART_SCENE.read_text(encoding="utf-8")
+            ).body
+            if isinstance(node, ast.FunctionDef)
+        }
+        self.assertIn("infer_part_graph", parts_functions)
+        self.assertIn("create_reference_part_graph", part_scene_functions)
+        self.assertIn("build_part_aware_base_mesh", part_scene_functions)
+        self.assertNotIn("create_reference_part_graph", modeling_functions)
+        self.assertNotIn("build_part_aware_base_mesh", modeling_functions)
 
         multiview_tree = ast.parse(
             REFERENCE_MULTIVIEW_SCENE.read_text(encoding="utf-8")

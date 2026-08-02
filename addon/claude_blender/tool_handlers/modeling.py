@@ -11,6 +11,7 @@ from .. import (
     reference_guides,
     reference_image_intake,
     reference_multiview_scene,
+    reference_part_scene,
     reference_surface_fitting,
     reference_visual_hull,
     semantic_sculpt,
@@ -506,6 +507,63 @@ def create_reference_blockout(context, args):
             args.get("color"), 4, (0.55, 0.6, 0.68, 1.0)
         ),
         label=str(args.get("label") or "Create reference blockout"),
+    )
+
+
+def create_reference_part_graph(context, args):
+    return reference_part_scene.create_reference_part_graph(
+        context,
+        collection_name=str(args.get("collection_name") or ""),
+        camera_name=str(args.get("camera_name") or ""),
+        active_view=str(args.get("active_view") or ""),
+        subject_profile=str(args.get("subject_profile") or "auto"),
+        part_hints=(
+            args.get("part_hints")
+            if isinstance(args.get("part_hints"), list)
+            else []
+        ),
+        mass_names=_name_list(args.get("mass_names")),
+        mass_settings=(
+            args.get("mass_settings")
+            if isinstance(args.get("mass_settings"), list)
+            else []
+        ),
+        name=str(args.get("name") or "Reference Part Graph"),
+        depth_ratio=_bounded_float(
+            args.get("depth_ratio"), 0.7, minimum=0.05, maximum=3.0
+        ),
+        max_parts=_bounded_int(
+            args.get("max_parts"), 32, minimum=1, maximum=64
+        ),
+        create_markers=bool(args.get("create_markers", True)),
+        label=str(args.get("label") or "Create reference part graph"),
+    )
+
+
+def build_part_aware_base_mesh(context, args):
+    return reference_part_scene.build_part_aware_base_mesh(
+        context,
+        part_graph_collection_name=str(
+            args.get("part_graph_collection_name") or ""
+        ),
+        part_names=_name_list(args.get("part_names")),
+        name_prefix=str(args.get("name_prefix") or "Reference Part Base"),
+        include_feature_parts=bool(args.get("include_feature_parts", True)),
+        blend_organic_parts=bool(args.get("blend_organic_parts", True)),
+        voxel_size=_bounded_float(
+            args.get("voxel_size"), 0.06, minimum=0.001, maximum=10.0
+        ),
+        smooth_iterations=_bounded_int(
+            args.get("smooth_iterations"), 3, minimum=0, maximum=20
+        ),
+        segments=_bounded_int(
+            args.get("segments"), 32, minimum=8, maximum=128
+        ),
+        rings=_bounded_int(
+            args.get("rings"), 16, minimum=4, maximum=64
+        ),
+        show_components=bool(args.get("show_components", False)),
+        label=str(args.get("label") or "Build part-aware base mesh"),
     )
 
 

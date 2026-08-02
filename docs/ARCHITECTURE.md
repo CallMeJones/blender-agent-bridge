@@ -178,6 +178,8 @@ Operational changes should use typed helpers when validation, rollback, provenan
 - `compare_model_to_reference`
 - `evaluate_reference_model_benchmark`
 - `create_reference_blockout`
+- `create_reference_part_graph`
+- `build_part_aware_base_mesh`
 - `define_semantic_sculpt_regions`
 - `inspect_semantic_sculpt_regions`
 - `apply_semantic_sculpt`

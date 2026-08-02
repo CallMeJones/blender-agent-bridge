@@ -93,6 +93,8 @@ _REFERENCE_QUALITY_TOOL_NAMES = {
     "auto_reference_sculpt_repair",
     "evaluate_reference_model_benchmark",
     "create_reference_blockout",
+    "create_reference_part_graph",
+    "build_part_aware_base_mesh",
     "adaptive_remesh",
     "create_directional_fur_curves",
     "inspect_modeling_quality",
@@ -113,6 +115,8 @@ _REFERENCE_QUALITY_REQUIRED_TOOL_NAMES = {
     "compare_model_to_reference",
     "evaluate_multiview_reference_match",
     "create_reference_blockout",
+    "create_reference_part_graph",
+    "build_part_aware_base_mesh",
     "inspect_modeling_quality",
     "capture_viewport",
     "capture_object_inspection_renders",
@@ -305,6 +309,19 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         request_text,
         {"adaptive remesh", "adaptive remeshing", "sculpt topology"},
     )
+    reference_parts_request = _contains_keyword(
+        request_text,
+        {
+            "part graph",
+            "part-aware",
+            "part aware",
+            "named parts",
+            "organic base mesh",
+            "base mesh from reference",
+            "reference parts",
+            "anatomy parts",
+        },
+    )
     auto_reference_repair_request = _contains_keyword(
         request_text,
         {
@@ -401,6 +418,9 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
     if adaptive_remesh_request:
         selected.add("adaptive_remesh")
         matched_groups.append("adaptive_topology")
+    if reference_parts_request:
+        selected.update({"create_reference_part_graph", "build_part_aware_base_mesh"})
+        matched_groups.append("reference_parts")
     if auto_reference_repair_request:
         selected.add("auto_reference_sculpt_repair")
         matched_groups.append("reference_scoring")
@@ -440,6 +460,8 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         protected.add("fit_surface_to_multiview_references")
     if adaptive_remesh_request:
         protected.add("adaptive_remesh")
+    if reference_parts_request:
+        protected.update({"create_reference_part_graph", "build_part_aware_base_mesh"})
     if auto_reference_repair_request:
         protected.add("auto_reference_sculpt_repair")
     if reference_benchmark_request:
@@ -655,6 +677,8 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "mark_uv_seams",
     "plan_director_workflow",
     "plan_model_quality_workflow",
+    "create_reference_part_graph",
+    "build_part_aware_base_mesh",
     "plan_asset_import_workflow",
     "plan_advanced_scene_workflow",
     "animate_object_bounce",
