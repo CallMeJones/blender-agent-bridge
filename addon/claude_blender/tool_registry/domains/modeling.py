@@ -124,11 +124,162 @@ _VECTOR3_SCHEMA = {
 }
 
 
+_SHAPE_VECTOR3_SCHEMA = {
+    'type': 'array',
+    'items': {'type': 'number', 'minimum': -1000000.0, 'maximum': 1000000.0},
+    'minItems': 3,
+    'maxItems': 3,
+}
+
+
 _COLOR4_SCHEMA = {
     'type': 'array',
     'items': {'type': 'number', 'minimum': 0.0, 'maximum': 1.0},
     'minItems': 3,
     'maxItems': 4,
+}
+
+
+_SHAPE_TRANSFORM_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'location': _SHAPE_VECTOR3_SCHEMA,
+        'rotation': {
+            **_SHAPE_VECTOR3_SCHEMA,
+            'description': 'Local XYZ Euler rotation in radians.',
+        },
+        'scale': {
+            'type': 'array',
+            'items': {'type': 'number', 'minimum': 0.0001, 'maximum': 10000.0},
+            'minItems': 3,
+            'maxItems': 3,
+        },
+    },
+    'additionalProperties': False,
+}
+
+
+_SHAPE_NODE_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'id': {'type': 'string', 'minLength': 1, 'maxLength': 64},
+        'type': {
+            'type': 'string',
+            'enum': [
+                'sphere',
+                'ellipsoid',
+                'box',
+                'capsule',
+                'cylinder',
+                'torus',
+                'superquadric',
+                'sweep',
+            ],
+        },
+        'operation': {
+            'type': 'string',
+            'enum': ['union', 'subtract', 'intersect'],
+            'description': 'Sequential boolean operation. The first enabled node must use union.',
+        },
+        'blend': {
+            'type': 'number',
+            'minimum': 0.0,
+            'maximum': 1000.0,
+            'description': 'Program-space smooth boolean radius; zero is a hard operation.',
+        },
+        'enabled': {'type': 'boolean'},
+        'parent_id': {
+            'type': 'string',
+            'description': 'Optional semantic transform parent node id.',
+        },
+        'semantic_role': {'type': 'string', 'maxLength': 120},
+        'transform': _SHAPE_TRANSFORM_SCHEMA,
+        'radius': {'type': 'number', 'minimum': 0.00001, 'maximum': 10000.0},
+        'radii': {
+            'type': 'array',
+            'items': {'type': 'number', 'minimum': 0.00001, 'maximum': 10000.0},
+            'minItems': 1,
+            'maxItems': 64,
+            'description': 'Three ellipsoid/superquadric radii, or one radius per sweep point.',
+        },
+        'size': {
+            'type': 'array',
+            'items': {'type': 'number', 'minimum': 0.00001, 'maximum': 10000.0},
+            'minItems': 3,
+            'maxItems': 3,
+        },
+        'rounding': {'type': 'number', 'minimum': 0.0, 'maximum': 1000.0},
+        'point_a': _SHAPE_VECTOR3_SCHEMA,
+        'point_b': _SHAPE_VECTOR3_SCHEMA,
+        'depth': {'type': 'number', 'minimum': 0.00001, 'maximum': 10000.0},
+        'major_radius': {'type': 'number', 'minimum': 0.00001, 'maximum': 10000.0},
+        'minor_radius': {'type': 'number', 'minimum': 0.00001, 'maximum': 10000.0},
+        'exponents': {
+            'type': 'array',
+            'items': {'type': 'number', 'minimum': 0.1, 'maximum': 4.0},
+            'minItems': 2,
+            'maxItems': 2,
+        },
+        'points': {
+            'type': 'array',
+            'items': _SHAPE_VECTOR3_SCHEMA,
+            'minItems': 2,
+            'maxItems': 64,
+            'description': 'Local centerline points for a tapered sweep.',
+        },
+    },
+    'required': ['id', 'type'],
+    'additionalProperties': False,
+}
+
+
+_SHAPE_PROGRAM_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'schema_version': {'type': 'integer', 'enum': [1]},
+        'name': {'type': 'string', 'maxLength': 120},
+        'bounds': {
+            'type': 'object',
+            'properties': {'min': _SHAPE_VECTOR3_SCHEMA, 'max': _SHAPE_VECTOR3_SCHEMA},
+            'required': ['min', 'max'],
+            'additionalProperties': False,
+            'description': 'Object-local program-space compiler bounds. Leave margin around the entire surface.',
+        },
+        'nodes': {
+            'type': 'array',
+            'items': _SHAPE_NODE_SCHEMA,
+            'minItems': 1,
+            'maxItems': 64,
+        },
+        'metadata': {
+            'type': 'object',
+            'maxProperties': 32,
+            'propertyNames': {'maxLength': 64},
+            'additionalProperties': {
+                'oneOf': [
+                    {'type': 'string', 'maxLength': 1024},
+                    {'type': 'number'},
+                    {'type': 'boolean'},
+                    {'type': 'null'},
+                ],
+            },
+        },
+    },
+    'required': ['bounds', 'nodes'],
+    'additionalProperties': False,
+}
+
+
+_SHAPE_COMPILE_PROPERTIES = {
+    'program': _SHAPE_PROGRAM_SCHEMA,
+    'resolution': {
+        'type': 'integer',
+        'minimum': 8,
+        'maximum': 96,
+        'description': 'Grid cells along the longest bounds axis.',
+    },
+    'iso_level': {'type': 'number', 'minimum': -1000.0, 'maximum': 1000.0},
+    'smooth_iterations': {'type': 'integer', 'minimum': 0, 'maximum': 10},
 }
 
 
@@ -362,7 +513,89 @@ _MULTIVIEW_FIT_SELECTION_PROPERTIES = {
 }
 
 
-SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'edit_mesh',
+SPECS = tuple(ToolSpec(**payload) for payload in [
+ {'name': 'compile_shape_program',
+  'description': 'Compile a bounded semantic implicit-shape program into one continuous watertight mesh. The connected '
+                 'LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, '
+                 'superquadrics, and tapered sweeps with smooth union, subtraction, and intersection. Stores the '
+                 'canonical program on the object for later inspection and revision.',
+  'input_schema': {'type': 'object',
+                   'properties': {**_SHAPE_COMPILE_PROPERTIES,
+                                  'object_name': {'type': 'string'},
+                                  'material_name': {'type': 'string'},
+                                  'color': _COLOR4_SCHEMA,
+                                  'label': {'type': 'string'}},
+                   'required': ['program'],
+                   'additionalProperties': False},
+  'contract': {'mutates_scene': True,
+               'requires_live_preview': True,
+               'permissions': ['scene:read', 'scene:mutate', 'preview:write'],
+               'supports_headless': True,
+               'long_running': True,
+               'duration_hint': 'Bounded SDF grid evaluation and watertight mesh extraction.'},
+  'handler_key': 'compile_shape_program',
+  'order': 600,
+  'groups': ('advanced_create', 'procedural_3d', 'model_quality', 'reference_modeling', 'implicit_modeling'),
+  'exposure': 'catalog',
+  'owner': 'modeling'},
+ {'name': 'inspect_shape_program',
+  'description': 'Inspect the canonical semantic shape program, digest, compiler settings, and current mesh counts '
+                 'stored on a compiled implicit-shape object. Use include_program=true before revising individual '
+                 'semantic forms.',
+  'input_schema': {'type': 'object',
+                   'properties': {'object_name': {'type': 'string'},
+                                  'include_program': {'type': 'boolean'}},
+                   'required': ['object_name'],
+                   'additionalProperties': False},
+  'contract': {'mutates_scene': False,
+               'permissions': ['scene:read'],
+               'supports_headless': True},
+  'handler_key': 'inspect_shape_program',
+  'order': 610,
+  'groups': ('deep_inspect', 'procedural_3d', 'model_quality', 'reference_modeling', 'implicit_modeling'),
+  'exposure': 'catalog',
+  'owner': 'modeling'},
+ {'name': 'update_shape_program',
+  'description': 'Replace the canonical program on an existing compiled implicit-shape object and regenerate its '
+                 'continuous mesh with full mesh, metadata, and vertex-group preview rollback. Preserves object '
+                 'transform, materials, and modifiers.',
+  'input_schema': {'type': 'object',
+                   'properties': {**_SHAPE_COMPILE_PROPERTIES,
+                                  'object_name': {'type': 'string'},
+                                  'label': {'type': 'string'}},
+                   'required': ['object_name', 'program'],
+                   'additionalProperties': False},
+  'contract': {'mutates_scene': True,
+               'requires_live_preview': True,
+               'permissions': ['scene:read', 'scene:mutate', 'preview:write'],
+               'supports_headless': True,
+               'long_running': True,
+               'duration_hint': 'Bounded SDF grid evaluation and watertight mesh replacement.'},
+  'handler_key': 'update_shape_program',
+  'order': 620,
+  'groups': ('advanced_create', 'refinement', 'procedural_3d', 'model_quality', 'reference_modeling', 'implicit_modeling'),
+  'exposure': 'catalog',
+  'owner': 'modeling'},
+ {'name': 'sample_shape_program_sdf',
+  'description': 'Evaluate a semantic shape program at up to 512 object-local program-space points without changing Blender. Returns '
+                 'signed distances and inside/outside classification so an LLM can probe proportions, cavities, and '
+                 'boolean behavior before compiling a dense mesh.',
+  'input_schema': {'type': 'object',
+                   'properties': {'program': _SHAPE_PROGRAM_SCHEMA,
+                                  'points': {'type': 'array',
+                                             'items': _SHAPE_VECTOR3_SCHEMA,
+                                             'maxItems': 512}},
+                   'required': ['program', 'points'],
+                   'additionalProperties': False},
+  'contract': {'mutates_scene': False,
+               'permissions': [],
+               'supports_headless': True},
+  'handler_key': 'sample_shape_program_sdf',
+  'order': 630,
+  'groups': ('deep_inspect', 'procedural_3d', 'model_quality', 'reference_modeling', 'implicit_modeling'),
+  'exposure': 'catalog',
+  'owner': 'modeling'},
+ {'name': 'edit_mesh',
   'description': 'Apply one bounded destructive mesh edit to selected or named single-user mesh objects with mesh-data '
                  'snapshot rollback. Supports face extrusion, face inset, bounded planar loop cut, planar knife cut, '
                  'boundary-loop bridge, dissolve-degenerate, merge-by-distance, and proportional vertex edit.',

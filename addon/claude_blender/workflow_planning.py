@@ -36,6 +36,10 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "create_reference_modeling_guides",
             "inspect_reference_modeling_guides",
             "create_reference_blockout",
+            "compile_shape_program",
+            "inspect_shape_program",
+            "update_shape_program",
+            "sample_shape_program_sdf",
             "create_reference_part_graph",
             "build_part_aware_base_mesh",
             "create_eye_stack",
@@ -58,8 +62,10 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "Use an LLM-authored reference brief and model-quality rubric before "
             "building. For raw reference images, normalize intake and masks first. "
             "For calibrated multi-view evidence, construct a visual hull or "
-            "depth-constrained surface, run joint measured fitting, create a named "
-            "part graph/base mesh, add reusable feature stacks for eyes, muzzle, "
+            "depth-constrained surface, run joint measured fitting, author a persistent "
+            "implicit shape program for novel continuous forms, and inspect/revise named "
+            "nodes before topology-dependent detail. Use a part graph/base mesh only when "
+            "that decomposition is useful, add reusable feature stacks for eyes, muzzle, "
             "or ears when present, create part-weight surface masks, generate "
             "part-aware fur flow for furry subjects, score every view, and adapt "
             "topology only where needed before persistent semantic regions and "
@@ -80,9 +86,13 @@ ADVANCED_WORKFLOW_DOMAINS = {
         "script_boundary": "Under active trust, prefer one cohesive script for authored 2D/storyboard construction; use helpers for inspection, evidence, and explicitly requested isolated operations.",
     },
     "procedural_3d": {
-        "keywords": {"advanced 3d", "procedural", "array", "scatter", "kit", "object kit", "kitbash", "mechanical", "mechanical joint", "mechanical part", "control panel", "modular", "wall panel", "pipe run", "hard surface", "hard-surface", "geometry nodes", "node group", "modifier stack", "edit mesh", "extrude", "inset", "loop cut", "loop-cut", "knife", "proportional edit", "bridge", "dissolve", "merge", "curve to mesh", "convert curve", "boolean", "cutter", "mirror", "symmetry", "symmetrize", "solidify", "screw", "thread", "spiral", "wall thickness"},
+        "keywords": {"advanced 3d", "procedural", "implicit shape", "implicit model", "shape program", "shape graph", "signed distance field", "sdf model", "array", "scatter", "kit", "object kit", "kitbash", "mechanical", "mechanical joint", "mechanical part", "control panel", "modular", "wall panel", "pipe run", "hard surface", "hard-surface", "geometry nodes", "node group", "modifier stack", "edit mesh", "extrude", "inset", "loop cut", "loop-cut", "knife", "proportional edit", "bridge", "dissolve", "merge", "curve to mesh", "convert curve", "boolean", "cutter", "mirror", "symmetry", "symmetrize", "solidify", "screw", "thread", "spiral", "wall thickness"},
         "tools": [
             "get_geometry_nodes_details",
+            "compile_shape_program",
+            "inspect_shape_program",
+            "update_shape_program",
+            "sample_shape_program_sdf",
             "apply_procedural_array_stack",
             "edit_mesh",
             "curve_to_mesh",
@@ -96,7 +106,7 @@ ADVANCED_WORKFLOW_DOMAINS = {
             "add_bevel_and_subsurf",
             "organize_scene_for_production",
         ],
-        "script_boundary": "After inspection, prefer one cohesive trusted script for authored procedural geometry, custom nodes, and multi-object construction; use exact helpers for requested isolated operations.",
+        "script_boundary": "Use persistent shape programs for bounded continuous forms the semantic SDF vocabulary can express. After inspection, use one cohesive trusted script for custom nodes, multi-object construction, or geometry outside that vocabulary; keep exact helpers for isolated operations.",
     },
     "advanced_animation": {
         "keywords": {"advanced animation", "shot", "blocking", "dolly", "crane", "truck", "camera move", "camera animation", "nla", "retime", "f-curve", "pose", "acting", "motion arc"},

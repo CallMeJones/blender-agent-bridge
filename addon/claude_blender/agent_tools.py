@@ -19,9 +19,10 @@ AGENT_GUIDANCE = (
     "For scene edits, identify targets first and leave successful live-preview changes pending for the user. Do not commit or revert unless the user explicitly asks; use last-step revert only when they want to undo the latest external import. "
     "For .blend lifecycle work, inspect diagnostics first. Never invent a durable project path: new, open, save-as, and save-copy paths must come from the user or a file picker. Project-file tools are bounded to the current saved .blend directory. "
     "Use asynchronous external-asset and render jobs for downloads, imports, long renders, frame sequences, and final video validation. Poll the returned status tools, preserve provider provenance, and treat bridge timeouts as recoverable before rerunning work. "
-    "When runtime script trust is active, prefer one cohesive trusted Blender Python script for authored object generation, modeling, animation, materials, custom nodes, rigging, and look development unless the user explicitly requests helpers, a helper path, or no Python. In mixed requests, keep that authored script path and use exact helpers separately for project files, imports, long renders, persistent bakes, evidence, preview decisions, and isolated edits; an operational suffix must not demote the authored work to a helper chain. "
+    "When runtime script trust is active, prefer one cohesive trusted Blender Python script for authored work outside a bounded bridge compiler, including custom object generation, animation, materials, nodes, rigging, and look development, unless the user explicitly requests helpers or no Python. In mixed requests, keep the chosen authored construction path and use exact helpers separately for project files, imports, long renders, persistent bakes, evidence, preview decisions, and isolated edits; an operational suffix must not replace the primary authored work with an unrelated helper chain. "
     "Generated Python runs only while runtime script trust is active. Trust Agent Scripts is equivalent to Blender's Run Script command and permits filesystem, network, subprocess, project-file, persistent-cache, and full Blender API access. Put complete source in draft_script.code, inspect bpy.app.version, validate version-sensitive RNA enums before assignment, and report the exact refusal or execution error when it does not run. For cohesive scripts likely to exceed the bridge timeout, use start_trusted_script_job, poll status, and apply the copied-file result only after explicit user approval. "
     "For substantial authored work, use a compact execution trace and durable model-quality review state when reference evidence is involved; these remain available through gateway schema lookup and invocation without widening tools/list. "
+    "For novel continuous forms that can be decomposed into semantic masses, cavities, and tapered paths, prefer compile_shape_program over category-specific base meshes or opaque generated geometry. Inspect the stored program, revise named nodes with update_shape_program, and use point sampling when boolean or proportion behavior is uncertain. "
     "For calibrated multi-view references, construct a bounded visual hull or depth-constrained surface, run measured joint multi-view fitting, then add adaptive topology or localized semantic form repair. Use persistent semantic regions and one deterministic 3D, form-aware, or calibrated screen-space sculpt call for remaining local errors, then recapture evidence before another repair. "
     "Use low-resolution evidence for routine review unless the user asks for final quality. Do not claim an artifact, save, import, render, checkpoint, or script run succeeded unless the tool result verifies it. "
     "When work is complete, summarize what changed, what remains pending, and any user decision still required."
@@ -94,6 +95,10 @@ _REFERENCE_QUALITY_TOOL_NAMES = {
     "auto_reference_sculpt_repair",
     "evaluate_reference_model_benchmark",
     "create_reference_blockout",
+    "compile_shape_program",
+    "inspect_shape_program",
+    "update_shape_program",
+    "sample_shape_program_sdf",
     "create_reference_part_graph",
     "build_part_aware_base_mesh",
     "create_eye_stack",
@@ -323,6 +328,21 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         request_text,
         {"adaptive remesh", "adaptive remeshing", "sculpt topology"},
     )
+    implicit_shape_request = _contains_keyword(
+        request_text,
+        {
+            "implicit shape",
+            "implicit model",
+            "shape program",
+            "shape graph",
+            "signed distance field",
+            "sdf model",
+            "sdf sculpt",
+            "smooth boolean form",
+            "tapered sweep",
+            "semantic masses",
+        },
+    )
     reference_parts_request = _contains_keyword(
         request_text,
         {
@@ -449,6 +469,20 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         matched_groups.append("materials")
         matched_groups.append("procedural_textures")
 
+    if implicit_shape_request:
+        selected.update(
+            {
+                "compile_shape_program",
+                "inspect_shape_program",
+                "update_shape_program",
+                "sample_shape_program_sdf",
+                "inspect_modeling_quality",
+                "commit_preview",
+                "revert_preview",
+            }
+        )
+        matched_groups.append("implicit_modeling")
+
     if _contains_keyword(text, _UV_LAYOUT_KEYWORDS):
         selected.update({"mark_uv_seams", "uv_unwrap", "inspect_uv_layout", "create_image_texture_material", "inspect_material_setup", "repair_material_setup", "bake_maps", "create_shader_material"})
         matched_groups.append("basic_edit")
@@ -545,6 +579,8 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         protected.add("fit_surface_to_multiview_references")
     if adaptive_remesh_request:
         protected.add("adaptive_remesh")
+    if implicit_shape_request:
+        protected.update({"compile_shape_program", "inspect_shape_program"})
     if reference_parts_request:
         protected.update({"create_reference_part_graph", "build_part_aware_base_mesh"})
     if feature_stack_request:
@@ -570,7 +606,20 @@ def select_blender_tool_definitions(prompt="", context_bundle=None, *, max_schem
         if group in {"vehicle", "product", "character", "refinement", "camera_render", "rigging", "curves_text", "particles", "geometry_nodes", "external_assets", "advanced_workflow", "two_d_storyboard", "procedural_3d", "simulation_setup", "preview_control", "semantic_sculpt"}:
             protected.update(_TOOL_GROUPS.get(group, set()))
     if quality_reference_request:
-        if feature_stack_request or fur_flow_request:
+        if implicit_shape_request:
+            protected.update(
+                {
+                    "plan_model_quality_workflow",
+                    "compile_shape_program",
+                    "inspect_shape_program",
+                    "inspect_modeling_quality",
+                    "capture_viewport",
+                    "draft_script",
+                    "commit_preview",
+                    "revert_preview",
+                }
+            )
+        elif feature_stack_request or fur_flow_request:
             protected.update(
                 {
                     "plan_model_quality_workflow",
@@ -800,6 +849,8 @@ TOOL_FUNCTIONS_FOR_MUTATION_COMPAT = {
     "create_ear_stack",
     "create_part_weight_vertex_groups",
     "create_fur_flow_field_from_parts",
+    "compile_shape_program",
+    "update_shape_program",
     "plan_asset_import_workflow",
     "plan_advanced_scene_workflow",
     "animate_object_bounce",

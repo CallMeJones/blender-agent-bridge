@@ -1166,6 +1166,16 @@ def main():
                 False,
             ),
             (
+                "Use an implicit shape program and signed distance field to compile, inspect, sample, and update semantic masses and tapered sweeps.",
+                {
+                    "compile_shape_program",
+                    "inspect_shape_program",
+                    "update_shape_program",
+                    "sample_shape_program_sdf",
+                },
+                False,
+            ),
+            (
                 "Create an advanced procedural hard-surface array with a geometry-nodes scatter grid.",
                 {"apply_procedural_array_stack", "add_geometry_nodes_modifier"},
                 True,
@@ -2616,7 +2626,8 @@ def main():
         assert "structured reference_brief" in reference_prompt_text, reference_prompt
         assert "plan_model_quality_workflow" in reference_prompt_text, reference_prompt
         assert "construction_strategy" in reference_prompt_text, reference_prompt
-        assert "one cohesive draft_script for primary construction" in reference_prompt_text, reference_prompt
+        assert "prefer compile_shape_program" in reference_prompt_text, reference_prompt
+        assert "revise exact named nodes with update_shape_program" in reference_prompt_text, reference_prompt
         assert "bpy.app.version" in reference_prompt_text, reference_prompt
         assert "RNA enum identifiers" in reference_prompt_text, reference_prompt
         assert "canned category bases" in reference_prompt_text, reference_prompt

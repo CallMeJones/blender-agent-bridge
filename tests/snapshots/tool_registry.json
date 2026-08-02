@@ -1,5 +1,5 @@
 {
-  "catalog_tool_count": 228,
+  "catalog_tool_count": 232,
   "contracts": {
     "adaptive_remesh": {
       "description": "Adaptively refine sculpt topology by subdividing edges that exceed a bounded local target derived from edge length, semantic-region weight, and face curvature. Retains interpolated semantic point attributes, optionally relaxes spacing and projects vertices back to the source surface, and enforces input, per-pass, and result vertex limits. This is a form-preserving refinement pass; it does not decimate or promise production retopology.",
@@ -3890,6 +3890,340 @@
         "recoverable": true,
         "status_tool": "blender_bridge_status"
       }
+    },
+    "compile_shape_program": {
+      "description": "Compile a bounded semantic implicit-shape program into one continuous watertight mesh. The connected LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, superquadrics, and tapered sweeps with smooth union, subtraction, and intersection. Stores the canonical program on the object for later inspection and revision.",
+      "duration_hint": "Bounded SDF grid evaluation and watertight mesh extraction.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "iso_level": {
+            "maximum": 1000.0,
+            "minimum": -1000.0,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "material_name": {
+            "type": "string"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "program": {
+            "additionalProperties": false,
+            "properties": {
+              "bounds": {
+                "additionalProperties": false,
+                "description": "Object-local program-space compiler bounds. Leave margin around the entire surface.",
+                "properties": {
+                  "max": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  },
+                  "min": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "min",
+                  "max"
+                ],
+                "type": "object"
+              },
+              "metadata": {
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "maxLength": 1024,
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxProperties": 32,
+                "propertyNames": {
+                  "maxLength": 64
+                },
+                "type": "object"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "nodes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "blend": {
+                      "description": "Program-space smooth boolean radius; zero is a hard operation.",
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "depth": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "exponents": {
+                      "items": {
+                        "maximum": 4.0,
+                        "minimum": 0.1,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "id": {
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "major_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "minor_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "operation": {
+                      "description": "Sequential boolean operation. The first enabled node must use union.",
+                      "enum": [
+                        "union",
+                        "subtract",
+                        "intersect"
+                      ],
+                      "type": "string"
+                    },
+                    "parent_id": {
+                      "description": "Optional semantic transform parent node id.",
+                      "type": "string"
+                    },
+                    "point_a": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "point_b": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "points": {
+                      "description": "Local centerline points for a tapered sweep.",
+                      "items": {
+                        "items": {
+                          "maximum": 1000000.0,
+                          "minimum": -1000000.0,
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "radii": {
+                      "description": "Three ellipsoid/superquadric radii, or one radius per sweep point.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "rounding": {
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "semantic_role": {
+                      "maxLength": 120,
+                      "type": "string"
+                    },
+                    "size": {
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "transform": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "location": {
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "rotation": {
+                          "description": "Local XYZ Euler rotation in radians.",
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "scale": {
+                          "items": {
+                            "maximum": 10000.0,
+                            "minimum": 0.0001,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": {
+                      "enum": [
+                        "sphere",
+                        "ellipsoid",
+                        "box",
+                        "capsule",
+                        "cylinder",
+                        "torus",
+                        "superquadric",
+                        "sweep"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 64,
+                "minItems": 1,
+                "type": "array"
+              },
+              "schema_version": {
+                "enum": [
+                  1
+                ],
+                "type": "integer"
+              }
+            },
+            "required": [
+              "bounds",
+              "nodes"
+            ],
+            "type": "object"
+          },
+          "resolution": {
+            "description": "Grid cells along the longest bounds axis.",
+            "maximum": 96,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "smooth_iterations": {
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "program"
+        ],
+        "type": "object"
+      },
+      "long_running": true,
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
     },
     "configure_render_outputs": {
       "description": "Enable or disable ViewLayer render passes and configure shader AOVs. Use this for render-pass, cryptomatte, depth/normal/AO, or custom AOV requests before custom compositor/render Python. Applies immediately with preview revert support.",
@@ -12041,6 +12375,43 @@
       ],
       "supports_headless": true
     },
+    "inspect_shape_program": {
+      "description": "Inspect the canonical semantic shape program, digest, compiler settings, and current mesh counts stored on a compiled implicit-shape object. Use include_program=true before revising individual semantic forms.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_program": {
+            "type": "boolean"
+          },
+          "object_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "object_name"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read"
+      ],
+      "supports_headless": true
+    },
     "inspect_simulation_bake": {
       "description": "Sample evaluated simulation state across a bounded frame range and report cache/bake readiness without mutating persistent point caches.",
       "input_schema": {
@@ -14703,6 +15074,313 @@
         "type": "object"
       }
     },
+    "sample_shape_program_sdf": {
+      "description": "Evaluate a semantic shape program at up to 512 object-local program-space points without changing Blender. Returns signed distances and inside/outside classification so an LLM can probe proportions, cavities, and boolean behavior before compiling a dense mesh.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "points": {
+            "items": {
+              "items": {
+                "maximum": 1000000.0,
+                "minimum": -1000000.0,
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "maxItems": 512,
+            "type": "array"
+          },
+          "program": {
+            "additionalProperties": false,
+            "properties": {
+              "bounds": {
+                "additionalProperties": false,
+                "description": "Object-local program-space compiler bounds. Leave margin around the entire surface.",
+                "properties": {
+                  "max": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  },
+                  "min": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "min",
+                  "max"
+                ],
+                "type": "object"
+              },
+              "metadata": {
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "maxLength": 1024,
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxProperties": 32,
+                "propertyNames": {
+                  "maxLength": 64
+                },
+                "type": "object"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "nodes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "blend": {
+                      "description": "Program-space smooth boolean radius; zero is a hard operation.",
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "depth": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "exponents": {
+                      "items": {
+                        "maximum": 4.0,
+                        "minimum": 0.1,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "id": {
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "major_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "minor_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "operation": {
+                      "description": "Sequential boolean operation. The first enabled node must use union.",
+                      "enum": [
+                        "union",
+                        "subtract",
+                        "intersect"
+                      ],
+                      "type": "string"
+                    },
+                    "parent_id": {
+                      "description": "Optional semantic transform parent node id.",
+                      "type": "string"
+                    },
+                    "point_a": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "point_b": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "points": {
+                      "description": "Local centerline points for a tapered sweep.",
+                      "items": {
+                        "items": {
+                          "maximum": 1000000.0,
+                          "minimum": -1000000.0,
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "radii": {
+                      "description": "Three ellipsoid/superquadric radii, or one radius per sweep point.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "rounding": {
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "semantic_role": {
+                      "maxLength": 120,
+                      "type": "string"
+                    },
+                    "size": {
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "transform": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "location": {
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "rotation": {
+                          "description": "Local XYZ Euler rotation in radians.",
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "scale": {
+                          "items": {
+                            "maximum": 10000.0,
+                            "minimum": 0.0001,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": {
+                      "enum": [
+                        "sphere",
+                        "ellipsoid",
+                        "box",
+                        "capsule",
+                        "cylinder",
+                        "torus",
+                        "superquadric",
+                        "sweep"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 64,
+                "minItems": 1,
+                "type": "array"
+              },
+              "schema_version": {
+                "enum": [
+                  1
+                ],
+                "type": "integer"
+              }
+            },
+            "required": [
+              "bounds",
+              "nodes"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "program",
+          "points"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [],
+      "supports_headless": true
+    },
     "save_blend_file": {
       "description": "Save the current .blend, save-as to a human-confirmed .blend path, or save a copy without changing the active file. Refuses accidental overwrite unless overwrite=true.",
       "duration_hint": "Usually seconds, but large .blend files or network paths can take longer. The current file path changes only when copy=false and filepath targets a different .blend.",
@@ -17025,6 +17703,328 @@
         "type": "object"
       },
       "requires_live_preview": true
+    },
+    "update_shape_program": {
+      "description": "Replace the canonical program on an existing compiled implicit-shape object and regenerate its continuous mesh with full mesh, metadata, and vertex-group preview rollback. Preserves object transform, materials, and modifiers.",
+      "duration_hint": "Bounded SDF grid evaluation and watertight mesh replacement.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "iso_level": {
+            "maximum": 1000.0,
+            "minimum": -1000.0,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "program": {
+            "additionalProperties": false,
+            "properties": {
+              "bounds": {
+                "additionalProperties": false,
+                "description": "Object-local program-space compiler bounds. Leave margin around the entire surface.",
+                "properties": {
+                  "max": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  },
+                  "min": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "min",
+                  "max"
+                ],
+                "type": "object"
+              },
+              "metadata": {
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "maxLength": 1024,
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxProperties": 32,
+                "propertyNames": {
+                  "maxLength": 64
+                },
+                "type": "object"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "nodes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "blend": {
+                      "description": "Program-space smooth boolean radius; zero is a hard operation.",
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "depth": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "exponents": {
+                      "items": {
+                        "maximum": 4.0,
+                        "minimum": 0.1,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "id": {
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "major_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "minor_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "operation": {
+                      "description": "Sequential boolean operation. The first enabled node must use union.",
+                      "enum": [
+                        "union",
+                        "subtract",
+                        "intersect"
+                      ],
+                      "type": "string"
+                    },
+                    "parent_id": {
+                      "description": "Optional semantic transform parent node id.",
+                      "type": "string"
+                    },
+                    "point_a": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "point_b": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "points": {
+                      "description": "Local centerline points for a tapered sweep.",
+                      "items": {
+                        "items": {
+                          "maximum": 1000000.0,
+                          "minimum": -1000000.0,
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "radii": {
+                      "description": "Three ellipsoid/superquadric radii, or one radius per sweep point.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "rounding": {
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "semantic_role": {
+                      "maxLength": 120,
+                      "type": "string"
+                    },
+                    "size": {
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "transform": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "location": {
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "rotation": {
+                          "description": "Local XYZ Euler rotation in radians.",
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "scale": {
+                          "items": {
+                            "maximum": 10000.0,
+                            "minimum": 0.0001,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": {
+                      "enum": [
+                        "sphere",
+                        "ellipsoid",
+                        "box",
+                        "capsule",
+                        "cylinder",
+                        "torus",
+                        "superquadric",
+                        "sweep"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 64,
+                "minItems": 1,
+                "type": "array"
+              },
+              "schema_version": {
+                "enum": [
+                  1
+                ],
+                "type": "integer"
+              }
+            },
+            "required": [
+              "bounds",
+              "nodes"
+            ],
+            "type": "object"
+          },
+          "resolution": {
+            "description": "Grid cells along the longest bounds axis.",
+            "maximum": 96,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "smooth_iterations": {
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "object_name",
+          "program"
+        ],
+        "type": "object"
+      },
+      "long_running": true,
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
     },
     "uv_unwrap": {
       "description": "Create or update preview-safe UV coordinate maps on mesh objects using bounded deterministic smart, cube, or planar projection. Applies immediately with mesh-data preview rollback.",
@@ -19805,6 +20805,317 @@
       "name": "assign_material_to_selected"
     },
     {
+      "description": "Compile a bounded semantic implicit-shape program into one continuous watertight mesh. The connected LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, superquadrics, and tapered sweeps with smooth union, subtraction, and intersection. Stores the canonical program on the object for later inspection and revision.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "iso_level": {
+            "maximum": 1000.0,
+            "minimum": -1000.0,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "material_name": {
+            "type": "string"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "program": {
+            "additionalProperties": false,
+            "properties": {
+              "bounds": {
+                "additionalProperties": false,
+                "description": "Object-local program-space compiler bounds. Leave margin around the entire surface.",
+                "properties": {
+                  "max": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  },
+                  "min": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "min",
+                  "max"
+                ],
+                "type": "object"
+              },
+              "metadata": {
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "maxLength": 1024,
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxProperties": 32,
+                "propertyNames": {
+                  "maxLength": 64
+                },
+                "type": "object"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "nodes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "blend": {
+                      "description": "Program-space smooth boolean radius; zero is a hard operation.",
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "depth": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "exponents": {
+                      "items": {
+                        "maximum": 4.0,
+                        "minimum": 0.1,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "id": {
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "major_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "minor_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "operation": {
+                      "description": "Sequential boolean operation. The first enabled node must use union.",
+                      "enum": [
+                        "union",
+                        "subtract",
+                        "intersect"
+                      ],
+                      "type": "string"
+                    },
+                    "parent_id": {
+                      "description": "Optional semantic transform parent node id.",
+                      "type": "string"
+                    },
+                    "point_a": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "point_b": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "points": {
+                      "description": "Local centerline points for a tapered sweep.",
+                      "items": {
+                        "items": {
+                          "maximum": 1000000.0,
+                          "minimum": -1000000.0,
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "radii": {
+                      "description": "Three ellipsoid/superquadric radii, or one radius per sweep point.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "rounding": {
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "semantic_role": {
+                      "maxLength": 120,
+                      "type": "string"
+                    },
+                    "size": {
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "transform": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "location": {
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "rotation": {
+                          "description": "Local XYZ Euler rotation in radians.",
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "scale": {
+                          "items": {
+                            "maximum": 10000.0,
+                            "minimum": 0.0001,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": {
+                      "enum": [
+                        "sphere",
+                        "ellipsoid",
+                        "box",
+                        "capsule",
+                        "cylinder",
+                        "torus",
+                        "superquadric",
+                        "sweep"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 64,
+                "minItems": 1,
+                "type": "array"
+              },
+              "schema_version": {
+                "enum": [
+                  1
+                ],
+                "type": "integer"
+              }
+            },
+            "required": [
+              "bounds",
+              "nodes"
+            ],
+            "type": "object"
+          },
+          "resolution": {
+            "description": "Grid cells along the longest bounds axis.",
+            "maximum": 96,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "smooth_iterations": {
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "program"
+        ],
+        "type": "object"
+      },
+      "name": "compile_shape_program"
+    },
+    {
       "description": "Create a new emission material node setup and assign it to selected mesh objects. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
@@ -19840,6 +21151,25 @@
       "name": "assign_emission_material_to_selected"
     },
     {
+      "description": "Inspect the canonical semantic shape program, digest, compiler settings, and current mesh counts stored on a compiled implicit-shape object. Use include_program=true before revising individual semantic forms.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_program": {
+            "type": "boolean"
+          },
+          "object_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "object_name"
+        ],
+        "type": "object"
+      },
+      "name": "inspect_shape_program"
+    },
+    {
       "description": "Create or find a collection in the current scene. Applies immediately with preview revert support for newly created collections.",
       "input_schema": {
         "additionalProperties": false,
@@ -19859,6 +21189,305 @@
       "name": "create_collection"
     },
     {
+      "description": "Replace the canonical program on an existing compiled implicit-shape object and regenerate its continuous mesh with full mesh, metadata, and vertex-group preview rollback. Preserves object transform, materials, and modifiers.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "iso_level": {
+            "maximum": 1000.0,
+            "minimum": -1000.0,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "program": {
+            "additionalProperties": false,
+            "properties": {
+              "bounds": {
+                "additionalProperties": false,
+                "description": "Object-local program-space compiler bounds. Leave margin around the entire surface.",
+                "properties": {
+                  "max": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  },
+                  "min": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "min",
+                  "max"
+                ],
+                "type": "object"
+              },
+              "metadata": {
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "maxLength": 1024,
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxProperties": 32,
+                "propertyNames": {
+                  "maxLength": 64
+                },
+                "type": "object"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "nodes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "blend": {
+                      "description": "Program-space smooth boolean radius; zero is a hard operation.",
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "depth": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "exponents": {
+                      "items": {
+                        "maximum": 4.0,
+                        "minimum": 0.1,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "id": {
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "major_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "minor_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "operation": {
+                      "description": "Sequential boolean operation. The first enabled node must use union.",
+                      "enum": [
+                        "union",
+                        "subtract",
+                        "intersect"
+                      ],
+                      "type": "string"
+                    },
+                    "parent_id": {
+                      "description": "Optional semantic transform parent node id.",
+                      "type": "string"
+                    },
+                    "point_a": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "point_b": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "points": {
+                      "description": "Local centerline points for a tapered sweep.",
+                      "items": {
+                        "items": {
+                          "maximum": 1000000.0,
+                          "minimum": -1000000.0,
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "radii": {
+                      "description": "Three ellipsoid/superquadric radii, or one radius per sweep point.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "rounding": {
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "semantic_role": {
+                      "maxLength": 120,
+                      "type": "string"
+                    },
+                    "size": {
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "transform": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "location": {
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "rotation": {
+                          "description": "Local XYZ Euler rotation in radians.",
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "scale": {
+                          "items": {
+                            "maximum": 10000.0,
+                            "minimum": 0.0001,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": {
+                      "enum": [
+                        "sphere",
+                        "ellipsoid",
+                        "box",
+                        "capsule",
+                        "cylinder",
+                        "torus",
+                        "superquadric",
+                        "sweep"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 64,
+                "minItems": 1,
+                "type": "array"
+              },
+              "schema_version": {
+                "enum": [
+                  1
+                ],
+                "type": "integer"
+              }
+            },
+            "required": [
+              "bounds",
+              "nodes"
+            ],
+            "type": "object"
+          },
+          "resolution": {
+            "description": "Grid cells along the longest bounds axis.",
+            "maximum": 96,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "smooth_iterations": {
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "object_name",
+          "program"
+        ],
+        "type": "object"
+      },
+      "name": "update_shape_program"
+    },
+    {
       "description": "Link selected objects to a named collection without deleting existing links. Applies immediately with preview revert support.",
       "input_schema": {
         "additionalProperties": false,
@@ -19876,6 +21505,297 @@
         "type": "object"
       },
       "name": "link_selected_to_collection"
+    },
+    {
+      "description": "Evaluate a semantic shape program at up to 512 object-local program-space points without changing Blender. Returns signed distances and inside/outside classification so an LLM can probe proportions, cavities, and boolean behavior before compiling a dense mesh.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "points": {
+            "items": {
+              "items": {
+                "maximum": 1000000.0,
+                "minimum": -1000000.0,
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "maxItems": 512,
+            "type": "array"
+          },
+          "program": {
+            "additionalProperties": false,
+            "properties": {
+              "bounds": {
+                "additionalProperties": false,
+                "description": "Object-local program-space compiler bounds. Leave margin around the entire surface.",
+                "properties": {
+                  "max": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  },
+                  "min": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "min",
+                  "max"
+                ],
+                "type": "object"
+              },
+              "metadata": {
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "maxLength": 1024,
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxProperties": 32,
+                "propertyNames": {
+                  "maxLength": 64
+                },
+                "type": "object"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "nodes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "blend": {
+                      "description": "Program-space smooth boolean radius; zero is a hard operation.",
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "depth": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "exponents": {
+                      "items": {
+                        "maximum": 4.0,
+                        "minimum": 0.1,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "id": {
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "major_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "minor_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "operation": {
+                      "description": "Sequential boolean operation. The first enabled node must use union.",
+                      "enum": [
+                        "union",
+                        "subtract",
+                        "intersect"
+                      ],
+                      "type": "string"
+                    },
+                    "parent_id": {
+                      "description": "Optional semantic transform parent node id.",
+                      "type": "string"
+                    },
+                    "point_a": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "point_b": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "points": {
+                      "description": "Local centerline points for a tapered sweep.",
+                      "items": {
+                        "items": {
+                          "maximum": 1000000.0,
+                          "minimum": -1000000.0,
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "radii": {
+                      "description": "Three ellipsoid/superquadric radii, or one radius per sweep point.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "rounding": {
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "semantic_role": {
+                      "maxLength": 120,
+                      "type": "string"
+                    },
+                    "size": {
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "transform": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "location": {
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "rotation": {
+                          "description": "Local XYZ Euler rotation in radians.",
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "scale": {
+                          "items": {
+                            "maximum": 10000.0,
+                            "minimum": 0.0001,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": {
+                      "enum": [
+                        "sphere",
+                        "ellipsoid",
+                        "box",
+                        "capsule",
+                        "cylinder",
+                        "torus",
+                        "superquadric",
+                        "sweep"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 64,
+                "minItems": 1,
+                "type": "array"
+              },
+              "schema_version": {
+                "enum": [
+                  1
+                ],
+                "type": "integer"
+              }
+            },
+            "required": [
+              "bounds",
+              "nodes"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "program",
+          "points"
+        ],
+        "type": "object"
+      },
+      "name": "sample_shape_program_sdf"
     },
     {
       "description": "Add a bounded common modifier to selected mesh objects. Supports BEVEL, SUBSURF, SOLIDIFY, and ARRAY. Applies immediately with preview revert support.",
@@ -30072,6 +31992,10 @@
       "create_material_palette"
     ],
     "modeling": [
+      "compile_shape_program",
+      "inspect_shape_program",
+      "update_shape_program",
+      "sample_shape_program_sdf",
       "edit_mesh",
       "inspect_modeling_quality",
       "curve_to_mesh",
@@ -30206,7 +32130,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "5a95a196c28f1e82f49f4d5d619080316243372861768bfb26d36fd451ef5804",
+  "registry_digest": "3d38a6b1aa7d834afa68e0af157fe9f7c7fe82c786709b9dfca6a7da30deddbd",
   "schema_version": 1,
   "specs": [
     {
@@ -35624,6 +37548,354 @@
     },
     {
       "contract": {
+        "duration_hint": "Bounded SDF grid evaluation and watertight mesh extraction.",
+        "long_running": true,
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Compile a bounded semantic implicit-shape program into one continuous watertight mesh. The connected LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, superquadrics, and tapered sweeps with smooth union, subtraction, and intersection. Stores the canonical program on the object for later inspection and revision.",
+      "exposure": "catalog",
+      "groups": [
+        "advanced_create",
+        "procedural_3d",
+        "model_quality",
+        "reference_modeling",
+        "implicit_modeling"
+      ],
+      "handler_key": "compile_shape_program",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "color": {
+            "items": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 3,
+            "type": "array"
+          },
+          "iso_level": {
+            "maximum": 1000.0,
+            "minimum": -1000.0,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "material_name": {
+            "type": "string"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "program": {
+            "additionalProperties": false,
+            "properties": {
+              "bounds": {
+                "additionalProperties": false,
+                "description": "Object-local program-space compiler bounds. Leave margin around the entire surface.",
+                "properties": {
+                  "max": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  },
+                  "min": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "min",
+                  "max"
+                ],
+                "type": "object"
+              },
+              "metadata": {
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "maxLength": 1024,
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxProperties": 32,
+                "propertyNames": {
+                  "maxLength": 64
+                },
+                "type": "object"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "nodes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "blend": {
+                      "description": "Program-space smooth boolean radius; zero is a hard operation.",
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "depth": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "exponents": {
+                      "items": {
+                        "maximum": 4.0,
+                        "minimum": 0.1,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "id": {
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "major_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "minor_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "operation": {
+                      "description": "Sequential boolean operation. The first enabled node must use union.",
+                      "enum": [
+                        "union",
+                        "subtract",
+                        "intersect"
+                      ],
+                      "type": "string"
+                    },
+                    "parent_id": {
+                      "description": "Optional semantic transform parent node id.",
+                      "type": "string"
+                    },
+                    "point_a": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "point_b": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "points": {
+                      "description": "Local centerline points for a tapered sweep.",
+                      "items": {
+                        "items": {
+                          "maximum": 1000000.0,
+                          "minimum": -1000000.0,
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "radii": {
+                      "description": "Three ellipsoid/superquadric radii, or one radius per sweep point.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "rounding": {
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "semantic_role": {
+                      "maxLength": 120,
+                      "type": "string"
+                    },
+                    "size": {
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "transform": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "location": {
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "rotation": {
+                          "description": "Local XYZ Euler rotation in radians.",
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "scale": {
+                          "items": {
+                            "maximum": 10000.0,
+                            "minimum": 0.0001,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": {
+                      "enum": [
+                        "sphere",
+                        "ellipsoid",
+                        "box",
+                        "capsule",
+                        "cylinder",
+                        "torus",
+                        "superquadric",
+                        "sweep"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 64,
+                "minItems": 1,
+                "type": "array"
+              },
+              "schema_version": {
+                "enum": [
+                  1
+                ],
+                "type": "integer"
+              }
+            },
+            "required": [
+              "bounds",
+              "nodes"
+            ],
+            "type": "object"
+          },
+          "resolution": {
+            "description": "Grid cells along the longest bounds axis.",
+            "maximum": 96,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "smooth_iterations": {
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "program"
+        ],
+        "type": "object"
+      },
+      "name": "compile_shape_program",
+      "order": 600,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
         "description": "Create a new emission material node setup and assign it to selected mesh objects",
         "mutates_scene": true,
         "requires_live_preview": true
@@ -35685,6 +37957,57 @@
     },
     {
       "contract": {
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read"
+        ],
+        "supports_headless": true
+      },
+      "description": "Inspect the canonical semantic shape program, digest, compiler settings, and current mesh counts stored on a compiled implicit-shape object. Use include_program=true before revising individual semantic forms.",
+      "exposure": "catalog",
+      "groups": [
+        "deep_inspect",
+        "procedural_3d",
+        "model_quality",
+        "reference_modeling",
+        "implicit_modeling"
+      ],
+      "handler_key": "inspect_shape_program",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_program": {
+            "type": "boolean"
+          },
+          "object_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "object_name"
+        ],
+        "type": "object"
+      },
+      "name": "inspect_shape_program",
+      "order": 610,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
         "description": "Create or find a collection in the current scene",
         "mutates_scene": true,
         "requires_live_preview": true
@@ -35730,6 +38053,343 @@
     },
     {
       "contract": {
+        "duration_hint": "Bounded SDF grid evaluation and watertight mesh replacement.",
+        "long_running": true,
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Replace the canonical program on an existing compiled implicit-shape object and regenerate its continuous mesh with full mesh, metadata, and vertex-group preview rollback. Preserves object transform, materials, and modifiers.",
+      "exposure": "catalog",
+      "groups": [
+        "advanced_create",
+        "refinement",
+        "procedural_3d",
+        "model_quality",
+        "reference_modeling",
+        "implicit_modeling"
+      ],
+      "handler_key": "update_shape_program",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "iso_level": {
+            "maximum": 1000.0,
+            "minimum": -1000.0,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "object_name": {
+            "type": "string"
+          },
+          "program": {
+            "additionalProperties": false,
+            "properties": {
+              "bounds": {
+                "additionalProperties": false,
+                "description": "Object-local program-space compiler bounds. Leave margin around the entire surface.",
+                "properties": {
+                  "max": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  },
+                  "min": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "min",
+                  "max"
+                ],
+                "type": "object"
+              },
+              "metadata": {
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "maxLength": 1024,
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxProperties": 32,
+                "propertyNames": {
+                  "maxLength": 64
+                },
+                "type": "object"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "nodes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "blend": {
+                      "description": "Program-space smooth boolean radius; zero is a hard operation.",
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "depth": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "exponents": {
+                      "items": {
+                        "maximum": 4.0,
+                        "minimum": 0.1,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "id": {
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "major_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "minor_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "operation": {
+                      "description": "Sequential boolean operation. The first enabled node must use union.",
+                      "enum": [
+                        "union",
+                        "subtract",
+                        "intersect"
+                      ],
+                      "type": "string"
+                    },
+                    "parent_id": {
+                      "description": "Optional semantic transform parent node id.",
+                      "type": "string"
+                    },
+                    "point_a": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "point_b": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "points": {
+                      "description": "Local centerline points for a tapered sweep.",
+                      "items": {
+                        "items": {
+                          "maximum": 1000000.0,
+                          "minimum": -1000000.0,
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "radii": {
+                      "description": "Three ellipsoid/superquadric radii, or one radius per sweep point.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "rounding": {
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "semantic_role": {
+                      "maxLength": 120,
+                      "type": "string"
+                    },
+                    "size": {
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "transform": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "location": {
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "rotation": {
+                          "description": "Local XYZ Euler rotation in radians.",
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "scale": {
+                          "items": {
+                            "maximum": 10000.0,
+                            "minimum": 0.0001,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": {
+                      "enum": [
+                        "sphere",
+                        "ellipsoid",
+                        "box",
+                        "capsule",
+                        "cylinder",
+                        "torus",
+                        "superquadric",
+                        "sweep"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 64,
+                "minItems": 1,
+                "type": "array"
+              },
+              "schema_version": {
+                "enum": [
+                  1
+                ],
+                "type": "integer"
+              }
+            },
+            "required": [
+              "bounds",
+              "nodes"
+            ],
+            "type": "object"
+          },
+          "resolution": {
+            "description": "Grid cells along the longest bounds axis.",
+            "maximum": 96,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "smooth_iterations": {
+            "maximum": 10,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "object_name",
+          "program"
+        ],
+        "type": "object"
+      },
+      "name": "update_shape_program",
+      "order": 620,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
+    },
+    {
+      "contract": {
         "description": "Link selected objects to a named collection without deleting existing links",
         "mutates_scene": true,
         "requires_live_preview": true
@@ -35772,6 +38432,327 @@
         "type": "object"
       },
       "owner": "scene_editing"
+    },
+    {
+      "contract": {
+        "mutates_scene": false,
+        "permissions": [],
+        "supports_headless": true
+      },
+      "description": "Evaluate a semantic shape program at up to 512 object-local program-space points without changing Blender. Returns signed distances and inside/outside classification so an LLM can probe proportions, cavities, and boolean behavior before compiling a dense mesh.",
+      "exposure": "catalog",
+      "groups": [
+        "deep_inspect",
+        "procedural_3d",
+        "model_quality",
+        "reference_modeling",
+        "implicit_modeling"
+      ],
+      "handler_key": "sample_shape_program_sdf",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "points": {
+            "items": {
+              "items": {
+                "maximum": 1000000.0,
+                "minimum": -1000000.0,
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "maxItems": 512,
+            "type": "array"
+          },
+          "program": {
+            "additionalProperties": false,
+            "properties": {
+              "bounds": {
+                "additionalProperties": false,
+                "description": "Object-local program-space compiler bounds. Leave margin around the entire surface.",
+                "properties": {
+                  "max": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  },
+                  "min": {
+                    "items": {
+                      "maximum": 1000000.0,
+                      "minimum": -1000000.0,
+                      "type": "number"
+                    },
+                    "maxItems": 3,
+                    "minItems": 3,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "min",
+                  "max"
+                ],
+                "type": "object"
+              },
+              "metadata": {
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "maxLength": 1024,
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxProperties": 32,
+                "propertyNames": {
+                  "maxLength": 64
+                },
+                "type": "object"
+              },
+              "name": {
+                "maxLength": 120,
+                "type": "string"
+              },
+              "nodes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "blend": {
+                      "description": "Program-space smooth boolean radius; zero is a hard operation.",
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "depth": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "exponents": {
+                      "items": {
+                        "maximum": 4.0,
+                        "minimum": 0.1,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "id": {
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "major_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "minor_radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "operation": {
+                      "description": "Sequential boolean operation. The first enabled node must use union.",
+                      "enum": [
+                        "union",
+                        "subtract",
+                        "intersect"
+                      ],
+                      "type": "string"
+                    },
+                    "parent_id": {
+                      "description": "Optional semantic transform parent node id.",
+                      "type": "string"
+                    },
+                    "point_a": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "point_b": {
+                      "items": {
+                        "maximum": 1000000.0,
+                        "minimum": -1000000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "points": {
+                      "description": "Local centerline points for a tapered sweep.",
+                      "items": {
+                        "items": {
+                          "maximum": 1000000.0,
+                          "minimum": -1000000.0,
+                          "type": "number"
+                        },
+                        "maxItems": 3,
+                        "minItems": 3,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "radii": {
+                      "description": "Three ellipsoid/superquadric radii, or one radius per sweep point.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    "radius": {
+                      "maximum": 10000.0,
+                      "minimum": 1e-05,
+                      "type": "number"
+                    },
+                    "rounding": {
+                      "maximum": 1000.0,
+                      "minimum": 0.0,
+                      "type": "number"
+                    },
+                    "semantic_role": {
+                      "maxLength": 120,
+                      "type": "string"
+                    },
+                    "size": {
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "transform": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "location": {
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "rotation": {
+                          "description": "Local XYZ Euler rotation in radians.",
+                          "items": {
+                            "maximum": 1000000.0,
+                            "minimum": -1000000.0,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        },
+                        "scale": {
+                          "items": {
+                            "maximum": 10000.0,
+                            "minimum": 0.0001,
+                            "type": "number"
+                          },
+                          "maxItems": 3,
+                          "minItems": 3,
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": {
+                      "enum": [
+                        "sphere",
+                        "ellipsoid",
+                        "box",
+                        "capsule",
+                        "cylinder",
+                        "torus",
+                        "superquadric",
+                        "sweep"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 64,
+                "minItems": 1,
+                "type": "array"
+              },
+              "schema_version": {
+                "enum": [
+                  1
+                ],
+                "type": "integer"
+              }
+            },
+            "required": [
+              "bounds",
+              "nodes"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "program",
+          "points"
+        ],
+        "type": "object"
+      },
+      "name": "sample_shape_program_sdf",
+      "order": 630,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "modeling"
     },
     {
       "contract": {
@@ -53243,5 +56224,5 @@
       "owner": "scripts_transactions"
     }
   ],
-  "tool_count": 229
+  "tool_count": 233
 }

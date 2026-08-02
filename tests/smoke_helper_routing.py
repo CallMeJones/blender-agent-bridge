@@ -31,6 +31,7 @@ def main():
         "Review this mesh against the attached photo and repair its form continuity.",
         "Improve the model quality and landmark placement of this prop.",
         "Build a 3D model from image and run a quality pass.",
+        "Build an implicit shape program from the reference image and refine its SDF silhouette.",
     ):
         assert helper_routing.is_reference_model_quality_request(prompt), prompt
     for prompt in (
@@ -240,6 +241,13 @@ def main():
     )
     assert quality_guard["code"] == "procedural_3d_helper_required", quality_guard
     assert "inspect_modeling_quality" in quality_guard["recommended_tools"], quality_guard
+
+    implicit_guard = helper_routing.helper_first_script_advisory(
+        "Use helpers only to create an implicit shape program instead of writing an SDF script."
+    )
+    assert implicit_guard["code"] == "procedural_3d_helper_required", implicit_guard
+    assert "compile_shape_program" in implicit_guard["recommended_tools"], implicit_guard
+    assert "update_shape_program" in implicit_guard["recommended_tools"], implicit_guard
 
     modular_guard = helper_routing.helper_first_script_advisory(
         "Write Python for a modular wall panel object kit with pipe run details."

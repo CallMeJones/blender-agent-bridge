@@ -284,6 +284,16 @@ def main():
         assert "get_geometry_nodes_details" in procedural_names, procedural_meta
         assert "draft_script" in procedural_names, procedural_meta
 
+        implicit_tools, implicit_meta = agent_tools.select_blender_tool_definitions(
+            "Use an implicit shape program and signed distance field to build semantic masses, cavities, and a tapered sweep.",
+            bundle,
+        )
+        implicit_names = _names(implicit_tools)
+        for expected in {"compile_shape_program", "inspect_shape_program"}:
+            assert expected in implicit_names, (expected, implicit_meta)
+        assert "implicit_modeling" in implicit_meta["matched_groups"], implicit_meta
+        assert implicit_meta["schema_chars"] <= agent_tools.TOOL_SCHEMA_CHAR_BUDGET
+
         lamp_tools, lamp_meta = agent_tools.select_blender_tool_definitions(
             "Create a believable architect desk lamp product prop with spring arms, counterweight, open wide shade, bulb, and cable.",
             bundle,

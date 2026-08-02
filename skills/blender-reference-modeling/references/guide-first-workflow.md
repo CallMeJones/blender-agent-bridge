@@ -22,8 +22,8 @@ When image path, landmarks, or annotation points are available:
 2. Let the pipeline calibrate annotation coordinates to the actual image dimensions, image rectangle, guide plane, and orthographic comparison camera.
 3. Use `create_reference_modeling_guides` only when inputs are already normalized or must be assembled manually without an annotation document.
 4. Name guides for script handoff, such as `primary_outline`, `feature_left_center`, `secondary_mass`, or `major_width`.
-5. Inspect the result with `inspect_reference_modeling_guides(include_points=true)` before writing an authored modeling script.
-6. Feed the inspected collection metadata into the script; do not make the script rediscover guide objects by vague selection state.
+5. Inspect the result with `inspect_reference_modeling_guides(include_points=true)` before authoring a shape program or modeling script.
+6. Feed the inspected collection metadata into the chosen construction path; do not rediscover guide objects by vague selection state.
 
 For two or more orthographic references, use `create_multiview_reference_guides` with a distinct axis or custom camera basis for every view. Reuse exact landmark names across views. Treat high residuals, nearly parallel rays, and unresolved landmarks as calibration problems; correct the source annotations or view scale before moving reconstructed 3D landmarks by eye. When two or more non-parallel views contain closed silhouettes, call `create_multiview_visual_hull` to intersect them into the primary watertight volume. A front/back pair alone cannot bound depth.
 
@@ -34,6 +34,8 @@ If annotation data is missing, create a `reference_brief` that explicitly lists 
 For organic subjects, prefer continuous deformed forms over stacked primitives:
 
 - Build broad ellipsoid or metaball-like masses that match silhouette first.
+- Prefer `compile_shape_program` when the subject can be expressed as named continuous masses, smooth boolean cavities, and tapered paths. Store `semantic_role` labels, use `parent_id` for attached forms, inspect the canonical graph, and revise exact nodes with `update_shape_program` after each measured comparison.
+- Use `sample_shape_program_sdf` to verify inside/outside behavior before a dense compile. Keep explicit bounds close enough for useful resolution but far enough that the surface never touches them.
 - Prefer `create_multiview_depth_surface` when explicitly calibrated depth exists and `create_multiview_visual_hull` otherwise. Run `fit_surface_to_multiview_references` to reduce broad cross-view error before using `adaptive_remesh` for bounded local density where edge length and curvature require it.
 - When helpers are requested, `create_reference_blockout` can turn named mass ellipses into camera-oriented editable forms and an optional voxel-remesh union. Keep per-mass depth and deformation settings reference-derived.
 - Blend or join adjacent soft forms only after their measured positions are acceptable.
@@ -43,6 +45,7 @@ For organic subjects, prefer continuous deformed forms over stacked primitives:
 - Use `fit_surface_to_multiview_references` for broad silhouette, depth, or reconstructed-landmark disagreement across views. Turn remaining localized critiques into persistent named regions with `define_semantic_sculpt_regions`, then inspect their weighted coverage before deformation.
 - Use `apply_semantic_sculpt` for measured 3D fields and `apply_form_aware_sculpt` for topology-aware tangent relax, pinch, or crease. Use `apply_screen_space_sculpt` for a known calibrated contour pull, or `optimize_screen_space_sculpt` when candidate strengths should be scored and rejected unless they improve the reference metrics.
 - `adaptive_remesh` interpolates semantic point attributes; inspect coverage afterward. Redefine semantic regions after other topology-changing operations that alter vertex identity.
+- Commit the implicit blockout before topology-dependent masks or shape keys. Recompiling clears stale vertex groups and refuses shape-key meshes; preview revert restores the previous mesh and weights.
 
 Do not add fur, hair, whiskers, fabric fibers, or glossy finish to hide a weak silhouette, wrong eye placement, or broken mass transition.
 

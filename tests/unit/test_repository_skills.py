@@ -91,7 +91,7 @@ class RepositorySkillTests(unittest.TestCase):
         self.assertIn("ready_for_user_review", combined)
         self.assertIn("leave the preview pending", combined)
 
-    def test_skills_make_authored_mutation_script_first(self):
+    def test_skills_route_authored_mutation_by_capability(self):
         bridge_dir = SKILLS_ROOT / "blender-bridge"
         bridge_text = "\n".join(
             path.read_text(encoding="utf-8").lower()
@@ -114,7 +114,8 @@ class RepositorySkillTests(unittest.TestCase):
         self.assertIn("start_trusted_script_job", bridge_text)
         self.assertIn("start an execution trace", bridge_text)
         self.assertNotIn("fallback after a concrete helper gap", bridge_text)
-        self.assertIn("one cohesive reference-derived script", reference_text)
+        self.assertIn("prefer `compile_shape_program`", reference_text)
+        self.assertIn("outside that bounded vocabulary", reference_text)
         self.assertIn("does not change the repair execution strategy", reference_text)
         self.assertIn("not an automatic downgrade to primitive-only construction", reference_text)
         self.assertIn("start_model_quality_review", reference_text)

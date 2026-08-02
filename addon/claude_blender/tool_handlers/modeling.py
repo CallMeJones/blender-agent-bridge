@@ -17,8 +17,89 @@ from .. import (
     reference_surface_fitting,
     reference_visual_hull,
     semantic_sculpt,
+    shape_program,
+    shape_program_scene,
 )
 from .support import _bounded_float, _bounded_int, _float_list, _name_list, _optional_float_list
+
+
+def compile_shape_program(context, args):
+    program = args.get("program")
+    return shape_program_scene.compile_shape_program(
+        context,
+        program=program if isinstance(program, dict) else {},
+        object_name=str(args.get("object_name") or "Implicit Shape"),
+        resolution=_bounded_int(
+            args.get("resolution"), 48, minimum=8, maximum=96
+        ),
+        iso_level=_bounded_float(
+            args.get("iso_level"), 0.0, minimum=-1000.0, maximum=1000.0
+        ),
+        smooth_iterations=_bounded_int(
+            args.get("smooth_iterations"), 1, minimum=0, maximum=10
+        ),
+        material_name=str(args.get("material_name") or ""),
+        color=_float_list(args.get("color"), 4, (0.56, 0.62, 0.72, 1.0)),
+        label=str(args.get("label") or "Compile shape program"),
+    )
+
+
+def inspect_shape_program(context, args):
+    return shape_program_scene.inspect_shape_program(
+        context,
+        object_name=str(args.get("object_name") or ""),
+        include_program=bool(args.get("include_program", True)),
+    )
+
+
+def update_shape_program(context, args):
+    program = args.get("program")
+    return shape_program_scene.update_shape_program(
+        context,
+        object_name=str(args.get("object_name") or ""),
+        program=program if isinstance(program, dict) else {},
+        resolution=_bounded_int(
+            args.get("resolution"), 48, minimum=8, maximum=96
+        ),
+        iso_level=_bounded_float(
+            args.get("iso_level"), 0.0, minimum=-1000.0, maximum=1000.0
+        ),
+        smooth_iterations=_bounded_int(
+            args.get("smooth_iterations"), 1, minimum=0, maximum=10
+        ),
+        label=str(args.get("label") or "Update shape program"),
+    )
+
+
+def sample_shape_program_sdf(_context, args):
+    program = args.get("program")
+    points = args.get("points")
+    try:
+        normalized = shape_program.normalize_shape_program(
+            program if isinstance(program, dict) else {}
+        )
+        values = shape_program.sample_shape_program(
+            normalized, points if isinstance(points, list) else []
+        )
+        return {
+            "ok": True,
+            "message": f"Sampled shape program at {len(values)} point(s)",
+            "digest": shape_program.shape_program_digest(normalized),
+            "samples": [
+                {
+                    "point": point,
+                    "signed_distance": value,
+                    "inside": value <= 0.0,
+                }
+                for point, value in zip(points or [], values)
+            ],
+        }
+    except (TypeError, ValueError, OverflowError) as exc:
+        return {
+            "ok": False,
+            "code": "invalid_shape_program",
+            "message": str(exc),
+        }
 
 
 def create_text_object(context, args):

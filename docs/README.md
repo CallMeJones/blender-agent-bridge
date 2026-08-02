@@ -13,6 +13,7 @@ Start with the top-level `README.md`, then use these deeper notes for developmen
 - [SHOWCASE.md](SHOWCASE.md) - curated community showcase and submission requirements.
 - [ADDING_A_TOOL.md](ADDING_A_TOOL.md) - canonical registry, handler, safety, snapshot, and test workflow for contributors.
 - [MULTIVIEW_RECONSTRUCTION.md](MULTIVIEW_RECONSTRUCTION.md) - calibrated silhouette/depth fusion, joint surface fitting, bounded adaptive topology, and form-aware brush fields.
+- [IMPLICIT_SHAPE_PROGRAMS.md](IMPLICIT_SHAPE_PROGRAMS.md) - LLM-authored semantic SDF graphs, watertight compilation, persistent inspection, and preview-safe revision.
 - [REFERENCE_IMAGE_INTAKE.md](REFERENCE_IMAGE_INTAKE.md) - deterministic image/mask intake, multi-view scoring, and score-retained sculpt repair.
 - [REFERENCE_PART_MODELING.md](REFERENCE_PART_MODELING.md) - deterministic part graphs and part-aware organic base mesh construction.
 - [SEMANTIC_SCULPTING.md](SEMANTIC_SCULPTING.md) - model-neutral semantic regions, deterministic 3D fields, calibrated contour pulls, and measured optimization.
