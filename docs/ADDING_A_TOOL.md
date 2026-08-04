@@ -4,7 +4,7 @@ Blender Agent Bridge has one canonical metadata registry. A tool has exactly one
 
 ## 1. Choose The Owning Domain
 
-Use one of the eleven explicit modules in `addon/claude_blender/tool_registry/domains/`. The ordered module list in `tool_registry/__init__.py` is intentional; do not add automatic package discovery.
+Use one of the thirteen explicit modules in `addon/claude_blender/tool_registry/domains/`. The ordered module list in `tool_registry/__init__.py` is intentional; do not add automatic package discovery.
 
 If a genuinely new domain is required, add it to `DOMAIN_MODULES` in a stable position and document why an existing owner is unsuitable.
 

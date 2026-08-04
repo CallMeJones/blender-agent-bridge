@@ -2311,6 +2311,21 @@ def _guardrail_warnings_for_tool(tool, arguments=None):
     arguments = arguments if arguments_known else {}
     annotations = _tool_annotations(tool)
     warnings = []
+    if name in {"draft_script", "draft_privileged_script"}:
+        warnings.append(
+            {
+                "code": "trusted_script_checkpoint_only",
+                "severity": "warning",
+                "message": (
+                    "Trusted Python runs immediately with checkpoint and Blender undo recovery. It does not create "
+                    "a live preview transaction, and commit_preview or revert_preview cannot commit or undo its "
+                    "changes. Use bounded preview helpers or disclose checkpoint-only execution when the user "
+                    "requires a pending preview."
+                ),
+                "live_preview_supported": False,
+                "recovery": ["checkpoint_restore", "blender_undo"],
+            }
+        )
     if name in EXTERNAL_ASSET_DIRECT_TOOLS:
         warnings.append(
             {

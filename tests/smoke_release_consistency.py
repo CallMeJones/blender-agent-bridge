@@ -150,7 +150,7 @@ def _assert_local_release_metadata():
     generated_uvx = build_info.mcp_config("http://127.0.0.1:1", launch_mode="uvx", platform_name="posix")
     generated_server = generated_uvx["mcpServers"]["blender"]
     assert f"{build_info.MCP_DISTRIBUTION_NAME}=={version}" in generated_server["args"], generated_server
-    assert generated_server["env"]["CLAUDE_BLENDER_TOOL_REGISTRY_DIGEST"] == build_info.TOOL_REGISTRY_DIGEST
+    assert generated_server["env"] == {"CLAUDE_BLENDER_MCP_RUNTIME_MODE": "uvx"}, generated_server
     published_version = _publication_version()
     published_install_surfaces = [
         os.path.join(CLIENT_GUIDE_DIR, filename)

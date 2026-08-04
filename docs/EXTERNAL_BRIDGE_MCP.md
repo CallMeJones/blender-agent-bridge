@@ -7,7 +7,7 @@ The extension defaults to **Bundled**, which launches the pure-Python MCP server
 Select the runtime in Blender preferences before using **Copy MCP Config**. Generated `uvx` configs pin the extension version:
 
 ```text
-uvx --from blender-bridge==0.4.0 blender-bridge
+uvx --from blender-bridge==0.4.1 blender-bridge
 ```
 
 Windows configs use `cmd /c uvx ...`; macOS and Linux invoke `uvx` directly. Blender detects a missing executable and shows installation guidance but never installs software automatically. See the [client guide matrix](clients/README.md) for complete formats.
@@ -70,11 +70,11 @@ If you set a bridge token, the copied config includes:
 }
 ```
 
-The copied config also includes safe metadata in the MCP server `env` block, such as `CLAUDE_BLENDER_ADDON_VERSION`, `CLAUDE_BLENDER_ADDON_SOURCE_HASH`, `CLAUDE_BLENDER_BRIDGE_VERSION`, `CLAUDE_BLENDER_MCP_SERVER_VERSION`, `CLAUDE_BLENDER_MCP_CONFIG_VERSION`, `CLAUDE_BLENDER_MCP_RUNTIME_MODE`, `CLAUDE_BLENDER_TOOL_REGISTRY_DIGEST`, and a short `CLAUDE_BLENDER_MCP_CONFIG_NOTE`. These fields behave like a comment for humans while remaining valid JSON for stricter clients; runtime mode and registry digest additionally participate in compatibility diagnostics.
+The normal copied config is intentionally compact. It omits `env` unless a real value is needed, such as `BLENDER_BRIDGE_TOKEN`, `SKETCHFAB_API_TOKEN`, or the `CLAUDE_BLENDER_MCP_RUNTIME_MODE` marker used by the optional `uvx / PyPI` runtime. Version, source, and tool-registry compatibility are checked from the running bridge instead of requiring users to paste diagnostic metadata.
 
 ## Client Env Auth
 
-Poly Haven needs no API key. For Sketchfab downloads, use `Copy MCP Config`, fill the empty `SKETCHFAB_API_TOKEN` environment field in the client configuration, then restart or refresh the client. The token is not saved in Blender preferences, `.blend` files, or audit logs.
+Poly Haven needs no API key. For Sketchfab downloads, use `Copy MCP + Sketchfab`, or add `SKETCHFAB_API_TOKEN` to the client configuration yourself, then restart or refresh the client. The token is not saved in Blender preferences, `.blend` files, or audit logs.
 
 External asset downloads connect directly instead of using system HTTP proxies. This keeps DNS validation and the connected destination under the same security check, but networks that require an outbound proxy must allow direct access to the provider/CDN or downloads will fail with a connection error.
 
@@ -119,7 +119,7 @@ Use `blender_bridge_status` to check `mcp_external_asset_auth.sketchfab` and con
 
 ## MCP Client Refresh
 
-Some clients cache MCP tool lists, server paths, or environment values. After installing a new zip, reloading the add-on, or pressing `Copy MCP Config`, replace the old client config and refresh or restart the MCP client. If `blender_bridge_status` reports a different add-on, bridge, MCP server, config version, or source hash than Blender's sidebar, the client is probably still using stale config. The status payload compares the add-on source hash running in Blender, the MCP server source hash, and the hash embedded in copied MCP config so stale installs are visible from the client.
+Some clients cache MCP tool lists, server paths, or environment values. After installing a new zip, reloading the add-on, or pressing `Copy MCP Config`, replace the old client config and refresh or restart the MCP client. If `blender_bridge_status` reports a different add-on, bridge, MCP server, config version, or source hash than Blender's sidebar, the client is probably still using stale config. The status payload compares the add-on source hash running in Blender with the MCP server source hash so stale installs are visible from the client.
 
 After updating, use this quick checklist:
 
@@ -245,7 +245,7 @@ Do not reconnect the server or change the advertised tool set merely to save con
 
 Catalog summaries, schema lookups, and tool-call results may include `guardrail_warnings`. These are advisory, machine-readable nudges for MCP clients; they do not replace Blender-side enforcement. Current warning categories cover synchronous external asset fallbacks, cache cleanup writes, destructive project-file operations, user-confirmed paths, session-trusted scripts, live-preview mutations, long-running synchronous calls, capability-routed authored/operational work, and background job polling.
 
-`draft_script` is the default authored-mutation path for object generation, modeling, animation, materials, custom nodes, rigging, and look development while trust is active, unless the user requests helpers. It has a 500k-character payload ceiling. With trust off it refuses without retaining script state. With trust on it runs immediately with the same filesystem, network, subprocess, project-file, persistent-cache, and Blender API permissions as Blender's **Run Script** command. Helper and static-analysis findings may be returned as advice, but they do not become hidden authorization filters after trust.
+`draft_script` is the default authored-mutation path for object generation, modeling, animation, materials, custom nodes, rigging, and look development while trust is active, unless the user requests helpers. It has a 500k-character payload ceiling. With trust off it refuses without retaining script state. With trust on it runs immediately with the same filesystem, network, subprocess, project-file, persistent-cache, and Blender API permissions as Blender's **Run Script** command. Its recovery boundary is checkpoint plus Blender undo, not live preview: it does not create pending preview state, and `commit_preview`/`revert_preview` cannot commit or undo its changes. A planner selecting it for a request that explicitly requires pending preview must disclose that limitation or use bounded preview helpers. Helper and static-analysis findings may be returned as advice, but they do not become hidden authorization filters after trust.
 
 Use `start_trusted_script_job` when one cohesive authored script is likely to exceed the bridge timeout or benefits from isolated execution. It snapshots the current scene to a copied `.blend`, starts a background Blender process, and returns immediately. Poll `get_trusted_script_job_status`, cancel with `cancel_trusted_script_job` when needed, and call `apply_trusted_script_job_result` only after explicit user approval. Apply first creates a checkpoint and preserves active runtime script trust across the file change. The background result cannot alter the live scene before that confirmed apply.
 

@@ -13,6 +13,14 @@ from claude_blender import script_execution  # noqa: E402
 
 
 class ScriptExecutionStatusTests(unittest.TestCase):
+    def test_trusted_script_mutation_semantics_exclude_live_preview(self):
+        semantics = script_execution.mutation_semantics()
+        self.assertEqual("checkpoint_only", semantics["mode"])
+        self.assertFalse(semantics["live_preview_supported"])
+        self.assertFalse(semantics["creates_pending_preview"])
+        self.assertFalse(semantics["commit_preview_applies"])
+        self.assertFalse(semantics["revert_preview_applies"])
+
     def test_attempted_run_reports_active_trust(self):
         status = script_execution.status_fields(
             {"auto_run_attempted": True, "auto_ran": True, "code": "script_ran"}

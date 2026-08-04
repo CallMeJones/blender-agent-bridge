@@ -13,8 +13,8 @@ PyPI` in Blender.
 
 1. In Blender's **Agent Bridge** sidebar, press **Start**.
 2. Press **Copy MCP Config**. The generated JSON is the source of truth for the
-   installed extension path, Blender Python executable, bridge URL, token,
-   version metadata, and registry digest.
+   installed extension path, Blender Python executable, bridge URL, and any
+   token or runtime environment values that are actually needed.
 3. Open Cursor's MCP settings, or edit `~/.cursor/mcp.json` for all projects or
    `.cursor/mcp.json` for one project.
 4. Merge the complete generated `mcpServers.blender` entry without deleting
@@ -33,8 +33,8 @@ Merge the Blender MCP config currently on my clipboard into my global ~/.cursor/
 ```
 
 If Cursor cannot access the clipboard, merge the generated JSON manually. Do
-not reconstruct the token, executable, extension path, or registry metadata
-from examples. Bundled mode has this shape:
+not reconstruct the token, executable, or extension path from examples. Bundled
+mode has this shape when bridge-token auth is enabled:
 
 ```json
 {
@@ -51,12 +51,12 @@ from examples. Bundled mode has this shape:
 Pinned `uvx` mode on macOS/Linux uses `"command": "uvx"` with:
 
 ```json
-"args": ["--from", "blender-bridge==0.4.0", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
+"args": ["--from", "blender-bridge==0.4.1", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
 ```
 
 On Windows, an `uvx` entry uses `"command": "cmd"` and prefixes args with
-`"/c", "uvx"`. Keep all environment fields copied by Blender, including the
-optional Sketchfab token.
+`"/c", "uvx"`. Keep any environment fields copied by Blender, including the
+`uvx` runtime marker and optional Sketchfab token.
 
 ## Restart And Smoke Test
 

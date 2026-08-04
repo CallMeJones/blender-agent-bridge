@@ -171,7 +171,7 @@ def _write_html(repo_dir, entry, zip_name, *, repository_url=DEFAULT_REPOSITORY_
   <div class="grid">
     <div class="panel">
       <h3>Bundled (default)</h3>
-      <p>Press <strong>Copy MCP Config</strong> and paste it into your MCP client. The server is shipped with the extension, requires no extra installation, and retains source-tree diagnostics.</p>
+      <p>Press <strong>Copy MCP Config</strong> and paste it into your MCP client. The server is shipped with the extension, requires no extra installation, and keeps the default config compact.</p>
     </div>
     <div class="panel">
       <h3>uvx / PyPI (optional)</h3>

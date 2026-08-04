@@ -394,11 +394,15 @@ def _client_entry_check(absolute_path, entry):
     }
     if settings["bridge_url"]:
         details["bridge_url"] = _safe_bridge_url(settings["bridge_url"])
+    metadata_present = bool(configured_version or configured_digest)
+    message = "The Blender client entry resolves to an available MCP command."
+    if metadata_present:
+        message = "The Blender client entry resolves to an available MCP command with current version metadata."
     return _check(
         "client_configuration",
         "Client configuration",
         PASS,
-        "The Blender client entry resolves to an available MCP command with current version metadata.",
+        message,
         details=details,
     )
 

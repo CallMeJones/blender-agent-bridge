@@ -427,6 +427,75 @@ def _image_size_tuple(image):
         return 0, 0
 
 
+def _sample_image_visibility(filepath, *, max_samples=4096):
+    """Return a small visual digest for detecting unusable screenshot files."""
+
+    image = None
+    try:
+        image = bpy.data.images.load(filepath, check_existing=False)
+        width, height = _image_size_tuple(image)
+        pixel_count = width * height
+        if width <= 0 or height <= 0 or pixel_count <= 0:
+            return {
+                "available": False,
+                "blank": True,
+                "note": "Viewport screenshot has no readable pixels",
+                "width": width,
+                "height": height,
+                "pixel_count": int(pixel_count),
+            }
+        stride = max(1, math.ceil(pixel_count / max(1, int(max_samples))))
+        sample_count = 0
+        min_luma = 1.0
+        max_luma = 0.0
+        sum_luma = 0.0
+        sum_alpha = 0.0
+        max_alpha = 0.0
+        for pixel_index in range(0, pixel_count, stride):
+            offset = pixel_index * 4
+            r = float(image.pixels[offset])
+            g = float(image.pixels[offset + 1])
+            b = float(image.pixels[offset + 2])
+            a = float(image.pixels[offset + 3])
+            luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
+            sample_count += 1
+            min_luma = min(min_luma, luma)
+            max_luma = max(max_luma, luma)
+            sum_luma += luma
+            sum_alpha += a
+            max_alpha = max(max_alpha, a)
+        mean_luma = sum_luma / max(1, sample_count)
+        mean_alpha = sum_alpha / max(1, sample_count)
+        luminance_range = max_luma - min_luma
+        transparent = mean_alpha <= 0.01 and max_alpha <= 0.05
+        black = max_luma <= 0.005 and mean_luma <= 0.003
+        return {
+            "available": True,
+            "blank": bool(transparent or black),
+            "blank_reason": "transparent" if transparent else ("all_black" if black else ""),
+            "width": width,
+            "height": height,
+            "pixel_count": int(pixel_count),
+            "sample_count": int(sample_count),
+            "mean_luminance": round(mean_luma, 6),
+            "max_luminance": round(max_luma, 6),
+            "luminance_range": round(luminance_range, 6),
+            "mean_alpha": round(mean_alpha, 6),
+        }
+    except Exception as exc:
+        return {
+            "available": False,
+            "blank": False,
+            "note": f"Viewport screenshot pixels could not be inspected: {type(exc).__name__}: {exc}",
+        }
+    finally:
+        if image is not None:
+            try:
+                bpy.data.images.remove(image)
+            except Exception:
+                pass
+
+
 def _resize_png_to_fit(filepath, max_bytes, *, max_width=0, max_height=0):
     """Downscale and re-save a PNG with Blender's image API until it fits."""
 
@@ -586,6 +655,17 @@ def prepare_image_attachment(
         }, {}
 
     final_size = os.path.getsize(prepared_path)
+    visual_digest = _sample_image_visibility(prepared_path)
+    if visual_digest.get("blank"):
+        return {
+            "requested": True,
+            "available": False,
+            "note": "Viewport screenshot appears blank or all black; no usable visual evidence was captured",
+            "path": prepared_path,
+            "size_bytes": final_size,
+            "visual_digest": visual_digest,
+            **resize_info,
+        }, {}
     with open(prepared_path, "rb") as handle:
         data = base64.b64encode(handle.read()).decode("ascii")
     try:
@@ -624,6 +704,7 @@ def prepare_image_attachment(
         "size_bytes": final_size,
         "width": width,
         "height": height,
+        "visual_digest": visual_digest,
         "note": note,
         **resize_info,
     }

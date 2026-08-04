@@ -2,9 +2,15 @@
 
 ## Unreleased
 
+## 0.4.1 - 2026-08-02
+
+- Made copied MCP configs compact by default: bundled configs omit `env` unless a bridge token or Sketchfab token is present, and `uvx / PyPI` configs include only the runtime marker plus real auth values.
+- Fixed viewport blank-capture detection to inspect rendered pixel content more reliably before accepting visual evidence.
+- Fixed inspection-render URI handoff so clients can read the generated resource after URI-only capture responses.
+- Scrubbed Python home variables from MCPB launch smoke environments so host-managed `uv` launches are tested without inheriting a developer interpreter.
 - Added a deterministic `blender-bridge doctor` command that separates client config, executable/path, socket, bridge health, loaded-source, protocol/registry, five-tool manifest, schema, and read-only gateway failures without exposing credentials.
 - Added reproducible MCPB v0.4 `uv` packaging for a one-click Claude Desktop connector, including a host-managed Python environment, sensitive bridge-token configuration, matching runtime metadata, checksumed release artifacts, public artifact verification, tests, and cross-platform installation/recovery guidance.
-- Advanced the working source identity to 0.4.1 while public install guides remain pinned to the published 0.4.0 artifact, and strengthened the release-consistency gate so new Unreleased behavior cannot pass under an already-published version.
+- Strengthened the release-consistency gate so unreleased behavior cannot pass under an already-published version, then aligned tracked install guides with the promoted 0.4.1 publication version.
 - Replaced the competing 28-tool default MCP manifest with five stable gateway tools so retrieval-based clients cannot load planners while omitting the catalog execution path. Every canonical helper remains searchable, schema-addressable, and invokable; `BLENDER_MCP_TOOL_SURFACE=direct` restores the former curated surface, `full` exposes every helper, and the legacy full-list flag remains supported.
 - Made gateway registration independent of Blender/bridge availability, added explicit `mcp_tool_surface` diagnostics, enriched gateway descriptions for cross-client retrieval, and added default-gateway execution plus Claude/Codex/Cursor five-result reachability regressions.
 - Hardened gateway search for read-only inspection and broad multi-domain builds, bounded response-control projection metadata, and collapsed arbitrary unknown tool names into a single content-free telemetry/audit identifier.

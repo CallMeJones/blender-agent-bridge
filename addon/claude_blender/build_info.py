@@ -22,7 +22,7 @@ BLENDER_VERSION_MIN_TUPLE = blender_compat.MINIMUM_VERSION
 BLENDER_VERSION_MIN = blender_compat.MINIMUM_VERSION_TEXT
 BRIDGE_VERSION = "0.3"
 MCP_SERVER_VERSION = "0.4.1"
-MCP_CONFIG_VERSION = "3"
+MCP_CONFIG_VERSION = "4"
 MCP_RUNTIME_BUNDLED = "bundled"
 MCP_RUNTIME_UVX = "uvx"
 MCP_RUNTIME_MODES = {MCP_RUNTIME_BUNDLED, MCP_RUNTIME_UVX}
@@ -47,7 +47,10 @@ def addon_root():
 
 
 def mcp_server_path():
-    return os.path.join(addon_root(), "mcp_server.py")
+    # Development installs may expose the extension through a directory
+    # junction. Resolve it while Blender still has access so restricted MCP
+    # client processes receive an ordinary source path.
+    return os.path.realpath(os.path.join(addon_root(), "mcp_server.py"))
 
 
 def source_tree_hash(root=None):
@@ -157,24 +160,40 @@ def source_hash_status(actual_hash=None, expected_hash=None):
     }
 
 
-def mcp_config_env(token="", sketchfab_api_token="", *, launch_mode=MCP_RUNTIME_BUNDLED):
+def mcp_config_env(
+    token="",
+    sketchfab_api_token="",
+    *,
+    launch_mode=MCP_RUNTIME_BUNDLED,
+    include_diagnostics=False,
+):
     launch_mode = normalize_mcp_runtime_mode(launch_mode)
-    source_hash = source_tree_hash()
-    env = {
-        "CLAUDE_BLENDER_ADDON_ID": ADDON_ID,
-        "CLAUDE_BLENDER_ADDON_VERSION": ADDON_VERSION,
-        "CLAUDE_BLENDER_ADDON_SOURCE_HASH": source_hash,
-        "CLAUDE_BLENDER_BRIDGE_VERSION": BRIDGE_VERSION,
-        "CLAUDE_BLENDER_MCP_SERVER_VERSION": MCP_SERVER_VERSION,
-        "CLAUDE_BLENDER_MCP_CONFIG_VERSION": MCP_CONFIG_VERSION,
-        "CLAUDE_BLENDER_MCP_CONFIG_NOTE": MCP_CONFIG_NOTE,
-        "CLAUDE_BLENDER_MCP_RUNTIME_MODE": launch_mode,
-        "CLAUDE_BLENDER_TOOL_REGISTRY_DIGEST": TOOL_REGISTRY_DIGEST,
-        "BLENDER_AGENT_BRIDGE_EXTERNAL_AUTH_NOTE": EXTERNAL_AUTH_ENV_NOTE,
-        "SKETCHFAB_API_TOKEN": str(sketchfab_api_token or ""),
-    }
+    env = {}
+    if include_diagnostics:
+        source_hash = source_tree_hash()
+        env.update(
+            {
+                "CLAUDE_BLENDER_ADDON_ID": ADDON_ID,
+                "CLAUDE_BLENDER_ADDON_VERSION": ADDON_VERSION,
+                "CLAUDE_BLENDER_ADDON_SOURCE_HASH": source_hash,
+                "CLAUDE_BLENDER_BRIDGE_VERSION": BRIDGE_VERSION,
+                "CLAUDE_BLENDER_MCP_SERVER_VERSION": MCP_SERVER_VERSION,
+                "CLAUDE_BLENDER_MCP_CONFIG_VERSION": MCP_CONFIG_VERSION,
+                "CLAUDE_BLENDER_MCP_CONFIG_NOTE": MCP_CONFIG_NOTE,
+                "CLAUDE_BLENDER_TOOL_REGISTRY_DIGEST": TOOL_REGISTRY_DIGEST,
+                "BLENDER_AGENT_BRIDGE_EXTERNAL_AUTH_NOTE": EXTERNAL_AUTH_ENV_NOTE,
+            }
+        )
+    if include_diagnostics or launch_mode != MCP_RUNTIME_BUNDLED:
+        env["CLAUDE_BLENDER_MCP_RUNTIME_MODE"] = launch_mode
     if token:
         env["BLENDER_BRIDGE_TOKEN"] = str(token)
+    if sketchfab_api_token:
+        env["SKETCHFAB_API_TOKEN"] = str(sketchfab_api_token)
+    # Generation credentials deliberately do not appear here. The generation
+    # handler runs inside Blender and reads add-on preferences; a key pasted
+    # into the MCP client config would be invisible to it, so offering a slot
+    # would point users at a channel that cannot work.
     return env
 
 
@@ -198,6 +217,7 @@ def mcp_config(
     command="",
     launch_mode=MCP_RUNTIME_BUNDLED,
     platform_name=None,
+    include_diagnostics_env=False,
 ):
     launch_mode = normalize_mcp_runtime_mode(launch_mode)
     launch_command, launch_args = mcp_launch_command(
@@ -205,17 +225,25 @@ def mcp_config(
         platform_name=platform_name,
         command=command,
     )
+    server = {
+        "command": launch_command,
+        "args": [
+            *launch_args,
+            "--bridge-url",
+            str(bridge_url or ""),
+        ],
+    }
+    env = mcp_config_env(
+        token,
+        sketchfab_api_token,
+        launch_mode=launch_mode,
+        include_diagnostics=include_diagnostics_env,
+    )
+    if env:
+        server["env"] = env
     return {
         "mcpServers": {
-            "blender": {
-                "command": launch_command,
-                "args": [
-                    *launch_args,
-                    "--bridge-url",
-                    str(bridge_url or ""),
-                ],
-                "env": mcp_config_env(token, sketchfab_api_token, launch_mode=launch_mode),
-            }
+            "blender": server
         }
     }
 

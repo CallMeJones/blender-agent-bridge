@@ -15,6 +15,7 @@ from .domains import (
     workflows_refinement,
     quality_observability,
     external_assets,
+    generation,
     scripts_transactions,
 )
 
@@ -31,6 +32,7 @@ DOMAIN_MODULES = (
     workflows_refinement,
     quality_observability,
     external_assets,
+    generation,
     scripts_transactions,
 )
 

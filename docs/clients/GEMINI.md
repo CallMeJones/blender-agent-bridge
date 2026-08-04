@@ -29,10 +29,10 @@ Pinned `uvx` mode on macOS/Linux uses:
 
 ```json
 "command": "uvx",
-"args": ["--from", "blender-bridge==0.4.0", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
+"args": ["--from", "blender-bridge==0.4.1", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
 ```
 
-On Windows use `"command": "cmd"` and prefix args with `"/c", "uvx"`. Preserve Blender's generated environment block. Leave `trust` false until you have inspected the tool surface and safety model.
+On Windows use `"command": "cmd"` and prefix args with `"/c", "uvx"`. Preserve Blender's generated environment block when one is present. Leave `trust` false until you have inspected the tool surface and safety model.
 
 ## Restart And Smoke Test
 

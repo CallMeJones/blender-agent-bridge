@@ -9,6 +9,24 @@ TRUST_REQUIRED_REASON = "external_script_trust_required"
 NOT_ATTEMPTED_REASON = "not_attempted"
 
 
+def mutation_semantics():
+    """Describe the recovery boundary for session-trusted Python."""
+
+    return {
+        "mode": "checkpoint_only",
+        "live_preview_supported": False,
+        "creates_pending_preview": False,
+        "commit_preview_applies": False,
+        "revert_preview_applies": False,
+        "recovery": ["checkpoint_restore", "blender_undo"],
+        "message": (
+            "Trusted Python runs immediately with checkpoint and Blender undo recovery. "
+            "It does not create a live preview transaction, and commit_preview or "
+            "revert_preview cannot commit or undo its changes."
+        ),
+    }
+
+
 def status_fields(run_result):
     """Return the canonical public status fields for a trusted-script result."""
 

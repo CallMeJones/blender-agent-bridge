@@ -97,6 +97,63 @@ class CLAUDEBLENDER_AP_preferences(bpy.types.AddonPreferences):
         default="BUNDLED",
     )
 
+    # Image-to-3D generation providers. These live in add-on preferences rather
+    # than the MCP client config because the tool handler runs inside Blender
+    # and never sees the MCP server process environment.
+    generation_egress_allowed: bpy.props.BoolProperty(
+        name="Allow Third-Party Uploads",
+        description=(
+            "Permit hosted providers to receive reference images. Off by default: many studios "
+            "may not send client artwork to a third party. Local models and a self-hosted "
+            "endpoint work with this off"
+        ),
+        default=False,
+    )
+    triposr_root: bpy.props.StringProperty(
+        name="TripoSR Folder",
+        description="Checkout containing run.py for local TripoSR generation",
+        subtype="DIR_PATH",
+        default="",
+    )
+    generation_python: bpy.props.StringProperty(
+        name="Generation Python",
+        description=(
+            "Interpreter with torch installed, used to probe GPU capability and run local "
+            "models. Blender's bundled Python is not used"
+        ),
+        subtype="FILE_PATH",
+        default="",
+    )
+    generation_endpoint: bpy.props.StringProperty(
+        name="Studio Endpoint",
+        description="Base URL of a self-hosted inference server; counts as local, needs no egress",
+        default="",
+    )
+    generation_endpoint_token: bpy.props.StringProperty(
+        name="Endpoint Token",
+        description="Optional bearer token for the self-hosted endpoint",
+        subtype="PASSWORD",
+        default="",
+    )
+    tripo_api_key: bpy.props.StringProperty(
+        name="Tripo API Key",
+        description=(
+            "Stored in Blender preferences on disk, masked in this panel but not encrypted. "
+            "Leave empty and use an environment variable if that is unacceptable"
+        ),
+        subtype="PASSWORD",
+        default="",
+    )
+    meshy_api_key: bpy.props.StringProperty(
+        name="Meshy API Key",
+        description=(
+            "Stored in Blender preferences on disk, masked in this panel but not encrypted. "
+            "Leave empty and use an environment variable if that is unacceptable"
+        ),
+        subtype="PASSWORD",
+        default="",
+    )
+
     def draw(self, context):
         layout = self.layout
         safety = layout.box()
@@ -109,6 +166,44 @@ class CLAUDEBLENDER_AP_preferences(bpy.types.AddonPreferences):
         connection.prop(self, "bridge_port")
         connection.prop(self, "bridge_auth_token")
         connection.prop(self, "mcp_launch_mode")
+
+        draw_generation_settings(layout.box(), self, title="Image-To-3D Generation")
+
+
+def draw_generation_settings(layout, prefs, *, title=""):
+    """Lay out the generation settings.
+
+    Shared by the add-on preferences and the viewport sidebar so the two views
+    cannot drift as providers are added.
+    """
+
+    if title:
+        layout.label(text=title)
+    layout.prop(prefs, "generation_python")
+    layout.prop(prefs, "triposr_root")
+    layout.separator()
+    layout.prop(prefs, "generation_endpoint")
+    layout.prop(prefs, "generation_endpoint_token")
+    layout.separator()
+    layout.prop(prefs, "generation_egress_allowed")
+    hosted = layout.column()
+    hosted.enabled = bool(prefs.generation_egress_allowed)
+    hosted.prop(prefs, "tripo_api_key")
+    hosted.prop(prefs, "meshy_api_key")
+    if not prefs.generation_egress_allowed:
+        layout.label(text="Hosted providers stay disabled until uploads are allowed.", icon="INFO")
+
+
+def generation_environment_overlay(prefs):
+    """Map generation preferences onto the env names the provider layer reads.
+
+    The mapping itself lives in ``generation_providers`` so it stays importable
+    without bpy and is covered by tests directly rather than through a copy.
+    """
+
+    from . import generation_providers
+
+    return generation_providers.environment_overlay(prefs)
 
 
 def get_preferences(context):

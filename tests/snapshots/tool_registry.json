@@ -1,5 +1,5 @@
 {
-  "catalog_tool_count": 232,
+  "catalog_tool_count": 235,
   "contracts": {
     "adaptive_remesh": {
       "description": "Adaptively refine sculpt topology by subdividing edges that exceed a bounded local target derived from edge length, semantic-region weight, and face curvature. Retains interpolated semantic point attributes, optionally relaxes spacing and projects vertices back to the source surface, and enforces input, per-pass, and result vertex limits. This is a form-preserving refinement pass; it does not decimate or promise production retopology.",
@@ -9394,7 +9394,7 @@
     },
     "draft_script": {
       "authorization_model": "blender_run_script_equivalent",
-      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. This is the default authored-mutation path for object generation, modeling, animation, materials, custom nodes, rigging, and look development unless the user requests helpers. Prefer bounded helpers for operational work that needs recovery, provenance, polling, or path validation.",
+      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. This is the default authored-mutation path for object generation, modeling, animation, materials, custom nodes, rigging, and look development unless the user requests helpers. Prefer bounded helpers for operational work that needs recovery, provenance, polling, or path validation. Trusted scripts are checkpoint-backed immediate edits, not live-preview transactions; commit_preview and revert_preview do not apply to their changes.",
       "destructive_hint": true,
       "duration_hint": "Synchronous trusted Python may finish in seconds or keep Blender busy indefinitely, depending on the script.",
       "has_side_effects": true,
@@ -11008,6 +11008,76 @@
       },
       "permissions": [
         "files:read"
+      ],
+      "supports_headless": true
+    },
+    "get_generation_job_status": {
+      "description": "Poll an asynchronous generation job for status, progress, provider task id, cached manifest path, and import readiness. When completed, import the cached model with start_external_asset_import_job.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "files:read"
+      ],
+      "supports_headless": true
+    },
+    "get_generation_provider_diagnostics": {
+      "description": "Report which image-to-3D generation providers are usable on this machine and, for each unusable one, exactly why. Covers local models, a self-hosted studio endpoint, and hosted APIs. Network egress is denied by default so reference art stays local until an operator opts in. Credential presence is reported by environment-variable name; values are never returned.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "probe_python": {
+            "description": "Interpreter with torch installed, used to read GPU VRAM and compute capability.",
+            "type": "string"
+          },
+          "refresh_hardware": {
+            "description": "Re-run the GPU probe instead of using the cached result from this session.",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "process:start"
       ],
       "supports_headless": true
     },
@@ -17236,6 +17306,97 @@
         "recoverable": true,
         "resource_tool": "get_external_asset_import_job_status",
         "status_tool": "blender_bridge_status"
+      },
+      "timeout_seconds": 30
+    },
+    "start_generation_job": {
+      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Uploads the images to the selected provider and creates a paid generation task, so it needs egress to be allowed and a credential configured; call get_generation_provider_diagnostics first when provider readiness is unknown. The finished model is cached like any external asset, so import it with start_external_asset_import_job.",
+      "duration_hint": "Returns quickly after starting the job. Generation itself typically takes one to a few minutes; poll get_generation_job_status.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "cache_dir": {
+            "type": "string"
+          },
+          "face_limit": {
+            "maximum": 1000000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "job_name": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "provider": {
+            "description": "Omit to auto-select the best available provider.",
+            "type": "string"
+          },
+          "timeout": {
+            "maximum": 300,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "views": {
+            "additionalProperties": false,
+            "description": "Maps a view name to a local image path. Multi-view providers treat the names as positional slots, so a mislabelled view produces a worse model rather than an error. Supply \"front\" alone for single-image generation.",
+            "properties": {
+              "back": {
+                "type": "string"
+              },
+              "front": {
+                "type": "string"
+              },
+              "left": {
+                "type": "string"
+              },
+              "right": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "views"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "path_policy": "Every view image path must be a local path explicitly supplied by the user, a file picker, a prior capture, or another trusted local source.",
+      "permissions": [
+        "files:read",
+        "files:write",
+        "network:full",
+        "process:start"
+      ],
+      "requires_user_path": true,
+      "returns_background_job": true,
+      "supports_headless": true,
+      "timeout_recovery": {
+        "bridge_status_tool": "blender_bridge_status",
+        "poll_after_seconds": 5,
+        "recoverable": true,
+        "status_tool": "get_generation_job_status"
       },
       "timeout_seconds": 30
     },
@@ -31988,7 +32149,7 @@
       "name": "prune_external_asset_cache"
     },
     {
-      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. This is the default authored-mutation path for object generation, modeling, animation, materials, custom nodes, rigging, and look development unless the user requests helpers. Prefer bounded helpers for operational work that needs recovery, provenance, polling, or path validation.",
+      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. This is the default authored-mutation path for object generation, modeling, animation, materials, custom nodes, rigging, and look development unless the user requests helpers. Prefer bounded helpers for operational work that needs recovery, provenance, polling, or path validation. Trusted scripts are checkpoint-backed immediate edits, not live-preview transactions; commit_preview and revert_preview do not apply to their changes.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -32257,6 +32418,98 @@
         "type": "object"
       },
       "name": "revert_preview"
+    },
+    {
+      "description": "Report which image-to-3D generation providers are usable on this machine and, for each unusable one, exactly why. Covers local models, a self-hosted studio endpoint, and hosted APIs. Network egress is denied by default so reference art stays local until an operator opts in. Credential presence is reported by environment-variable name; values are never returned.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "probe_python": {
+            "description": "Interpreter with torch installed, used to read GPU VRAM and compute capability.",
+            "type": "string"
+          },
+          "refresh_hardware": {
+            "description": "Re-run the GPU probe instead of using the cached result from this session.",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_generation_provider_diagnostics"
+    },
+    {
+      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Uploads the images to the selected provider and creates a paid generation task, so it needs egress to be allowed and a credential configured; call get_generation_provider_diagnostics first when provider readiness is unknown. The finished model is cached like any external asset, so import it with start_external_asset_import_job.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "cache_dir": {
+            "type": "string"
+          },
+          "face_limit": {
+            "maximum": 1000000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "job_name": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "provider": {
+            "description": "Omit to auto-select the best available provider.",
+            "type": "string"
+          },
+          "timeout": {
+            "maximum": 300,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "views": {
+            "additionalProperties": false,
+            "description": "Maps a view name to a local image path. Multi-view providers treat the names as positional slots, so a mislabelled view produces a worse model rather than an error. Supply \"front\" alone for single-image generation.",
+            "properties": {
+              "back": {
+                "type": "string"
+              },
+              "front": {
+                "type": "string"
+              },
+              "left": {
+                "type": "string"
+              },
+              "right": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "views"
+        ],
+        "type": "object"
+      },
+      "name": "start_generation_job"
+    },
+    {
+      "description": "Poll an asynchronous generation job for status, progress, provider task id, cached manifest path, and import readiness. When completed, import the cached model with start_external_asset_import_job.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_generation_job_status"
     }
   ],
   "domains": {
@@ -32352,6 +32605,11 @@
       "delete_external_asset_job",
       "get_external_asset_cache_diagnostics",
       "prune_external_asset_cache"
+    ],
+    "generation": [
+      "get_generation_provider_diagnostics",
+      "start_generation_job",
+      "get_generation_job_status"
     ],
     "inspection_docs": [
       "inspect_scene",
@@ -32518,7 +32776,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "9169c3e7448ffb193fdf4acf926095569b86214e4914c4057cf881dd787d43df",
+  "registry_digest": "2f4fe59d3d8783de229fe38e40e595ca08881eaf21397e361ecdccf406bed47c",
   "schema_version": 1,
   "specs": [
     {
@@ -55985,7 +56243,7 @@
     {
       "contract": {
         "authorization_model": "blender_run_script_equivalent",
-        "description": "Run generated Blender Python with Blender Run Script-equivalent permissions only while Blender-side session script trust is active",
+        "description": "Run generated Blender Python with Blender Run Script-equivalent permissions only while Blender-side session script trust is active; changes are checkpoint-backed and outside the live Commit/Revert preview transaction",
         "destructive_hint": true,
         "duration_hint": "Synchronous trusted Python may finish in seconds or keep Blender busy indefinitely, depending on the script.",
         "has_side_effects": true,
@@ -56008,7 +56266,7 @@
         },
         "timeout_seconds": 300
       },
-      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. This is the default authored-mutation path for object generation, modeling, animation, materials, custom nodes, rigging, and look development unless the user requests helpers. Prefer bounded helpers for operational work that needs recovery, provenance, polling, or path validation.",
+      "description": "Run Blender Python immediately with the same process permissions as Blender's Run Script command when Blender-side session script trust is active. Filesystem, network, subprocess, project-file, and Blender API access are allowed. When trust is off the request is refused without retaining script state. This is the default authored-mutation path for object generation, modeling, animation, materials, custom nodes, rigging, and look development unless the user requests helpers. Prefer bounded helpers for operational work that needs recovery, provenance, polling, or path validation. Trusted scripts are checkpoint-backed immediate edits, not live-preview transactions; commit_preview and revert_preview do not apply to their changes.",
       "exposure": "catalog",
       "groups": [],
       "handler_key": "draft_script",
@@ -56810,7 +57068,274 @@
         "type": "object"
       },
       "owner": "scripts_transactions"
+    },
+    {
+      "contract": {
+        "description": "Report generation provider availability, hardware capability, and egress policy",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "probe_python": {
+              "type": "string"
+            },
+            "refresh_hardware": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "mutates_scene": false,
+        "permissions": [
+          "process:start"
+        ],
+        "supports_headless": true
+      },
+      "description": "Report which image-to-3D generation providers are usable on this machine and, for each unusable one, exactly why. Covers local models, a self-hosted studio endpoint, and hosted APIs. Network egress is denied by default so reference art stays local until an operator opts in. Credential presence is reported by environment-variable name; values are never returned.",
+      "exposure": "catalog",
+      "groups": [
+        "external_assets"
+      ],
+      "handler_key": "get_generation_provider_diagnostics",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "probe_python": {
+            "description": "Interpreter with torch installed, used to read GPU VRAM and compute capability.",
+            "type": "string"
+          },
+          "refresh_hardware": {
+            "description": "Re-run the GPU probe instead of using the cached result from this session.",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_generation_provider_diagnostics",
+      "order": 1900,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "generation"
+    },
+    {
+      "contract": {
+        "description": "Start an asynchronous paid image-to-3D generation job and return a job id to poll",
+        "duration_hint": "Returns quickly after starting the job. Generation itself typically takes one to a few minutes; poll get_generation_job_status.",
+        "has_side_effects": true,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "cache_dir": {
+              "type": "string"
+            },
+            "face_limit": {
+              "type": "integer"
+            },
+            "job_name": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "timeout": {
+              "type": "integer"
+            },
+            "views": {
+              "additionalProperties": false,
+              "description": "Maps a view name to a local image path. Multi-view providers treat the names as positional slots, so a mislabelled view produces a worse model rather than an error. Supply \"front\" alone for single-image generation.",
+              "properties": {
+                "back": {
+                  "type": "string"
+                },
+                "front": {
+                  "type": "string"
+                },
+                "left": {
+                  "type": "string"
+                },
+                "right": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "views"
+          ],
+          "type": "object"
+        },
+        "mutates_scene": false,
+        "path_policy": "Every view image path must be a local path explicitly supplied by the user, a file picker, a prior capture, or another trusted local source.",
+        "permissions": [
+          "files:read",
+          "files:write",
+          "network:full",
+          "process:start"
+        ],
+        "requires_user_path": true,
+        "returns_background_job": true,
+        "supports_headless": true,
+        "timeout_recovery": {
+          "bridge_status_tool": "blender_bridge_status",
+          "poll_after_seconds": 5,
+          "recoverable": true,
+          "status_tool": "get_generation_job_status"
+        },
+        "timeout_seconds": 30
+      },
+      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Uploads the images to the selected provider and creates a paid generation task, so it needs egress to be allowed and a credential configured; call get_generation_provider_diagnostics first when provider readiness is unknown. The finished model is cached like any external asset, so import it with start_external_asset_import_job.",
+      "exposure": "catalog",
+      "groups": [
+        "external_assets"
+      ],
+      "handler_key": "start_generation_job",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "cache_dir": {
+            "type": "string"
+          },
+          "face_limit": {
+            "maximum": 1000000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "job_name": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "provider": {
+            "description": "Omit to auto-select the best available provider.",
+            "type": "string"
+          },
+          "timeout": {
+            "maximum": 300,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "views": {
+            "additionalProperties": false,
+            "description": "Maps a view name to a local image path. Multi-view providers treat the names as positional slots, so a mislabelled view produces a worse model rather than an error. Supply \"front\" alone for single-image generation.",
+            "properties": {
+              "back": {
+                "type": "string"
+              },
+              "front": {
+                "type": "string"
+              },
+              "left": {
+                "type": "string"
+              },
+              "right": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "views"
+        ],
+        "type": "object"
+      },
+      "name": "start_generation_job",
+      "order": 1910,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "generation"
+    },
+    {
+      "contract": {
+        "description": "Poll an asynchronous generation job for status, progress, and import readiness",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "job_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "job_id"
+          ],
+          "type": "object"
+        },
+        "mutates_scene": false,
+        "permissions": [
+          "files:read"
+        ],
+        "supports_headless": true
+      },
+      "description": "Poll an asynchronous generation job for status, progress, provider task id, cached manifest path, and import readiness. When completed, import the cached model with start_external_asset_import_job.",
+      "exposure": "catalog",
+      "groups": [
+        "external_assets"
+      ],
+      "handler_key": "get_generation_job_status",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_generation_job_status",
+      "order": 1920,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "generation"
     }
   ],
-  "tool_count": 233
+  "tool_count": 236
 }

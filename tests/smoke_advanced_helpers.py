@@ -789,6 +789,11 @@ def main():
         assert quality_plan["construction_strategy"]["script_trust"]["active"] is True, quality_plan
         assert quality_plan["script_fallback_policy"]["helper_first"] is False, quality_plan
         assert quality_plan["script_fallback_policy"]["script_first"] is True, quality_plan
+        assert quality_plan["script_fallback_policy"]["must_leave_preview_pending"] is False, quality_plan
+        assert quality_plan["script_fallback_policy"]["mutation_semantics"][
+            "live_preview_supported"
+        ] is False, quality_plan
+        assert quality_plan["completion_contract"]["trusted_script_checkpoint_only"] is True, quality_plan
         assert quality_plan["script_fallback_policy"]["requires_session_script_trust"] is True, quality_plan
         assert "enum_items" in quality_plan["script_fallback_policy"]["script_preflight"]["enum_check"], quality_plan
         assert any(item["criterion"] == "silhouette_match" for item in quality_plan["quality_rubric"]), quality_plan
@@ -1024,6 +1029,14 @@ def main():
         ] is True
         assert scripted_director_names.index("draft_script") < scripted_director_names.index(
             "capture_viewport"
+        ), scripted_director_plan
+        assert scripted_director_plan["preview_policy"]["leave_pending"] is False
+        assert scripted_director_plan["preview_policy"][
+            "commit_revert_excludes_trusted_script_changes"
+        ] is True
+        assert all(
+            "trusted-script changes are excluded" in option["applies_to"]
+            for option in scripted_director_plan["preview_decision_options"]
         ), scripted_director_plan
         assert script_runner.revoke_external_script_trust_window(context)["ok"]
         details = _execute(context, "get_2d_animation_details", {"max_items": 12})

@@ -384,6 +384,10 @@ def _file_path_for_block(data_block):
     return ""
 
 
+def _is_builtin_resource_path(path):
+    return str(path or "").strip().casefold() == "<builtin>"
+
+
 def _data_collection(name):
     collection = getattr(bpy.data, name, None)
     if collection is None:
@@ -475,7 +479,7 @@ def _external_files(max_items):
     for collection_name in EXTERNAL_FILE_COLLECTION_NAMES:
         for item in _data_collection(collection_name):
             raw_path = _file_path_for_block(item)
-            if not raw_path:
+            if not raw_path or _is_builtin_resource_path(raw_path):
                 continue
             absolute_path = _abspath(raw_path)
             packed = _is_packed(item)

@@ -23,7 +23,7 @@ Blender's **Copy MCP Config** button.
 
 - Install and enable the Blender extension, open the **Agent Bridge** sidebar, and start the bridge first.
 - Run only one MCP server instance against a Blender bridge at a time. Disable old or duplicate client entries before switching clients.
-- Prefer **Copy MCP Config** in Blender. It supplies the current port, token, protocol, registry digest, version pin, and the correct bundled path.
+- Prefer **Copy MCP Config** in Blender. It supplies the current port, optional tokens, the `uvx` version pin when selected, and the correct bundled path. Use `blender_bridge_status` for protocol and registry diagnostics.
 - Bundled mode remains the zero-install default. `uvx / PyPI` requires [`uv`](https://docs.astral.sh/uv/getting-started/installation/) and runs the exact matching version.
 - After changing the extension, launch mode, or config, replace the complete client entry and restart or refresh the MCP host.
 - Safe smoke prompt: `Check Blender bridge status, find and invoke the scene-object inspection tool, and make no changes.`

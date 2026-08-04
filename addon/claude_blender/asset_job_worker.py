@@ -131,16 +131,37 @@ def _download_sketchfab(config, args):
     )
 
 
+def _generate_tripo(config, args):
+    from . import generation_job
+
+    return generation_job.run(
+        config,
+        args,
+        progress_callback=lambda update: _progress_callback(config, update),
+        # The key never appears in the on-disk config; asset_jobs passes it
+        # through the child environment.
+        api_key=os.environ.get(ASSET_JOB_SECRET_TOKEN_ENV, ""),
+    )
+
+
+# Provider name -> worker. One row per asset source; the branches that used to
+# live in run() are gone.
+WORKER_DISPATCH = {
+    "poly_haven": _download_poly_haven,
+    "sketchfab": _download_sketchfab,
+    "tripo": _generate_tripo,
+}
+
+
 def run(config):
     provider = str(config.get("provider") or "")
     args = dict(config.get("args") or {})
     _write_status(config, "running", message=f"{provider.replace('_', ' ').title()} asset download/cache started")
-    if provider == "poly_haven":
-        manifest = _download_poly_haven(config, args)
-    elif provider == "sketchfab":
-        manifest = _download_sketchfab(config, args)
-    else:
+    worker = WORKER_DISPATCH.get(provider)
+    if worker is None:
         manifest = {"ok": False, "message": f"Unsupported external asset provider: {provider}"}
+    else:
+        manifest = worker(config, args)
     status = "completed" if manifest.get("ok") else "failed"
     _write_status(
         config,

@@ -1786,7 +1786,10 @@ def import_cached_asset(
         if resolved_type == "models":
             return _apply_model_import(context, manifest, label=label, allow_duplicate=allow_duplicate)
         return {"ok": False, "message": f"Unsupported Poly Haven import type: {resolved_type}", "manifest": manifest}
-    if provider == "sketchfab":
+    if provider == "sketchfab" or manifest.get("generation"):
+        # Generated assets share Sketchfab's single-model shape: one import_file
+        # plus a downloaded_files entry. Keying off the generation block covers
+        # every provider in the generation domain without naming each one.
         import_file = manifest.get("import_file", "")
         if import_file:
             downloaded_files = manifest.setdefault("downloaded_files", [])

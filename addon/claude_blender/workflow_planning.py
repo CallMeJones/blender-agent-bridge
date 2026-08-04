@@ -365,6 +365,7 @@ def _authored_construction_strategy(context, prompt):
             "apply": "apply_trusted_script_job_result",
             "live_scene_unchanged_until_confirmed_apply": True,
         },
+        "mutation_semantics": script_execution.mutation_semantics(),
         "script_preflight": helper_routing.script_authoring_preflight(),
     }
 
@@ -1097,7 +1098,13 @@ def plan_model_quality_workflow(
                 "Advance the durable model-quality review through start, blind packet, evaluation, repair record, "
                 "and re-evaluation until it reports ready_for_user_review or blocked_quality_floor."
             ),
-            "Leave the final preview pending until the user explicitly chooses commit or revert.",
+            (
+                "Trusted-script construction is checkpoint-only, not a live preview: disclose that commit_preview "
+                "and revert_preview do not apply to its changes. Only bounded helper mutations can remain pending "
+                "for the user's commit or revert decision."
+                if scripted_construction
+                else "Leave the final helper preview pending until the user explicitly chooses commit or revert."
+            ),
         ],
         "completion_contract": {
             "ready_for_mutation": brief_ready,
@@ -1113,6 +1120,13 @@ def plan_model_quality_workflow(
             "must_not_stop_after_planning": True,
             "durable_quality_review_required": True,
             "quality_terminal_statuses": ["ready_for_user_review", "blocked_quality_floor"],
+            "selected_construction_live_preview_supported": not scripted_construction,
+            "trusted_script_checkpoint_only": scripted_construction,
+            "commit_revert_scope": (
+                "bounded helper mutations only"
+                if scripted_construction
+                else "all selected construction mutations"
+            ),
         },
         "script_fallback_policy": {
             "legacy_field_name": True,
@@ -1129,7 +1143,8 @@ def plan_model_quality_workflow(
             "named_part_requirements": list(
                 brief["primary_masses"] + brief["secondary_forms"] + brief["landmarks"]
             ),
-            "must_leave_preview_pending": True,
+            "must_leave_preview_pending": not scripted_construction,
+            "mutation_semantics": construction_strategy["mutation_semantics"],
             "long_running_script_path": {
                 "start": "start_trusted_script_job",
                 "poll": "get_trusted_script_job_status",
@@ -1266,6 +1281,7 @@ def plan_advanced_scene_workflow(context, *, prompt="", domains=None, target_obj
             "search_docs_before_unfamiliar_python": True,
             "script_preflight": authored_strategy["script_preflight"],
             "domain_boundaries": script_boundaries,
+            "mutation_semantics": authored_strategy["mutation_semantics"],
         },
         "mcp_client_guidance": [
             "Execute next_tool_calls in order through schema lookup and gateway invocation.",
@@ -1273,6 +1289,12 @@ def plan_advanced_scene_workflow(context, *, prompt="", domains=None, target_obj
             "Do not invoke the deferred script while any nested planner reports missing input, unresolved selection, or a blocked status.",
             "Use each step's helper_path only when trust is off, helpers were requested, or an exact isolated helper is intentionally chosen.",
             "Keep inspection, external assets, long jobs, evidence, and preview decisions on bounded helpers.",
+            (
+                "Trusted-script changes are checkpoint-only and are not controlled by commit_preview or "
+                "revert_preview; disclose this before execution when the user requested a pending preview."
+                if scripted_domains
+                else "Bounded helper mutations may remain pending for commit or revert."
+            ),
         ],
         "label": label,
     }
@@ -1759,9 +1781,15 @@ def plan_director_workflow(
             }
         )
 
+    preview_scope = (
+        "pending bounded-helper mutations only; trusted-script changes are excluded"
+        if scripted_authoring
+        else "all pending helper mutations"
+    )
     preview_decision_options = [
         {
             "decision": "commit",
+            "applies_to": preview_scope,
             "blocked_until": "user explicitly approves the pending preview",
             "tool_call": _planned_tool_call(
                 "commit_preview",
@@ -1773,6 +1801,7 @@ def plan_director_workflow(
         },
         {
             "decision": "revert",
+            "applies_to": preview_scope,
             "blocked_until": "user explicitly reverts the pending preview or a smoke test must clean up",
             "tool_call": _planned_tool_call(
                 "revert_preview",
@@ -1821,7 +1850,10 @@ def plan_director_workflow(
         "next_tool_calls": flat_calls,
         "preview_decision_options": preview_decision_options,
         "preview_policy": {
-            "leave_pending": True,
+            "leave_pending": not scripted_authoring,
+            "bounded_helper_changes_may_remain_pending": True,
+            "trusted_script_checkpoint_only": scripted_authoring,
+            "commit_revert_excludes_trusted_script_changes": scripted_authoring,
             "commit_only_on_user_request": True,
             "revert_after_smoke": True,
         },
@@ -1830,7 +1862,12 @@ def plan_director_workflow(
             "When scripted_authoring is present, replace its code placeholder and invoke draft_script before evidence capture.",
             "Honor the deferred call's completion_gate; do not script against unresolved asset choices, missing briefs, or blocked animation context.",
             "Use run_animation_workflow only on the bounded-helper path selected when trust is off or helpers were requested.",
-            "Leave the resulting preview pending for the user's explicit commit or revert decision.",
+            (
+                "Trusted-script changes are immediate and checkpoint-only; commit_preview and revert_preview apply "
+                "only to any pending bounded-helper changes. Disclose this before scripted execution."
+                if scripted_authoring
+                else "Leave the resulting helper preview pending for the user's explicit commit or revert decision."
+            ),
         ],
         "script_fallback_policy": {
             "legacy_field_name": True,
@@ -1841,5 +1878,6 @@ def plan_director_workflow(
             "privileged_generated_scripts_allowed_when_session_trusted": True,
             "persistent_bake_scripts_allowed_when_session_trusted": True,
             "script_preflight": authored_strategy["script_preflight"],
+            "mutation_semantics": authored_strategy["mutation_semantics"],
         },
     }

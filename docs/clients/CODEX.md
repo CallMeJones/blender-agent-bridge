@@ -14,13 +14,12 @@ process's `PATH`.
 
 1. In Blender's **Agent Bridge** sidebar, press **Start**.
 2. Press **Copy MCP Config**. The generated values are the source of truth for
-   the installed extension path, Blender Python executable, bridge URL, token,
-   version metadata, and registry digest.
+   the installed extension path, Blender Python executable, bridge URL, and any
+   token or runtime environment values that are actually needed.
 3. In Codex, open **Settings > MCP servers > Add server** and choose local
    **STDIO**.
 4. Name the server `blender`, then copy the generated `command`, every `args`
-   item in order, and every `env` value without rewriting paths or dropping
-   metadata.
+   item in order, and any `env` values without rewriting paths.
 5. Save the server and select **Restart**. Remove or disable any older
    `blender` entry before reconnecting.
 
@@ -33,12 +32,12 @@ To let Codex install the copied entry, open a new task after pressing **Copy MCP
 Config** and ask:
 
 ```text
-Install the Blender MCP config currently on my clipboard as a user MCP server named blender; convert the JSON to Codex TOML without changing command, args, or env, preserve my existing config, never print token values, then verify it is listed and tell me to restart MCP.
+Install the Blender MCP config currently on my clipboard as a user MCP server named blender; convert the JSON to Codex TOML without changing command, args, or any env values, preserve my existing config, never print token values, then verify it is listed and tell me to restart MCP.
 ```
 
 If Codex cannot access the clipboard, enter the generated values through
 Settings or convert the generated JSON to TOML manually. Do not reconstruct the
-token, executable, extension path, or registry metadata from examples.
+token, executable, or extension path from examples.
 
 Bundled mode launches the `mcp_server.py` shipped inside the installed extension:
 
@@ -56,16 +55,17 @@ Pinned `uvx` mode on macOS or Linux:
 ```toml
 [mcp_servers.blender]
 command = "uvx"
-args = ["--from", "blender-bridge==0.4.0", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
+args = ["--from", "blender-bridge==0.4.1", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
 
 [mcp_servers.blender.env]
-BLENDER_BRIDGE_TOKEN = "<bridge-token>"
+CLAUDE_BLENDER_MCP_RUNTIME_MODE = "uvx"
 ```
 
 On Windows, an `uvx` entry uses `command = "cmd"` and begins `args` with `"/c",
-"uvx"`. Preserve the complete generated `env` table, including an optional
-`SKETCHFAB_API_TOKEN`. You can also add a server with `codex mcp add`, but the
-Blender-generated entry remains authoritative.
+"uvx"`. Preserve any generated `env` table, including optional
+`BLENDER_BRIDGE_TOKEN` or `SKETCHFAB_API_TOKEN` values. You can also add a
+server with `codex mcp add`, but the Blender-generated entry remains
+authoritative.
 
 ## Restart And Smoke Test
 

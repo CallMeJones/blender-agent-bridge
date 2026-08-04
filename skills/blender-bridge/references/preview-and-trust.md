@@ -27,6 +27,7 @@ With trust off:
 With trust on:
 
 - Generated Python runs immediately.
+- It is checkpoint-backed, not a live preview transaction; `commit_preview` and `revert_preview` do not apply to its changes.
 - It has Blender Run Script-equivalent filesystem, network, process, project-file, cache, and Blender API access.
 - Static findings are advisory rather than an approval boundary.
 - Opening, creating, restoring, copying, renaming, saving, or modifying `.blend` files does not change the active runtime grant.
@@ -45,6 +46,7 @@ Before using `draft_script`:
 5. Prefer one cohesive, idempotent script over fragmented snippets or long primitive-helper chains.
 6. Supply complete `intent`, `expected_changes`, `risk_level`, `code`, and any schema-required targets.
 7. Inspect outputs, errors, changed objects, and preview state.
-8. On failure, restore the checkpoint, confirm trust remains active, and repair the script from the traceback before reducing scope or changing execution mode.
+8. When the user requires a pending preview, use bounded preview helpers or clearly disclose that trusted-script changes are checkpoint-only before execution.
+9. On failure, restore the checkpoint, confirm trust remains active, and repair the script from the traceback before reducing scope or changing execution mode.
 
 Use bounded project-file, asset, render, capture, save, and cache helpers when their validation or recovery is valuable, even while trust is active.

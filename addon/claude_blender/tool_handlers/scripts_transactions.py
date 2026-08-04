@@ -124,6 +124,7 @@ def draft_script(context, args):
         "run_result": run_result,
         "requires_user_approval": False,
         "helper_advisory": helper_advisory,
+        "mutation_semantics": script_execution.mutation_semantics(),
     }
 
 

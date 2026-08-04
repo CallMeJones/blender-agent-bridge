@@ -107,6 +107,9 @@ class MCPBPackageTests(unittest.TestCase):
 
             env = dict(os.environ)
             env.update({key: expand(value) for key, value in config["env"].items()})
+            for key in list(env):
+                if key.upper() in {"PYTHONHOME", "UV_INTERNAL__PYTHONHOME"}:
+                    env.pop(key, None)
             env["UV_NO_PROGRESS"] = "1"
             env["UV_CACHE_DIR"] = os.path.join(temporary, "uv-cache")
             env["UV_PROJECT_ENVIRONMENT"] = os.path.join(temporary, "uv-environment")

@@ -11,7 +11,9 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'draft_script',
                  'and Blender API access are allowed. When trust is off the request is refused without retaining '
                  'script state. This is the default authored-mutation path for object generation, modeling, animation, '
                  'materials, custom nodes, rigging, and look development unless the user requests helpers. Prefer '
-                 'bounded helpers for operational work that needs recovery, provenance, polling, or path validation.',
+                 'bounded helpers for operational work that needs recovery, provenance, polling, or path validation. '
+                 'Trusted scripts are checkpoint-backed immediate edits, not live-preview transactions; '
+                 'commit_preview and revert_preview do not apply to their changes.',
   'input_schema': {'type': 'object',
                    'properties': {'intent': {'type': 'string', 'description': 'Plain-language reason for the script'},
                                   'expected_changes': {'type': 'string',
@@ -31,7 +33,8 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'draft_script',
                    'required': ['intent', 'expected_changes', 'risk_level', 'code'],
                    'additionalProperties': False},
   'contract': {'description': "Run generated Blender Python with Blender Run Script-equivalent permissions only while "
-                              'Blender-side session script trust is active',
+                              'Blender-side session script trust is active; changes are checkpoint-backed and outside '
+                              'the live Commit/Revert preview transaction',
                'mutates_scene': True,
                'has_side_effects': True,
                'requires_approval': False,

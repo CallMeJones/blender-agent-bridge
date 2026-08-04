@@ -19,7 +19,6 @@ import claude_blender  # noqa: E402
 from claude_blender import (  # noqa: E402
     agent_tools,
     audit_log,
-    bridge_protocol,
     bridge_server,
     build_info,
     preferences,
@@ -99,7 +98,7 @@ def main():
         server_config = copied_config["mcpServers"]["blender"]
         assert server_config["command"] == build_info.bundled_python_executable(), server_config
         assert server_config["args"][0].endswith("mcp_server.py"), server_config
-        assert server_config["env"]["CLAUDE_BLENDER_BRIDGE_VERSION"] == bridge_protocol.BRIDGE_VERSION
+        assert "env" not in server_config, server_config
 
         internal_tool_names = {tool["name"] for tool in agent_tools.blender_tool_definitions()}
         assert "run_approved_script" not in internal_tool_names
@@ -220,6 +219,9 @@ print("created", obj.name)
         )
         assert run["ok"] and run["auto_ran"], run
         assert run["authorization_model"] == "blender_run_script_equivalent", run
+        assert run["mutation_semantics"]["mode"] == "checkpoint_only", run
+        assert run["mutation_semantics"]["live_preview_supported"] is False, run
+        assert run["mutation_semantics"]["revert_preview_applies"] is False, run
         assert run["run_result"]["checkpoint"]["ok"], run
         assert run["run_result"]["checkpoint"]["path"] not in {
             first_checkpoint["path"],

@@ -1850,8 +1850,89 @@ def _playblast_frame_evidence(playblast):
     return evidence, findings
 
 
+def _inspection_render_metadata_from_uri(context, uri, *, capture_dir=None):
+    render_id, kind, _image_id = inspection_render.parse_inspection_render_resource_uri(uri)
+    if not render_id:
+        return None
+    if render_id == "latest" and kind == "metadata":
+        return inspection_render.latest_inspection_render_metadata(capture_dir=capture_dir, context=context)
+    if kind in {"metadata", "image"}:
+        return inspection_render.inspection_render_metadata(render_id, capture_dir=capture_dir, context=context)
+    return None
+
+
+def _nonempty_inspection_value(value):
+    if value is None:
+        return False
+    if value == "":
+        return False
+    if value == [] or value == {}:
+        return False
+    return True
+
+
+def _merge_inspection_render_metadata(source, override):
+    source = dict(source or {})
+    override = dict(override or {})
+    if not source:
+        return override
+    result = dict(source)
+    source_images = list(source.get("images") or [])
+    by_uri = {str(item.get("resource_uri") or ""): item for item in source_images if item.get("resource_uri")}
+    by_id = {str(item.get("image_id") or ""): item for item in source_images if item.get("image_id")}
+    override_images = list(override.get("images") or [])
+    if override_images:
+        enriched_images = []
+        for raw_image in override_images:
+            if not isinstance(raw_image, dict):
+                continue
+            source_image = (
+                by_uri.get(str(raw_image.get("resource_uri") or ""))
+                or by_id.get(str(raw_image.get("image_id") or ""))
+                or {}
+            )
+            image = dict(source_image)
+            for key, value in raw_image.items():
+                if key in {"width", "height", "size_bytes"} and not value:
+                    continue
+                if _nonempty_inspection_value(value):
+                    image[key] = value
+            enriched_images.append(image)
+        result["images"] = enriched_images
+    for key, value in override.items():
+        if key == "images":
+            continue
+        if _nonempty_inspection_value(value):
+            result[key] = value
+    return result
+
+
+def _resolved_inspection_render_metadata(metadata):
+    return bool(metadata and (metadata.get("available") or metadata.get("images")))
+
+
 def _normalize_inspection_render(context, metadata):
+    if isinstance(metadata, str) and metadata.strip():
+        resolved = _inspection_render_metadata_from_uri(context, metadata)
+        if _resolved_inspection_render_metadata(resolved):
+            return resolved
     if isinstance(metadata, dict) and metadata:
+        capture_dir = str(metadata.get("capture_dir") or "")
+        metadata_uri = str(metadata.get("metadata_uri") or "")
+        resolved = _inspection_render_metadata_from_uri(context, metadata_uri, capture_dir=capture_dir)
+        if not resolved:
+            for image_item in metadata.get("images") or []:
+                if not isinstance(image_item, dict):
+                    continue
+                resolved = _inspection_render_metadata_from_uri(
+                    context,
+                    str(image_item.get("resource_uri") or ""),
+                    capture_dir=capture_dir,
+                )
+                if resolved:
+                    break
+        if _resolved_inspection_render_metadata(resolved):
+            return _merge_inspection_render_metadata(resolved, metadata)
         return metadata
     return inspection_render.latest_inspection_render_metadata(context=context)
 

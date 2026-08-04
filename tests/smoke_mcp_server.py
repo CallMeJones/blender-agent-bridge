@@ -2266,6 +2266,36 @@ def main():
         assert cache_cleanup_warnings[0]["code"] == "cache_cleanup_writes", invoked_cache_cleanup
         assert cache_cleanup_warnings[0]["safe_first_arguments"] == {"dry_run": True}, invoked_cache_cleanup
 
+        invoked_trusted_script = _send(
+            proc,
+            {
+                "jsonrpc": "2.0",
+                "id": 233,
+                "method": "tools/call",
+                "params": {
+                    "name": "invoke_blender_tool",
+                    "arguments": {
+                        "name": "draft_script",
+                        "arguments": {
+                            "intent": "Create a test object",
+                            "expected_changes": "Creates one object immediately",
+                            "risk_level": "low",
+                            "code": "print('test')",
+                        },
+                    },
+                },
+            },
+        )
+        trusted_script_warning = next(
+            warning
+            for warning in invoked_trusted_script["result"]["structuredContent"][
+                "guardrail_warnings"
+            ]
+            if warning["code"] == "trusted_script_checkpoint_only"
+        )
+        assert trusted_script_warning["live_preview_supported"] is False
+        assert "revert_preview cannot" in trusted_script_warning["message"]
+
         catalog_invoked = _send(
             proc,
             {

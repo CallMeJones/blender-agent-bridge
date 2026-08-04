@@ -922,7 +922,7 @@ class CLAUDEBLENDER_OT_copy_mcp_config(bpy.types.Operator):
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
         state.status = (
-            f"Copied MCP config v{build_info.MCP_CONFIG_VERSION}; fill the empty Sketchfab token if needed"
+            f"Copied compact MCP config v{build_info.MCP_CONFIG_VERSION}; use Copy MCP + Sketchfab for downloads"
         )
         return {"FINISHED"}
 
@@ -970,7 +970,7 @@ class CLAUDEBLENDER_OT_copy_mcp_config_with_sketchfab(bpy.types.Operator):
             return {"CANCELLED"}
         self.sketchfab_api_token = ""
         state.status = (
-            f"Copied MCP config v{build_info.MCP_CONFIG_VERSION} with one-time Sketchfab auth; restart the MCP client"
+            f"Copied compact MCP config v{build_info.MCP_CONFIG_VERSION} with one-time Sketchfab auth; restart the MCP client"
         )
         if not bpy.app.background:
             def draw_confirmation(menu, _context):
@@ -1049,6 +1049,31 @@ class CLAUDEBLENDER_PT_sidebar(bpy.types.Panel):
         _draw_script_trust_control(layout, context, state)
         _draw_action_center(layout, state)
 
+class CLAUDEBLENDER_PT_generation(bpy.types.Panel):
+    """Generation provider settings, mirrored from add-on preferences.
+
+    Kept as a closed sub-panel so the parent panel's deliberate contract --
+    connection, safety state, and decisions needing attention -- stays intact,
+    while the settings remain findable where the rest of the bridge UI lives.
+    """
+
+    bl_idname = "CLAUDEBLENDER_PT_generation"
+    bl_parent_id = "CLAUDEBLENDER_PT_sidebar"
+    bl_label = "Image-To-3D Generation"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Agent Bridge"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+        prefs = preferences.get_preferences(context)
+        if prefs is None:
+            layout.label(text="Add-on preferences unavailable.", icon="ERROR")
+            return
+        preferences.draw_generation_settings(layout, prefs)
+
+
 classes = (
     CLAUDEBLENDER_OT_capture_context,
     CLAUDEBLENDER_OT_commit_preview,
@@ -1081,6 +1106,7 @@ classes = (
     CLAUDEBLENDER_OT_set_session_sketchfab_token,
     CLAUDEBLENDER_OT_clear_session_sketchfab_token,
     CLAUDEBLENDER_PT_sidebar,
+    CLAUDEBLENDER_PT_generation,
 )
 
 

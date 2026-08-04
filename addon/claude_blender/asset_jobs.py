@@ -152,25 +152,38 @@ def _asset_job_uri(job_id):
 
 
 def _worker_config_args(provider, args):
+    """Strip every secret before the config is written to disk."""
+
     args = dict(args or {})
-    if provider == "sketchfab":
-        args.pop("api_token", None)
-        args.pop("model_password", None)
+    for argument_name, _env_var in _provider_secrets(provider):
+        args.pop(argument_name, None)
     return args
 
 
-def _child_env(args):
+def _provider_secrets(provider):
+    """Return (argument name, child env var) pairs a provider carries."""
+
+    spec = JOB_PROVIDER_SPECS.get(str(provider or "").strip().lower())
+    return spec.get("secrets", ()) if spec else ()
+
+
+def _child_env(args, provider=""):
+    """Hand secrets to the worker through the environment, never through the config file."""
+
     env = render_jobs._child_env()
-    token = str((args or {}).get("api_token") or external_assets.session_sketchfab_api_token() or "").strip()
-    password = str((args or {}).get("model_password") or "").strip()
-    if token:
-        env[ASSET_JOB_SECRET_TOKEN_ENV] = token
-    else:
-        env.pop(ASSET_JOB_SECRET_TOKEN_ENV, None)
-    if password:
-        env[ASSET_JOB_SECRET_PASSWORD_ENV] = password
-    else:
-        env.pop(ASSET_JOB_SECRET_PASSWORD_ENV, None)
+    secrets = _provider_secrets(provider) if provider else (
+        ("api_token", ASSET_JOB_SECRET_TOKEN_ENV),
+        ("model_password", ASSET_JOB_SECRET_PASSWORD_ENV),
+    )
+    for argument_name, env_var in secrets:
+        value = str((args or {}).get(argument_name) or "").strip()
+        if not value and argument_name == "api_token":
+            # Sketchfab keeps a session-scoped token outside the arguments.
+            value = str(external_assets.session_sketchfab_api_token() or "").strip()
+        if value:
+            env[env_var] = value
+        else:
+            env.pop(env_var, None)
     return env
 
 
@@ -200,21 +213,21 @@ def _bounded_int(value, default, *, minimum, maximum):
     return max(int(minimum), min(int(maximum), result))
 
 
-def _redacted_parameters(provider, args):
-    provider = str(provider or "").strip().lower()
-    args = dict(args or {})
-    if provider == "poly_haven":
-        return {
-            "provider": "poly_haven",
-            "asset_id": str(args.get("asset_id") or ""),
-            "asset_type": str(args.get("asset_type") or ""),
-            "resolution": str(args.get("resolution") or ""),
-            "file_format": str(args.get("file_format") or ""),
-            "map_types": [str(item) for item in args.get("map_types") or []],
-            "include_dependencies": bool(args.get("include_dependencies", True)),
-            "cache_dir": str(args.get("cache_dir") or ""),
-            "timeout": _bounded_int(args.get("timeout"), 60, minimum=1, maximum=300),
-        }
+def _redact_poly_haven(args):
+    return {
+        "provider": "poly_haven",
+        "asset_id": str(args.get("asset_id") or ""),
+        "asset_type": str(args.get("asset_type") or ""),
+        "resolution": str(args.get("resolution") or ""),
+        "file_format": str(args.get("file_format") or ""),
+        "map_types": [str(item) for item in args.get("map_types") or []],
+        "include_dependencies": bool(args.get("include_dependencies", True)),
+        "cache_dir": str(args.get("cache_dir") or ""),
+        "timeout": _bounded_int(args.get("timeout"), 60, minimum=1, maximum=300),
+    }
+
+
+def _redact_sketchfab(args):
     return {
         "provider": "sketchfab",
         "uid": str(args.get("uid") or ""),
@@ -224,6 +237,79 @@ def _redacted_parameters(provider, args):
         "cache_dir": str(args.get("cache_dir") or ""),
         "timeout": _bounded_int(args.get("timeout"), 120, minimum=1, maximum=300),
     }
+
+
+def _redact_generation(args):
+    views = args.get("views") if isinstance(args.get("views"), dict) else {}
+    return {
+        "provider": "tripo",
+        "generation_kind": "multiview" if len(views) > 1 else "image",
+        "view_names": sorted(str(name) for name in views),
+        "view_count": len(views),
+        "model": str(args.get("model") or ""),
+        "face_limit": _bounded_int(args.get("face_limit"), 0, minimum=0, maximum=1000000),
+        "api_key_supplied": bool(str(args.get("api_key") or "").strip()),
+        "cache_dir": str(args.get("cache_dir") or ""),
+        "timeout": _bounded_int(args.get("timeout"), 120, minimum=1, maximum=300),
+    }
+
+
+def _validate_poly_haven(args):
+    if not str(args.get("asset_id") or "").strip():
+        return "asset_id is required for Poly Haven jobs"
+    return ""
+
+
+def _validate_sketchfab(args):
+    if not str(args.get("uid") or "").strip():
+        return "uid is required for Sketchfab jobs"
+    return ""
+
+
+def _validate_generation(args):
+    views = args.get("views")
+    if not isinstance(views, dict) or not any(
+        str(entry or "").strip() for entry in views.values()
+    ):
+        return "views must map at least one view name to an image path"
+    if not str(args.get("api_key") or "").strip():
+        return "api_key is required for generation jobs"
+    return ""
+
+
+# One entry per asset-source provider. Adding a source means adding a row here
+# plus a worker function, not editing branches in three places.
+JOB_PROVIDER_SPECS = {
+    "poly_haven": {
+        "validate": _validate_poly_haven,
+        "redact": _redact_poly_haven,
+        "secrets": (),
+    },
+    "sketchfab": {
+        "validate": _validate_sketchfab,
+        "redact": _redact_sketchfab,
+        "secrets": (
+            ("api_token", ASSET_JOB_SECRET_TOKEN_ENV),
+            ("model_password", ASSET_JOB_SECRET_PASSWORD_ENV),
+        ),
+    },
+    "tripo": {
+        "validate": _validate_generation,
+        "redact": _redact_generation,
+        "secrets": (("api_key", ASSET_JOB_SECRET_TOKEN_ENV),),
+    },
+}
+
+JOB_PROVIDER_NAMES = tuple(sorted(JOB_PROVIDER_SPECS))
+
+
+def _redacted_parameters(provider, args):
+    provider = str(provider or "").strip().lower()
+    args = dict(args or {})
+    spec = JOB_PROVIDER_SPECS.get(provider)
+    if spec is None:
+        return {"provider": provider}
+    return spec["redact"](args)
 
 
 def _manifest_summary(manifest):
@@ -404,7 +490,7 @@ def _start_process_job(job_id, provider, args, metadata):
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
             creationflags=creationflags,
-            env=_child_env(args),
+            env=_child_env(args, provider),
         )
     finally:
         log_handle.close()
@@ -543,12 +629,15 @@ def start_external_asset_download(
     **args,
 ):
     provider = str(provider or "").strip().lower()
-    if provider not in {"poly_haven", "sketchfab"}:
-        return {"ok": False, "message": "provider must be poly_haven or sketchfab"}
-    if provider == "poly_haven" and not str(args.get("asset_id") or "").strip():
-        return {"ok": False, "message": "asset_id is required for Poly Haven jobs"}
-    if provider == "sketchfab" and not str(args.get("uid") or "").strip():
-        return {"ok": False, "message": "uid is required for Sketchfab jobs"}
+    spec = JOB_PROVIDER_SPECS.get(provider)
+    if spec is None:
+        return {
+            "ok": False,
+            "message": "provider must be one of: %s" % ", ".join(JOB_PROVIDER_NAMES),
+        }
+    validation_error = spec["validate"](args)
+    if validation_error:
+        return {"ok": False, "message": validation_error}
 
     job_id = _job_id()
     info = _job_root_info(context, preferred_dir=capture_dir, create=True)

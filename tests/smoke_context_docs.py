@@ -204,6 +204,14 @@ def main():
 
         missing_image = bpy.data.images.new("Missing Smoke External Image", width=1, height=1)
         missing_image.filepath_raw = "//missing-smoke-texture.png"
+        font_curve = bpy.data.curves.new("Builtin Font Smoke", type="FONT")
+        font_object = bpy.data.objects.new("Builtin Font Smoke", font_curve)
+        bpy.context.scene.collection.objects.link(font_object)
+        builtin_font_paths = {
+            str(getattr(font, "filepath", "") or "").strip().casefold()
+            for font in bpy.data.fonts
+        }
+        assert "<builtin>" in builtin_font_paths, builtin_font_paths
         diagnostics = json.loads(
             tool_dispatcher.execute_tool(bpy.context, "get_blend_file_diagnostics", {"max_items": 20})
         )
@@ -211,6 +219,16 @@ def main():
         assert "data_block_summary" in diagnostics, diagnostics
         assert any(item["collection"] == "images" for item in diagnostics["data_block_summary"]), diagnostics
         assert any(item["name"] == "Missing Smoke External Image" for item in diagnostics["missing_external_files"]), diagnostics
+        assert not any(
+            str(item.get("filepath") or "").strip().casefold() == "<builtin>"
+            for item in diagnostics["external_files"]
+        ), diagnostics
+        assert not any(
+            str(item.get("filepath") or "").strip().casefold() == "<builtin>"
+            for item in diagnostics["missing_external_files"]
+        ), diagnostics
+        bpy.data.objects.remove(font_object, do_unlink=True)
+        bpy.data.curves.remove(font_curve)
         bpy.data.images.remove(missing_image)
 
         layout = json.loads(tool_dispatcher.execute_tool(bpy.context, "get_workspace_layout", {}))
@@ -449,6 +467,47 @@ def main():
             assert image_resource["mimeType"] == "image/png", image_resource
             assert image_resource["blob"], image_resource
 
+        uri_only_review = json.loads(
+            tool_dispatcher.execute_tool(
+                bpy.context,
+                "review_inspection_renders_against_brief",
+                {
+                    "prompt": "Inspect the front below and side render evidence.",
+                    "inspection_render": {
+                        "available": True,
+                        "render_id": render_metadata["render_id"],
+                        "images": [
+                            {
+                                "available": True,
+                                "resource_uri": image_item["resource_uri"],
+                            }
+                            for image_item in render_metadata["images"]
+                        ],
+                    },
+                },
+            )
+        )
+        assert uri_only_review["ok"] is True, uri_only_review
+        assert uri_only_review["usable_image_count"] == 2, uri_only_review
+        assert all(
+            image["file_exists"] for image in uri_only_review["visual_detail_review"]["images"]
+        ), uri_only_review
+
+        metadata_uri_review = json.loads(
+            tool_dispatcher.execute_tool(
+                bpy.context,
+                "review_inspection_renders_against_brief",
+                {
+                    "prompt": "Inspect the latest render metadata.",
+                    "inspection_render": {
+                        "metadata_uri": render_metadata["metadata_uri"],
+                    },
+                },
+            )
+        )
+        assert metadata_uri_review["ok"] is True, metadata_uri_review
+        assert metadata_uri_review["usable_image_count"] == 2, metadata_uri_review
+
         project_capture_path = os.path.join(resolved_capture_dir["capture_dir"], "viewport-old-project.png")
         os.makedirs(os.path.dirname(project_capture_path), exist_ok=True)
         with open(project_capture_path, "wb") as handle:
@@ -564,6 +623,23 @@ def main():
         assert resized_metadata["size_bytes"] <= 48 * 1024, resized_metadata
         assert resized_metadata["width"] < resized_metadata["original_width"], resized_metadata
         assert resized_attachments["viewport_image"]["source"]["media_type"] == "image/png"
+
+        blank_png = os.path.join(cache_dir, "blank-viewport.png")
+        blank_image = bpy.data.images.new("Agent Bridge Blank Viewport Source", width=16, height=16)
+        blank_image.pixels[:] = [0.0, 0.0, 0.0, 1.0] * (16 * 16)
+        blank_image.filepath_raw = blank_png
+        blank_image.file_format = "PNG"
+        blank_image.save()
+        bpy.data.images.remove(blank_image)
+        blank_metadata, blank_attachments = viewport_capture.prepare_image_attachment(
+            blank_png,
+            max_bytes=48 * 1024,
+            capture_method="test-blank-png",
+        )
+        assert blank_metadata["available"] is False, blank_metadata
+        assert "blank" in blank_metadata["note"], blank_metadata
+        assert blank_metadata["visual_digest"]["blank_reason"] == "all_black", blank_metadata
+        assert blank_attachments == {}, blank_attachments
 
         docs = docs_index.search_blender_docs("keyframe camera orbit action fcurves", cache_dir=cache_dir)
         assert docs["results"], docs
