@@ -71,6 +71,10 @@ class ProviderSpec:
     max_input_images: int = 1
     license_note: str = ""
     notes: str = ""
+    # False means the capability is described but no job backend exists yet.
+    # Such a provider is reported for planning but never auto-selected, so a
+    # caller cannot be routed to something that will refuse.
+    job_implemented: bool = False
 
     def __post_init__(self):
         if self.kind not in PROVIDER_KINDS:
@@ -139,6 +143,7 @@ PROVIDER_SPECS = (
         supports_multiview=True,
         max_input_images=4,
         license_note="Commercial API; output rights governed by the vendor's terms.",
+        job_implemented=True,
     ),
     ProviderSpec(
         "meshy",
@@ -440,6 +445,7 @@ def provider_availability(spec, hardware=None, environ=None):
         "configured_env_vars": _configured_env_names(
             spec.credential_env_vars + spec.endpoint_env_vars + spec.runtime_env_vars, source
         ),
+        "job_implemented": spec.job_implemented,
         "license_note": spec.license_note,
         "notes": spec.notes,
     }
@@ -516,7 +522,10 @@ def select_provider(preferred="", environ=None, hardware=None, require_multiview
         return {"ok": True, "selected": preferred, "report": report, "diagnostics": diagnostics}
 
     # Local first: it is cheaper, and it keeps reference art on the machine.
+    # Only providers with a job backend are auto-selected; routing a caller to
+    # a declared-but-unimplemented provider would produce a confusing refusal.
     order = (KIND_LOCAL_PROCESS, KIND_LOCAL_HTTP, KIND_HOSTED_API)
+    skipped_unimplemented = []
     for kind in order:
         for spec in PROVIDER_SPECS:
             if spec.kind != kind:
@@ -526,6 +535,15 @@ def select_provider(preferred="", environ=None, hardware=None, require_multiview
                 continue
             if require_multiview and not report["supports_multiview"]:
                 continue
+            if not spec.job_implemented:
+                skipped_unimplemented.append(spec.name)
+                continue
             return {"ok": True, "selected": spec.name, "report": report, "diagnostics": diagnostics}
 
+    if skipped_unimplemented:
+        return refuse(
+            "No generation provider with a job backend is available. These are configured "
+            "but not yet implemented: %s" % ", ".join(sorted(skipped_unimplemented)),
+            unimplemented_providers=sorted(skipped_unimplemented),
+        )
     return refuse("No generation provider is currently available.")
