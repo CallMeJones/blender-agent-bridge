@@ -106,7 +106,95 @@ def create_curve_path(
     live_preview._mark_pending(context, label)
     return {"ok": True, "message": f"Created curve path {obj.name}", "object": obj.name, "transaction_id": transaction["id"]}
 
-MODELING_SEED_MODIFIER_TYPES = {"ARRAY", "BOOLEAN", "MIRROR", "NODES", "SCREW", "SOLIDIFY"}
+MODELING_SEED_MODIFIER_TYPES = {"ARRAY", "BOOLEAN", "MIRROR", "NODES", "SCREW", "SKIN", "SOLIDIFY"}
+
+# Thresholds measured against real meshes rather than guessed. Worst ordinary
+# ratios observed: Suzanne 17.8x median face area, a cylinder's ngon caps 10.2x
+# median edge length. A badly spiked surface measured 61x and 66x.
+#
+# The gap between those is not large, so these deliberately sit well clear of
+# legitimate geometry and only catch severe damage. A mild spike measured 14.3x
+# area -- below Suzanne -- so no area threshold can separate it, and this check
+# will not catch subtle degradation. It is a net for destroyed surfaces, not a
+# quality score; the repair tool's own extent budget is the finer guard.
+FACE_AREA_OUTLIER_RATIO = 40.0
+EDGE_LENGTH_OUTLIER_RATIO = 25.0
+
+
+def _evaluated_mesh(obj):
+    """Return (mesh, owner, evaluated) for what the user actually sees.
+
+    Topology judged on ``obj.data`` is wrong for any modifier-driven object: a
+    Skin skeleton has no faces of its own, and a remeshed surface hides its real
+    geometry. The evaluated mesh is the one that matters, so it is what gets
+    inspected; the base counts are still reported for transparency.
+    """
+
+    import bpy
+
+    if not getattr(obj, "modifiers", None):
+        return obj.data, None, False
+    try:
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        evaluated_object = obj.evaluated_get(depsgraph)
+        mesh = evaluated_object.to_mesh()
+    except Exception:  # noqa: BLE001 - fall back to the base mesh
+        return obj.data, None, False
+    if mesh is None:
+        return obj.data, None, False
+    return mesh, evaluated_object, True
+
+
+def _geometry_sanity(mesh):
+    """Flag geometry that is topologically valid but visibly broken.
+
+    Remeshing keeps a mesh watertight no matter how mangled it is, so the
+    topology checks alone will pass a destroyed surface. These look at shape.
+    """
+
+    report = {
+        "face_area_outliers": 0,
+        "edge_length_outliers": 0,
+        "median_face_area": 0.0,
+        "largest_face_area": 0.0,
+    }
+    polygons = getattr(mesh, "polygons", None)
+    if not polygons or len(polygons) < 8:
+        return report, []
+
+    areas = sorted(float(poly.area) for poly in polygons)
+    median_area = areas[len(areas) // 2]
+    report["median_face_area"] = median_area
+    report["largest_face_area"] = areas[-1]
+    issues = []
+    if median_area > 1e-12:
+        outliers = sum(1 for area in areas if area > median_area * FACE_AREA_OUTLIER_RATIO)
+        report["face_area_outliers"] = outliers
+        if outliers:
+            issues.append(
+                "%d face(s) exceed %.0fx the median area, which usually means spikes or stray shards"
+                % (outliers, FACE_AREA_OUTLIER_RATIO)
+            )
+
+    edges = getattr(mesh, "edges", None)
+    vertices = getattr(mesh, "vertices", None)
+    if edges and vertices and len(edges) >= 8:
+        lengths = []
+        for edge in edges:
+            a = vertices[edge.vertices[0]].co
+            b = vertices[edge.vertices[1]].co
+            lengths.append((a - b).length)
+        lengths.sort()
+        median_length = lengths[len(lengths) // 2]
+        if median_length > 1e-9:
+            outliers = sum(1 for length in lengths if length > median_length * EDGE_LENGTH_OUTLIER_RATIO)
+            report["edge_length_outliers"] = outliers
+            if outliers:
+                issues.append(
+                    "%d edge(s) exceed %.0fx the median length, which usually means stretched spikes"
+                    % (outliers, EDGE_LENGTH_OUTLIER_RATIO)
+                )
+    return report, issues
 
 def _material_assignment_quality(obj):
     slots = list(getattr(obj, "material_slots", []) or [])
@@ -127,7 +215,10 @@ def _material_assignment_quality(obj):
     }
 
 def _mesh_modeling_quality(obj, *, require_materials, allow_modifier_seed_boundaries, scale_tolerance):
-    mesh = obj.data if obj and obj.type == "MESH" else None
+    base_mesh = obj.data if obj and obj.type == "MESH" else None
+    mesh, evaluated_owner, used_evaluated = (
+        _evaluated_mesh(obj) if base_mesh is not None else (None, None, False)
+    )
     modifiers = [{"name": modifier.name, "type": modifier.type} for modifier in getattr(obj, "modifiers", [])]
     seed_modifier = any(item["type"] in MODELING_SEED_MODIFIER_TYPES for item in modifiers)
     materials = _material_assignment_quality(obj)
@@ -198,11 +289,26 @@ def _mesh_modeling_quality(obj, *, require_materials, allow_modifier_seed_bounda
     if any(component <= 1e-6 for component in dimensions):
         warnings.append("object has near-zero dimension")
 
-    return {
+    geometry = {}
+    if mesh is not None:
+        geometry, geometry_issues = _geometry_sanity(mesh)
+        issues.extend(geometry_issues)
+
+    if used_evaluated and base_mesh is not None:
+        base_faces = len(base_mesh.polygons)
+        if base_faces != topology["faces"]:
+            warnings.append(
+                "Topology reported from the evaluated mesh (%d faces); the base mesh has %d."
+                % (topology["faces"], base_faces)
+            )
+
+    result = {
         "object": obj.name,
         "type": obj.type,
-        "mesh": mesh.name if mesh else "",
+        "mesh": (base_mesh.name if base_mesh else ""),
         "topology": topology,
+        "topology_source": "evaluated" if used_evaluated else "base_mesh",
+        "geometry": geometry,
         "materials": materials,
         "modifiers": modifiers,
         "scale": [round(value, 6) for value in scale],
@@ -211,6 +317,12 @@ def _mesh_modeling_quality(obj, *, require_materials, allow_modifier_seed_bounda
         "warnings": warnings,
         "passed": not issues,
     }
+    if evaluated_owner is not None:
+        try:
+            evaluated_owner.to_mesh_clear()
+        except Exception:  # noqa: BLE001 - cleanup is best effort
+            pass
+    return result
 
 def inspect_modeling_quality(
     context,

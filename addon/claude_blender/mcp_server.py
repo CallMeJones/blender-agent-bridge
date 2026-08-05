@@ -650,6 +650,18 @@ STATUS_OUTPUT_SCHEMA = {
         "compatible": {"type": ["boolean", "null"]},
         "compatibility_status": {"type": "string"},
         "compatibility_message": {"type": "string"},
+        "blocked": {"type": "boolean"},
+        "blocking_issues": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string"},
+                    "message": {"type": "string"},
+                    "remedy": {"type": "string"},
+                },
+            },
+        },
         "build_diagnostics": {"type": "string"},
         "scene": {"type": "string"},
         "bridge_busy": {"type": "boolean"},
@@ -1716,6 +1728,21 @@ def _catalog_search_content(structured):
 def _bridge_status_content(status):
     status = dict(status or {})
     if status.get("ok"):
+        blocking = [item for item in (status.get("blocking_issues") or []) if isinstance(item, dict)]
+        if blocking:
+            # Lead with the blocker. Reporting "connected" first and burying the
+            # incompatibility reads as healthy, and the caller only discovers
+            # otherwise when their first mutating call is refused.
+            lines = [
+                "BLOCKED: the Blender bridge is reachable but mutating tools will be refused.",
+            ]
+            for item in blocking:
+                lines.append(
+                    "- %s %s" % (str(item.get("message") or "").strip(), str(item.get("remedy") or "").strip())
+                )
+            lines.append("Read-only inspection still works, so this will not surface until a tool tries to change the scene.")
+            return " ".join(part for part in lines if part.strip())
+
         parts = ["Blender bridge is connected."]
         tool_surface_name = str(status.get("mcp_tool_surface") or "").strip()
         if tool_surface_name:
@@ -3107,13 +3134,33 @@ class BlenderMCPServer:
             None if not reported_addon_version else reported_addon_version == SERVER_VERSION
         )
         compatibility_reasons = []
+        blocking_issues = []
         compatibility_known = bool(addon_registry_digest and reported_bridge_version)
         if addon_registry_digest and addon_registry_digest != mcp_registry_digest:
             compatibility_reasons.append("Blender add-on and MCP runtime tool registry digests differ")
+            blocking_issues.append({
+                "code": "addon_mcp_registry_mismatch",
+                "message": "The Blender add-on and the running MCP server were built from different tool registries.",
+                "remedy": "Reload scripts in Blender (or restart it), then restart the MCP client.",
+            })
         if config_registry_digest and config_registry_digest != mcp_registry_digest:
             compatibility_reasons.append("MCP config and runtime tool registry digests differ")
+            blocking_issues.append({
+                "code": "config_registry_mismatch",
+                "message": "The MCP client config was generated for a different tool registry than the running server.",
+                "remedy": "Press Copy MCP Config in the Blender sidebar, paste it into the client config, then restart the MCP client.",
+            })
         if reported_bridge_version and reported_bridge_version != bridge_protocol.BRIDGE_VERSION:
             compatibility_reasons.append("Blender bridge protocol version differs from the MCP runtime")
+            blocking_issues.append({
+                "code": "bridge_protocol_mismatch",
+                "message": "The Blender bridge and the MCP server speak different protocol versions.",
+                "remedy": "Install matching add-on and MCP server versions, then restart both.",
+            })
+        # Surfaced at the top level so a caller cannot miss it among ~60 sibling
+        # fields. Empty when nothing is wrong.
+        status["blocking_issues"] = blocking_issues
+        status["blocked"] = bool(blocking_issues)
         if compatibility_reasons:
             status["compatible"] = False
             status["compatibility_status"] = "incompatible"
@@ -3181,13 +3228,24 @@ class BlenderMCPServer:
         status = self._compatibility_cache
         if status.get("compatible") is True:
             return None
-        return _tool_error(
-            str(
+        blocking = [item for item in (status.get("blocking_issues") or []) if isinstance(item, dict)]
+        # Lead with what to do, not with which hashes differ. This is usually the
+        # first mutating call a new user makes, so the message has to be a fix.
+        if blocking:
+            summary = "; ".join(
+                "%s %s" % (str(item.get("message") or "").strip(), str(item.get("remedy") or "").strip())
+                for item in blocking
+            )
+        else:
+            summary = str(
                 status.get("compatibility_message")
                 or "Blender bridge did not provide a compatible protocol and tool-registry handshake"
-            ),
+            )
+        return _tool_error(
+            summary,
             code="bridge_incompatible",
             data={
+                "blocking_issues": blocking,
                 "compatibility_status": status.get("compatibility_status"),
                 "bridge_version": status.get("bridge_version"),
                 "expected_bridge_version": bridge_protocol.BRIDGE_VERSION,

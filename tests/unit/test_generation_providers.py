@@ -165,17 +165,46 @@ class SelectionTests(unittest.TestCase):
         )
         self.assertTrue(report["available"], report["remedies"])
 
-    def test_unimplemented_provider_is_never_auto_selected(self):
-        # TripoSR is available on this hardware but has no job backend; routing
-        # a caller to it would produce a confusing refusal downstream.
+    def test_hosted_provider_is_never_auto_selected(self):
+        # Hosted providers spend the user's credits and upload their reference
+        # art. Auto-selection must not reach for one, even when it is ready.
+        env = _env(TRIPO_API_KEY="k", MESHY_API_KEY="k", **{gp.EGRESS_ENV_VAR: "allow"})
+        result = gp.select_provider(environ=env, hardware=LAPTOP_GPU)
+        self.assertFalse(result["ok"])
+        self.assertIsNone(result["selected"])
+
+    def test_available_hosted_providers_are_offered_as_suggestions(self):
+        env = _env(TRIPO_API_KEY="k", **{gp.EGRESS_ENV_VAR: "allow"})
+        result = gp.select_provider(environ=env, hardware=LAPTOP_GPU)
+        self.assertIn("tripo", result["suggested_providers"])
+        self.assertTrue(result["requires_explicit_choice"])
+        self.assertIn("name it explicitly", result["message"])
+
+    def test_naming_a_hosted_provider_explicitly_is_honoured(self):
+        env = _env(TRIPO_API_KEY="k", **{gp.EGRESS_ENV_VAR: "allow"})
+        result = gp.select_provider(preferred="tripo", environ=env, hardware=LAPTOP_GPU)
+        self.assertTrue(result["ok"], result.get("message"))
+        self.assertEqual("tripo", result["selected"])
+
+    def test_unavailable_hosted_provider_is_not_suggested(self):
+        # Egress denied: offering it would suggest something that cannot run.
+        env = _env(TRIPO_API_KEY="k")
+        result = gp.select_provider(environ=env, hardware=LAPTOP_GPU)
+        self.assertEqual([], result.get("suggested_providers", []))
+
+    def test_unimplemented_local_provider_is_never_auto_selected(self):
+        # TripoSR is available on this hardware but has no job backend, so it
+        # must not be selected. With no usable local provider, the hosted one is
+        # suggested rather than silently used.
         env = _env(
             BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr",
             TRIPO_API_KEY="k",
             **{gp.EGRESS_ENV_VAR: "allow"},
         )
         result = gp.select_provider(environ=env, hardware=LAPTOP_GPU)
-        self.assertTrue(result["ok"], result.get("message"))
-        self.assertEqual("tripo", result["selected"])
+        self.assertFalse(result["ok"])
+        self.assertIn("triposr", result["unimplemented_providers"])
+        self.assertIn("tripo", result["suggested_providers"])
 
     def test_only_unimplemented_providers_refuses_and_names_them(self):
         env = _env(BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr")

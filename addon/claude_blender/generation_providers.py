@@ -521,10 +521,12 @@ def select_provider(preferred="", environ=None, hardware=None, require_multiview
             )
         return {"ok": True, "selected": preferred, "report": report, "diagnostics": diagnostics}
 
-    # Local first: it is cheaper, and it keeps reference art on the machine.
-    # Only providers with a job backend are auto-selected; routing a caller to
-    # a declared-but-unimplemented provider would produce a confusing refusal.
-    order = (KIND_LOCAL_PROCESS, KIND_LOCAL_HTTP, KIND_HOSTED_API)
+    # Auto-selection covers local providers only. A hosted provider spends the
+    # user's money and sends their reference art to a third party, so it is
+    # never chosen on the user's behalf -- it must be named in the request.
+    # Available hosted providers are returned as suggestions instead, so a
+    # planner can offer one and let the user decide.
+    order = (KIND_LOCAL_PROCESS, KIND_LOCAL_HTTP)
     skipped_unimplemented = []
     for kind in order:
         for spec in PROVIDER_SPECS:
@@ -540,6 +542,28 @@ def select_provider(preferred="", environ=None, hardware=None, require_multiview
                 continue
             return {"ok": True, "selected": spec.name, "report": report, "diagnostics": diagnostics}
 
+    suggestions = [
+        spec.name
+        for spec in PROVIDER_SPECS
+        if spec.kind == KIND_HOSTED_API
+        and spec.job_implemented
+        and by_name[spec.name]["available"]
+        and (not require_multiview or spec.supports_multiview)
+    ]
+
+    if suggestions:
+        return refuse(
+            "No local generation provider is available. %s can do this but %s a paid "
+            "third-party service that uploads the reference images, so name it explicitly "
+            "to use it."
+            % (
+                ", ".join(sorted(suggestions)),
+                "is" if len(suggestions) == 1 else "are",
+            ),
+            suggested_providers=sorted(suggestions),
+            requires_explicit_choice=True,
+            unimplemented_providers=sorted(skipped_unimplemented),
+        )
     if skipped_unimplemented:
         return refuse(
             "No generation provider with a job backend is available. These are configured "

@@ -53,14 +53,19 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
 
  {'name': 'start_generation_job',
   'description': 'Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then '
-                 'poll get_generation_job_status until terminal. Uploads the images to the selected provider and '
-                 'creates a paid generation task, so it needs egress to be allowed and a credential configured; call '
-                 'get_generation_provider_diagnostics first when provider readiness is unknown. The finished model is '
-                 'cached like any external asset, so import it with start_external_asset_import_job.',
+                 'poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer '
+                 'authored scripts and bounded helpers unless the user asks for generation. Only local providers are '
+                 'selected automatically. A hosted provider such as Tripo or Meshy spends the user\'s credits and '
+                 'uploads their reference images to a third party, so it is never chosen automatically: name it in '
+                 '"provider" only when the user asked for it, or suggest it and let them decide. Call '
+                 'get_generation_provider_diagnostics when provider readiness is unknown. The finished model is cached '
+                 'like any external asset, so import it with start_external_asset_import_job.',
   'input_schema': {'type': 'object',
                    'properties': {'views': _VIEWS_SCHEMA,
                                   'provider': {'type': 'string',
-                                               'description': 'Omit to auto-select the best available provider.'},
+                                               'description': 'Omit to auto-select a local provider. Hosted providers '
+                                                              '(tripo, meshy) cost credits and upload the images, so '
+                                                              'they are never auto-selected and must be named here.'},
                                   'model': {'type': 'string'},
                                   'face_limit': {'type': 'integer', 'minimum': 0, 'maximum': 1000000},
                                   'job_name': {'type': 'string'},

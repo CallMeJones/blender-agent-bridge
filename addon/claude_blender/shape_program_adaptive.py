@@ -671,14 +671,34 @@ def _mesh_edge_status(faces):
 
 
 def _validate_closed(faces):
-    edge_use, invalid = _mesh_edge_status(faces)
+    counts, invalid = _mesh_edge_status(faces)
     if invalid:
+        # Distinguish the two causes, because they need opposite responses and
+        # only one of them can be helped by refining.
+        pinched = [edge for edge in invalid if counts[edge] > 2]
+        unpaired = [edge for edge in invalid if counts[edge] < 2]
+        if pinched:
+            # More than two faces on one edge means a cell contained two
+            # surface sheets and dual contouring gave them a shared vertex.
+            # Subdividing that cell does not separate the sheets, so advising
+            # a higher base_depth here would be advice that cannot work.
+            raise shape_program.ShapeProgramError(
+                f"Adaptive dual contour produced {len(pinched)} pinched edge(s) where more "
+                "than two faces meet. This happens where surfaces touch or nearly touch, "
+                "most often where a subtract cavity breaks through the outer surface. "
+                "Raising base_depth will not resolve it. Use meshing_mode=uniform for this "
+                "program, or separate the touching forms."
+            )
+        if unpaired:
+            raise shape_program.ShapeProgramError(
+                f"Adaptive dual contour left {len(unpaired)} open edge(s); increase "
+                "base_depth or use uniform meshing"
+            )
         raise shape_program.ShapeProgramError(
-            "Adaptive dual contour is not a consistently oriented watertight "
-            f"manifold at {len(invalid)} mesh edges; increase base_depth or use "
-            "uniform meshing"
+            f"Adaptive dual contour is inconsistently oriented at {len(invalid)} mesh "
+            "edges; use uniform meshing for this program"
         )
-    return len(edge_use)
+    return len(counts)
 
 
 def _check_boundary(builder):
@@ -793,11 +813,14 @@ def mesh_shape_program_adaptive(
         _edge_use, invalid_edges = _mesh_edge_status(faces)
         if not invalid_edges and not skipped_segments:
             break
+        # Split vertices are appended past the end of surface_leaves and have
+        # no cell of their own, so they cannot be refined; skip them.
         repair_leaves = {
             surface_leaves[vertex_id]
             for edge in invalid_edges
             for vertex_id in edge
-            if surface_leaves[vertex_id].depth < max_depth
+            if vertex_id < len(surface_leaves)
+            and surface_leaves[vertex_id].depth < max_depth
         }
         repair_leaves.update(
             leaf for leaf in repair_candidates if leaf.depth < max_depth

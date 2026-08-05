@@ -142,6 +142,27 @@ Compilation is deliberately bounded:
 
 Use the smallest bounds that still leave clear space around the form. Oversized bounds waste resolution; undersized bounds are rejected instead of producing an open mesh.
 
+## Adaptive Mode And Touching Surfaces
+
+Adaptive dual contouring places one vertex per octree cell. Where a cell contains two
+surface sheets that touch or nearly touch, both sheets share that vertex and more than two
+faces meet on one edge, which is not a manifold. The compiler refuses such a mesh rather
+than returning it.
+
+The most common trigger is a `subtract` cavity breaking through the outer surface, where
+the cavity wall and the outer wall meet at a rim. A tightly-blended multi-segment `sweep`
+can do the same where segments nearly touch.
+
+**Refining does not help.** The defect is topological rather than a sampling artifact, so
+raising `adaptive_base_depth` produces the same pinched edges. Measured on a sphere
+subtracted from an ellipsoid: 4 pinched edges at base depth 4, and the same 4 at base
+depth 5.
+
+Use `meshing_mode: uniform` for programs with `subtract`, or separate the touching forms.
+Uniform marching tetrahedra handles both cases correctly. Resolving this in adaptive mode
+requires manifold dual contouring, which splits a cell's vertex per surface component; it
+is not implemented.
+
 ## Current Limits
 
 Adaptive mode reduces empty-volume work and concentrates topology, but it is still a bounded CPU decoder rather than a learned 3D prior. Extremely ambiguous topology may require a higher base depth or uniform mode, and maximum-depth/cell/work limits can refuse oversized requests. The primitive vocabulary expresses continuous mass and path structure, not arbitrary engraved detail, pores, individual hair, or learned hidden-surface inference. Use calibrated visual hull/depth tools for multi-view evidence, semantic sculpt tools for measured local correction, and fur-flow/groom tools after the core surface is stable.

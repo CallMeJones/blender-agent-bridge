@@ -133,6 +133,7 @@ def _generated_annotation(item, image_path, *, max_mask_axis):
             "derived foreground mask is empty or full; supply annotations or a better mask"
         )
     bounds = outline["bounds"]
+    silhouette_warnings = _silhouette_plausibility_warnings(outline, bounds)
     subject = str(item.get("subject") or "reference model")
     return {
         "version": 1,
@@ -162,6 +163,7 @@ def _generated_annotation(item, image_path, *, max_mask_axis):
             "edge_pixel_count": outline["edge_pixel_count"],
             "outline_point_count": len(outline["points"]),
             "image_identity": _digest_file(image_path),
+            "warnings": silhouette_warnings,
         },
     }
 
@@ -237,11 +239,28 @@ def prepare_reference_images(
     except (OSError, ValueError, OverflowError) as exc:
         return {"ok": False, "message": str(exc), "prepared_views": prepared}
 
+    # Collect per-view silhouette warnings to the top level. Left only inside
+    # each summary they are easy to miss, which is how an unusable outline was
+    # previously reported as a clean success.
+    intake_warnings = []
+    for summary in summaries:
+        for warning in summary.get("warnings") or []:
+            intake_warnings.append("%s: %s" % (summary.get("name") or "view", warning))
+
+    message = f"Prepared {len(prepared)} reference image(s)"
+    if intake_warnings:
+        message += (
+            "; %d generated silhouette warning(s) -- inspect the outline before building from it"
+            % len(intake_warnings)
+        )
+
     result = {
         "ok": True,
-        "message": f"Prepared {len(prepared)} reference image(s)",
+        "message": message,
         "prepared_views": prepared,
         "intake": summaries,
+        "warnings": intake_warnings,
+        "silhouette_quality": "suspect" if intake_warnings else "plausible",
     }
     if not create_guides:
         return result
@@ -310,7 +329,15 @@ def prepare_reference_images(
         }
     result["guide_result"] = guide_result
     result["ok"] = bool(guide_result.get("ok"))
-    result["message"] = guide_result.get("message") or result["message"]
+    guide_message = guide_result.get("message") or result["message"]
+    # Keep the silhouette warning visible: the guide message would otherwise
+    # replace it and the caller would build on a suspect outline unknowingly.
+    if intake_warnings:
+        guide_message += (
+            "; %d generated silhouette warning(s) -- inspect the outline before building from it"
+            % len(intake_warnings)
+        )
+    result["message"] = guide_message
     return result
 
 
@@ -579,6 +606,113 @@ def _controls_from_priorities(priorities, *, max_controls, step):
     return controls
 
 
+# A generated silhouette can be structurally valid and still be nonsense. On a
+# white-uniform-on-white-page subject the derived outline wandered through empty
+# page and reported a clean success, which then poisoned the hull, the fit, the
+# part graph and the score with nothing to stop it. These checks use statistics
+# already computed, so they cost nothing and only ever warn.
+MASS_FILLS_FRAME_RATIO = 0.90
+PLAUSIBLE_COVERAGE_RANGE = (0.05, 0.60)
+BORDER_PROXIMITY = 0.02
+BORDER_POINT_FRACTION = 0.25
+
+
+def _silhouette_plausibility_warnings(outline, bounds):
+    """Warn when a derived outline looks like a failed segmentation."""
+
+    warnings = []
+    width = float(bounds.get("width") or 0.0)
+    height = float(bounds.get("height") or 0.0)
+    if width >= MASS_FILLS_FRAME_RATIO and height >= MASS_FILLS_FRAME_RATIO:
+        warnings.append(
+            "The derived primary mass fills %.0f%% x %.0f%% of the frame, which usually means the "
+            "subject was not separated from the background. Supply a mask image or annotation JSON."
+            % (100.0 * width, 100.0 * height)
+        )
+
+    coverage = float(outline.get("foreground_coverage") or 0.0)
+    low, high = PLAUSIBLE_COVERAGE_RANGE
+    if coverage < low or coverage > high:
+        warnings.append(
+            "Derived foreground coverage is %.1f%%, outside the %.0f-%.0f%% band typical of a "
+            "framed subject. Check the generated silhouette before building from it."
+            % (100.0 * coverage, 100.0 * low, 100.0 * high)
+        )
+
+    points = outline.get("points") or []
+    if points:
+        on_border = sum(
+            1
+            for point in points
+            if len(point) >= 2
+            and (
+                point[0] <= BORDER_PROXIMITY
+                or point[0] >= 1.0 - BORDER_PROXIMITY
+                or point[1] <= BORDER_PROXIMITY
+                or point[1] >= 1.0 - BORDER_PROXIMITY
+            )
+        )
+        fraction = on_border / float(len(points))
+        if fraction >= BORDER_POINT_FRACTION:
+            warnings.append(
+                "%.0f%% of the outline sits on the image border, which usually means the mask "
+                "leaked into the background rather than tracing the subject."
+                % (100.0 * fraction)
+            )
+    return warnings
+
+
+# A pass may trade a little all-view score for a large worst-view gain, but a
+# real decline means the pass made the model worse overall.
+AGGREGATE_REGRESSION_TOLERANCE = 0.002
+# Repeated passes previously grew a figure's bounding box by 32% as spikes were
+# pushed outward. Silhouette IoU barely registers that; extent does.
+MAXIMUM_REPAIR_EXTENT_GROWTH = 0.05
+
+
+def _repair_target_object(context, object_name):
+    """Resolve the mesh the repair will edit, or None when it is ambiguous."""
+
+    import bpy
+
+    name = str(object_name or "").strip()
+    if name:
+        obj = bpy.data.objects.get(name)
+        return obj if obj is not None and obj.type == "MESH" else None
+    selected = [obj for obj in getattr(context, "selected_objects", []) or [] if obj.type == "MESH"]
+    if len(selected) == 1:
+        return selected[0]
+    active = getattr(getattr(context, "view_layer", None), "objects", None)
+    active = getattr(active, "active", None)
+    return active if active is not None and active.type == "MESH" else None
+
+
+def _object_extent(obj):
+    """Largest world-space bounding-box dimension, used as a growth budget."""
+
+    if obj is None:
+        return 0.0
+    try:
+        return float(max(obj.dimensions))
+    except (AttributeError, TypeError, ValueError):
+        return 0.0
+
+
+def _aggregate_score(evaluation):
+    aggregate = (evaluation or {}).get("aggregate") or {}
+    for key in ("mean_score", "score", "mean_iou"):
+        value = aggregate.get(key)
+        if isinstance(value, (int, float)):
+            return float(value)
+    return 0.0
+
+
+def _aggregate_regression(before, after):
+    """How much the all-view score fell. Positive means it got worse."""
+
+    return _aggregate_score(before) - _aggregate_score(after)
+
+
 def auto_reference_sculpt_repair(
     context,
     *,
@@ -634,6 +768,13 @@ def auto_reference_sculpt_repair(
             "message": "No silhouette repair controls were generated from the current score",
             "baseline": before,
         }
+    # The repair below optimizes the single worst view. Improving that view can
+    # take the gain out of the others, so capture enough state to undo the pass
+    # if the full-view aggregate ends up worse than it started.
+    repair_target = _repair_target_object(context, object_name)
+    points_before = semantic_sculpt._local_points(repair_target) if repair_target else None
+    extent_before = _object_extent(repair_target) if repair_target else 0.0
+
     repair = semantic_sculpt.optimize_screen_space_sculpt(
         context,
         object_name=object_name,
@@ -681,12 +822,67 @@ def auto_reference_sculpt_repair(
         landmark_weight=landmark_weight,
         capture_dir=capture_dir,
     )
+    regression = _aggregate_regression(before, after)
+    extent_after = _object_extent(repair_target) if repair_target else 0.0
+    extent_growth = (
+        (extent_after - extent_before) / extent_before if extent_before > 1e-9 else 0.0
+    )
+    over_budget = extent_growth > MAXIMUM_REPAIR_EXTENT_GROWTH
+
+    if (regression > AGGREGATE_REGRESSION_TOLERANCE or over_budget) and points_before is not None:
+        # The worst view improved but the model as a whole did not. Undo the
+        # pass rather than reporting a change the caller would have to detect
+        # by re-scoring, which is how repeated passes silently destroy a mesh.
+        semantic_sculpt._write_points(repair_target, points_before)
+        restored = evaluate_multiview_reference_match(
+            context,
+            collection_name=collection_name,
+            object_names=[object_name] if object_name else [],
+            selected_only=not bool(object_name),
+            view_names=view_names or [],
+            outline_name=outline_name,
+            reference_mask_source=reference_mask_source,
+            landmark_targets=landmark_targets or [],
+            max_axis=max_axis,
+            mask_threshold=mask_threshold,
+            edge_weight=edge_weight,
+            landmark_weight=landmark_weight,
+            capture_dir=capture_dir,
+        )
+        reason = (
+            "grew the model extent by %.1f%% (budget %.0f%%)" % (
+                100.0 * extent_growth, 100.0 * MAXIMUM_REPAIR_EXTENT_GROWTH
+            )
+            if over_budget
+            else "reduced the all-view score by %.4f" % regression
+        )
+        return {
+            "ok": True,
+            "changed": False,
+            "reverted": True,
+            "message": (
+                "Repair improved the worst view but %s, so the mesh was restored. "
+                "Further automatic passes are unlikely to help; inspect the model and "
+                "make a targeted correction instead." % reason
+            ),
+            "baseline": before,
+            "rejected": after,
+            "after": restored,
+            "aggregate_regression": regression,
+            "extent_growth": extent_growth,
+            "generated_controls": controls,
+            "repair": repair,
+        }
+
     return {
         "ok": bool(after.get("ok")),
         "changed": True,
+        "reverted": False,
         "message": "Applied one measured reference-sculpt repair pass",
         "baseline": before,
         "after": after,
+        "aggregate_regression": regression,
+        "extent_growth": extent_growth,
         "generated_controls": controls,
         "repair": repair,
     }
