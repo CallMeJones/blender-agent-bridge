@@ -144,24 +144,23 @@ Use the smallest bounds that still leave clear space around the form. Oversized 
 
 ## Adaptive Mode And Touching Surfaces
 
-Adaptive dual contouring places one vertex per octree cell. Where a cell contains two
-surface sheets that touch or nearly touch, both sheets share that vertex and more than two
-faces meet on one edge, which is not a manifold. The compiler refuses such a mesh rather
-than returning it.
+Adaptive dual contouring places vertices per octree cell. A cell holding two surface sheets
+-- a `subtract` cavity wall beside the outer wall, most often -- needs one vertex per sheet.
+Giving both a single shared vertex makes four faces meet on one edge, which is not a
+manifold, and the compiler refuses such a mesh.
 
-The most common trigger is a `subtract` cavity breaking through the outer surface, where
-the cavity wall and the outer wall meet at a rim. A tightly-blended multi-segment `sweep`
-can do the same where segments nearly touch.
+The compiler now groups each cell's sign-changing edges into connected surface patches and
+emits one vertex per patch, so touching sheets stay separate. Faces built from a minimal
+edge take the vertex belonging to the patch that edge touches. Ambiguous saddle faces are
+resolved by sampling the face centre.
 
-**Refining does not help.** The defect is topological rather than a sampling artifact, so
-raising `adaptive_base_depth` produces the same pinched edges. Measured on a sphere
-subtracted from an ellipsoid: 4 pinched edges at base depth 4, and the same 4 at base
-depth 5.
+Measured on a sphere subtracted through the wall of an ellipsoid, previously 4 pinched
+edges at max_depth 7, 30 at 8 and 84 at 9 -- refinement made it worse, and a program that
+compiled at one depth could fail at a deeper one. All three now compile cleanly. On a
+seven-node lamp with a hollowed shade, pinched edges fell from 140 to 2.
 
-Use `meshing_mode: uniform` for programs with `subtract`, or separate the touching forms.
-Uniform marching tetrahedra handles both cases correctly. Resolving this in adaptive mode
-requires manifold dual contouring, which splits a cell's vertex per surface component; it
-is not implemented.
+A small residue remains on some programs. Where it occurs the error names it as a pinched
+edge and points at `meshing_mode: uniform`, which handles every case correctly.
 
 ## Current Limits
 

@@ -47,6 +47,97 @@ _PLANE_AXES = {
 }
 _INCIDENT_CYCLE = ((-1, -1), (1, -1), (1, 1), (-1, 1))
 
+# The six cube faces. Each entry lists its four corners in cycle order and the
+# four edges between consecutive corners, in the same order. Used to decide
+# which sign-changing edges belong to the same surface patch within a cell.
+_CUBE_FACES = (
+    ((0, 1, 2, 3), (0, 1, 2, 3)),
+    ((4, 5, 6, 7), (4, 5, 6, 7)),
+    ((0, 1, 5, 4), (0, 9, 4, 8)),
+    ((3, 2, 6, 7), (2, 10, 6, 11)),
+    ((0, 4, 7, 3), (8, 7, 11, 3)),
+    ((1, 2, 6, 5), (1, 10, 5, 9)),
+)
+
+
+def crossing_edges(corner_values, iso_level):
+    """Indices of cube edges whose endpoints straddle the iso level."""
+
+    return [
+        index
+        for index, (first, second) in enumerate(_EDGES)
+        if (corner_values[first] <= iso_level) != (corner_values[second] <= iso_level)
+    ]
+
+
+def cell_surface_components(corner_values, iso_level, face_center_values=None):
+    """Partition a cell's sign-changing edges into connected surface patches.
+
+    Dual contouring normally places one vertex per cell, which is only correct
+    when the cell holds a single surface patch. Where two patches pass through
+    one cell -- a cavity wall beside an outer wall, say -- a single shared
+    vertex joins both, four faces meet on one edge, and the mesh is not a
+    manifold. Grouping the edges first is what makes one vertex per patch
+    possible.
+
+    Two edges belong to the same patch when a face of the cube connects them.
+    A face with two crossings joins them directly. A face with four crossings
+    is a saddle with two valid readings, resolved by the sign at the face
+    centre: ``face_center_values`` maps a face index to that value. Without it
+    the saddle is joined in cycle order, which keeps the result deterministic
+    but may merge patches that the centre sample would separate.
+
+    Returns a list of edge-index lists, one per patch, in ascending order.
+    """
+
+    active = crossing_edges(corner_values, iso_level)
+    if not active:
+        return []
+
+    parent = {edge: edge for edge in active}
+
+    def find(edge):
+        while parent[edge] != edge:
+            parent[edge] = parent[parent[edge]]
+            edge = parent[edge]
+        return edge
+
+    def union(first, second):
+        first_root, second_root = find(first), find(second)
+        if first_root != second_root:
+            parent[max(first_root, second_root)] = min(first_root, second_root)
+
+    inside = [value <= iso_level for value in corner_values]
+
+    for face_index, (corners, edges) in enumerate(_CUBE_FACES):
+        present = [edge for edge in edges if edge in parent]
+        if len(present) == 2:
+            union(present[0], present[1])
+        elif len(present) == 4:
+            # Signs alternate around the face, so the contour is two curves and
+            # there are two ways to pair the crossings. Whichever pair of
+            # diagonal corners the face centre agrees with is the pair joined
+            # across the face; the other two corners get isolated.
+            center = None
+            if face_center_values is not None:
+                center = face_center_values.get(face_index)
+            if center is None:
+                union(edges[0], edges[1])
+                union(edges[2], edges[3])
+                continue
+            center_inside = center <= iso_level
+            if center_inside == inside[corners[0]]:
+                union(edges[0], edges[1])
+                union(edges[2], edges[3])
+            else:
+                union(edges[1], edges[2])
+                union(edges[3], edges[0])
+
+    groups = defaultdict(list)
+    for edge in active:
+        groups[find(edge)].append(edge)
+    return [sorted(edges) for _root, edges in sorted(groups.items())]
+
 
 def _number(value, field, *, minimum=None, maximum=None):
     if isinstance(value, bool):
@@ -303,6 +394,21 @@ class _Sampler:
         self.lattice_cache[key] = value
         return value
 
+    def value_at_key(self, key):
+        """Sample an arbitrary lattice coordinate, including half-cell centres.
+
+        ``lattice`` caches on exact integer keys; face centres fall between
+        them, so they are evaluated directly and cached under their own key.
+        """
+
+        cached = self.lattice_cache.get(key)
+        if cached is not None:
+            self.lattice_cache_hits += 1
+            return cached
+        value = self._evaluate(self.lattice_point(key))
+        self.lattice_cache[key] = value
+        return value
+
     def point(self, point):
         return self._evaluate(point)
 
@@ -363,6 +469,9 @@ class _OctreeNode:
         "residual",
         "normal_spread",
         "vertex_id",
+        "components",
+        "patch_vertices",
+        "patch_vertex_ids",
     )
 
     def __init__(self, origin, size, depth):
@@ -377,6 +486,9 @@ class _OctreeNode:
         self.residual = 0.0
         self.normal_spread = 0.0
         self.vertex_id = None
+        self.components = ()
+        self.patch_vertices = ()
+        self.patch_vertex_ids = ()
 
 
 class _AdaptiveBuilder:
@@ -408,6 +520,7 @@ class _AdaptiveBuilder:
         self.auto_refined_cells = 0
         self.region_refined_cells = 0
         self.topology_refined_cells = 0
+        self.multi_patch_cells = 0
 
     def cell_bounds(self, node):
         minimum = self.sampler.lattice_point(node.origin)
@@ -421,9 +534,13 @@ class _AdaptiveBuilder:
                 target = max(target, region["depth"])
         return target
 
-    def hermite_data(self, node, cell_extent):
+    def hermite_data(self, node, cell_extent, edges=None):
+        """Hermite samples for the cell's crossing edges, or a subset of them."""
+
         result = []
-        for first_index, second_index in _EDGES:
+        for edge_index, (first_index, second_index) in enumerate(_EDGES):
+            if edges is not None and edge_index not in edges:
+                continue
             first_value = node.corner_values[first_index]
             second_value = node.corner_values[second_index]
             if (first_value <= self.iso_level) == (second_value <= self.iso_level):
@@ -438,6 +555,29 @@ class _AdaptiveBuilder:
                 )
             )
         return result
+
+    def face_center_values(self, node):
+        """Sample the centre of each *ambiguous* cube face only.
+
+        A face with four crossings can be read two ways and needs its centre
+        sign to choose. Faces with zero or two crossings are unambiguous, so
+        sampling them is wasted work -- and doing so unconditionally was enough
+        to push a 32-node program past the SDF evaluation budget.
+        """
+
+        crossing = set(crossing_edges(node.corner_values, self.iso_level))
+        if len(crossing) < 4:
+            return {}
+        values = {}
+        for face_index, (corner_cycle, edges) in enumerate(_CUBE_FACES):
+            if sum(1 for edge in edges if edge in crossing) != 4:
+                continue
+            key = tuple(
+                sum(node.corner_keys[corner][axis] for corner in corner_cycle) / 4.0
+                for axis in range(3)
+            )
+            values[face_index] = self.sampler.value_at_key(key)
+        return values
 
     def _refine(self, node):
         child_size = node.size // 2
@@ -511,6 +651,35 @@ class _AdaptiveBuilder:
             self.auto_refined_cells += 1
             self._refine(node)
             return node
+
+        # One vertex per surface patch. A cell holding two patches -- a cavity
+        # wall beside an outer wall, say -- would otherwise join both through a
+        # single vertex and produce edges shared by four faces.
+        crossing = crossing_edges(node.corner_values, self.iso_level)
+        if len(crossing) < 6:
+            # Two patches need at least three crossing edges each, so fewer
+            # than six cannot split. Skips the analysis for most cells.
+            components = [crossing] if crossing else []
+        else:
+            components = cell_surface_components(
+                node.corner_values,
+                self.iso_level,
+                self.face_center_values(node),
+            )
+        node.components = components
+        if len(components) > 1:
+            node.patch_vertices = []
+            for edges in components:
+                patch_hermite = self.hermite_data(node, cell_extent, edges=set(edges))
+                if not patch_hermite:
+                    node.patch_vertices.append(vertex)
+                    continue
+                patch_vertex, _n, _r, _s = _qef_vertex(patch_hermite, minimum, maximum)
+                node.patch_vertices.append(patch_vertex)
+            self.multi_patch_cells += 1
+        else:
+            node.patch_vertices = [vertex]
+
         node.vertex = vertex
         node.normal = normal
         node.residual = residual
@@ -552,6 +721,38 @@ def _edge_descriptor(first, second):
     plane = _PLANE_AXES[axis]
     line = (axis, first[plane[0]], first[plane[1]])
     return line, min(first[axis], second[axis]), max(first[axis], second[axis])
+
+
+def leaf_patch_vertex_id(leaf, line, start, end):
+    """The vertex id for the patch of ``leaf`` that this minimal edge touches.
+
+    A cell with one patch has a single vertex and this is just ``vertex_id``.
+    Where a cell holds several patches, the minimal edge lies on exactly one of
+    the cell's twelve edges, and the patch owning that edge owns the vertex.
+    Routing here is what keeps the two patches from sharing a vertex.
+    """
+
+    ids = getattr(leaf, "patch_vertex_ids", ()) or ()
+    if len(ids) <= 1:
+        return leaf.vertex_id
+
+    axis, first_fixed, second_fixed = line
+    plane = _PLANE_AXES[axis]
+    for edge_index, (first_corner, second_corner) in enumerate(_EDGES):
+        first_key = leaf.corner_keys[first_corner]
+        second_key = leaf.corner_keys[second_corner]
+        if first_key[plane[0]] != first_fixed or first_key[plane[1]] != second_fixed:
+            continue
+        if second_key[plane[0]] != first_fixed or second_key[plane[1]] != second_fixed:
+            continue
+        low = min(first_key[axis], second_key[axis])
+        high = max(first_key[axis], second_key[axis])
+        if low > start or high < end:
+            continue
+        for component_index, edges in enumerate(leaf.components):
+            if edge_index in edges and component_index < len(ids):
+                return ids[component_index]
+    return leaf.vertex_id
 
 
 def _incident_leaves(root, line, start, end, lattice_size):
@@ -617,8 +818,9 @@ def _dual_faces(root, leaves, sampler, iso_level):
                 continue
             indices = []
             for node in incident:
-                if node.vertex_id not in indices:
-                    indices.append(node.vertex_id)
+                patch_id = leaf_patch_vertex_id(node, line, start, end)
+                if patch_id not in indices:
+                    indices.append(patch_id)
             if len(indices) < 3:
                 skipped_segments += 1
                 repair_candidates.update(incident)
@@ -792,14 +994,25 @@ def mesh_shape_program_adaptive(
             )
         for leaf in surface_leaves:
             leaf.vertex_id = None
-        for vertex_id, leaf in enumerate(surface_leaves):
-            if vertex_id >= shape_program.MAX_OUTPUT_VERTICES:
-                raise shape_program.ShapeProgramError(
-                    "Adaptive mesh exceeds the "
-                    f"{shape_program.MAX_OUTPUT_VERTICES} vertex limit"
-                )
-            leaf.vertex_id = vertex_id
-        vertices = [leaf.vertex for leaf in surface_leaves]
+            leaf.patch_vertex_ids = ()
+        vertices = []
+        vertex_owner = []
+        for leaf in surface_leaves:
+            patch_points = list(leaf.patch_vertices or (leaf.vertex,))
+            patch_ids = []
+            for point in patch_points:
+                if len(vertices) >= shape_program.MAX_OUTPUT_VERTICES:
+                    raise shape_program.ShapeProgramError(
+                        "Adaptive mesh exceeds the "
+                        f"{shape_program.MAX_OUTPUT_VERTICES} vertex limit"
+                    )
+                vertices.append(point)
+                vertex_owner.append(leaf)
+                patch_ids.append(len(vertices) - 1)
+            leaf.patch_vertex_ids = tuple(patch_ids)
+            # The first patch keeps the plain vertex_id so single-patch cells
+            # and every existing lookup behave exactly as before.
+            leaf.vertex_id = patch_ids[0]
         faces, skipped_segments, repair_candidates = _dual_faces(
             root,
             leaves,
@@ -816,11 +1029,11 @@ def mesh_shape_program_adaptive(
         # Split vertices are appended past the end of surface_leaves and have
         # no cell of their own, so they cannot be refined; skip them.
         repair_leaves = {
-            surface_leaves[vertex_id]
+            vertex_owner[vertex_id]
             for edge in invalid_edges
             for vertex_id in edge
-            if vertex_id < len(surface_leaves)
-            and surface_leaves[vertex_id].depth < max_depth
+            if vertex_id < len(vertex_owner)
+            and vertex_owner[vertex_id].depth < max_depth
         }
         repair_leaves.update(
             leaf for leaf in repair_candidates if leaf.depth < max_depth
