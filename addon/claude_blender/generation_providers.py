@@ -42,6 +42,10 @@ try:
 except ImportError:  # Direct-script compatibility inside Blender.
     import session_credentials
 
+RUN_STATUS_RUNNABLE = "runnable"
+RUN_STATUS_NO_JOB_BACKEND = "no_job_backend"
+RUN_STATUS_BLOCKED = "blocked"
+
 EGRESS_ENV_VAR = "BLENDER_AGENT_BRIDGE_GENERATION_EGRESS"
 PROBE_PYTHON_ENV_VAR = "BLENDER_AGENT_BRIDGE_GENERATION_PROBE_PYTHON"
 PROBE_TIMEOUT_SECONDS = 60
@@ -582,11 +586,11 @@ def provider_availability(spec, hardware=None, environ=None):
         "available": not blockers,
         "runnable": runnable,
         "run_status": (
-            "runnable"
+            RUN_STATUS_RUNNABLE
             if runnable
-            else "no_job_backend"
+            else RUN_STATUS_NO_JOB_BACKEND
             if not spec.job_implemented
-            else "blocked"
+            else RUN_STATUS_BLOCKED
         ),
         "run_blocker": (
             ""

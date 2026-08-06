@@ -70,6 +70,14 @@ def plan_image_to_3d_approach(context, args):
     for spec in generation_providers.PROVIDER_SPECS:
         report = by_name.get(spec.name) or {}
         hosted = spec.kind == generation_providers.KIND_HOSTED_API
+        no_backend = (
+            report.get("run_status") == generation_providers.RUN_STATUS_NO_JOB_BACKEND
+        )
+        # Config blockers are dropped for a provider with no backend. They are
+        # accurate but unactionable, and offering them beside the real reason
+        # invites the reader to act on the fixable-looking one: a planner
+        # offered "install TripoSR first, then generate locally at no cost",
+        # which no amount of installing could deliver.
         routes.append(
             {
                 "id": spec.name,
@@ -84,8 +92,9 @@ def plan_image_to_3d_approach(context, args):
                 "ready": bool(report.get("runnable")),
                 "why_not_ready": str(report.get("run_blocker") or ""),
                 "produces": "A generated mesh, typically dense and not rig-ready.",
-                "blockers": report.get("blockers") or [],
-                "remedies": report.get("remedies") or [],
+                "blockers": [] if no_backend else (report.get("blockers") or []),
+                "remedies": [] if no_backend else (report.get("remedies") or []),
+                "actionable": not no_backend,
                 "license_note": spec.license_note,
             }
         )
