@@ -58,14 +58,21 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
                  'selected automatically. A hosted provider such as Tripo or Meshy spends the user\'s credits and '
                  'uploads their reference images to a third party, so it is never chosen automatically: name it in '
                  '"provider" only when the user asked for it, or suggest it and let them decide. Call '
-                 'get_generation_provider_diagnostics when provider readiness is unknown. The finished model is cached '
-                 'like any external asset, so import it with start_external_asset_import_job.',
+                 'get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is '
+                 'not enough to start it: the first call returns requires_confirmation with the cost, which must be '
+                 'told to the user, and only a second call with confirm_paid=true spends anything. The finished model '
+                 'is cached like any external asset, so import it with start_external_asset_import_job.',
   'input_schema': {'type': 'object',
                    'properties': {'views': _VIEWS_SCHEMA,
                                   'provider': {'type': 'string',
                                                'description': 'Omit to auto-select a local provider. Hosted providers '
                                                               '(tripo, meshy) cost credits and upload the images, so '
                                                               'they are never auto-selected and must be named here.'},
+                                  'confirm_paid': {'type': 'boolean',
+                                                   'description': 'Set only after telling the user the cost and '
+                                                                  'getting their agreement. Required before any '
+                                                                  'hosted provider will start. Never set it in the '
+                                                                  'same turn the cost was discovered.'},
                                   'model': {'type': 'string'},
                                   'face_limit': {'type': 'integer', 'minimum': 0, 'maximum': 1000000},
                                   'job_name': {'type': 'string'},
@@ -93,6 +100,7 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
                'input_schema': {'type': 'object',
                                 'properties': {'views': _VIEWS_SCHEMA,
                                                'provider': {'type': 'string'},
+                                               'confirm_paid': {'type': 'boolean'},
                                                'model': {'type': 'string'},
                                                'face_limit': {'type': 'integer'},
                                                'job_name': {'type': 'string'},

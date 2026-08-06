@@ -74,6 +74,31 @@ def start_generation_job(context, args):
         }
 
     provider = selection["selected"]
+
+    # Naming a paid provider is not the same as agreeing to be charged. An
+    # agent can decide to call Tripo on its own; the user cannot un-spend the
+    # credits afterwards. So the first attempt reports the cost and refuses,
+    # and only a second call carrying confirm_paid actually starts the job --
+    # which forces the number into the conversation before the money moves.
+    if generation_providers.is_paid_provider(provider) and not bool(args.get("confirm_paid")):
+        notice = generation_providers.paid_provider_notice(provider)
+        return {
+            "ok": False,
+            "requires_confirmation": True,
+            "message": (
+                "%s is a paid service and would be charged for this job. %s Tell the user "
+                "the cost and that their reference images are uploaded, then call again "
+                "with confirm_paid=true if they agree."
+                % (notice.get("title") or provider, notice.get("cost_note") or "")
+            ).strip(),
+            "provider": provider,
+            "cost": notice,
+            "free_alternative": (
+                "Local providers cost nothing and upload nothing; run "
+                "get_generation_provider_diagnostics to see whether one is configured."
+            ),
+        }
+
     if provider not in asset_jobs.JOB_PROVIDER_SPECS:
         return {
             "ok": False,

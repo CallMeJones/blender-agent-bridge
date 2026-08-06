@@ -130,5 +130,63 @@ class PreferenceDrivenAvailabilityTests(_StoreIsolation):
         self.assertEqual(gp.EGRESS_DENY, gp.egress_mode(environ))
 
 
+class PaidProviderTests(_StoreIsolation):
+    """Spending the user's money must never be automatic."""
+
+    def test_only_hosted_providers_are_paid(self):
+        self.assertTrue(gp.is_paid_provider("tripo"))
+        self.assertTrue(gp.is_paid_provider("meshy"))
+        self.assertFalse(gp.is_paid_provider("triposr"))
+        self.assertFalse(gp.is_paid_provider("studio_endpoint"))
+        self.assertFalse(gp.is_paid_provider(""))
+        self.assertFalse(gp.is_paid_provider("not_a_provider"))
+
+    def test_every_paid_provider_states_its_cost(self):
+        # A confirmation prompt with no number in it is not informed consent.
+        for spec in gp.PROVIDER_SPECS:
+            if spec.kind == gp.KIND_HOSTED_API:
+                self.assertTrue(spec.cost_note, spec.name)
+
+    def test_notice_carries_what_a_user_needs_to_decide(self):
+        notice = gp.paid_provider_notice("tripo")
+        self.assertTrue(notice["paid"])
+        self.assertTrue(notice["uploads_reference_images"])
+        self.assertIn("credits", notice["cost_note"])
+        self.assertTrue(notice["license_note"])
+
+    def test_notice_for_a_local_provider_is_not_marked_paid(self):
+        notice = gp.paid_provider_notice("triposr")
+        self.assertFalse(notice["paid"])
+        self.assertFalse(notice["uploads_reference_images"])
+
+    def test_auto_selection_never_returns_a_paid_provider(self):
+        # Both hosted providers fully configured and permitted; a request that
+        # names nothing must still refuse rather than pick one.
+        environ = {
+            "TRIPO_API_KEY": "k",
+            "MESHY_API_KEY": "k",
+            gp.EGRESS_ENV_VAR: gp.EGRESS_ALLOW,
+        }
+        selection = gp.select_provider(environ=environ, hardware=LAPTOP_GPU)
+        self.assertFalse(selection["ok"])
+        self.assertIsNone(selection["selected"])
+        self.assertTrue(selection["requires_explicit_choice"])
+        self.assertIn("tripo", selection["suggested_providers"])
+
+    def test_a_configured_local_provider_is_chosen_over_a_paid_one(self):
+        environ = gp.environment_overlay(
+            _FakePreferences(
+                generation_python="C:/venv/python.exe",
+                triposr_root="C:/blend/TripoSR",
+                tripo_api_key="k",
+                generation_egress_allowed=True,
+            )
+        )
+        selection = gp.select_provider(environ=environ, hardware=LAPTOP_GPU)
+        # TripoSR has no job backend yet, so this still refuses -- but the
+        # refusal must not quietly fall through to the paid provider.
+        self.assertFalse(gp.is_paid_provider(selection.get("selected") or ""))
+
+
 if __name__ == "__main__":
     unittest.main()

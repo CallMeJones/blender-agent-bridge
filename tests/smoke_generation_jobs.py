@@ -90,6 +90,39 @@ check("valid generation passes", asset_jobs._validate_generation({"views": {"fro
 check("poly haven needs asset_id", "asset_id" in asset_jobs._validate_poly_haven({}))
 check("sketchfab needs uid", "uid" in asset_jobs._validate_sketchfab({}))
 
+print("== a paid job cannot start without confirmation ==")
+# The whole point: an agent that decides on its own to use Tripo must be
+# stopped before the credits move, not warned about afterwards.
+import bpy  # noqa: E402
+from claude_blender.tool_handlers import generation as generation_handler  # noqa: E402
+
+image = os.path.join(bpy.app.tempdir, "smoke_reference.png")
+with open(image, "wb") as handle:
+    handle.write(b"\x89PNG\r\n\x1a\n")
+
+os.environ["TRIPO_API_KEY"] = "tsk_smoke_key"
+os.environ["BLENDER_AGENT_BRIDGE_GENERATION_EGRESS"] = "allow"
+try:
+    unconfirmed = generation_handler.start_generation_job(
+        bpy.context, {"provider": "tripo", "views": {"front": image}}
+    )
+    check("naming a paid provider does not start it", unconfirmed.get("ok") is False, str(unconfirmed)[:90])
+    check("refusal asks for confirmation", unconfirmed.get("requires_confirmation") is True)
+    check("refusal states the cost", "30" in (unconfirmed.get("cost") or {}).get("cost_note", ""))
+    check("refusal names the upload", (unconfirmed.get("cost") or {}).get("uploads_reference_images") is True)
+    check("refusal points at a free path", bool(unconfirmed.get("free_alternative")))
+
+    auto = generation_handler.start_generation_job(bpy.context, {"views": {"front": image}})
+    check("omitting the provider never picks a paid one", auto.get("ok") is False, str(auto)[:90])
+
+    missing = generation_handler.start_generation_job(
+        bpy.context, {"provider": "tripo", "views": {"front": image + ".absent"}}
+    )
+    check("a missing reference image is refused first", missing.get("ok") is False)
+finally:
+    os.environ.pop("TRIPO_API_KEY", None)
+    os.environ.pop("BLENDER_AGENT_BRIDGE_GENERATION_EGRESS", None)
+
 if failures:
     print("\nsmoke_generation_jobs: FAILED (%d)" % len(failures))
     for item in failures:

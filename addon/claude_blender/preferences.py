@@ -266,16 +266,22 @@ class CLAUDEBLENDER_AP_preferences(bpy.types.AddonPreferences):
 
 
 def _draw_credential(layout, prefs, attribute, credential, label):
-    """Draw one credential field and say plainly where the value now lives."""
+    """Draw one credential field and always say whether a key is set.
+
+    The status line is not decoration. The entry field blanks itself the
+    moment a key is accepted, so a set key and an unset one look identical --
+    this line is the only thing that distinguishes them.
+    """
 
     layout.prop(prefs, attribute)
-    if not session_credentials.session_credential(credential):
-        return
     row = layout.row(align=True)
+    if not session_credentials.session_credential(credential):
+        row.label(text="%s: not set" % label, icon="RADIOBUT_OFF")
+        return
     if getattr(prefs, REMEMBER_CREDENTIALS_ATTRIBUTE, False):
-        row.label(text="%s: remembered on this machine" % label, icon="FILE_TICK")
+        row.label(text="%s: set, remembered on this machine" % label, icon="FILE_TICK")
     else:
-        row.label(text="%s: held for this session" % label, icon="LOCKED")
+        row.label(text="%s: set for this session" % label, icon="LOCKED")
     row.operator(
         "claude_blender.clear_session_credential", text="", icon="X"
     ).credential = credential

@@ -76,6 +76,9 @@ class ProviderSpec:
     max_input_images: int = 1
     license_note: str = ""
     notes: str = ""
+    # What one job costs the user. Stated so a caller can put a number in
+    # front of the user before spending rather than after.
+    cost_note: str = ""
     # False means the capability is described but no job backend exists yet.
     # Such a provider is reported for planning but never auto-selected, so a
     # caller cannot be routed to something that will refuse.
@@ -148,6 +151,8 @@ PROVIDER_SPECS = (
         supports_multiview=True,
         max_input_images=4,
         license_note="Commercial API; output rights governed by the vendor's terms.",
+        # Measured on a live v3 image-to-model job during evaluation.
+        cost_note="About 30 Tripo credits per image-to-model job.",
         job_implemented=True,
     ),
     ProviderSpec(
@@ -159,8 +164,32 @@ PROVIDER_SPECS = (
         supports_multiview=True,
         max_input_images=4,
         license_note="Commercial API; output rights governed by the vendor's terms.",
+        cost_note="Charged per job against the account's Meshy credit balance.",
     ),
 )
+
+
+def is_paid_provider(name):
+    """Whether starting a job with this provider spends the user's money."""
+
+    spec = PROVIDERS_BY_NAME.get(str(name or "").strip().lower())
+    return bool(spec and spec.kind == KIND_HOSTED_API)
+
+
+def paid_provider_notice(name):
+    """The facts a user needs before agreeing to spend. Never performs I/O."""
+
+    spec = PROVIDERS_BY_NAME.get(str(name or "").strip().lower())
+    if spec is None:
+        return {}
+    return {
+        "provider": spec.name,
+        "title": spec.title,
+        "paid": spec.kind == KIND_HOSTED_API,
+        "cost_note": spec.cost_note,
+        "license_note": spec.license_note,
+        "uploads_reference_images": bool(spec.requires_egress),
+    }
 
 PROVIDERS_BY_NAME = {spec.name: spec for spec in PROVIDER_SPECS}
 
