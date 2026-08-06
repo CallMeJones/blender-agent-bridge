@@ -266,8 +266,18 @@ def environment_overlay(prefs, credentials=None):
         value = _preference_value(prefs, attribute, credentials)
         if value:
             overlay[name] = value
-    if bool(getattr(prefs, PREFERENCE_EGRESS_ATTRIBUTE, False)):
-        overlay[EGRESS_ENV_VAR] = EGRESS_ALLOW
+    if prefs is not None:
+        # This one setting is emitted in both directions, unlike the others.
+        # Contributing only "allow" would make the checkbox one-way: an
+        # environment that already said allow could not be switched off from
+        # the panel, and the box would read unchecked while uploads were in
+        # fact permitted. A user tightening a policy has to win over an
+        # environment default, never the reverse.
+        overlay[EGRESS_ENV_VAR] = (
+            EGRESS_ALLOW
+            if bool(getattr(prefs, PREFERENCE_EGRESS_ATTRIBUTE, False))
+            else EGRESS_DENY
+        )
     return overlay
 
 

@@ -53,8 +53,9 @@ LAPTOP_GPU = {
 
 
 class PreferenceOverlayTests(_StoreIsolation):
-    def test_empty_preferences_produce_no_overlay(self):
-        self.assertEqual({}, gp.environment_overlay(_FakePreferences()))
+    def test_empty_preferences_contribute_nothing_but_the_egress_policy(self):
+        overlay = gp.environment_overlay(_FakePreferences())
+        self.assertEqual({gp.EGRESS_ENV_VAR: gp.EGRESS_DENY}, overlay)
 
     def test_missing_preferences_object_is_tolerated(self):
         self.assertEqual({}, gp.environment_overlay(None))
@@ -66,12 +67,45 @@ class PreferenceOverlayTests(_StoreIsolation):
 
     def test_whitespace_only_values_are_ignored(self):
         overlay = gp.environment_overlay(_FakePreferences(tripo_api_key="   ", triposr_root="\t"))
-        self.assertEqual({}, overlay)
+        self.assertNotIn("TRIPO_API_KEY", overlay)
+        self.assertNotIn("BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT", overlay)
 
-    def test_egress_toggle_only_appears_when_enabled(self):
-        self.assertNotIn(gp.EGRESS_ENV_VAR, gp.environment_overlay(_FakePreferences()))
+    def test_egress_toggle_is_emitted_in_both_directions(self):
+        # Unlike every other preference, this one contributes a value when off
+        # as well as on -- see the next two tests for why.
+        off = gp.environment_overlay(_FakePreferences())
+        self.assertEqual(gp.EGRESS_DENY, off[gp.EGRESS_ENV_VAR])
         enabled = gp.environment_overlay(_FakePreferences(generation_egress_allowed=True))
         self.assertEqual(gp.EGRESS_ALLOW, enabled[gp.EGRESS_ENV_VAR])
+
+    def test_unchecking_uploads_overrides_an_environment_that_allows_them(self):
+        # Otherwise the checkbox is one-way: a stale env var left over from
+        # testing would leave hosted providers reachable while the panel
+        # showed the box unchecked.
+        environ = {gp.EGRESS_ENV_VAR: gp.EGRESS_ALLOW}
+        environ.update(gp.environment_overlay(_FakePreferences(tripo_api_key="k")))
+        self.assertEqual(gp.EGRESS_DENY, gp.egress_mode(environ))
+        selection = gp.select_provider(preferred="tripo", environ=environ, hardware=LAPTOP_GPU)
+        self.assertFalse(selection["ok"])
+        self.assertIsNone(selection["selected"])
+
+    def test_checking_uploads_still_permits_them(self):
+        environ = {gp.EGRESS_ENV_VAR: gp.EGRESS_ALLOW}
+        environ.update(
+            gp.environment_overlay(
+                _FakePreferences(tripo_api_key="k", generation_egress_allowed=True)
+            )
+        )
+        self.assertEqual(gp.EGRESS_ALLOW, gp.egress_mode(environ))
+        self.assertEqual(
+            "tripo",
+            gp.select_provider(preferred="tripo", environ=environ, hardware=LAPTOP_GPU)["selected"],
+        )
+
+    def test_absent_preferences_leave_the_environment_policy_alone(self):
+        # On the MCP side there is no preferences object; forcing deny there
+        # would override a policy an operator set deliberately.
+        self.assertNotIn(gp.EGRESS_ENV_VAR, gp.environment_overlay(None))
 
     def test_overlay_does_not_blank_operator_environment(self):
         environ = {"TRIPO_API_KEY": "from-environment"}
