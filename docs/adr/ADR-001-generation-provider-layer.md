@@ -322,3 +322,29 @@ oversight. Adding a provider means adding one row to
 `preferences.CREDENTIAL_FIELDS`; a test asserts every secret preference is
 paired with a credential name, so a new provider cannot quietly reintroduce
 disk-only storage.
+
+## Review, 2026-08-06: Decision 1 Held
+
+An architecture review asked whether `asset_jobs` should be split, on the
+grounds that it now carries two verbs: catalog downloads (Poly Haven,
+Sketchfab) and paid generation (Tripo). Recorded here so the question is not
+reopened without new evidence.
+
+**It held.** Decision 1 predicted that discovery differs while caching,
+manifesting, importing and presenting are identical, and that is what
+happened. The generation path reuses the subprocess worker, cancel, restart
+recovery, provenance stamping and the whole import tail without modification.
+
+The one asymmetry that did appear was absorbed rather than leaked. Paid
+providers need human spend approval and free ones do not, so the approval gate
+sits at `start_external_asset_download` -- the single seam every job of every
+kind passes through -- driven by a required `spends_money` field on each
+provider's entry in `JOB_PROVIDER_SPECS`. Requiring the field rather than
+defaulting it means a provider cannot be added without deciding, and a test
+fails if one omits it. Splitting the module would have given the gate two
+homes and made "did we gate this provider?" a question with two places to look.
+
+**Revisit if:** a provider needs an artifact shape other than "one cached file
+plus a manifest" -- the original revisit condition, unchanged -- or if the two
+verbs acquire genuinely different job lifecycles rather than different heads.
+Two verbs sharing one lifecycle is the condition this decision was made for.
