@@ -1780,6 +1780,25 @@ def _bridge_status_content(status):
             lines.append("Read-only inspection still works, so this will not surface until a tool tries to change the scene.")
             return " ".join(part for part in lines if part.strip())
 
+        # Stale source leads for the same reason a blocker does. Calls still
+        # succeed, which is exactly the problem: they succeed against tools
+        # from before the add-on files changed, and the caller has no way to
+        # tell. Observed -- a session ran for some time on old code while the
+        # reader reported the harmless config-hash note instead, because that
+        # one was the more prominent of the two.
+        if status.get("addon_runtime_source_stale"):
+            guidance = str(status.get("addon_reload_guidance") or "").strip()
+            return " ".join(
+                part
+                for part in (
+                    "STALE: the Blender add-on files changed after Blender loaded them, so "
+                    "tools are being served from the older code.",
+                    guidance or "Reload scripts in Blender, or restart it.",
+                    "Everything below describes the loaded version, not the files on disk.",
+                )
+                if part
+            )
+
         parts = ["Blender bridge is connected."]
         tool_surface_name = str(status.get("mcp_tool_surface") or "").strip()
         if tool_surface_name:

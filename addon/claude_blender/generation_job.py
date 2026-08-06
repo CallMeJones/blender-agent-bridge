@@ -25,6 +25,23 @@ MANIFEST_NAME = "asset_manifest.json"
 POLL_INTERVAL_SECONDS = 5
 # A hosted task normally lands in a minute or two; this bounds a hung provider.
 MAX_POLL_SECONDS = 1800
+# Measured on a live v3 image-to-model job. Used only to refuse a job the
+# account plainly cannot afford, so erring high would block affordable work
+# and erring low would let it fail after upload; this is the observed figure.
+ESTIMATED_JOB_COST = 30.0
+
+
+def _bounded_cost(value, default):
+    try:
+        cost = float(value)
+    except (TypeError, ValueError):
+        return float(default)
+    return cost if cost > 0 else float(default)
+
+
+def _format_credits(value):
+    number = float(value)
+    return str(int(number)) if number == int(number) else "%.2f" % number
 
 
 def _write_manifest(cache_dir, manifest):
@@ -103,6 +120,32 @@ def run(
             client = generation_clients.TripoClient(api_key, timeout=int(args.get("timeout") or 120))
         except generation_clients.GenerationError as error:
             return _failure(cache_dir, str(error))
+
+    # Check funds before anything leaves the machine. An account short of
+    # credits fails at task creation -- after the user has approved the spend
+    # and after their reference art has already been uploaded, which is the
+    # worst order to discover it in. This runs in the worker subprocess, so
+    # the request never touches Blender's main thread.
+    estimated_cost = _bounded_cost(args.get("estimated_cost"), ESTIMATED_JOB_COST)
+    read_balance = getattr(client, "balance", None)
+    try:
+        available = read_balance() if callable(read_balance) else None
+    except generation_clients.GenerationError as error:
+        # A balance endpoint that is unreachable or unrecognised must not block
+        # a job the user has already approved; the vendor rejects it later if
+        # funds really are short.
+        report(0.02, "Could not read the account balance: %s" % error, phase="balance")
+        available = None
+    if isinstance(available, (int, float)) and available < estimated_cost:
+        return _failure(
+            cache_dir,
+            "Not enough credits: the account holds %s and this job needs about %s. "
+            "Nothing was uploaded and nothing was charged."
+            % (_format_credits(available), _format_credits(estimated_cost)),
+            credits_available=available,
+            credits_required=estimated_cost,
+            uploaded=False,
+        )
 
     # Upload every view first; uploads are not billed, so a failure here costs
     # nothing and is worth surfacing before a task is created.

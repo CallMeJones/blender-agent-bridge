@@ -39,6 +39,41 @@ def get_generation_provider_diagnostics(context, args):
     return report
 
 
+_VIEW_SLOTS = ("front", "left", "back", "right")
+
+
+def _view_warnings(views):
+    """Say what a partial or uncalibrated view set will cost the result.
+
+    Slots are positional: a provider treats "left" as the left orthographic
+    view whatever the image actually shows. A mislabelled or 3/4 view produces
+    a worse model rather than an error, and a missing slot is invented rather
+    than omitted, so neither is visible in the job result.
+    """
+
+    warnings = []
+    supplied = [name for name in _VIEW_SLOTS if name in views]
+    missing = [name for name in _VIEW_SLOTS if name not in views]
+    if missing:
+        warnings.append(
+            "Only %s supplied. The provider invents everything the %s view%s would have "
+            "shown; on a character that is typically the back of the hair, clothing "
+            "fastenings, and anything the front hides."
+            % (
+                ", ".join(supplied) or "one view",
+                ", ".join(missing),
+                "" if len(missing) == 1 else "s",
+            )
+        )
+    if len(supplied) > 1:
+        warnings.append(
+            "Views are positional slots, not labels: each image must be the orthographic "
+            "view its slot names. A three-quarter image placed in 'left' degrades the "
+            "model silently rather than failing."
+        )
+    return warnings
+
+
 def plan_image_to_3d_approach(context, args):
     """List every route from a reference image to a model, for the user to pick.
 
@@ -244,7 +279,7 @@ def start_generation_job(context, args):
             break
 
     prefs = preferences.get_preferences(context)
-    return asset_jobs.start_external_asset_download(
+    started = asset_jobs.start_external_asset_download(
         context,
         provider=provider,
         job_name=str(args.get("job_name") or "generation"),
@@ -257,6 +292,13 @@ def start_generation_job(context, args):
         cache_dir=str(args.get("cache_dir") or ""),
         timeout=_bounded_int(args.get("timeout"), 120, minimum=1, maximum=300),
     )
+    # Carried on both the approval request and the started job: the cost of a
+    # partial view set is worth stating before the user approves it, and worth
+    # repeating once the mesh exists and looks wrong on the unseen side.
+    warnings = _view_warnings(views)
+    if warnings and isinstance(started, dict):
+        started["view_warnings"] = warnings
+    return started
 
 
 def get_generation_job_status(context, args):

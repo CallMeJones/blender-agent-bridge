@@ -157,3 +157,65 @@ class GenerationJobTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _BalanceClient(_StubClient):
+    """A stub that can report an account balance, like the real client."""
+
+    def __init__(self, credits, **kwargs):
+        super().__init__(**kwargs)
+        self._credits = credits
+        self.balance_calls = 0
+
+    def balance(self):
+        self.balance_calls += 1
+        if isinstance(self._credits, Exception):
+            raise self._credits
+        return self._credits
+
+
+class BalanceGateTests(unittest.TestCase):
+    """Funds are checked before anything leaves the machine."""
+
+    def test_a_short_account_fails_before_upload(self):
+        # The bad order is: approve, upload the user's art, then discover the
+        # account cannot pay. Nothing should leave the machine first.
+        with tempfile.TemporaryDirectory() as tmp:
+            client = _BalanceClient(10.0)
+            manifest = _run(tmp, _views(tmp, ["front"]), client=client)
+        self.assertFalse(manifest["ok"])
+        self.assertIn("Not enough credits", manifest["message"])
+        self.assertIn("nothing was charged", manifest["message"])
+        self.assertEqual(10.0, manifest["credits_available"])
+        self.assertEqual(30.0, manifest["credits_required"])
+        self.assertFalse(manifest["uploaded"])
+        self.assertEqual([], client.uploaded)
+        self.assertIsNone(client.created)
+
+    def test_a_funded_account_proceeds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = _BalanceClient(1000.0)
+            manifest = _run(tmp, _views(tmp, ["front"]), client=client)
+        self.assertTrue(manifest["ok"], manifest.get("message"))
+        self.assertEqual(1, client.balance_calls)
+        self.assertEqual("image", client.created[0])
+
+    def test_exactly_enough_credit_proceeds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = _run(tmp, _views(tmp, ["front"]), client=_BalanceClient(30.0))
+        self.assertTrue(manifest["ok"], manifest.get("message"))
+
+    def test_an_unreadable_balance_does_not_block_an_approved_job(self):
+        # The user already approved the spend. A balance endpoint that is
+        # unreachable or unrecognised must not veto that; the vendor rejects
+        # the task later if funds really are short.
+        error = generation_clients.GenerationError("balance endpoint unavailable")
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = _run(tmp, _views(tmp, ["front"]), client=_BalanceClient(error))
+        self.assertTrue(manifest["ok"], manifest.get("message"))
+
+    def test_a_client_without_a_balance_method_still_runs(self):
+        # Injected clients in other suites do not implement balance().
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = _run(tmp, _views(tmp, ["front"]), client=_StubClient())
+        self.assertTrue(manifest["ok"], manifest.get("message"))
