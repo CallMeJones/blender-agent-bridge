@@ -331,6 +331,22 @@ def main():
         # Nothing is held yet, so no credential offers to be cleared.
         assert "claude_blender.clear_session_credential" not in prefs_layout.operators
 
+        print("== setup stays out of the viewport ==")
+        # The sidebar is on screen during screen shares and streams, so it
+        # reports readiness and links to Preferences. A credential field
+        # appearing here again must be a deliberate test change.
+        generation_layout = _FakeLayout()
+        ui.CLAUDEBLENDER_PT_generation.draw(
+            type("_Generation", (), {"layout": generation_layout})(), context
+        )
+        assert generation_layout.properties == [], generation_layout.properties
+        assert generation_layout.operators == [
+            "claude_blender.open_generation_preferences"
+        ], generation_layout.operators
+        assert any("No provider keys entered" in text for text in generation_layout.labels), (
+            generation_layout.labels
+        )
+
         print("== every provider key takes the same route ==")
         # Remembering is the default, and it is the OS store that remembers.
         assert addon_prefs.remember_api_keys is True

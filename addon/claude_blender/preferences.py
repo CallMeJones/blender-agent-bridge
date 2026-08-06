@@ -355,6 +355,39 @@ def draw_credential_settings(layout, prefs, *, title="Provider Credentials"):
         layout.label(text="Hosted generation stays disabled until uploads are allowed.", icon="INFO")
 
 
+def draw_generation_summary(layout, prefs):
+    """Read-only readiness for the viewport sidebar.
+
+    Setup lives in Preferences, not here. Entering a key is a once-ever task
+    now that it is remembered, while this panel is on screen for the whole
+    session -- including during screen shares, tutorials, and streams. A
+    credential field in the viewport is an exposure waiting to happen, and it
+    buys nothing a status line and a button do not.
+    """
+
+    held = [
+        label
+        for _attribute, credential, label in CREDENTIAL_FIELDS
+        if session_credentials.session_credential(credential)
+    ]
+    if held:
+        layout.label(text="Keys: %s" % ", ".join(held), icon="LOCKED")
+    else:
+        layout.label(text="No provider keys entered yet.", icon="INFO")
+
+    if str(getattr(prefs, "generation_endpoint", "") or "").strip():
+        layout.label(text="Studio endpoint configured.", icon="CHECKMARK")
+    elif str(getattr(prefs, "generation_python", "") or "").strip():
+        layout.label(text="Local generation interpreter set.", icon="CHECKMARK")
+    else:
+        layout.label(text="No local generation configured.", icon="INFO")
+
+    if not getattr(prefs, "generation_egress_allowed", False):
+        layout.label(text="Third-party uploads are off.", icon="INFO")
+
+    layout.operator("claude_blender.open_generation_preferences", icon="PREFERENCES")
+
+
 def seed_session_credentials(prefs):
     """Populate the session store at startup, and migrate off plain text.
 

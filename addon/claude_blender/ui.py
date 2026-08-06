@@ -1043,6 +1043,26 @@ class CLAUDEBLENDER_OT_clear_session_sketchfab_token(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class CLAUDEBLENDER_OT_open_generation_preferences(bpy.types.Operator):
+    bl_idname = "claude_blender.open_generation_preferences"
+    bl_label = "Set Up Providers"
+    bl_description = "Open add-on preferences, where provider keys and local generation are configured"
+    bl_options = {"INTERNAL"}
+
+    def execute(self, context):
+        try:
+            bpy.ops.preferences.addon_show(module=__package__)
+        except (RuntimeError, TypeError):
+            # addon_show needs the module to be a registered add-on entry;
+            # the preferences window on its own is still better than nothing.
+            try:
+                bpy.ops.screen.userpref_show()
+            except RuntimeError:
+                self.report({"ERROR"}, "Open Edit > Preferences > Add-ons to set up providers")
+                return {"CANCELLED"}
+        return {"FINISHED"}
+
+
 class CLAUDEBLENDER_OT_clear_session_credential(bpy.types.Operator):
     bl_idname = "claude_blender.clear_session_credential"
     bl_label = "Clear Credential"
@@ -1115,7 +1135,7 @@ class CLAUDEBLENDER_PT_generation(bpy.types.Panel):
         if prefs is None:
             layout.label(text="Add-on preferences unavailable.", icon="ERROR")
             return
-        preferences.draw_generation_settings(layout, prefs)
+        preferences.draw_generation_summary(layout, prefs)
 
 
 classes = (
@@ -1150,6 +1170,7 @@ classes = (
     CLAUDEBLENDER_OT_set_session_sketchfab_token,
     CLAUDEBLENDER_OT_clear_session_sketchfab_token,
     CLAUDEBLENDER_OT_clear_session_credential,
+    CLAUDEBLENDER_OT_open_generation_preferences,
     CLAUDEBLENDER_PT_sidebar,
     CLAUDEBLENDER_PT_generation,
 )
