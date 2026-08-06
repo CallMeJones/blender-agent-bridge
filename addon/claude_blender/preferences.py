@@ -4,7 +4,82 @@ from __future__ import annotations
 
 import bpy
 
-from . import user_paths
+from . import credential_store, session_credentials, user_paths
+
+# Preference field -> the session credential it feeds. Every provider that
+# needs a secret goes through this one table, so Sketchfab and the generation
+# providers cannot drift back into separate handling. Poly Haven is absent
+# because its API is open and every asset is CC0 -- there is no key to hold.
+CREDENTIAL_FIELDS = (
+    ("sketchfab_api_token", session_credentials.SKETCHFAB_API_TOKEN, "Sketchfab"),
+    ("tripo_api_key", session_credentials.TRIPO_API_KEY, "Tripo"),
+    ("meshy_api_key", session_credentials.MESHY_API_KEY, "Meshy"),
+    ("generation_endpoint_token", session_credentials.GENERATION_ENDPOINT_TOKEN, "Studio endpoint"),
+)
+REMEMBER_CREDENTIALS_ATTRIBUTE = "remember_api_keys"
+
+# Assigning to a property from inside its own update callback re-enters that
+# callback. Track which fields we are mid-scrub on rather than recursing.
+_SCRUBBING = set()
+
+
+def _blank_field(prefs, attribute):
+    """Clear an entry field without re-entering its own update callback."""
+
+    if not str(getattr(prefs, attribute, "") or ""):
+        return
+    _SCRUBBING.add(attribute)
+    try:
+        setattr(prefs, attribute, "")
+    finally:
+        _SCRUBBING.discard(attribute)
+
+
+def _make_credential_update(attribute, credential):
+    """Route a typed credential to memory, and to the OS store when asked.
+
+    The preference field is only ever an entry box. Its value is moved out and
+    the box blanked, so no credential is written to ``userpref.blend`` on any
+    path -- "remember" means the operating system's credential store, never a
+    plain-text preference.
+    """
+
+    def update(self, _context):
+        if attribute in _SCRUBBING:
+            return
+        value = str(getattr(self, attribute, "") or "").strip()
+        if not value:
+            return
+        session_credentials.set_session_credential(credential, value)
+        if getattr(self, REMEMBER_CREDENTIALS_ATTRIBUTE, False):
+            credential_store.store_credential(credential, value)
+        _blank_field(self, attribute)
+
+    return update
+
+
+def _remember_credentials_update(self, _context):
+    """Push held credentials into the OS store, or forget them there."""
+
+    if REMEMBER_CREDENTIALS_ATTRIBUTE in _SCRUBBING:
+        return
+    if getattr(self, REMEMBER_CREDENTIALS_ATTRIBUTE, False):
+        if not credential_store.is_available():
+            # Nothing to fall back to that would still be safe, so the toggle
+            # snaps back rather than quietly doing nothing.
+            _SCRUBBING.add(REMEMBER_CREDENTIALS_ATTRIBUTE)
+            try:
+                setattr(self, REMEMBER_CREDENTIALS_ATTRIBUTE, False)
+            finally:
+                _SCRUBBING.discard(REMEMBER_CREDENTIALS_ATTRIBUTE)
+            return
+        for _attribute, credential, _label in CREDENTIAL_FIELDS:
+            value = session_credentials.session_credential(credential)
+            if value:
+                credential_store.store_credential(credential, value)
+        return
+    # Switching off forgets what is on disk but leaves this session working.
+    credential_store.forget_everything()
 
 
 def _default_cache_dir():
@@ -129,29 +204,49 @@ class CLAUDEBLENDER_AP_preferences(bpy.types.AddonPreferences):
         description="Base URL of a self-hosted inference server; counts as local, needs no egress",
         default="",
     )
+    # Credentials. Every one of these is held in memory for this Blender
+    # session and the field blanks itself once entered, unless persistence is
+    # switched on below. See CREDENTIAL_FIELDS for the single routing table.
+    remember_api_keys: bpy.props.BoolProperty(
+        name="Remember Keys On This Machine",
+        description=(
+            "Keep third-party provider keys in this computer's own credential store so "
+            "they survive a restart. Encrypted by the OS against your user account where "
+            "one is available, and never written to Blender preferences or .blend files. "
+            "Switching it off erases them"
+        ),
+        default=True,
+        update=_remember_credentials_update,
+    )
     generation_endpoint_token: bpy.props.StringProperty(
         name="Endpoint Token",
-        description="Optional bearer token for the self-hosted endpoint",
+        description="Optional bearer token for your self-hosted endpoint. Not a vendor key",
         subtype="PASSWORD",
         default="",
+        update=_make_credential_update(
+            "generation_endpoint_token", session_credentials.GENERATION_ENDPOINT_TOKEN
+        ),
+    )
+    sketchfab_api_token: bpy.props.StringProperty(
+        name="Sketchfab API Token",
+        description="Token for downloading Sketchfab models. Held in memory unless you opt into saving",
+        subtype="PASSWORD",
+        default="",
+        update=_make_credential_update("sketchfab_api_token", session_credentials.SKETCHFAB_API_TOKEN),
     )
     tripo_api_key: bpy.props.StringProperty(
         name="Tripo API Key",
-        description=(
-            "Stored in Blender preferences on disk, masked in this panel but not encrypted. "
-            "Leave empty and use an environment variable if that is unacceptable"
-        ),
+        description="Key for Tripo image-to-3D. Held in memory unless you opt into saving",
         subtype="PASSWORD",
         default="",
+        update=_make_credential_update("tripo_api_key", session_credentials.TRIPO_API_KEY),
     )
     meshy_api_key: bpy.props.StringProperty(
         name="Meshy API Key",
-        description=(
-            "Stored in Blender preferences on disk, masked in this panel but not encrypted. "
-            "Leave empty and use an environment variable if that is unacceptable"
-        ),
+        description="Key for Meshy image-to-3D. Held in memory unless you opt into saving",
         subtype="PASSWORD",
         default="",
+        update=_make_credential_update("meshy_api_key", session_credentials.MESHY_API_KEY),
     )
 
     def draw(self, context):
@@ -167,31 +262,116 @@ class CLAUDEBLENDER_AP_preferences(bpy.types.AddonPreferences):
         connection.prop(self, "bridge_auth_token")
         connection.prop(self, "mcp_launch_mode")
 
-        draw_generation_settings(layout.box(), self, title="Image-To-3D Generation")
+        draw_generation_settings(layout.box(), self, title="Providers And Credentials")
+
+
+def _draw_credential(layout, prefs, attribute, credential, label):
+    """Draw one credential field and say plainly where the value now lives."""
+
+    layout.prop(prefs, attribute)
+    if not session_credentials.session_credential(credential):
+        return
+    row = layout.row(align=True)
+    if getattr(prefs, REMEMBER_CREDENTIALS_ATTRIBUTE, False):
+        row.label(text="%s: remembered on this machine" % label, icon="FILE_TICK")
+    else:
+        row.label(text="%s: held for this session" % label, icon="LOCKED")
+    row.operator(
+        "claude_blender.clear_session_credential", text="", icon="X"
+    ).credential = credential
 
 
 def draw_generation_settings(layout, prefs, *, title=""):
-    """Lay out the generation settings.
+    """Lay out the generation and provider credential settings.
 
     Shared by the add-on preferences and the viewport sidebar so the two views
-    cannot drift as providers are added.
+    cannot drift as providers are added. Grouped by what each field is *for*:
+    as a flat list there was nothing to tell a user that the interpreter and
+    endpoint fields have no bearing on the hosted providers below them.
     """
 
     if title:
         layout.label(text=title)
-    layout.prop(prefs, "generation_python")
-    layout.prop(prefs, "triposr_root")
-    layout.separator()
-    layout.prop(prefs, "generation_endpoint")
-    layout.prop(prefs, "generation_endpoint_token")
+
+    local = layout.box()
+    local.label(text="Run On Your Own Hardware", icon="DESKTOP")
+    local.label(text="Optional. Leave blank to use hosted providers only.")
+    local.prop(prefs, "generation_python")
+    local.prop(prefs, "triposr_root")
+    local.separator()
+    local.prop(prefs, "generation_endpoint")
+    _draw_credential(
+        local,
+        prefs,
+        "generation_endpoint_token",
+        session_credentials.GENERATION_ENDPOINT_TOKEN,
+        "Endpoint token",
+    )
+
+    draw_credential_settings(layout.box(), prefs)
+
+
+def draw_credential_settings(layout, prefs, *, title="Provider Credentials"):
+    """One panel for every provider key, so no provider gets weaker handling."""
+
+    if title:
+        layout.label(text=title, icon="LOCKED")
+
+    store = credential_store.describe()
+    remember = layout.row()
+    remember.enabled = bool(store["available"])
+    remember.prop(prefs, REMEMBER_CREDENTIALS_ATTRIBUTE)
+    if not store["available"]:
+        layout.label(text="Nowhere safe to remember keys here; memory only.", icon="INFO")
+    elif getattr(prefs, REMEMBER_CREDENTIALS_ATTRIBUTE, False):
+        # Never call the permissions-only fallback encrypted.
+        layout.label(
+            text=store["label"], icon="CHECKMARK" if store["encrypted"] else "INFO"
+        )
+    else:
+        layout.label(text="Keys stay in memory and clear when Blender closes.", icon="INFO")
+    if store["remedy"]:
+        layout.label(text=store["remedy"], icon="INFO")
+
+    _draw_credential(
+        layout, prefs, "sketchfab_api_token", session_credentials.SKETCHFAB_API_TOKEN, "Sketchfab"
+    )
+    layout.label(text="Poly Haven needs no key: open API, every asset CC0.", icon="CHECKMARK")
+
     layout.separator()
     layout.prop(prefs, "generation_egress_allowed")
     hosted = layout.column()
     hosted.enabled = bool(prefs.generation_egress_allowed)
-    hosted.prop(prefs, "tripo_api_key")
-    hosted.prop(prefs, "meshy_api_key")
+    _draw_credential(hosted, prefs, "tripo_api_key", session_credentials.TRIPO_API_KEY, "Tripo")
+    _draw_credential(hosted, prefs, "meshy_api_key", session_credentials.MESHY_API_KEY, "Meshy")
     if not prefs.generation_egress_allowed:
-        layout.label(text="Hosted providers stay disabled until uploads are allowed.", icon="INFO")
+        layout.label(text="Hosted generation stays disabled until uploads are allowed.", icon="INFO")
+
+
+def seed_session_credentials(prefs):
+    """Populate the session store at startup, and migrate off plain text.
+
+    Earlier builds wrote generation keys straight into ``userpref.blend``. Any
+    such value is moved into memory (and into the OS store when the user has
+    asked to be remembered) and the preference blanked, so upgrading clears
+    the plain-text copy rather than leaving it behind.
+    """
+
+    seeded = list(credential_store.load_into_session())
+    if prefs is None:
+        return seeded
+    remember = bool(getattr(prefs, REMEMBER_CREDENTIALS_ATTRIBUTE, False))
+    for attribute, credential, _label in CREDENTIAL_FIELDS:
+        value = str(getattr(prefs, attribute, "") or "").strip()
+        if not value:
+            continue
+        session_credentials.set_session_credential(credential, value)
+        if remember:
+            credential_store.store_credential(credential, value)
+        _blank_field(prefs, attribute)
+        if credential not in seeded:
+            seeded.append(credential)
+    return seeded
 
 
 def generation_environment_overlay(prefs):
@@ -221,6 +401,12 @@ classes = (
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
+    try:
+        seed_session_credentials(get_preferences(bpy.context))
+    except (AttributeError, KeyError, RuntimeError):
+        # Preferences are not always reachable this early during startup. The
+        # store simply stays empty and the preference fallback still applies.
+        pass
 
 
 def unregister():

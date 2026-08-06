@@ -27,6 +27,11 @@ except ImportError:  # Direct-script compatibility inside Blender.
     import blender_compat
 
 try:
+    from . import session_credentials
+except ImportError:  # Direct-script compatibility inside Blender.
+    import session_credentials
+
+try:
     from . import live_preview
 except ImportError:  # Pure-Python registry/runtime imports must never require bpy.
     live_preview = None
@@ -63,24 +68,24 @@ ASSET_KEY_PROPERTY = "blender_agent_bridge_asset_key"
 ASSET_PROVIDER_PROPERTY = "blender_agent_bridge_asset_provider"
 ASSET_SOURCE_URL_PROPERTY = "blender_agent_bridge_asset_source_url"
 CACHE_ROOT_MARKER_FILENAME = ".blender-agent-bridge-asset-cache"
-_SESSION_SKETCHFAB_API_TOKEN = ""
+
+# Poly Haven is deliberately absent: its API is open and every asset is CC0, so
+# there is no credential to hold. Adding a field for it would only imply one.
+SKETCHFAB_SESSION_CREDENTIAL = session_credentials.SKETCHFAB_API_TOKEN
 
 
 def set_session_sketchfab_api_token(value):
     """Keep Sketchfab auth in this Blender process only."""
 
-    global _SESSION_SKETCHFAB_API_TOKEN
-    _SESSION_SKETCHFAB_API_TOKEN = str(value or "").strip()
-    return bool(_SESSION_SKETCHFAB_API_TOKEN)
+    return session_credentials.set_session_credential(SKETCHFAB_SESSION_CREDENTIAL, value)
 
 
 def clear_session_sketchfab_api_token():
-    global _SESSION_SKETCHFAB_API_TOKEN
-    _SESSION_SKETCHFAB_API_TOKEN = ""
+    session_credentials.clear_session_credential(SKETCHFAB_SESSION_CREDENTIAL)
 
 
 def session_sketchfab_api_token():
-    return _SESSION_SKETCHFAB_API_TOKEN
+    return session_credentials.session_credential(SKETCHFAB_SESSION_CREDENTIAL)
 
 
 def _bounded_limit(value, default=20, *, maximum=50):

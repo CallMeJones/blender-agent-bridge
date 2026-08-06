@@ -79,7 +79,15 @@ If a helper call opens a new preview transaction and then fails, the dispatcher 
 
 ## Privacy Rules
 
-- Do not store provider API keys in Blender Agent Bridge.
+- Do not store AI provider API keys in Blender Agent Bridge. The model account
+  belongs to the MCP client, not to Blender.
+- Third-party asset and generation provider keys (Sketchfab, Tripo, Meshy) are
+  entered in one panel and handled one way: held in memory for the session, and
+  remembered between sessions only in the operating system's own credential
+  store. They are never written to Blender preferences, `.blend` files, job
+  manifests, or audit logs. Where no OS store exists, the fallback is a file
+  readable only by the user account, and the panel says so in those words
+  rather than implying encryption it does not have.
 - Let users toggle screenshot inclusion.
 - Let users choose whether file paths, object names, material names, and custom properties are sent.
 - Do not send raw mesh data unless the user requests it.

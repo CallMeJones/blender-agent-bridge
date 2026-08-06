@@ -44,7 +44,8 @@ Prepare a release verification pass using docs/TESTING_GUIDE.md and docs/RELEASE
 - Every safety-sensitive path must test both allowed and refused cases.
 - Every long or visual operation must return pollable artifacts or readable resource URIs instead of relying only on console output.
 - Every bug fix gets the smallest owner test first, then the broader gate that would have caught the bug.
-- No test should require provider API keys. Optional Sketchfab download/import tests may use a per-run token from the environment. The one-time Sketchfab config dialog may copy a token to the clipboard, but tokens must never be stored in Blender preferences, `.blend` files, logs, committed files, or guide text.
+- No test should require provider API keys. Optional Sketchfab download/import tests may use a per-run token from the environment. The one-time Sketchfab config dialog may copy a token to the clipboard, but tokens must never be stored in Blender preferences, `.blend` files, logs, committed files, or guide text. The credential panel fields are entry boxes only: they blank themselves on assignment, and `tests/smoke_ui_layout.py` asserts that they do.
+- Credential-store tests must not use a real key. `tests/unit/test_credential_store.py` writes disposable sentinel values through the real OS backend and removes them again; it never reads a credential the user stored.
 
 ## Phase 0: Preflight
 

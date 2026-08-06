@@ -37,6 +37,11 @@ import json
 import os
 import subprocess
 
+try:
+    from . import session_credentials
+except ImportError:  # Direct-script compatibility inside Blender.
+    import session_credentials
+
 EGRESS_ENV_VAR = "BLENDER_AGENT_BRIDGE_GENERATION_EGRESS"
 PROBE_PYTHON_ENV_VAR = "BLENDER_AGENT_BRIDGE_GENERATION_PROBE_PYTHON"
 PROBE_TIMEOUT_SECONDS = 60
@@ -179,30 +184,57 @@ PREFERENCE_ENV_MAP = (
     ("meshy_api_key", "MESHY_API_KEY"),
 )
 
+# Preference attributes holding a secret, and the session credential each one
+# feeds. The store is consulted first: with persistence off the preference is
+# blank by design, and with it on an explicitly-set session credential is the
+# more recent decision of the two.
+PREFERENCE_CREDENTIAL_MAP = (
+    ("generation_endpoint_token", session_credentials.GENERATION_ENDPOINT_TOKEN),
+    ("tripo_api_key", session_credentials.TRIPO_API_KEY),
+    ("meshy_api_key", session_credentials.MESHY_API_KEY),
+)
+_CREDENTIAL_BY_ATTRIBUTE = dict(PREFERENCE_CREDENTIAL_MAP)
+
 # One preference selects the interpreter for every local provider.
 PREFERENCE_PYTHON_ATTRIBUTE = "generation_python"
 PREFERENCE_PYTHON_ENV_VARS = (PROBE_PYTHON_ENV_VAR, "BLENDER_AGENT_BRIDGE_TRIPOSR_PYTHON")
 PREFERENCE_EGRESS_ATTRIBUTE = "generation_egress_allowed"
 
 
-def environment_overlay(prefs):
+def _preference_value(prefs, attribute, credentials):
+    """Resolve one preference, preferring a session-held credential."""
+
+    credential = _CREDENTIAL_BY_ATTRIBUTE.get(attribute)
+    if credential:
+        if credentials is None:
+            held = session_credentials.session_credential(credential)
+        else:
+            held = str(credentials.get(credential, "") or "").strip()
+        if held:
+            return held
+    return str(getattr(prefs, attribute, "") or "").strip()
+
+
+def environment_overlay(prefs, credentials=None):
     """Map add-on preferences onto the env names this module reads.
 
     Only non-empty values are contributed, so layering this over ``os.environ``
     never blanks something an operator set there deliberately; preferences win
     where both are present. Duck-typed on purpose -- it takes any object with
     the attributes, so it needs no bpy import and is directly testable.
+
+    ``prefs`` may be None: session-held credentials must still reach the
+    environment when the add-on preferences are unavailable. ``credentials``
+    overrides the live session store and exists for tests.
     """
 
-    if prefs is None:
-        return {}
     overlay = {}
     python_path = str(getattr(prefs, PREFERENCE_PYTHON_ATTRIBUTE, "") or "").strip()
     if python_path:
         for name in PREFERENCE_PYTHON_ENV_VARS:
             overlay[name] = python_path
     for attribute, name in PREFERENCE_ENV_MAP:
-        value = str(getattr(prefs, attribute, "") or "").strip()
+        value = _preference_value(prefs, attribute, credentials)
         if value:
             overlay[name] = value
     if bool(getattr(prefs, PREFERENCE_EGRESS_ATTRIBUTE, False)):

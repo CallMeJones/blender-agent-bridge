@@ -9,6 +9,15 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 from claude_blender import generation_providers as gp  # noqa: E402
+from claude_blender import session_credentials  # noqa: E402
+
+
+class _StoreIsolation(unittest.TestCase):
+    """The overlay now consults the session store, which is process-global."""
+
+    def setUp(self):
+        session_credentials.clear_session_credentials()
+        self.addCleanup(session_credentials.clear_session_credentials)
 
 
 class _FakePreferences:
@@ -43,7 +52,7 @@ LAPTOP_GPU = {
 }
 
 
-class PreferenceOverlayTests(unittest.TestCase):
+class PreferenceOverlayTests(_StoreIsolation):
     def test_empty_preferences_produce_no_overlay(self):
         self.assertEqual({}, gp.environment_overlay(_FakePreferences()))
 
@@ -87,7 +96,7 @@ class PreferenceOverlayTests(unittest.TestCase):
             self.assertIn(name, overlay, attribute)
 
 
-class PreferenceDrivenAvailabilityTests(unittest.TestCase):
+class PreferenceDrivenAvailabilityTests(_StoreIsolation):
     def test_configuring_triposr_in_preferences_makes_it_available(self):
         environ = gp.environment_overlay(
             _FakePreferences(generation_python="C:/venv/python.exe", triposr_root="C:/blend/TripoSR")

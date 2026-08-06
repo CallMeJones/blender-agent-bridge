@@ -16,12 +16,14 @@ from . import (
     build_info,
     context_bundle,
     context_planner,
+    credential_store,
     docs_index,
     external_assets,
     lab_parity,
     live_preview,
     preferences,
     script_runner,
+    session_credentials,
     transcript,
     viewport_capture,
 )
@@ -33,6 +35,15 @@ _docs_timer_registered = False
 
 def _prefs(context):
     return preferences.get_preferences(context)
+
+
+def _set_status(context, message):
+    """Report to the sidebar when there is one. The Preferences window has no scene."""
+
+    scene = getattr(context, "scene", None)
+    state = getattr(scene, "claude_blender", None) if scene else None
+    if state is not None:
+        state.status = message
 
 
 def _format_docs_status(status):
@@ -1028,7 +1039,40 @@ class CLAUDEBLENDER_OT_clear_session_sketchfab_token(bpy.types.Operator):
 
     def execute(self, context):
         external_assets.clear_session_sketchfab_api_token()
-        context.scene.claude_blender.status = "Sketchfab session token cleared"
+        _set_status(context, "Sketchfab session token cleared")
+        return {"FINISHED"}
+
+
+class CLAUDEBLENDER_OT_clear_session_credential(bpy.types.Operator):
+    bl_idname = "claude_blender.clear_session_credential"
+    bl_label = "Clear Credential"
+    bl_description = "Forget this credential now, both in memory and in saved preferences"
+    bl_options = {"INTERNAL"}
+
+    credential: bpy.props.StringProperty(
+        name="Credential",
+        description="Which stored credential to forget",
+        options={"SKIP_SAVE"},
+        default="",
+    )
+
+    def execute(self, context):
+        name = str(self.credential or "").strip()
+        try:
+            session_credentials.clear_session_credential(name)
+        except session_credentials.UnknownCredentialError:
+            self.report({"ERROR"}, "Unknown credential: %s" % (name or "(empty)"))
+            return {"CANCELLED"}
+        # Clearing has to reach every copy, or the next startup would seed the
+        # session straight back from the OS store or a stale preference.
+        credential_store.delete_credential(name)
+        prefs = preferences.get_preferences(context)
+        if prefs is not None:
+            for attribute, credential, _label in preferences.CREDENTIAL_FIELDS:
+                if credential == name and str(getattr(prefs, attribute, "") or ""):
+                    setattr(prefs, attribute, "")
+        _set_status(context, "%s cleared" % name)
+        self.report({"INFO"}, "Credential cleared")
         return {"FINISHED"}
 
 
@@ -1105,6 +1149,7 @@ classes = (
     CLAUDEBLENDER_OT_copy_mcp_config_with_sketchfab,
     CLAUDEBLENDER_OT_set_session_sketchfab_token,
     CLAUDEBLENDER_OT_clear_session_sketchfab_token,
+    CLAUDEBLENDER_OT_clear_session_credential,
     CLAUDEBLENDER_PT_sidebar,
     CLAUDEBLENDER_PT_generation,
 )

@@ -253,10 +253,14 @@ a breaking change.
 4. [ ] Create `tool_registry/domains/generation.py`; move
        `get_generation_provider_diagnostics` to order 1900; run
        `scripts/update_tool_snapshot.py` and update the three count tripwires.
-5. [ ] Generalise `set_session_sketchfab_api_token` into
+5. [x] Generalise `set_session_sketchfab_api_token` into
        `set_session_credential(name, value)` / `session_credential(name)`.
-6. [ ] Point the generation panel at the session store; add an explicit
-       "remember on this machine" toggle for preference persistence.
+       Done in `session_credentials.py`; the Sketchfab helpers now delegate to
+       it, so one keyed store serves every provider.
+6. [x] Point the generation panel at the session store; add an explicit
+       "remember on this machine" toggle. Resolved differently and better than
+       written: persistence does not go to `userpref.blend` at all. See the
+       amendment below.
 7. [ ] Generalise `mcp_server.SKETCHFAB_AUTH_FORWARD_TOOLS:78` into a
        `{tool_name: credential_spec}` table so generation can ride the existing forwarder.
 8. [ ] Add generation job tools (`start_generation_job`, status via the shared asset job
@@ -276,3 +280,45 @@ Recorded so these are not relitigated:
 - **Verifying the API against the live service rather than its documentation.** Three
   public sources disagreed; probing established the real shapes, and a zero-credit account
   distinguished "structurally valid" (code 2010) from "malformed" (code 1004) for free.
+
+## Amendment, 2026-08-06: Credentials Go To The OS, Not To Preferences
+
+Item 6 originally proposed a toggle that would persist keys into
+`userpref.blend`. Implementing it exposed the reason not to: that file is
+unencrypted, is copied between machines with a user's configuration, and
+`docs/SAFETY_MODEL.md` already promised keys would not live there. The
+generation providers added in this ADR had quietly broken that promise, while
+Sketchfab kept a session-only token -- two policies for one class of secret,
+with the newer one weaker.
+
+Hashing was considered and rejected outright: it is one-way, so a hashed key
+can never be sent to the provider. Encrypting with a key stored beside the
+ciphertext was rejected as obfuscation rather than protection.
+
+**Decision.** Credentials take exactly one route, for every provider:
+
+1. The preference field is an entry box only. On assignment the value is moved
+   out and the field blanked, so no key is ever written to `userpref.blend` --
+   including on the upgrade path, where a key left there by an earlier build is
+   migrated out and the field cleared.
+2. `session_credentials` holds the value in memory and is the single read path
+   for every provider.
+3. `credential_store` persists it in the facility the operating system already
+   provides: DPAPI on Windows, the login keychain on macOS, Secret Service on
+   Linux. Detection round-trips a sentinel before selecting a backend, so a
+   tool that is installed but cannot reach its daemon -- the normal case on a
+   headless render node -- is not chosen and then found broken on first use.
+4. Where no such facility exists, the fallback is a file created `0600`, the
+   mechanism `~/.aws/credentials` and `~/.netrc` use. It is reported as
+   "readable only by your user account" and never described as encrypted, and
+   a file whose permissions have widened is discarded rather than read.
+
+Remembering is on by default, at the user's explicit direction, so a key is
+entered once rather than every session.
+
+**Consequence.** Poly Haven keeps no field at all -- its API is open and every
+asset is CC0 -- and the panel says why, so the absence does not read as an
+oversight. Adding a provider means adding one row to
+`preferences.CREDENTIAL_FIELDS`; a test asserts every secret preference is
+paired with a credential name, so a new provider cannot quietly reintroduce
+disk-only storage.

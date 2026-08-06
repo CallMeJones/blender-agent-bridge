@@ -74,7 +74,15 @@ The normal copied config is intentionally compact. It omits `env` unless a real 
 
 ## Client Env Auth
 
-Poly Haven needs no API key. For Sketchfab downloads, use `Copy MCP + Sketchfab`, or add `SKETCHFAB_API_TOKEN` to the client configuration yourself, then restart or refresh the client. The token is not saved in Blender preferences, `.blend` files, or audit logs.
+Poly Haven needs no API key: its API is open and every asset is CC0.
+
+For Sketchfab downloads there are three routes, in order of convenience:
+
+1. **The Providers And Credentials panel.** Paste the token once. The field blanks itself immediately; the value is held in memory for the session and, with `Remember Keys On This Machine` on (the default), kept in the operating system's credential store so it survives a restart. Tripo and Meshy keys use the same panel and the same mechanism.
+2. **An environment variable.** Set `SKETCHFAB_API_TOKEN` or `BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN` for the MCP server process.
+3. **`Copy MCP + Sketchfab`**, which writes the token into the copied client configuration; restart or refresh the client afterwards.
+
+No route writes a token to Blender preferences, `.blend` files, job manifests, or audit logs. Remembered keys live in Windows DPAPI, the macOS login keychain, or the Linux Secret Service; where none is reachable the fallback is a file readable only by your user account, and the panel labels it as such.
 
 External asset downloads connect directly instead of using system HTTP proxies. This keeps DNS validation and the connected destination under the same security check, but networks that require an outbound proxy must allow direct access to the provider/CDN or downloads will fail with a connection error.
 
