@@ -321,6 +321,11 @@ def main():
         # Poly Haven says why it has no field rather than leaving a gap.
         assert "Provider Credentials" in prefs_layout.labels, prefs_layout.labels
         assert "Poly Haven needs no key: open API, every asset CC0." in prefs_layout.labels
+        # The split between the two credential groups is about data direction,
+        # not about how a key is stored, and has to say so on screen.
+        assert "Download assets from" in prefs_layout.labels, prefs_layout.labels
+        assert "Generate from your images with" in prefs_layout.labels
+        assert "These send your reference images to the vendor." in prefs_layout.labels
         assert not hasattr(preferences.CLAUDEBLENDER_AP_preferences, "execution_mode")
 
         # Nothing is held yet, so no credential offers to be cleared.

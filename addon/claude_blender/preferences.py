@@ -333,12 +333,19 @@ def draw_credential_settings(layout, prefs, *, title="Provider Credentials"):
     if store["remedy"]:
         layout.label(text=store["remedy"], icon="INFO")
 
+    # Every key below is entered and stored the same way. They are split by
+    # which direction data travels, because only one direction needs the
+    # upload consent -- without the headings that split reads as arbitrary.
+    layout.separator()
+    layout.label(text="Download assets from", icon="IMPORT")
     _draw_credential(
         layout, prefs, "sketchfab_api_token", session_credentials.SKETCHFAB_API_TOKEN, "Sketchfab"
     )
     layout.label(text="Poly Haven needs no key: open API, every asset CC0.", icon="CHECKMARK")
 
     layout.separator()
+    layout.label(text="Generate from your images with", icon="EXPORT")
+    layout.label(text="These send your reference images to the vendor.")
     layout.prop(prefs, "generation_egress_allowed")
     hosted = layout.column()
     hosted.enabled = bool(prefs.generation_egress_allowed)
