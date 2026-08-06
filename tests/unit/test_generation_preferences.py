@@ -259,6 +259,23 @@ class StandingInstructionTests(_StoreIsolation):
         gp.set_session_generation_policy(gp.POLICY_ANY)
         self.assertEqual("", gp.policy_refusal("tripo"))
 
+    def test_the_refusal_says_how_to_proceed(self):
+        # A session mixes routes -- scripts, then a generated prop, then
+        # rigging, then scripts again. A refusal that reads as a wall would
+        # make the user repeat themselves; it has to name the way forward.
+        gp.set_session_generation_policy(gp.POLICY_NO_GENERATION, reason="no apis today")
+        refusal = gp.policy_refusal("tripo")
+        self.assertIn("set_generation_policy", refusal)
+        self.assertIn("'any'", refusal)
+        self.assertIn("Do not make them repeat themselves", refusal)
+
+    def test_no_policy_is_the_default_so_mixed_sessions_are_unobstructed(self):
+        # The common case is per-task choices, not standing instructions.
+        # Nothing should be recorded unless the user meant it generally.
+        self.assertEqual(gp.POLICY_ANY, gp.session_generation_policy()["policy"])
+        for name in ("tripo", "meshy", "triposr", "studio_endpoint"):
+            self.assertEqual("", gp.policy_refusal(name), name)
+
 
 class PaidProviderTests(_StoreIsolation):
     """Spending the user's money must never be automatic."""

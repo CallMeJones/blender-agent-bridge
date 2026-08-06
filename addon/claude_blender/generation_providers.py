@@ -224,9 +224,11 @@ def policy_refusal(provider):
     if policy == POLICY_LOCAL_ONLY and spec is not None and spec.kind != KIND_HOSTED_API:
         return ""
     reason = _SESSION_POLICY["reason"]
-    return "%s%s Ask the user directly if you believe this should change." % (
-        POLICY_LABELS[policy],
-        ' They said: "%s".' % reason if reason else "",
+    return (
+        "%s%s If the user is now asking for this, that is them relaxing it: call "
+        "set_generation_policy with 'any' and continue. Do not make them repeat "
+        "themselves or restart anything."
+        % (POLICY_LABELS[policy], ' They said: "%s".' % reason if reason else "")
     )
 
 

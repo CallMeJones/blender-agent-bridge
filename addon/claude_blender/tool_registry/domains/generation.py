@@ -52,13 +52,16 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
   'owner': 'generation'},
 
  {'name': 'set_generation_policy',
-  'description': 'Record a standing instruction from the user about how models may be built, the moment they give it. '
-                 'Call this when the user says anything like "do not use an API", "just use scripts", "nothing leaves '
-                 'my machine", or "local only" -- do not merely remember it. The bridge then enforces it for the rest '
-                 'of the Blender session, so it still holds after the instruction has dropped out of your context, and '
-                 'a later generation attempt is refused with the user\'s own words quoted back. Use "no_generation" for '
-                 'scripts and helpers only, "local_only" to forbid anything that uploads, and "any" to return to '
-                 'asking per job. Only the user can relax it; never call this to widen a policy they set.',
+  'description': 'Record a STANDING instruction about how models may be built for the rest of the session. Only for '
+                 'instructions the user meant to apply generally -- "never use a paid API", "nothing leaves my machine '
+                 'today", "always prefer scripts". Do NOT call this for a single task: "build this one with scripts" '
+                 'is a per-task choice you honour by using scripts, and recording it would wrongly refuse a later '
+                 'request for generation that the user does want. When in doubt, do not record it; a missing policy '
+                 'costs nothing, while a wrong one blocks work the user asked for. Once recorded the bridge enforces '
+                 'it even after it leaves your context, and a later attempt is refused with the user\'s own words '
+                 'quoted back. Use "no_generation" for scripts and helpers only, "local_only" to forbid anything that '
+                 'uploads, and "any" to lift a policy -- lifting is allowed whenever the user asks for something the '
+                 'policy forbids, since asking is how they relax it.',
   'input_schema': {'type': 'object',
                    'properties': {'policy': {'type': 'string',
                                              'enum': ['any', 'local_only', 'no_generation'],
