@@ -90,6 +90,25 @@ check("valid generation passes", asset_jobs._validate_generation({"views": {"fro
 check("poly haven needs asset_id", "asset_id" in asset_jobs._validate_poly_haven({}))
 check("sketchfab needs uid", "uid" in asset_jobs._validate_sketchfab({}))
 
+print("== every provider declares whether it spends money ==")
+# The point of declaring it per provider rather than checking a provider name
+# is that adding a new one forces the decision. A provider that forgets is the
+# one that quietly charges someone.
+for name, spec in sorted(asset_jobs.JOB_PROVIDER_SPECS.items()):
+    check("%s declares a spend policy" % name, "spends_money" in spec)
+    check("%s spend policy is a bool" % name, isinstance(spec.get("spends_money"), bool))
+check("tripo is declared paid", asset_jobs.JOB_PROVIDER_SPECS["tripo"]["spends_money"] is True)
+check(
+    "poly haven is declared free",
+    asset_jobs.JOB_PROVIDER_SPECS["poly_haven"]["spends_money"] is False,
+)
+# Sketchfab authenticates but does not purchase on this path; if that ever
+# changes, flipping the flag gates it with no other edit.
+check(
+    "sketchfab is declared free",
+    asset_jobs.JOB_PROVIDER_SPECS["sketchfab"]["spends_money"] is False,
+)
+
 print("== only a human at the keyboard can spend money ==")
 # The property under test is that no sequence of tool calls starts a paid job.
 # An argument cannot carry consent: the bridge never sees the conversation, so

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 
-from .. import asset_jobs, generation_providers, generation_spend, preferences
+from .. import asset_jobs, generation_providers, preferences
 from .support import _bounded_int
 
 
@@ -118,8 +118,8 @@ def plan_image_to_3d_approach(context, args):
         "paid_routes": [route["id"] for route in paid_ready],
         "generation_policy": policy,
         "note": (
-            "Starting a paid route still needs confirm_paid on start_generation_job, so "
-            "asking here is the first of two checks, not a replacement for it."
+            "A paid route additionally needs the user to click Approve in the Blender "
+            "sidebar before it starts, so asking here does not replace that."
         ),
     }
 
@@ -199,62 +199,9 @@ def start_generation_job(context, args):
             "hint": "Build it with authored scripts and bounded helpers instead.",
         }
 
-    # Spending the user's money requires the user. An argument cannot carry
-    # consent: the bridge never sees the conversation, so any flag a caller
-    # passes is just the caller asserting it asked. The approval below has to
-    # be given in Blender's own UI, which no tool call can reach -- the same
-    # reasoning as the script-trust window.
-    if generation_providers.is_paid_provider(provider):
-        notice = generation_providers.paid_provider_notice(provider)
-        fingerprint = generation_spend.job_fingerprint(provider, args)
-        state = generation_spend.approval_state(fingerprint)
-        status = (state or {}).get("status")
-
-        if status != generation_spend.STATUS_APPROVED:
-            if status == generation_spend.STATUS_DENIED:
-                return {
-                    "ok": False,
-                    "spend_approval": state,
-                    "message": (
-                        "The user declined this paid job in Blender. Do not ask again for "
-                        "the same job; offer a free route or a different approach."
-                    ),
-                }
-            request = generation_spend.request_approval(
-                provider,
-                fingerprint,
-                cost_note=notice.get("cost_note") or "",
-                view_count=len(views),
-                title=notice.get("title") or provider,
-            )
-            expired = status == generation_spend.STATUS_EXPIRED
-            return {
-                "ok": False,
-                "awaiting_user_approval": True,
-                "spend_approval": request,
-                "message": (
-                    "%s costs money and cannot start until the user approves it in Blender. "
-                    "%s Tell them the cost, then ask them to click Approve on the pending "
-                    "request in the Agent Bridge sidebar. Call this tool again with the same "
-                    "arguments once they have; there is no argument that skips this."
-                    % (
-                        notice.get("title") or provider,
-                        ("The earlier request expired. " if expired else "")
-                        + (notice.get("cost_note") or ""),
-                    )
-                ).strip(),
-                "cost": notice,
-                "free_alternative": (
-                    "Authoring the model in Blender costs nothing and uploads nothing."
-                ),
-            }
-
-        if not generation_spend.consume_approval(fingerprint):
-            return {
-                "ok": False,
-                "message": "That spend approval was already used. Ask the user to approve again.",
-                "spend_approval": generation_spend.approval_state(fingerprint),
-            }
+    # The spend gate lives in asset_jobs.start_external_asset_download, the
+    # single seam every job of every kind passes through. Duplicating it here
+    # would create a second thing to keep in step with the first.
 
     if provider not in asset_jobs.JOB_PROVIDER_SPECS:
         return {

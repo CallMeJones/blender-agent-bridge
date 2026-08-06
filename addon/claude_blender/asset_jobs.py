@@ -12,7 +12,7 @@ import uuid
 
 import bpy
 
-from . import external_assets, render_jobs, viewport_capture
+from . import external_assets, generation_spend, render_jobs, viewport_capture
 
 
 METADATA_FILENAME = "metadata.json"
@@ -279,11 +279,17 @@ def _validate_generation(args):
 
 # One entry per asset-source provider. Adding a source means adding a row here
 # plus a worker function, not editing branches in three places.
+# Every provider states whether starting a job spends the user's money. It is
+# required rather than defaulted: a new provider must decide, because the one
+# that forgets is the one that quietly charges someone. A test asserts the key
+# is present for every entry.
 JOB_PROVIDER_SPECS = {
     "poly_haven": {
         "validate": _validate_poly_haven,
         "redact": _redact_poly_haven,
         "secrets": (),
+        # Open API, every asset CC0. No credential, nothing to charge.
+        "spends_money": False,
     },
     "sketchfab": {
         "validate": _validate_sketchfab,
@@ -292,15 +298,97 @@ JOB_PROVIDER_SPECS = {
             ("api_token", ASSET_JOB_SECRET_TOKEN_ENV),
             ("model_password", ASSET_JOB_SECRET_PASSWORD_ENV),
         ),
+        # The token authenticates; it does not buy. This path downloads models
+        # the account already has rights to and has no purchase call. If a
+        # store purchase is ever added, flip this and it is gated for free.
+        "spends_money": False,
     },
     "tripo": {
         "validate": _validate_generation,
         "redact": _redact_generation,
         "secrets": (("api_key", ASSET_JOB_SECRET_TOKEN_ENV),),
+        "spends_money": True,
     },
 }
 
 JOB_PROVIDER_NAMES = tuple(sorted(JOB_PROVIDER_SPECS))
+
+
+def _spend_notice(provider):
+    """Cost facts for a paid provider, however it is registered."""
+
+    try:
+        from . import generation_providers
+    except ImportError:  # pragma: no cover - direct-script imports inside Blender
+        import generation_providers
+    notice = generation_providers.paid_provider_notice(provider)
+    if notice:
+        return notice
+    # A paid provider outside the generation table still gets gated; it just
+    # cannot quote a figure until it declares one.
+    return {
+        "provider": provider,
+        "title": provider,
+        "paid": True,
+        "cost_note": "This provider charges for each job.",
+        "uploads_reference_images": False,
+    }
+
+
+def _require_spend_approval(provider, args):
+    """Return a refusal until a human approves this exact job, else None."""
+
+    notice = _spend_notice(provider)
+    fingerprint = generation_spend.job_fingerprint(provider, args)
+    state = generation_spend.approval_state(fingerprint)
+    status = (state or {}).get("status")
+
+    if status == generation_spend.STATUS_APPROVED:
+        if generation_spend.consume_approval(fingerprint):
+            return None
+        return {
+            "ok": False,
+            "message": "That spend approval was already used. Ask the user to approve again.",
+            "spend_approval": generation_spend.approval_state(fingerprint),
+        }
+
+    if status == generation_spend.STATUS_DENIED:
+        return {
+            "ok": False,
+            "spend_approval": state,
+            "message": (
+                "The user declined this paid job in Blender. Do not ask again for the same "
+                "job; offer a free route or a different approach."
+            ),
+        }
+
+    request = generation_spend.request_approval(
+        provider,
+        fingerprint,
+        cost_note=notice.get("cost_note") or "",
+        view_count=len((args or {}).get("views") or {}) or 1,
+        title=notice.get("title") or provider,
+    )
+    return {
+        "ok": False,
+        "awaiting_user_approval": True,
+        "spend_approval": request,
+        "message": (
+            "%s costs money and cannot start until the user approves it in Blender. %s%s "
+            "Tell them the cost, then ask them to click Approve on the pending request in "
+            "the Agent Bridge sidebar. Call again with the same arguments once they have; "
+            "no argument skips this."
+            % (
+                notice.get("title") or provider,
+                "The earlier request expired. " if status == generation_spend.STATUS_EXPIRED else "",
+                notice.get("cost_note") or "",
+            )
+        ).strip(),
+        "cost": notice,
+        "free_alternative": (
+            "Authoring the model in Blender costs nothing and uploads nothing."
+        ),
+    }
 
 
 def _redacted_parameters(provider, args):
@@ -638,6 +726,15 @@ def start_external_asset_download(
     validation_error = spec["validate"](args)
     if validation_error:
         return {"ok": False, "message": validation_error}
+
+    # Every job of every kind passes through here, so this is the one place
+    # the spend gate can sit and be certain nothing routes around it. Putting
+    # it in a tool handler would mean a second entry point could be added
+    # later that quietly skips it.
+    if spec.get("spends_money"):
+        refusal = _require_spend_approval(provider, args)
+        if refusal is not None:
+            return refusal
 
     job_id = _job_id()
     info = _job_root_info(context, preferred_dir=capture_dir, create=True)
