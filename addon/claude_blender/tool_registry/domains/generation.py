@@ -51,6 +51,39 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
   'exposure': 'catalog',
   'owner': 'generation'},
 
+ {'name': 'set_generation_policy',
+  'description': 'Record a standing instruction from the user about how models may be built, the moment they give it. '
+                 'Call this when the user says anything like "do not use an API", "just use scripts", "nothing leaves '
+                 'my machine", or "local only" -- do not merely remember it. The bridge then enforces it for the rest '
+                 'of the Blender session, so it still holds after the instruction has dropped out of your context, and '
+                 'a later generation attempt is refused with the user\'s own words quoted back. Use "no_generation" for '
+                 'scripts and helpers only, "local_only" to forbid anything that uploads, and "any" to return to '
+                 'asking per job. Only the user can relax it; never call this to widen a policy they set.',
+  'input_schema': {'type': 'object',
+                   'properties': {'policy': {'type': 'string',
+                                             'enum': ['any', 'local_only', 'no_generation'],
+                                             'description': 'no_generation: scripts and helpers only. local_only: no '
+                                                            'third-party uploads. any: no standing restriction.'},
+                                  'reason': {'type': 'string',
+                                             'description': "The user's own words, quoted back to you if a later "
+                                                            'attempt is refused.'}},
+                   'required': ['policy'],
+                   'additionalProperties': False},
+  'contract': {'description': 'Record a session-scoped standing instruction about generation providers',
+               'mutates_scene': False,
+               'supports_headless': True,
+               'input_schema': {'type': 'object',
+                                'properties': {'policy': {'type': 'string',
+                                                          'enum': ['any', 'local_only', 'no_generation']},
+                                               'reason': {'type': 'string'}},
+                                'required': ['policy'],
+                                'additionalProperties': False}},
+  'handler_key': 'set_generation_policy',
+  'order': 1903,
+  'groups': ('external_assets',),
+  'exposure': 'catalog',
+  'owner': 'generation'},
+
  {'name': 'plan_image_to_3d_approach',
   'description': 'Call this FIRST whenever the user asks for a 3D model to be built from an image or reference sheet, '
                  'before preparing references, authoring a script, or starting any generation job. Returns every '

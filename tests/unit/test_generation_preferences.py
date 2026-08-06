@@ -210,6 +210,56 @@ class RunnabilityTests(_StoreIsolation):
         self.assertTrue(report["run_blocker"])
 
 
+class StandingInstructionTests(_StoreIsolation):
+    """"Just use scripts" has to outlive the turn it was said in."""
+
+    def setUp(self):
+        super().setUp()
+        gp.clear_session_generation_policy()
+        self.addCleanup(gp.clear_session_generation_policy)
+
+    def test_no_policy_forbids_nothing(self):
+        self.assertEqual("", gp.policy_refusal("tripo"))
+        self.assertEqual("", gp.policy_refusal("triposr"))
+
+    def test_no_generation_forbids_local_providers_too(self):
+        # "Just use scripts" is not "just avoid the paid one".
+        gp.set_session_generation_policy(gp.POLICY_NO_GENERATION)
+        self.assertTrue(gp.policy_refusal("tripo"))
+        self.assertTrue(gp.policy_refusal("triposr"))
+        self.assertTrue(gp.policy_refusal("studio_endpoint"))
+
+    def test_local_only_forbids_uploads_and_permits_local(self):
+        gp.set_session_generation_policy(gp.POLICY_LOCAL_ONLY)
+        self.assertTrue(gp.policy_refusal("tripo"))
+        self.assertTrue(gp.policy_refusal("meshy"))
+        self.assertEqual("", gp.policy_refusal("triposr"))
+        self.assertEqual("", gp.policy_refusal("studio_endpoint"))
+
+    def test_the_users_own_words_come_back_with_the_refusal(self):
+        # An agent that has lost the original turn needs telling what it is
+        # being held to, not just that it is being refused.
+        gp.set_session_generation_policy(
+            gp.POLICY_NO_GENERATION, reason="dont use an api just use scripts"
+        )
+        refusal = gp.policy_refusal("tripo")
+        self.assertIn("dont use an api just use scripts", refusal)
+
+    def test_an_unknown_policy_is_refused_rather_than_ignored(self):
+        with self.assertRaises(ValueError):
+            gp.set_session_generation_policy("no_apis_please")
+        # The previous instruction must survive a bad call.
+        gp.set_session_generation_policy(gp.POLICY_NO_GENERATION)
+        with self.assertRaises(ValueError):
+            gp.set_session_generation_policy("")
+        self.assertTrue(gp.policy_refusal("tripo"))
+
+    def test_policy_can_be_relaxed_again(self):
+        gp.set_session_generation_policy(gp.POLICY_NO_GENERATION)
+        gp.set_session_generation_policy(gp.POLICY_ANY)
+        self.assertEqual("", gp.policy_refusal("tripo"))
+
+
 class PaidProviderTests(_StoreIsolation):
     """Spending the user's money must never be automatic."""
 

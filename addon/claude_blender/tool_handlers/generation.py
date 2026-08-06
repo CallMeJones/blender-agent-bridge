@@ -90,6 +90,15 @@ def plan_image_to_3d_approach(context, args):
             }
         )
 
+    policy = generation_providers.session_generation_policy()
+    for route in routes:
+        if route["id"] == "authored":
+            continue
+        forbidden = generation_providers.policy_refusal(route["id"])
+        if forbidden:
+            route["ready"] = False
+            route["why_not_ready"] = forbidden
+
     ready = [route for route in routes if route["ready"]]
     paid_ready = [route for route in ready if route["id"] != "authored" and route["data_leaves_machine"]]
     return {
@@ -107,9 +116,36 @@ def plan_image_to_3d_approach(context, args):
         "routes": routes,
         "ready_routes": [route["id"] for route in ready],
         "paid_routes": [route["id"] for route in paid_ready],
+        "generation_policy": policy,
         "note": (
             "Starting a paid route still needs confirm_paid on start_generation_job, so "
             "asking here is the first of two checks, not a replacement for it."
+        ),
+    }
+
+
+def set_generation_policy(context, args):
+    """Record a standing instruction about how work may be done this session."""
+
+    policy = str(args.get("policy") or "").strip().lower()
+    try:
+        recorded = generation_providers.set_session_generation_policy(
+            policy, reason=str(args.get("reason") or "")
+        )
+    except ValueError as error:
+        return {
+            "ok": False,
+            "message": str(error),
+            "known_policies": list(generation_providers.GENERATION_POLICIES),
+        }
+    return {
+        "ok": True,
+        "message": "Standing instruction recorded for this Blender session. %s"
+        % generation_providers.POLICY_LABELS[recorded["policy"]],
+        "generation_policy": recorded,
+        "note": (
+            "Enforced in the bridge, so it holds for the rest of the session even after "
+            "it leaves your context. Only the user can relax it."
         ),
     }
 
@@ -149,6 +185,19 @@ def start_generation_job(context, args):
         }
 
     provider = selection["selected"]
+
+    # A standing instruction outranks everything below it, including an
+    # explicit confirm_paid. If the user said "no APIs, just scripts" an hour
+    # ago, that is still true now whether or not it is still in context.
+    refusal = generation_providers.policy_refusal(provider)
+    if refusal:
+        return {
+            "ok": False,
+            "message": "Refused by the user's standing instruction for this session. %s" % refusal,
+            "provider": provider,
+            "generation_policy": generation_providers.session_generation_policy(),
+            "hint": "Build it with authored scripts and bounded helpers instead.",
+        }
 
     # Naming a paid provider is not the same as agreeing to be charged. An
     # agent can decide to call Tripo on its own; the user cannot un-spend the

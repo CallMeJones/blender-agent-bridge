@@ -169,6 +169,67 @@ PROVIDER_SPECS = (
 )
 
 
+# A standing instruction from the user about how this work may be done. Held
+# for the Blender session so it outlives the turn it was given in: an
+# instruction that only lives in the agent's context is forgotten exactly when
+# a long job makes it most likely to matter.
+POLICY_ANY = "any"
+POLICY_LOCAL_ONLY = "local_only"
+POLICY_NO_GENERATION = "no_generation"
+GENERATION_POLICIES = (POLICY_ANY, POLICY_LOCAL_ONLY, POLICY_NO_GENERATION)
+
+POLICY_LABELS = {
+    POLICY_ANY: "Any route the user approves.",
+    POLICY_LOCAL_ONLY: "Local generation only; nothing may be uploaded to a third party.",
+    POLICY_NO_GENERATION: "No generation at all; build it with scripts and helpers.",
+}
+
+_SESSION_POLICY = {"policy": POLICY_ANY, "reason": ""}
+
+
+def set_session_generation_policy(policy, reason=""):
+    """Record the user's standing instruction for this Blender session."""
+
+    policy = str(policy or "").strip().lower()
+    if policy not in GENERATION_POLICIES:
+        raise ValueError(
+            "Unknown generation policy %r; expected one of %s"
+            % (policy, ", ".join(GENERATION_POLICIES))
+        )
+    _SESSION_POLICY["policy"] = policy
+    _SESSION_POLICY["reason"] = str(reason or "").strip()
+    return dict(_SESSION_POLICY)
+
+
+def session_generation_policy():
+    return dict(_SESSION_POLICY)
+
+
+def clear_session_generation_policy():
+    _SESSION_POLICY.update({"policy": POLICY_ANY, "reason": ""})
+
+
+def policy_refusal(provider):
+    """Explain why the standing instruction forbids this provider, or "".
+
+    Quotes the user's own words back when they gave a reason, because an agent
+    that has lost the original turn from its context needs to be told what it
+    is being held to, not merely that it is being refused.
+    """
+
+    policy = _SESSION_POLICY["policy"]
+    if policy == POLICY_ANY:
+        return ""
+    spec = PROVIDERS_BY_NAME.get(str(provider or "").strip().lower())
+    if policy == POLICY_LOCAL_ONLY and spec is not None and spec.kind != KIND_HOSTED_API:
+        return ""
+    reason = _SESSION_POLICY["reason"]
+    return "%s%s Ask the user directly if you believe this should change." % (
+        POLICY_LABELS[policy],
+        ' They said: "%s".' % reason if reason else "",
+    )
+
+
 def is_paid_provider(name):
     """Whether starting a job with this provider spends the user's money."""
 
@@ -479,8 +540,11 @@ def provider_availability(spec, hardware=None, environ=None):
     if spec.requires_egress and egress_mode(source) != EGRESS_ALLOW:
         block(
             "egress_denied",
-            "Network egress is denied by default. Set %s=%s to permit uploading reference "
-            "images to a third-party service." % (EGRESS_ENV_VAR, EGRESS_ALLOW),
+            "Uploading reference images to a third-party service is not permitted. Only the "
+            "user can change this, by ticking Allow Third-Party Uploads in the add-on "
+            "preferences; the %s environment variable no longer overrides that checkbox. "
+            "Do not ask them to set it -- offer a local or authored route instead."
+            % EGRESS_ENV_VAR,
         )
 
     # Hosted services always need a credential. A self-hosted endpoint may sit

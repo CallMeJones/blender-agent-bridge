@@ -1,5 +1,5 @@
 {
-  "catalog_tool_count": 236,
+  "catalog_tool_count": 237,
   "contracts": {
     "adaptive_remesh": {
       "description": "Adaptively refine sculpt topology by subdividing edges that exceed a bounded local target derived from edge length, semantic-region weight, and face curvature. Retains interpolated semantic point attributes, optionally relaxes spacing and projects vertices back to the source surface, and enforces input, per-pass, and result vertex limits. This is a form-preserving refinement pass; it does not decimate or promise production retopology.",
@@ -16144,6 +16144,47 @@
         },
         "type": "object"
       }
+    },
+    "set_generation_policy": {
+      "description": "Record a standing instruction from the user about how models may be built, the moment they give it. Call this when the user says anything like \"do not use an API\", \"just use scripts\", \"nothing leaves my machine\", or \"local only\" -- do not merely remember it. The bridge then enforces it for the rest of the Blender session, so it still holds after the instruction has dropped out of your context, and a later generation attempt is refused with the user's own words quoted back. Use \"no_generation\" for scripts and helpers only, \"local_only\" to forbid anything that uploads, and \"any\" to return to asking per job. Only the user can relax it; never call this to widen a policy they set.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "policy": {
+            "description": "no_generation: scripts and helpers only. local_only: no third-party uploads. any: no standing restriction.",
+            "enum": [
+              "any",
+              "local_only",
+              "no_generation"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "description": "The user's own words, quoted back to you if a later attempt is refused.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "supports_headless": true
     },
     "set_object_display": {
       "description": "Set object viewport display type, name/wire/in-front flags, display color, and empty display settings. Applies immediately with preview revert support.",
@@ -32493,6 +32534,32 @@
       "name": "get_generation_provider_diagnostics"
     },
     {
+      "description": "Record a standing instruction from the user about how models may be built, the moment they give it. Call this when the user says anything like \"do not use an API\", \"just use scripts\", \"nothing leaves my machine\", or \"local only\" -- do not merely remember it. The bridge then enforces it for the rest of the Blender session, so it still holds after the instruction has dropped out of your context, and a later generation attempt is refused with the user's own words quoted back. Use \"no_generation\" for scripts and helpers only, \"local_only\" to forbid anything that uploads, and \"any\" to return to asking per job. Only the user can relax it; never call this to widen a policy they set.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "policy": {
+            "description": "no_generation: scripts and helpers only. local_only: no third-party uploads. any: no standing restriction.",
+            "enum": [
+              "any",
+              "local_only",
+              "no_generation"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "description": "The user's own words, quoted back to you if a later attempt is refused.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy"
+        ],
+        "type": "object"
+      },
+      "name": "set_generation_policy"
+    },
+    {
       "description": "Call this FIRST whenever the user asks for a 3D model to be built from an image or reference sheet, before preparing references, authoring a script, or starting any generation job. Returns every available route -- authoring it in Blender, a local model, a self-hosted endpoint, a paid hosted API -- with its cost, whether the reference images leave the machine, and what kind of mesh it produces. The routes differ in ways only the user can weigh, so put the choice to them in your reply and wait for an answer rather than selecting one yourself. Read-only: costs nothing and starts nothing.",
       "input_schema": {
         "additionalProperties": false,
@@ -32700,6 +32767,7 @@
     ],
     "generation": [
       "get_generation_provider_diagnostics",
+      "set_generation_policy",
       "plan_image_to_3d_approach",
       "start_generation_job",
       "get_generation_job_status"
@@ -32869,7 +32937,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "668d1c622b478c196b98efab3d9f2c07e652c169c442436bcd989ae74fa1b1e5",
+  "registry_digest": "a0129472c33200d6bb0c12ff92dbdeec7cdbfa2aa988a091b9b4c587c1743b87",
   "schema_version": 1,
   "specs": [
     {
@@ -57223,6 +57291,78 @@
     },
     {
       "contract": {
+        "description": "Record a session-scoped standing instruction about generation providers",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "policy": {
+              "enum": [
+                "any",
+                "local_only",
+                "no_generation"
+              ],
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "policy"
+          ],
+          "type": "object"
+        },
+        "mutates_scene": false,
+        "supports_headless": true
+      },
+      "description": "Record a standing instruction from the user about how models may be built, the moment they give it. Call this when the user says anything like \"do not use an API\", \"just use scripts\", \"nothing leaves my machine\", or \"local only\" -- do not merely remember it. The bridge then enforces it for the rest of the Blender session, so it still holds after the instruction has dropped out of your context, and a later generation attempt is refused with the user's own words quoted back. Use \"no_generation\" for scripts and helpers only, \"local_only\" to forbid anything that uploads, and \"any\" to return to asking per job. Only the user can relax it; never call this to widen a policy they set.",
+      "exposure": "catalog",
+      "groups": [
+        "external_assets"
+      ],
+      "handler_key": "set_generation_policy",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "policy": {
+            "description": "no_generation: scripts and helpers only. local_only: no third-party uploads. any: no standing restriction.",
+            "enum": [
+              "any",
+              "local_only",
+              "no_generation"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "description": "The user's own words, quoted back to you if a later attempt is refused.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy"
+        ],
+        "type": "object"
+      },
+      "name": "set_generation_policy",
+      "order": 1903,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "generation"
+    },
+    {
+      "contract": {
         "description": "List every route from reference images to a model so the user can choose one",
         "input_schema": {
           "additionalProperties": false,
@@ -57527,5 +57667,5 @@
       "owner": "generation"
     }
   ],
-  "tool_count": 237
+  "tool_count": 238
 }
