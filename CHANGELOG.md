@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+## 0.5.0 - 2026-08-06
+
+### Credentials
+
+- Routed every third-party provider key through one panel and one mechanism. Keys are held in memory for the Blender session and, with `Remember Keys On This Machine` on by default, kept in the operating system's own credential store: DPAPI on Windows, the login keychain on macOS, Secret Service on Linux. Where no store is reachable the fallback is a file readable only by the user account, reported in those words and never described as encrypted.
+- Stopped writing API keys to `userpref.blend`. The preference field is an entry box that blanks itself once a key is accepted, so no key reaches that file on any path, and a key left there by an earlier build is migrated out and cleared on startup.
+- Gave Sketchfab a panel field matching Tripo and Meshy, so one class of secret no longer has two policies with the newer one weaker. Poly Haven has no field and the panel says why: open API, every asset CC0.
+
+### Paid generation
+
+- Added a hard spend gate. A job that costs money cannot start until a person approves it in the Agent Bridge sidebar; no tool argument can satisfy it. Approvals are single-use, fingerprinted to the exact job, and expire after ten minutes. The previous `confirm_paid` argument is removed: it looked like consent and an agent could set it in the same turn it discovered the cost.
+- Moved the gate to `asset_jobs.start_external_asset_download`, the single seam every job passes through, driven by a required `spends_money` declaration per provider so a new provider cannot be added without deciding.
+- Added `plan_image_to_3d_approach`, which lists every route with its cost, whether reference images leave the machine, and what mesh it produces, and asks the user to choose. It asks only when more than one route is ready, so a default install is never interrupted by a one-item menu.
+- Added `set_generation_policy` so a standing instruction such as "no APIs this session" is enforced by the bridge rather than remembered by the agent, and is quoted back if a later attempt is refused.
+
+### Honesty of diagnostics
+
+- Separated "configured" from "can actually run". A provider with no job backend reported clean once its paths were set and then refused every job; it now reports `runnable` false with a blocker saying configuration will not help, and offers no remedies to act on.
+- Made the reference benchmark state its own scope. It measures silhouette conformance, not model quality, and a dense shell filling the reference hull scores higher than a clean editable mesh of the same subject (measured: 0.926 against 0.557). The result now carries `verdict_scope`, `is_overall_quality_verdict`, and what it does not measure, and the tool no longer tells agents to drive a repair loop on it.
+- Made the uploads preference authoritative in both directions. Previously it could permit egress but not deny it, so a stale environment variable left the checkbox reading disabled while hosted providers stayed reachable.
+- Schema errors now name the accepted properties and suggest the nearest match instead of only reporting what was rejected.
+
+### Protocol
+
+- Stopped refusing calls on a tool-registry digest mismatch. Only five gateway tools are exposed and every helper resolves at invocation time against the registry inside Blender, so a client config generated against an older registry cannot misroute a call. Digests are reported as advisory; a bridge protocol version mismatch still fails closed.
+
+### Interface
+
+- Moved provider setup out of the viewport sidebar into add-on preferences, grouped by purpose, leaving the sidebar a readiness summary and a button. A credential field does not belong in the part of the UI users record and screen-share.
+
 ## 0.4.1 - 2026-08-02
 
 - Made copied MCP configs compact by default: bundled configs omit `env` unless a bridge token or Sketchfab token is present, and `uvx / PyPI` configs include only the runtime marker plus real auth values.
