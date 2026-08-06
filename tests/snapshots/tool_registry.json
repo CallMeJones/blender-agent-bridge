@@ -1,5 +1,5 @@
 {
-  "catalog_tool_count": 235,
+  "catalog_tool_count": 236,
   "contracts": {
     "adaptive_remesh": {
       "description": "Adaptively refine sculpt topology by subdividing edges that exceed a bounded local target derived from edge length, semantic-region weight, and face curvature. Retains interpolated semantic point attributes, optionally relaxes spacing and projects vertices back to the source surface, and enforces input, per-pass, and result vertex limits. This is a form-preserving refinement pass; it does not decimate or promise production retopology.",
@@ -13939,6 +13939,57 @@
         },
         "type": "object"
       },
+      "supports_headless": true
+    },
+    "plan_image_to_3d_approach": {
+      "description": "Call this FIRST whenever the user asks for a 3D model to be built from an image or reference sheet, before preparing references, authoring a script, or starting any generation job. Returns every available route -- authoring it in Blender, a local model, a self-hosted endpoint, a paid hosted API -- with its cost, whether the reference images leave the machine, and what kind of mesh it produces. The routes differ in ways only the user can weigh, so put the choice to them in your reply and wait for an answer rather than selecting one yourself. Read-only: costs nothing and starts nothing.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "description": "What the user asked for, to keep with the plan.",
+            "type": "string"
+          },
+          "views": {
+            "additionalProperties": false,
+            "description": "Maps a view name to a local image path. Multi-view providers treat the names as positional slots, so a mislabelled view produces a worse model rather than an error. Supply \"front\" alone for single-image generation.",
+            "properties": {
+              "back": {
+                "type": "string"
+              },
+              "front": {
+                "type": "string"
+              },
+              "left": {
+                "type": "string"
+              },
+              "right": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "process:start"
+      ],
       "supports_headless": true
     },
     "plan_model_quality_workflow": {
@@ -32442,6 +32493,39 @@
       "name": "get_generation_provider_diagnostics"
     },
     {
+      "description": "Call this FIRST whenever the user asks for a 3D model to be built from an image or reference sheet, before preparing references, authoring a script, or starting any generation job. Returns every available route -- authoring it in Blender, a local model, a self-hosted endpoint, a paid hosted API -- with its cost, whether the reference images leave the machine, and what kind of mesh it produces. The routes differ in ways only the user can weigh, so put the choice to them in your reply and wait for an answer rather than selecting one yourself. Read-only: costs nothing and starts nothing.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "description": "What the user asked for, to keep with the plan.",
+            "type": "string"
+          },
+          "views": {
+            "additionalProperties": false,
+            "description": "Maps a view name to a local image path. Multi-view providers treat the names as positional slots, so a mislabelled view produces a worse model rather than an error. Supply \"front\" alone for single-image generation.",
+            "properties": {
+              "back": {
+                "type": "string"
+              },
+              "front": {
+                "type": "string"
+              },
+              "left": {
+                "type": "string"
+              },
+              "right": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "name": "plan_image_to_3d_approach"
+    },
+    {
       "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. Only local providers are selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it, or suggest it and let them decide. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and only a second call with confirm_paid=true spends anything. The finished model is cached like any external asset, so import it with start_external_asset_import_job.",
       "input_schema": {
         "additionalProperties": false,
@@ -32616,6 +32700,7 @@
     ],
     "generation": [
       "get_generation_provider_diagnostics",
+      "plan_image_to_3d_approach",
       "start_generation_job",
       "get_generation_job_status"
     ],
@@ -32784,7 +32869,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "e25c50497b56a93ba51b4b2cd2b32a9cbfd5aaa9af06560794de9c6e394f792b",
+  "registry_digest": "668d1c622b478c196b98efab3d9f2c07e652c169c442436bcd989ae74fa1b1e5",
   "schema_version": 1,
   "specs": [
     {
@@ -57138,6 +57223,96 @@
     },
     {
       "contract": {
+        "description": "List every route from reference images to a model so the user can choose one",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "note": {
+              "type": "string"
+            },
+            "views": {
+              "additionalProperties": false,
+              "description": "Maps a view name to a local image path. Multi-view providers treat the names as positional slots, so a mislabelled view produces a worse model rather than an error. Supply \"front\" alone for single-image generation.",
+              "properties": {
+                "back": {
+                  "type": "string"
+                },
+                "front": {
+                  "type": "string"
+                },
+                "left": {
+                  "type": "string"
+                },
+                "right": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "type": "object"
+        },
+        "mutates_scene": false,
+        "permissions": [
+          "process:start"
+        ],
+        "supports_headless": true
+      },
+      "description": "Call this FIRST whenever the user asks for a 3D model to be built from an image or reference sheet, before preparing references, authoring a script, or starting any generation job. Returns every available route -- authoring it in Blender, a local model, a self-hosted endpoint, a paid hosted API -- with its cost, whether the reference images leave the machine, and what kind of mesh it produces. The routes differ in ways only the user can weigh, so put the choice to them in your reply and wait for an answer rather than selecting one yourself. Read-only: costs nothing and starts nothing.",
+      "exposure": "catalog",
+      "groups": [
+        "external_assets"
+      ],
+      "handler_key": "plan_image_to_3d_approach",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "description": "What the user asked for, to keep with the plan.",
+            "type": "string"
+          },
+          "views": {
+            "additionalProperties": false,
+            "description": "Maps a view name to a local image path. Multi-view providers treat the names as positional slots, so a mislabelled view produces a worse model rather than an error. Supply \"front\" alone for single-image generation.",
+            "properties": {
+              "back": {
+                "type": "string"
+              },
+              "front": {
+                "type": "string"
+              },
+              "left": {
+                "type": "string"
+              },
+              "right": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "name": "plan_image_to_3d_approach",
+      "order": 1905,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "generation"
+    },
+    {
+      "contract": {
         "description": "Start an asynchronous paid image-to-3D generation job and return a job id to poll",
         "duration_hint": "Returns quickly after starting the job. Generation itself typically takes one to a few minutes; poll get_generation_job_status.",
         "has_side_effects": true,
@@ -57352,5 +57527,5 @@
       "owner": "generation"
     }
   ],
-  "tool_count": 236
+  "tool_count": 237
 }

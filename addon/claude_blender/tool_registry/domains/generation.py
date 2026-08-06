@@ -51,6 +51,32 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
   'exposure': 'catalog',
   'owner': 'generation'},
 
+ {'name': 'plan_image_to_3d_approach',
+  'description': 'Call this FIRST whenever the user asks for a 3D model to be built from an image or reference sheet, '
+                 'before preparing references, authoring a script, or starting any generation job. Returns every '
+                 'available route -- authoring it in Blender, a local model, a self-hosted endpoint, a paid hosted API '
+                 '-- with its cost, whether the reference images leave the machine, and what kind of mesh it produces. '
+                 'The routes differ in ways only the user can weigh, so put the choice to them in your reply and wait '
+                 'for an answer rather than selecting one yourself. Read-only: costs nothing and starts nothing.',
+  'input_schema': {'type': 'object',
+                   'properties': {'views': _VIEWS_SCHEMA,
+                                  'note': {'type': 'string',
+                                           'description': 'What the user asked for, to keep with the plan.'}},
+                   'additionalProperties': False},
+  'contract': {'description': 'List every route from reference images to a model so the user can choose one',
+               'mutates_scene': False,
+               'permissions': ['process:start'],
+               'supports_headless': True,
+               'input_schema': {'type': 'object',
+                                'properties': {'views': _VIEWS_SCHEMA,
+                                               'note': {'type': 'string'}},
+                                'additionalProperties': False}},
+  'handler_key': 'plan_image_to_3d_approach',
+  'order': 1905,
+  'groups': ('external_assets',),
+  'exposure': 'catalog',
+  'owner': 'generation'},
+
  {'name': 'start_generation_job',
   'description': 'Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then '
                  'poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer '

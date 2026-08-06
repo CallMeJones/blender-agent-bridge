@@ -1157,7 +1157,10 @@ def _validate_schema(value, schema, path="$"):
         if schema.get("additionalProperties") is False:
             for key in value:
                 if key not in properties:
-                    errors.append(f"{path}.{key}: additional property is not allowed")
+                    errors.append(
+                        "%s.%s: additional property is not allowed%s"
+                        % (path, key, bridge_protocol._accepted_property_hint(key, properties))
+                    )
         for key, child_schema in properties.items():
             if key in value:
                 errors.extend(_validate_schema(value[key], child_schema, f"{path}.{key}"))

@@ -7,6 +7,7 @@ tool semantics.
 
 from __future__ import annotations
 
+import difflib
 import math
 
 try:
@@ -205,6 +206,17 @@ def _finite_json_number(value):
     return not isinstance(value, float) or math.isfinite(value)
 
 
+def _accepted_property_hint(key, properties):
+    """Name the accepted properties, and the closest one if there is a clear match."""
+
+    if not properties:
+        return ""
+    accepted = sorted(properties)
+    closest = difflib.get_close_matches(str(key), accepted, n=1, cutoff=0.6)
+    suggestion = "; did you mean %r?" % closest[0] if closest else ""
+    return "%s Accepted: %s" % (suggestion or ".", ", ".join(accepted))
+
+
 def validate_arguments(value, schema, path="$"):
     """Validate a value against the JSON Schema subset used by this project.
 
@@ -270,7 +282,14 @@ def validate_arguments(value, schema, path="$"):
         if schema.get("additionalProperties") is False:
             for key in value:
                 if key not in properties:
-                    errors.append(f"{path}.{key}: additional property is not allowed")
+                    # Naming what is accepted, and the nearest match, turns a
+                    # dead end into a one-step correction. A caller that
+                    # guessed "domain" for "domains" otherwise learns only
+                    # that its guess was wrong, never what to guess next.
+                    errors.append(
+                        "%s.%s: additional property is not allowed%s"
+                        % (path, key, _accepted_property_hint(key, properties))
+                    )
         for key, child_schema in properties.items():
             if key in value:
                 errors.extend(validate_arguments(value[key], child_schema, f"{path}.{key}"))

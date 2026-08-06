@@ -39,6 +39,80 @@ def get_generation_provider_diagnostics(context, args):
     return report
 
 
+def plan_image_to_3d_approach(context, args):
+    """List every route from a reference image to a model, for the user to pick.
+
+    Exists because the alternative is an agent quietly choosing on the user's
+    behalf. The routes differ in ways only the user can weigh -- money, whether
+    their artwork leaves the machine, how long it takes, and how editable the
+    result is -- so this returns the options and refuses to rank them.
+    """
+
+    environ = _generation_environ(context)
+    hardware = generation_providers.probe_hardware(environ=environ)
+    diagnostics = generation_providers.generation_provider_diagnostics(
+        environ=environ, hardware=hardware
+    )
+    by_name = {item["provider"]: item for item in diagnostics["providers"]}
+
+    routes = [
+        {
+            "id": "authored",
+            "title": "Author it in Blender",
+            "how": "Bounded helpers and trusted scripts build the mesh from reference guides.",
+            "cost": "Free.",
+            "data_leaves_machine": False,
+            "ready": True,
+            "produces": "Clean, editable topology you own from the first vertex.",
+            "effort": "Slowest. Best when the model must be rigged, edited, or matched precisely.",
+        }
+    ]
+    for spec in generation_providers.PROVIDER_SPECS:
+        report = by_name.get(spec.name) or {}
+        hosted = spec.kind == generation_providers.KIND_HOSTED_API
+        routes.append(
+            {
+                "id": spec.name,
+                "title": spec.title,
+                "how": (
+                    "Uploads the reference images to a third-party service."
+                    if hosted
+                    else "Runs the model on hardware you control."
+                ),
+                "cost": spec.cost_note or "Free; uses your own compute.",
+                "data_leaves_machine": bool(spec.requires_egress),
+                "ready": bool(report.get("available")) and spec.job_implemented,
+                "produces": "A generated mesh, typically dense and not rig-ready.",
+                "blockers": report.get("blockers") or [],
+                "remedies": report.get("remedies") or [],
+                "license_note": spec.license_note,
+            }
+        )
+
+    ready = [route for route in routes if route["ready"]]
+    paid_ready = [route for route in ready if route["id"] != "authored" and route["data_leaves_machine"]]
+    return {
+        "ok": True,
+        "requires_user_choice": True,
+        "message": (
+            "Several routes can build this. They differ in cost and in whether the "
+            "reference images leave the machine, so the user chooses -- do not pick one "
+            "for them, and do not start work on any route before they answer."
+        ),
+        "question": (
+            "How would you like this built? %s"
+            % " | ".join("%s (%s)" % (route["title"], route["cost"]) for route in ready)
+        ),
+        "routes": routes,
+        "ready_routes": [route["id"] for route in ready],
+        "paid_routes": [route["id"] for route in paid_ready],
+        "note": (
+            "Starting a paid route still needs confirm_paid on start_generation_job, so "
+            "asking here is the first of two checks, not a replacement for it."
+        ),
+    }
+
+
 def start_generation_job(context, args):
     environ = _generation_environ(context)
 
