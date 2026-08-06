@@ -19,6 +19,7 @@ from . import (
     credential_store,
     docs_index,
     external_assets,
+    generation_spend,
     lab_parity,
     live_preview,
     preferences,
@@ -1063,6 +1064,61 @@ class CLAUDEBLENDER_OT_open_generation_preferences(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class CLAUDEBLENDER_OT_decide_generation_spend(bpy.types.Operator):
+    bl_idname = "claude_blender.decide_generation_spend"
+    bl_label = "Decide Generation Spend"
+    bl_description = "Approve or decline a paid generation job. Only a person at this keyboard can do this"
+    bl_options = {"INTERNAL"}
+
+    request_id: bpy.props.StringProperty(options={"SKIP_SAVE"}, default="")
+    approve: bpy.props.BoolProperty(options={"SKIP_SAVE"}, default=False)
+
+    def execute(self, context):
+        decision = (
+            generation_spend.STATUS_APPROVED if self.approve else generation_spend.STATUS_DENIED
+        )
+        record = generation_spend.set_status(self.request_id, decision)
+        if record is None:
+            self.report({"WARNING"}, "That request is no longer pending")
+            return {"CANCELLED"}
+        _set_status(
+            context,
+            "%s generation approved" % record["title"]
+            if self.approve
+            else "%s generation declined" % record["title"],
+        )
+        self.report({"INFO"}, "Spend %s" % decision)
+        return {"FINISHED"}
+
+
+def _draw_pending_generation_spend(layout, context):
+    """Show paid jobs waiting on the user. Drawn in the sidebar, never a popup.
+
+    A modal dialog would steal focus from whatever the user is doing; a panel
+    row waits for them instead.
+    """
+
+    pending = generation_spend.pending_requests()
+    if not pending:
+        return
+    box = layout.box()
+    box.alert = True
+    box.label(text="Paid generation awaiting your approval", icon="ERROR")
+    for record in pending:
+        box.label(text="%s -- %s" % (record["title"], record["cost_note"] or "cost unknown"))
+        views = record.get("view_count") or 1
+        box.label(text="Uploads %d reference image%s." % (views, "" if views == 1 else "s"))
+        row = box.row(align=True)
+        approve = row.operator(
+            "claude_blender.decide_generation_spend", text="Approve", icon="CHECKMARK"
+        )
+        approve.request_id = record["request_id"]
+        approve.approve = True
+        decline = row.operator("claude_blender.decide_generation_spend", text="Decline", icon="X")
+        decline.request_id = record["request_id"]
+        decline.approve = False
+
+
 class CLAUDEBLENDER_OT_clear_session_credential(bpy.types.Operator):
     bl_idname = "claude_blender.clear_session_credential"
     bl_label = "Clear Credential"
@@ -1111,6 +1167,10 @@ class CLAUDEBLENDER_PT_sidebar(bpy.types.Panel):
         # and decisions that need the user's attention.
         _draw_bridge_summary(layout, state)
         _draw_script_trust_control(layout, context, state)
+        # A paid job waiting on the user is precisely a decision needing
+        # attention, so it belongs in the contract above, not in a sub-panel
+        # the user may never open.
+        _draw_pending_generation_spend(layout, context)
         _draw_action_center(layout, state)
 
 class CLAUDEBLENDER_PT_generation(bpy.types.Panel):
@@ -1170,6 +1230,7 @@ classes = (
     CLAUDEBLENDER_OT_set_session_sketchfab_token,
     CLAUDEBLENDER_OT_clear_session_sketchfab_token,
     CLAUDEBLENDER_OT_clear_session_credential,
+    CLAUDEBLENDER_OT_decide_generation_spend,
     CLAUDEBLENDER_OT_open_generation_preferences,
     CLAUDEBLENDER_PT_sidebar,
     CLAUDEBLENDER_PT_generation,

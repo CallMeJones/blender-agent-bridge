@@ -17402,7 +17402,7 @@
       "timeout_seconds": 30
     },
     "start_generation_job": {
-      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. Only local providers are selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it, or suggest it and let them decide. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and only a second call with confirm_paid=true spends anything. The finished model is cached like any external asset, so import it with start_external_asset_import_job.",
+      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. Only local providers are selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it, or suggest it and let them decide. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and the user must then click Approve in the Blender sidebar. No argument grants this: call again with the same arguments once they have approved. The finished model is cached like any external asset, so import it with start_external_asset_import_job.",
       "duration_hint": "Returns quickly after starting the job. Generation itself typically takes one to a few minutes; poll get_generation_job_status.",
       "has_side_effects": true,
       "input_schema": {
@@ -17410,10 +17410,6 @@
         "properties": {
           "cache_dir": {
             "type": "string"
-          },
-          "confirm_paid": {
-            "description": "Set only after telling the user the cost and getting their agreement. Required before any hosted provider will start. Never set it in the same turn the cost was discovered.",
-            "type": "boolean"
           },
           "face_limit": {
             "maximum": 1000000,
@@ -32593,16 +32589,12 @@
       "name": "plan_image_to_3d_approach"
     },
     {
-      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. Only local providers are selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it, or suggest it and let them decide. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and only a second call with confirm_paid=true spends anything. The finished model is cached like any external asset, so import it with start_external_asset_import_job.",
+      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. Only local providers are selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it, or suggest it and let them decide. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and the user must then click Approve in the Blender sidebar. No argument grants this: call again with the same arguments once they have approved. The finished model is cached like any external asset, so import it with start_external_asset_import_job.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
           "cache_dir": {
             "type": "string"
-          },
-          "confirm_paid": {
-            "description": "Set only after telling the user the cost and getting their agreement. Required before any hosted provider will start. Never set it in the same turn the cost was discovered.",
-            "type": "boolean"
           },
           "face_limit": {
             "maximum": 1000000,
@@ -32937,7 +32929,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "7d6109f055ba031af0743b9c7f7d8c56c174c44b39bc5562a4eb27cb4ee02974",
+  "registry_digest": "84bef854c4a59df7a9e9e20b43af5971594aaa48307e78f992a3724be7c3e3e6",
   "schema_version": 1,
   "specs": [
     {
@@ -57462,9 +57454,6 @@
             "cache_dir": {
               "type": "string"
             },
-            "confirm_paid": {
-              "type": "boolean"
-            },
             "face_limit": {
               "type": "integer"
             },
@@ -57527,7 +57516,7 @@
         },
         "timeout_seconds": 30
       },
-      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. Only local providers are selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it, or suggest it and let them decide. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and only a second call with confirm_paid=true spends anything. The finished model is cached like any external asset, so import it with start_external_asset_import_job.",
+      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. Only local providers are selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it, or suggest it and let them decide. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and the user must then click Approve in the Blender sidebar. No argument grants this: call again with the same arguments once they have approved. The finished model is cached like any external asset, so import it with start_external_asset_import_job.",
       "exposure": "catalog",
       "groups": [
         "external_assets"
@@ -57538,10 +57527,6 @@
         "properties": {
           "cache_dir": {
             "type": "string"
-          },
-          "confirm_paid": {
-            "description": "Set only after telling the user the cost and getting their agreement. Required before any hosted provider will start. Never set it in the same turn the cost was discovered.",
-            "type": "boolean"
           },
           "face_limit": {
             "maximum": 1000000,

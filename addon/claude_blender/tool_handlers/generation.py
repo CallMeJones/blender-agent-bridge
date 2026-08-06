@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 
-from .. import asset_jobs, generation_providers, preferences
+from .. import asset_jobs, generation_providers, generation_spend, preferences
 from .support import _bounded_int
 
 
@@ -199,29 +199,62 @@ def start_generation_job(context, args):
             "hint": "Build it with authored scripts and bounded helpers instead.",
         }
 
-    # Naming a paid provider is not the same as agreeing to be charged. An
-    # agent can decide to call Tripo on its own; the user cannot un-spend the
-    # credits afterwards. So the first attempt reports the cost and refuses,
-    # and only a second call carrying confirm_paid actually starts the job --
-    # which forces the number into the conversation before the money moves.
-    if generation_providers.is_paid_provider(provider) and not bool(args.get("confirm_paid")):
+    # Spending the user's money requires the user. An argument cannot carry
+    # consent: the bridge never sees the conversation, so any flag a caller
+    # passes is just the caller asserting it asked. The approval below has to
+    # be given in Blender's own UI, which no tool call can reach -- the same
+    # reasoning as the script-trust window.
+    if generation_providers.is_paid_provider(provider):
         notice = generation_providers.paid_provider_notice(provider)
-        return {
-            "ok": False,
-            "requires_confirmation": True,
-            "message": (
-                "%s is a paid service and would be charged for this job. %s Tell the user "
-                "the cost and that their reference images are uploaded, then call again "
-                "with confirm_paid=true if they agree."
-                % (notice.get("title") or provider, notice.get("cost_note") or "")
-            ).strip(),
-            "provider": provider,
-            "cost": notice,
-            "free_alternative": (
-                "Local providers cost nothing and upload nothing; run "
-                "get_generation_provider_diagnostics to see whether one is configured."
-            ),
-        }
+        fingerprint = generation_spend.job_fingerprint(provider, args)
+        state = generation_spend.approval_state(fingerprint)
+        status = (state or {}).get("status")
+
+        if status != generation_spend.STATUS_APPROVED:
+            if status == generation_spend.STATUS_DENIED:
+                return {
+                    "ok": False,
+                    "spend_approval": state,
+                    "message": (
+                        "The user declined this paid job in Blender. Do not ask again for "
+                        "the same job; offer a free route or a different approach."
+                    ),
+                }
+            request = generation_spend.request_approval(
+                provider,
+                fingerprint,
+                cost_note=notice.get("cost_note") or "",
+                view_count=len(views),
+                title=notice.get("title") or provider,
+            )
+            expired = status == generation_spend.STATUS_EXPIRED
+            return {
+                "ok": False,
+                "awaiting_user_approval": True,
+                "spend_approval": request,
+                "message": (
+                    "%s costs money and cannot start until the user approves it in Blender. "
+                    "%s Tell them the cost, then ask them to click Approve on the pending "
+                    "request in the Agent Bridge sidebar. Call this tool again with the same "
+                    "arguments once they have; there is no argument that skips this."
+                    % (
+                        notice.get("title") or provider,
+                        ("The earlier request expired. " if expired else "")
+                        + (notice.get("cost_note") or ""),
+                    )
+                ).strip(),
+                "cost": notice,
+                "free_alternative": (
+                    "Authoring the model in Blender costs nothing and uploads nothing."
+                ),
+            }
+
+        if not generation_spend.consume_approval(fingerprint):
+            return {
+                "ok": False,
+                "message": "That spend approval was already used. Ask the user to approve again.",
+                "spend_approval": generation_spend.approval_state(fingerprint),
+            }
 
     if provider not in asset_jobs.JOB_PROVIDER_SPECS:
         return {

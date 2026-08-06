@@ -90,27 +90,76 @@ check("valid generation passes", asset_jobs._validate_generation({"views": {"fro
 check("poly haven needs asset_id", "asset_id" in asset_jobs._validate_poly_haven({}))
 check("sketchfab needs uid", "uid" in asset_jobs._validate_sketchfab({}))
 
-print("== a paid job cannot start without confirmation ==")
-# The whole point: an agent that decides on its own to use Tripo must be
-# stopped before the credits move, not warned about afterwards.
+print("== only a human at the keyboard can spend money ==")
+# The property under test is that no sequence of tool calls starts a paid job.
+# An argument cannot carry consent: the bridge never sees the conversation, so
+# a flag saying "the user agreed" is only the caller asserting it asked.
 import bpy  # noqa: E402
+from claude_blender import generation_spend  # noqa: E402
 from claude_blender.tool_handlers import generation as generation_handler  # noqa: E402
 
 image = os.path.join(bpy.app.tempdir, "smoke_reference.png")
 with open(image, "wb") as handle:
     handle.write(b"\x89PNG\r\n\x1a\n")
 
+# This smoke imports the package without registering it, so there is no
+# preferences instance; the environment is the only configuration source and
+# environment_overlay(None) contributes nothing over it.
 os.environ["TRIPO_API_KEY"] = "tsk_smoke_key"
 os.environ["BLENDER_AGENT_BRIDGE_GENERATION_EGRESS"] = "allow"
+generation_spend.clear_requests()
+JOB = {"provider": "tripo", "views": {"front": image}}
+
 try:
-    unconfirmed = generation_handler.start_generation_job(
-        bpy.context, {"provider": "tripo", "views": {"front": image}}
+    first = generation_handler.start_generation_job(bpy.context, dict(JOB))
+    check("naming a paid provider does not start it", first.get("ok") is False, str(first)[:90])
+    check("refusal waits on the user", first.get("awaiting_user_approval") is True)
+    check("refusal states the cost", "30" in (first.get("cost") or {}).get("cost_note", ""))
+    check("refusal names the upload", (first.get("cost") or {}).get("uploads_reference_images") is True)
+    check("refusal points at a free path", bool(first.get("free_alternative")))
+
+    # The bypass that made the previous gate ornamental: refuse, then retry.
+    check(
+        "retrying does not approve it",
+        generation_handler.start_generation_job(bpy.context, dict(JOB)).get("ok") is False,
     )
-    check("naming a paid provider does not start it", unconfirmed.get("ok") is False, str(unconfirmed)[:90])
-    check("refusal asks for confirmation", unconfirmed.get("requires_confirmation") is True)
-    check("refusal states the cost", "30" in (unconfirmed.get("cost") or {}).get("cost_note", ""))
-    check("refusal names the upload", (unconfirmed.get("cost") or {}).get("uploads_reference_images") is True)
-    check("refusal points at a free path", bool(unconfirmed.get("free_alternative")))
+    check(
+        "no argument approves it",
+        generation_handler.start_generation_job(
+            bpy.context, dict(JOB, confirm_paid=True)
+        ).get("ok") is False,
+    )
+
+    pending = generation_spend.pending_requests()
+    check("exactly one request is pending", len(pending) == 1, str(len(pending)))
+
+    # A different job must not ride on this request.
+    other = generation_handler.start_generation_job(
+        bpy.context, {"provider": "tripo", "views": {"front": image}, "model": "other"}
+    )
+    check("a different job raises its own request", other.get("ok") is False)
+    check("requests are per job", len(generation_spend.pending_requests()) == 2)
+
+    # The operator wiring is covered by smoke_ui_layout, which registers the
+    # add-on; this smoke drives the store the operator writes to.
+    generation_spend.set_status(pending[0]["request_id"], generation_spend.STATUS_APPROVED)
+    check(
+        "the job runs once the user approves in Blender",
+        generation_handler.start_generation_job(bpy.context, dict(JOB)).get("ok") is True,
+    )
+    check(
+        "the approval is single use",
+        generation_handler.start_generation_job(bpy.context, dict(JOB)).get("ok") is False,
+    )
+
+    generation_spend.clear_requests()
+    denied = generation_handler.start_generation_job(bpy.context, dict(JOB))
+    generation_spend.set_status(
+        denied["spend_approval"]["request_id"], generation_spend.STATUS_DENIED
+    )
+    after_denial = generation_handler.start_generation_job(bpy.context, dict(JOB))
+    check("a declined job stays declined", after_denial.get("ok") is False)
+    check("declining is not a retry prompt", not after_denial.get("awaiting_user_approval"))
 
     auto = generation_handler.start_generation_job(bpy.context, {"views": {"front": image}})
     check("omitting the provider never picks a paid one", auto.get("ok") is False, str(auto)[:90])
@@ -120,6 +169,7 @@ try:
     )
     check("a missing reference image is refused first", missing.get("ok") is False)
 finally:
+    generation_spend.clear_requests()
     os.environ.pop("TRIPO_API_KEY", None)
     os.environ.pop("BLENDER_AGENT_BRIDGE_GENERATION_EGRESS", None)
 

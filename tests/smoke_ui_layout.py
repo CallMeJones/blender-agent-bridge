@@ -16,6 +16,7 @@ from claude_blender import (  # noqa: E402
     bridge_server,
     credential_store,
     external_assets,
+    generation_spend,
     live_preview,
     preferences,
     script_runner,
@@ -331,6 +332,37 @@ def main():
         # Nothing is held yet, so no credential offers to be cleared.
         assert "claude_blender.clear_session_credential" not in prefs_layout.operators
 
+        print("== a paid job waits for a click in the sidebar ==")
+        # The gate is only real if it is reachable. A request nobody can see
+        # is a deadlock, not a safeguard.
+        generation_spend.clear_requests()
+        request = generation_spend.request_approval(
+            "tripo", "fp-smoke", cost_note="About 30 Tripo credits.", view_count=2, title="Tripo AI"
+        )
+        spend_layout = _FakeLayout()
+        ui.CLAUDEBLENDER_PT_sidebar.draw(
+            type("_Sidebar", (), {"layout": spend_layout})(), context
+        )
+        assert "Paid generation awaiting your approval" in spend_layout.labels, spend_layout.labels
+        assert any("About 30 Tripo credits" in text for text in spend_layout.labels)
+        assert any("Uploads 2 reference images" in text for text in spend_layout.labels)
+        assert spend_layout.operators.count("claude_blender.decide_generation_spend") == 2
+
+        assert "FINISHED" in bpy.ops.claude_blender.decide_generation_spend(
+            request_id=request["request_id"], approve=True
+        )
+        assert generation_spend.consume_approval("fp-smoke") is True
+        # Deciding twice must not resurrect a spent approval.
+        assert generation_spend.consume_approval("fp-smoke") is False
+        assert generation_spend.pending_requests() == []
+
+        clean_layout = _FakeLayout()
+        ui.CLAUDEBLENDER_PT_sidebar.draw(
+            type("_Sidebar", (), {"layout": clean_layout})(), context
+        )
+        assert "claude_blender.decide_generation_spend" not in clean_layout.operators
+        generation_spend.clear_requests()
+
         print("== setup stays out of the viewport ==")
         # The sidebar is on screen during screen shares and streams, so it
         # reports readiness and links to Preferences. A credential field
@@ -369,8 +401,8 @@ def main():
         preferences.CLAUDEBLENDER_AP_preferences.draw(
             _PreferencesProxy(addon_prefs, held_layout), context
         )
-        assert "Tripo: remembered on this machine" in held_layout.labels, held_layout.labels
-        assert "Sketchfab: remembered on this machine" in held_layout.labels
+        assert "Tripo: set, remembered on this machine" in held_layout.labels, held_layout.labels
+        assert "Sketchfab: set, remembered on this machine" in held_layout.labels
         clears = [
             enabled
             for operator_id, enabled in held_layout.operator_enabled
