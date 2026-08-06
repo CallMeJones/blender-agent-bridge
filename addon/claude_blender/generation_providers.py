@@ -502,11 +502,36 @@ def provider_availability(spec, hardware=None, environ=None):
         for code, remedy in _hardware_blockers(spec, hw):
             block(code, remedy)
 
+    # "available" answers whether this deployment is configured and capable.
+    # "runnable" answers whether a job can actually start, which is the
+    # question a caller almost always means. They differ for a provider that
+    # is described for planning but has no backend: every blocker clears, and
+    # it still cannot run. Reporting only the first sent a reader off to
+    # install a runtime that was never going to help.
+    runnable = (not blockers) and spec.job_implemented
     return {
         "provider": spec.name,
         "title": spec.title,
         "kind": spec.kind,
         "available": not blockers,
+        "runnable": runnable,
+        "run_status": (
+            "runnable"
+            if runnable
+            else "no_job_backend"
+            if not spec.job_implemented
+            else "blocked"
+        ),
+        "run_blocker": (
+            ""
+            if runnable
+            else (
+                "%s is described for planning but has no job backend yet, so configuring "
+                "it will not make it run. Nothing to fix on this machine." % spec.title
+            )
+            if not spec.job_implemented
+            else "; ".join(remedies)
+        ),
         "blockers": blockers,
         "remedies": remedies,
         "requires_egress": spec.requires_egress,

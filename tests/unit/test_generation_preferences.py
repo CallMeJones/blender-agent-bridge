@@ -164,6 +164,52 @@ class PreferenceDrivenAvailabilityTests(_StoreIsolation):
         self.assertEqual(gp.EGRESS_DENY, gp.egress_mode(environ))
 
 
+class RunnabilityTests(_StoreIsolation):
+    """"Configured" and "can actually run" are different questions."""
+
+    def test_a_fully_configured_provider_without_a_backend_is_not_runnable(self):
+        # The failure this pins: TripoSR reported available with no blockers
+        # and no remedies, so a reader concluded that restoring its env vars
+        # gave them a working free route. It would not have.
+        environ = gp.environment_overlay(
+            _FakePreferences(
+                generation_python="C:/venv/python.exe", triposr_root="C:/blend/TripoSR"
+            )
+        )
+        report = gp.provider_availability(
+            gp.PROVIDERS_BY_NAME["triposr"], hardware=LAPTOP_GPU, environ=environ
+        )
+        self.assertTrue(report["available"], report["remedies"])
+        self.assertFalse(report["runnable"])
+        self.assertEqual("no_job_backend", report["run_status"])
+        self.assertIn("no job backend", report["run_blocker"])
+
+    def test_the_blocker_says_configuration_will_not_help(self):
+        report = gp.provider_availability(
+            gp.PROVIDERS_BY_NAME["trellis"], hardware=LAPTOP_GPU, environ={}
+        )
+        self.assertIn("will not make it run", report["run_blocker"])
+
+    def test_a_provider_with_a_backend_is_runnable_once_configured(self):
+        environ = gp.environment_overlay(
+            _FakePreferences(tripo_api_key="k", generation_egress_allowed=True)
+        )
+        report = gp.provider_availability(
+            gp.PROVIDERS_BY_NAME["tripo"], hardware=LAPTOP_GPU, environ=environ
+        )
+        self.assertTrue(report["runnable"])
+        self.assertEqual("runnable", report["run_status"])
+        self.assertEqual("", report["run_blocker"])
+
+    def test_a_blocked_provider_reports_its_remedies_as_the_run_blocker(self):
+        report = gp.provider_availability(
+            gp.PROVIDERS_BY_NAME["tripo"], hardware=LAPTOP_GPU, environ={}
+        )
+        self.assertFalse(report["runnable"])
+        self.assertEqual("blocked", report["run_status"])
+        self.assertTrue(report["run_blocker"])
+
+
 class PaidProviderTests(_StoreIsolation):
     """Spending the user's money must never be automatic."""
 
