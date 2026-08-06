@@ -1469,8 +1469,12 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
   'description': 'Render a model through every calibrated reference-guide camera in a single-view or multi-view '
                  'collection, compare silhouettes and optional landmarks, apply the versioned reference benchmark '
                  'profile per view, and return aggregate, worst-view, gate, redline, and repair-priority evidence. '
-                 'Use this after blockout, visual-hull, depth fitting, and each sculpt repair pass to decide the next '
-                 'measured correction.',
+                 'Measures silhouette conformance only: it can tell you a shape does not match the reference, and '
+                 'cannot tell a clean editable mesh from a dense shell filling the same outline. Use it to locate '
+                 'where a model is the wrong shape, never to rank two candidates or to decide a model is good -- a '
+                 'lumpy voxel column measured 0.926 here against 0.557 for a clean base mesh of the same subject. '
+                 'Do not drive a repair loop on this number alone; if the score falls while the model visibly '
+                 'improves, believe the model.',
   'input_schema': {'type': 'object',
                    'properties': {'collection_name': {'type': 'string',
                                                       'description': 'Exact calibrated reference-guide collection. '

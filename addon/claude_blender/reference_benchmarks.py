@@ -1,4 +1,22 @@
-"""Versioned metric gates for render-to-reference benchmark evaluations."""
+"""Versioned metric gates for render-to-reference benchmark evaluations.
+
+**This suite measures silhouette conformance, not model quality.** Every gate
+here -- IoU, edge distance, centroid offset, error regions, landmarks -- is
+derived from the same 2D comparison of a render against a reference
+silhouette. Nothing in it inspects topology, so it cannot tell a clean
+editable mesh from a dense shell that happens to fill the same outline.
+
+That distinction is not academic. Measured during evaluation: a lumpy voxel
+column scored 0.926 while a clean sculptable base mesh of the same subject
+scored 0.557, because the column filled the reference hull more completely.
+An agent treating the number as an overall verdict discards the useful model
+and iterates toward the blob, with measurements to justify it.
+
+The result payload therefore states its own scope. Callers ranking two
+candidates **MUST** bring a structural signal of their own; this suite can
+disqualify a wrong shape, and cannot say which of two right-enough shapes is
+better to work with.
+"""
 
 from __future__ import annotations
 
@@ -232,7 +250,26 @@ def evaluate_comparison(
         "profile": profile,
         "passed": not failed,
         "status": "passed" if not failed else "failed",
+        # Named for what it measures. "quality_score" is kept for callers that
+        # already read it, but the name invited exactly the misreading this
+        # payload now heads off.
+        "silhouette_conformance_score": quality_score,
         "quality_score": quality_score,
+        "verdict_scope": "silhouette_conformance_only",
+        "is_overall_quality_verdict": False,
+        "not_measured": [
+            "topology (component count, manifoldness, watertightness)",
+            "whether the mesh is editable, riggable, or sensibly distributed",
+            "polygon budget and face-area distribution",
+            "anything not visible in a 2D silhouette",
+        ],
+        "interpretation": (
+            "Silhouette conformance only. Use it to disqualify a shape that does not match "
+            "the reference, never to rank two candidates: a dense shell that fills the "
+            "reference hull scores higher than a clean editable mesh of the same subject "
+            "(measured: 0.926 against 0.557). To choose between candidates, or to drive a "
+            "repair loop, bring a structural measurement as well."
+        ),
         "gate_count": len(gates),
         "passed_gate_count": len(gates) - len(failed),
         "failed_gates": failed,

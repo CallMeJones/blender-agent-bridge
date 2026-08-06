@@ -9658,7 +9658,7 @@
       "requires_live_preview": true
     },
     "evaluate_multiview_reference_match": {
-      "description": "Render a model through every calibrated reference-guide camera in a single-view or multi-view collection, compare silhouettes and optional landmarks, apply the versioned reference benchmark profile per view, and return aggregate, worst-view, gate, redline, and repair-priority evidence. Use this after blockout, visual-hull, depth fitting, and each sculpt repair pass to decide the next measured correction.",
+      "description": "Render a model through every calibrated reference-guide camera in a single-view or multi-view collection, compare silhouettes and optional landmarks, apply the versioned reference benchmark profile per view, and return aggregate, worst-view, gate, redline, and repair-priority evidence. Measures silhouette conformance only: it can tell you a shape does not match the reference, and cannot tell a clean editable mesh from a dense shell filling the same outline. Use it to locate where a model is the wrong shape, never to rank two candidates or to decide a model is good -- a lumpy voxel column measured 0.926 here against 0.557 for a clean base mesh of the same subject. Do not drive a repair loop on this number alone; if the score falls while the model visibly improves, believe the model.",
       "duration_hint": "One bounded still render and image comparison per selected reference view.",
       "has_side_effects": true,
       "input_schema": {
@@ -26569,7 +26569,7 @@
       "name": "compare_model_to_reference"
     },
     {
-      "description": "Render a model through every calibrated reference-guide camera in a single-view or multi-view collection, compare silhouettes and optional landmarks, apply the versioned reference benchmark profile per view, and return aggregate, worst-view, gate, redline, and repair-priority evidence. Use this after blockout, visual-hull, depth fitting, and each sculpt repair pass to decide the next measured correction.",
+      "description": "Render a model through every calibrated reference-guide camera in a single-view or multi-view collection, compare silhouettes and optional landmarks, apply the versioned reference benchmark profile per view, and return aggregate, worst-view, gate, redline, and repair-priority evidence. Measures silhouette conformance only: it can tell you a shape does not match the reference, and cannot tell a clean editable mesh from a dense shell filling the same outline. Use it to locate where a model is the wrong shape, never to rank two candidates or to decide a model is good -- a lumpy voxel column measured 0.926 here against 0.557 for a clean base mesh of the same subject. Do not drive a repair loop on this number alone; if the score falls while the model visibly improves, believe the model.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -32929,7 +32929,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "84bef854c4a59df7a9e9e20b43af5971594aaa48307e78f992a3724be7c3e3e6",
+  "registry_digest": "5d0abb8509409ee9baedff86080138f2412012514d66bd07b357a1cd197346ee",
   "schema_version": 1,
   "specs": [
     {
@@ -46124,7 +46124,7 @@
           "status_tool": "blender_bridge_status"
         }
       },
-      "description": "Render a model through every calibrated reference-guide camera in a single-view or multi-view collection, compare silhouettes and optional landmarks, apply the versioned reference benchmark profile per view, and return aggregate, worst-view, gate, redline, and repair-priority evidence. Use this after blockout, visual-hull, depth fitting, and each sculpt repair pass to decide the next measured correction.",
+      "description": "Render a model through every calibrated reference-guide camera in a single-view or multi-view collection, compare silhouettes and optional landmarks, apply the versioned reference benchmark profile per view, and return aggregate, worst-view, gate, redline, and repair-priority evidence. Measures silhouette conformance only: it can tell you a shape does not match the reference, and cannot tell a clean editable mesh from a dense shell filling the same outline. Use it to locate where a model is the wrong shape, never to rank two candidates or to decide a model is good -- a lumpy voxel column measured 0.926 here against 0.557 for a clean base mesh of the same subject. Do not drive a repair loop on this number alone; if the score falls while the model visibly improves, believe the model.",
       "exposure": "catalog",
       "groups": [
         "model_quality",
