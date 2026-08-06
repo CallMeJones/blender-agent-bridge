@@ -110,18 +110,34 @@ def plan_image_to_3d_approach(context, args):
 
     ready = [route for route in routes if route["ready"]]
     paid_ready = [route for route in ready if route["id"] != "authored" and route["data_leaves_machine"]]
-    return {
-        "ok": True,
-        "requires_user_choice": True,
-        "message": (
+
+    # With no key configured, uploads switched off, or no local runtime, the
+    # authored route is the only one left -- and a question with one answer is
+    # not a choice, it is an interruption. Asking anyway trains people to click
+    # through the prompt, which blunts it for the times it does matter.
+    choice_needed = len(ready) > 1
+    if choice_needed:
+        message = (
             "Several routes can build this. They differ in cost and in whether the "
             "reference images leave the machine, so the user chooses -- do not pick one "
             "for them, and do not start work on any route before they answer."
-        ),
-        "question": (
-            "How would you like this built? %s"
-            % " | ".join("%s (%s)" % (route["title"], route["cost"]) for route in ready)
-        ),
+        )
+        question = "How would you like this built? %s" % " | ".join(
+            "%s (%s)" % (route["title"], route["cost"]) for route in ready
+        )
+    else:
+        message = (
+            "Only the authored route is available, so there is nothing to choose. "
+            "Do not ask the user and do not raise provider setup unless they bring it "
+            "up: proceed with scripts, bounded helpers, and the bridge tools."
+        )
+        question = ""
+
+    return {
+        "ok": True,
+        "requires_user_choice": choice_needed,
+        "message": message,
+        "question": question,
         "routes": routes,
         "ready_routes": [route["id"] for route in ready],
         "paid_routes": [route["id"] for route in paid_ready],
