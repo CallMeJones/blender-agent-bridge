@@ -115,15 +115,16 @@ class ConnectionDiagnosticsTests(unittest.TestCase):
         self.assertEqual("fail", checks["blender_health"]["status"])
         self.assertIn("another process", checks["blender_health"]["recovery"].lower())
 
-    def test_registry_mismatch_reports_incompatible_versions(self):
+    def test_registry_mismatch_does_not_fail_the_connection(self):
+        # Helpers resolve against the live registry in Blender, so a digest
+        # that has moved on is a note, not a fault. Reporting it as a failure
+        # sent users through a copy-config-and-restart cycle for nothing.
         health = dict(_Bridge().health)
         health["tool_registry_digest"] = "0" * 64
         report = self._run(_Bridge(health=health))
         checks = {item["id"]: item for item in report["checks"]}
 
-        self.assertFalse(report["ok"])
-        self.assertEqual("fail", checks["runtime_compatibility"]["status"])
-        self.assertIn("registry", checks["runtime_compatibility"]["summary"].lower())
+        self.assertNotEqual("fail", checks["runtime_compatibility"]["status"])
 
     def test_stale_loaded_addon_requires_reload(self):
         health = dict(_Bridge().health)

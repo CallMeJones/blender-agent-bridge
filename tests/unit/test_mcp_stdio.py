@@ -17,6 +17,7 @@ from claude_blender import build_info, mcp_server  # noqa: E402
 
 class FakeBridgeHandler(BaseHTTPRequestHandler):
     registry_digest = build_info.TOOL_REGISTRY_DIGEST
+    bridge_version = build_info.BRIDGE_VERSION
     include_compatibility_metadata = True
 
     def log_message(self, _format, *_args):
@@ -36,7 +37,7 @@ class FakeBridgeHandler(BaseHTTPRequestHandler):
             if self.include_compatibility_metadata:
                 payload.update(
                     {
-                        "bridge_version": build_info.BRIDGE_VERSION,
+                        "bridge_version": self.bridge_version,
                         "tool_registry_digest": self.registry_digest,
                     }
                 )
@@ -147,8 +148,31 @@ class MCPStdioTests(unittest.TestCase):
         )
         self.assertIn("anyOf", canonical["result"]["structuredContent"]["tool"]["inputSchema"])
 
-    def test_registry_mismatch_fails_closed(self):
+    def test_registry_mismatch_is_advisory_and_still_serves_calls(self):
+        # Only five gateway tools are exposed and their names are fixed; every
+        # helper resolves at invocation time against the registry running in
+        # Blender. A differing digest therefore cannot misroute anything, so
+        # blocking on it was pure ceremony -- a copy-config-and-restart cycle
+        # after every registry change, protecting nothing.
         FakeBridgeHandler.registry_digest = "0" * 64
+        try:
+            called = self.rpc(
+                1,
+                "tools/call",
+                {
+                    "name": "invoke_blender_tool",
+                    "arguments": {"name": "list_scene_objects", "arguments": {}},
+                },
+            )
+            self.assertFalse(called["result"].get("isError", False), called["result"])
+        finally:
+            FakeBridgeHandler.registry_digest = build_info.TOOL_REGISTRY_DIGEST
+
+    def test_protocol_mismatch_still_fails_closed(self):
+        # The one genuine incompatibility: different request and response
+        # shapes on the wire. This must keep blocking.
+        original = FakeBridgeHandler.bridge_version
+        FakeBridgeHandler.bridge_version = "0.1"
         try:
             called = self.rpc(
                 1,
@@ -161,7 +185,7 @@ class MCPStdioTests(unittest.TestCase):
             self.assertTrue(called["result"]["isError"])
             self.assertEqual("bridge_incompatible", called["result"]["structuredContent"]["code"])
         finally:
-            FakeBridgeHandler.registry_digest = build_info.TOOL_REGISTRY_DIGEST
+            FakeBridgeHandler.bridge_version = original
 
     def test_missing_compatibility_metadata_fails_closed(self):
         FakeBridgeHandler.include_compatibility_metadata = False

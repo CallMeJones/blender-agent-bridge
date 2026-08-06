@@ -64,6 +64,40 @@ def _env_float(name, default):
         return float(default)
 
 
+def _digest_comparison(status):
+    """Name the three digests and say which one disagrees.
+
+    Three values are involved and only two were ever shown, so a stale client
+    config -- the common case, and the one where the other two necessarily
+    agree -- looked like the bridge complaining about nothing.
+    """
+
+    runtime = str(status.get("mcp_tool_registry_digest") or "")
+    addon = str(status.get("tool_registry_digest") or "")
+    config = str(status.get("mcp_config_tool_registry_digest") or "")
+
+    def short(value):
+        return value[:12] if value else "(absent)"
+
+    differing = []
+    if addon and addon != runtime:
+        differing.append("blender_addon")
+    if config and config != runtime:
+        differing.append("mcp_client_config")
+    return {
+        "mcp_runtime": short(runtime),
+        "blender_addon": short(addon),
+        "mcp_client_config": short(config),
+        "differs_from_runtime": differing,
+        "summary": (
+            "All three tool registry digests agree."
+            if not differing
+            else "%s disagrees with the running MCP server (%s)."
+            % (", ".join(differing), short(runtime))
+        ),
+    }
+
+
 PROTOCOL_VERSION = "2025-06-18"
 SUPPORTED_PROTOCOL_VERSIONS = (PROTOCOL_VERSION,)
 SERVER_NAME = "blender-agent-bridge"
@@ -3135,21 +3169,33 @@ class BlenderMCPServer:
         )
         compatibility_reasons = []
         blocking_issues = []
+        advisory_issues = []
         compatibility_known = bool(addon_registry_digest and reported_bridge_version)
+
+        # Registry digests are reported, never enforced. Only five gateway
+        # tools are exposed, and their names are fixed; every helper is
+        # resolved at invocation time against the registry running inside
+        # Blender. A client config generated against an older registry
+        # therefore cannot route a call anywhere wrong -- there is nothing
+        # stale for it to route from. Blocking on it bought no safety and
+        # cost a copy-config-and-restart cycle after every registry change.
         if addon_registry_digest and addon_registry_digest != mcp_registry_digest:
-            compatibility_reasons.append("Blender add-on and MCP runtime tool registry digests differ")
-            blocking_issues.append({
+            advisory_issues.append({
                 "code": "addon_mcp_registry_mismatch",
                 "message": "The Blender add-on and the running MCP server were built from different tool registries.",
-                "remedy": "Reload scripts in Blender (or restart it), then restart the MCP client.",
+                "impact": "Advisory only. Helpers resolve against the add-on, so calls still route correctly.",
+                "remedy": "Reload scripts in Blender (or restart it) if a newly added helper is missing.",
             })
         if config_registry_digest and config_registry_digest != mcp_registry_digest:
-            compatibility_reasons.append("MCP config and runtime tool registry digests differ")
-            blocking_issues.append({
+            advisory_issues.append({
                 "code": "config_registry_mismatch",
-                "message": "The MCP client config was generated for a different tool registry than the running server.",
-                "remedy": "Press Copy MCP Config in the Blender sidebar, paste it into the client config, then restart the MCP client.",
+                "message": "The MCP client config was generated against a different tool registry.",
+                "impact": "Advisory only. The gateway tool names are fixed, so nothing routes from the config.",
+                "remedy": "No action needed. Copy MCP Config only if you want the diagnostic to read clean.",
             })
+
+        # A protocol mismatch is the one genuine incompatibility: the two sides
+        # would be speaking different request and response shapes.
         if reported_bridge_version and reported_bridge_version != bridge_protocol.BRIDGE_VERSION:
             compatibility_reasons.append("Blender bridge protocol version differs from the MCP runtime")
             blocking_issues.append({
@@ -3161,6 +3207,7 @@ class BlenderMCPServer:
         # fields. Empty when nothing is wrong.
         status["blocking_issues"] = blocking_issues
         status["blocked"] = bool(blocking_issues)
+        status["advisory_issues"] = advisory_issues
         if compatibility_reasons:
             status["compatible"] = False
             status["compatibility_status"] = "incompatible"
@@ -3168,11 +3215,17 @@ class BlenderMCPServer:
         elif compatibility_known:
             status["compatible"] = True
             status["compatibility_status"] = "compatible"
-            status["compatibility_message"] = (
-                "Bridge protocol and canonical tool registry are compatible."
-                if status["addon_mcp_version_match"] is not False
-                else "Bridge protocol and tool registry are compatible; add-on and MCP versions differ."
-            )
+            if advisory_issues:
+                status["compatibility_message"] = (
+                    "Bridge protocol is compatible. Tool registry digests differ, which is "
+                    "advisory: helpers resolve against the live registry in Blender."
+                )
+            else:
+                status["compatibility_message"] = (
+                    "Bridge protocol and canonical tool registry are compatible."
+                    if status["addon_mcp_version_match"] is not False
+                    else "Bridge protocol and tool registry are compatible; add-on and MCP versions differ."
+                )
         else:
             status["compatible"] = None
             status["compatibility_status"] = "unknown"
@@ -3251,6 +3304,13 @@ class BlenderMCPServer:
                 "expected_bridge_version": bridge_protocol.BRIDGE_VERSION,
                 "tool_registry_digest": status.get("tool_registry_digest"),
                 "mcp_tool_registry_digest": status.get("mcp_tool_registry_digest"),
+                # Without this the payload showed only the add-on and runtime
+                # digests, which agree whenever the config is the stale one.
+                # A reader saw two identical values beside a mismatch error and
+                # reasonably concluded the block was spurious. The value that
+                # actually differs has to be the one on display.
+                "mcp_config_tool_registry_digest": status.get("mcp_config_tool_registry_digest"),
+                "digest_comparison": _digest_comparison(status),
                 "compatibility_metadata_complete": bool(
                     status.get("bridge_version") and status.get("tool_registry_digest")
                 ),
