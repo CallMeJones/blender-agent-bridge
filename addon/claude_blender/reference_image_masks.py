@@ -8,6 +8,67 @@ import math
 MAX_OUTLINE_POINTS = 192
 
 
+def _border_flood_mask(pixels, width, height, tolerance):
+    """Background is what the image border can reach; subject is what it cannot.
+
+    Neither brightness nor a fixed background colour separates a light subject
+    from a light backdrop. A white uniform is as bright as a white sweep, so
+    ``luminance`` loses the character; a drop shadow is far from pure white, so
+    ``background_color`` keeps the shadow and reports a subject wider than it
+    is. Both failures were measured on a real reference sheet, and both produce
+    a plausible-looking mask rather than an error.
+
+    Connectivity separates them because a backdrop and its shadow touch the
+    image border and the subject does not. Growth compares each candidate to
+    the neighbour it came from rather than to a single seed colour, so a
+    gradient or a tinted shadow is followed while the sharp step at the
+    subject's edge stops it.
+    """
+
+    width = int(width)
+    height = int(height)
+    tolerance = max(0.0, float(tolerance))
+    background = bytearray(width * height)
+    stack = []
+
+    def offset(x, y):
+        return (y * width + x) * 4
+
+    def push(x, y):
+        index = y * width + x
+        if not background[index]:
+            background[index] = 1
+            stack.append((x, y))
+
+    for x in range(width):
+        push(x, 0)
+        push(x, height - 1)
+    for y in range(height):
+        push(0, y)
+        push(width - 1, y)
+
+    while stack:
+        x, y = stack.pop()
+        base = offset(x, y)
+        red, green, blue = pixels[base], pixels[base + 1], pixels[base + 2]
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = x + dx, y + dy
+            if not (0 <= nx < width and 0 <= ny < height):
+                continue
+            if background[ny * width + nx]:
+                continue
+            near = offset(nx, ny)
+            distance = math.sqrt(
+                (pixels[near] - red) ** 2
+                + (pixels[near + 1] - green) ** 2
+                + (pixels[near + 2] - blue) ** 2
+            )
+            if distance <= tolerance:
+                push(nx, ny)
+
+    return bytearray(0 if value else 1 for value in background)
+
+
 def mask_from_pixels(sample, *, mode, threshold, background_color=None):
     width, height = sample["sampled_size"]
     pixels = sample["pixels"]
@@ -21,7 +82,15 @@ def mask_from_pixels(sample, *, mode, threshold, background_color=None):
             if pixels[offset] >= threshold
         )
         coverage = alpha_pixels / max(1, int(width) * int(height))
-        mode = "alpha" if 0.001 < coverage < 0.995 else "background_color"
+        if 0.001 < coverage < 0.995:
+            mode = "alpha"
+        elif len(background) >= 3:
+            mode = "background_color"
+        else:
+            # Previously this chose background_color unconditionally and then
+            # raised, because auto has no colour to supply. Border flood needs
+            # none, and handles the light-on-light case that sends people here.
+            mode = "border_flood"
     if mode == "alpha":
         return bytearray(
             1 if pixels[offset + 3] >= threshold else 0
@@ -56,7 +125,11 @@ def mask_from_pixels(sample, *, mode, threshold, background_color=None):
             else 0
             for offset in range(0, len(pixels), 4)
         )
-    raise ValueError("mask mode must be auto, alpha, luminance, or background_color")
+    if mode == "border_flood":
+        return _border_flood_mask(pixels, width, height, threshold)
+    raise ValueError(
+        "mask mode must be auto, alpha, luminance, background_color, or border_flood"
+    )
 
 
 def _mask_bounds(mask, width, height):

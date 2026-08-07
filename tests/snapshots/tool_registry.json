@@ -14355,11 +14355,13 @@
                   "type": "boolean"
                 },
                 "mask_mode": {
+                  "description": "auto is usually right. border_flood treats whatever the image border can reach as background, which is the only mode that separates a light subject from a light backdrop: luminance cannot tell a white uniform from a white sweep, and background_color deletes the uniform along with the sweep. It follows a graded shadow out to the edge but stops at a hard step, so a hard-edged shadow stays part of the subject.",
                   "enum": [
                     "auto",
                     "alpha",
                     "luminance",
-                    "background_color"
+                    "background_color",
+                    "border_flood"
                   ],
                   "type": "string"
                 },
@@ -25514,11 +25516,13 @@
                   "type": "boolean"
                 },
                 "mask_mode": {
+                  "description": "auto is usually right. border_flood treats whatever the image border can reach as background, which is the only mode that separates a light subject from a light backdrop: luminance cannot tell a white uniform from a white sweep, and background_color deletes the uniform along with the sweep. It follows a graded shadow out to the edge but stops at a hard step, so a hard-edged shadow stays part of the subject.",
                   "enum": [
                     "auto",
                     "alpha",
                     "luminance",
-                    "background_color"
+                    "background_color",
+                    "border_flood"
                   ],
                   "type": "string"
                 },
@@ -32929,7 +32933,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "5d0abb8509409ee9baedff86080138f2412012514d66bd07b357a1cd197346ee",
+  "registry_digest": "0862d5c25c1f1bded347854e790d30d77cd9cc1447f93ec74ba18df0f1121ebb",
   "schema_version": 1,
   "specs": [
     {
@@ -44812,11 +44816,13 @@
                   "type": "boolean"
                 },
                 "mask_mode": {
+                  "description": "auto is usually right. border_flood treats whatever the image border can reach as background, which is the only mode that separates a light subject from a light backdrop: luminance cannot tell a white uniform from a white sweep, and background_color deletes the uniform along with the sweep. It follows a graded shadow out to the edge but stops at a hard step, so a hard-edged shadow stays part of the subject.",
                   "enum": [
                     "auto",
                     "alpha",
                     "luminance",
-                    "background_color"
+                    "background_color",
+                    "border_flood"
                   ],
                   "type": "string"
                 },

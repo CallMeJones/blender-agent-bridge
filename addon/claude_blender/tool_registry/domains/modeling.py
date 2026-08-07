@@ -87,7 +87,14 @@ _REFERENCE_IMAGE_INTAKE_SCHEMA = {
         },
         'mask_mode': {
             'type': 'string',
-            'enum': ['auto', 'alpha', 'luminance', 'background_color'],
+            'enum': ['auto', 'alpha', 'luminance', 'background_color', 'border_flood'],
+            'description': 'auto is usually right. border_flood treats whatever the image '
+                           'border can reach as background, which is the only mode that '
+                           'separates a light subject from a light backdrop: luminance '
+                           'cannot tell a white uniform from a white sweep, and '
+                           'background_color deletes the uniform along with the sweep. It '
+                           'follows a graded shadow out to the edge but stops at a hard '
+                           'step, so a hard-edged shadow stays part of the subject.',
         },
         'mask_threshold': {'type': 'number', 'minimum': 0.0, 'maximum': 1.0},
         'background_color': {'type': 'array', 'items': {'type': 'number'}, 'minItems': 3, 'maxItems': 3},
