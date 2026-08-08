@@ -113,3 +113,62 @@ class ReferenceBenchmarkTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _conformance_metrics(iou, mean_edge, p95_edge):
+    return {
+        "width": 512,
+        "height": 512,
+        "reference_pixels": 1000,
+        "model_pixels": 1000,
+        "intersection_pixels": int(1000 * iou),
+        "union_pixels": 1000,
+        "silhouette_iou": iou,
+        "mean_edge_distance_normalized": mean_edge,
+        "p95_edge_distance_normalized": p95_edge,
+        "centroid_offset": {"dx_pixels": 1, "dy_pixels": 1},
+        "error_regions": [],
+    }
+
+
+class ConformanceDiagnosisTests(unittest.TestCase):
+    """A wrong shape and a right shape in a different pose are not the same."""
+
+    def _diagnose(self, iou, mean_edge, p95_edge, profile="refined"):
+        result = reference_benchmarks.evaluate_comparison(
+            _conformance_metrics(iou, mean_edge, p95_edge), profile=profile
+        )
+        return result["conformance_diagnosis"]
+
+    def test_the_measured_a_pose_case_reads_as_area_not_drift(self):
+        # The real numbers: a character authored in an A-pose against a
+        # reference with clasped hands. The model was correct; the gate failed.
+        diagnosis = self._diagnose(0.666, 0.014, 0.030)
+        self.assertEqual("area_difference", diagnosis["kind"])
+        self.assertIn("pose", diagnosis["summary"])
+        self.assertIn("should not be chased", diagnosis["summary"])
+
+    def test_a_wandering_contour_reads_as_shape_drift(self):
+        diagnosis = self._diagnose(0.60, 0.070, 0.140)
+        self.assertEqual("shape_drift", diagnosis["kind"])
+        self.assertIn("shape", diagnosis["summary"])
+
+    def test_a_passing_model_is_reported_as_conformant(self):
+        self.assertEqual("conformant", self._diagnose(0.90, 0.010, 0.020)["kind"])
+
+    def test_a_close_contour_with_failing_area_is_never_called_drift(self):
+        # The distinction has to hold across the range, not at one point.
+        for iou in (0.40, 0.55, 0.66, 0.71):
+            self.assertEqual(
+                "area_difference",
+                self._diagnose(iou, 0.012, 0.024)["kind"],
+                iou,
+            )
+
+    def test_the_diagnosis_travels_with_the_scope_statement(self):
+        result = reference_benchmarks.evaluate_comparison(
+            _conformance_metrics(0.666, 0.014, 0.030), profile="refined"
+        )
+        self.assertFalse(result["is_overall_quality_verdict"])
+        self.assertEqual("silhouette_conformance_only", result["verdict_scope"])
+        self.assertTrue(result["conformance_diagnosis"]["summary"])

@@ -249,7 +249,14 @@ def _mesh_modeling_quality(obj, *, require_materials, allow_modifier_seed_bounda
                     "loose_vertices": sum(1 for vert in bm.verts if not vert.link_edges),
                     "loose_edges": sum(1 for edge in bm.edges if edge.is_wire),
                     "boundary_edges": sum(1 for edge in bm.edges if edge.is_boundary),
-                    "non_manifold_edges": sum(1 for edge in bm.edges if not edge.is_manifold),
+                    # bmesh reports a boundary edge as non-manifold, which is
+                    # true of the term and useless as a defect count: an open
+                    # garment shell is meant to have a hem. Counting only edges
+                    # shared by more than two faces keeps this a defect number,
+                    # so nobody is invited to weld a skirt shut to clear it.
+                    "non_manifold_edges": sum(
+                        1 for edge in bm.edges if len(edge.link_faces) > 2
+                    ),
                 }
             )
         finally:
@@ -265,7 +272,7 @@ def _mesh_modeling_quality(obj, *, require_materials, allow_modifier_seed_bounda
         if topology["loose_edges"]:
             issues.append(f"{topology['loose_edges']} loose edge(s)")
         if topology["non_manifold_edges"]:
-            message = f"{topology['non_manifold_edges']} non-manifold/boundary edge(s)"
+            message = f"{topology['non_manifold_edges']} non-manifold edge(s) shared by more than two faces"
             if allow_modifier_seed_boundaries and seed_modifier:
                 warnings.append(f"{message}; accepted as modifier seed geometry")
             else:

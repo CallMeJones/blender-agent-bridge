@@ -244,6 +244,7 @@ def evaluate_comparison(
         100.0 * sum(gate["score"] for gate in gates) / max(1, len(gates)),
         2,
     )
+    conformance = _conformance_diagnosis(gates)
     return {
         "schema_version": REFERENCE_BENCHMARK_SCHEMA_VERSION,
         "suite_version": REFERENCE_BENCHMARK_SUITE_VERSION,
@@ -257,6 +258,7 @@ def evaluate_comparison(
         "quality_score": quality_score,
         "verdict_scope": "silhouette_conformance_only",
         "is_overall_quality_verdict": False,
+        "conformance_diagnosis": conformance,
         "not_measured": [
             "topology (component count, manifoldness, watertightness)",
             "whether the mesh is editable, riggable, or sensibly distributed",
@@ -289,6 +291,58 @@ def evaluate_comparison(
             "matched_landmark_count": len(landmark_ratios),
         },
         "warnings": warnings,
+    }
+
+
+def _conformance_diagnosis(gates):
+    """Separate a wrong shape from a right shape in a different pose.
+
+    Both numbers are already computed and they disagree in a specific,
+    informative way. Silhouette IoU is an *area* comparison; mean and p95 edge
+    distance measure how far the two *contours* sit apart. A model whose
+    contour tracks the reference closely while its area does not is not
+    drifting in shape -- it is occupying different space, which is what a
+    deliberate pose change does.
+
+    Observed: a character authored in an A-pose against a reference with
+    clasped hands scored 0.666 IoU against a 0.72 threshold while mean edge
+    distance stayed at 1.2-1.7%. The model was correct and the gate said
+    otherwise. An agent worked that out by hand from the two numbers; there is
+    no reason every caller should have to.
+    """
+
+    by_name = {gate["gate"]: gate for gate in gates}
+    iou = by_name.get("silhouette_iou")
+    mean_edge = by_name.get("mean_edge_distance_ratio")
+    p95_edge = by_name.get("p95_edge_distance_ratio")
+    if iou is None:
+        return {}
+    if iou["passed"]:
+        return {
+            "kind": "conformant",
+            "summary": "Silhouette area and contour both agree with the reference.",
+        }
+    contours_agree = bool(
+        (mean_edge is None or mean_edge["passed"])
+        and (p95_edge is None or p95_edge["passed"])
+    )
+    if contours_agree:
+        return {
+            "kind": "area_difference",
+            "summary": (
+                "Silhouette area differs while the contour tracks the reference closely. "
+                "That is the signature of a different pose or a deliberate silhouette "
+                "change, not of shape drift. Look at where the extra or missing area sits "
+                "before changing the model; if the pose was chosen on purpose, this gate "
+                "cannot pass and should not be chased."
+            ),
+        }
+    return {
+        "kind": "shape_drift",
+        "summary": (
+            "Silhouette area and contour both disagree with the reference, so the shape "
+            "itself is off rather than merely posed differently."
+        ),
     }
 
 
