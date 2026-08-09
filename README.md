@@ -17,6 +17,14 @@ Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets
   <a href="LICENSE"><img alt="License GPL-3.0-or-later" src="https://img.shields.io/badge/License-GPL--3.0--or--later-111827"></a>
 </p>
 
+<p align="center">
+  <a href="https://polyhaven.com/"><img alt="Poly Haven assets" src="https://img.shields.io/badge/Assets-Poly%20Haven-2E7D32"></a>
+  <a href="https://sketchfab.com/"><img alt="Sketchfab assets" src="https://img.shields.io/badge/Assets-Sketchfab-1CAAD9"></a>
+  <a href="https://platform.tripo3d.ai/"><img alt="Tripo3D generation" src="https://img.shields.io/badge/Image--to--3D-Tripo-2563EB"></a>
+  <a href="https://www.meshy.ai/"><img alt="Meshy generation" src="https://img.shields.io/badge/Image--to--3D-Meshy-7C3AED"></a>
+  <a href="https://github.com/VAST-AI-Research/TripoSR"><img alt="Local TripoSR generation" src="https://img.shields.io/badge/Local%20Image--to--3D-TripoSR-374151"></a>
+</p>
+
 ## 1. Install the Blender Extension
 
 Install Blender `4.2.0` or newer. CI continuously checks Blender 4.2 LTS, 4.5 LTS, and 5.1; newer versions are allowed and use capability checks instead of an artificial maximum-version gate.
@@ -115,7 +123,7 @@ Restart Blender, press `Start`, copy the MCP config again, replace the old clien
 
 ## Why This Exists
 
-AI agents are getting good at using tools, but Blender needs guardrails. This bridge gives agents real scene context and practical tools without turning Blender into a chat app or storing provider API keys.
+AI agents are getting good at using tools, but Blender needs guardrails. This bridge gives agents real scene context and practical tools without turning Blender into a chat app or writing provider API keys into `.blend` files or Blender preferences.
 
 - Blender stays the execution layer: scene state, viewport evidence, preview changes, binary script trust, checkpoints, and local resources.
 - The external client stays the agent host: model connection, conversation memory, provider account, planning, and user chat.
@@ -127,6 +135,70 @@ AI agents are getting good at using tools, but Blender needs guardrails. This br
 - Connected LLMs can author persistent semantic shape programs from general SDF primitives and tapered sweeps, compile them into continuous watertight meshes with uniform or adaptive-dual extraction, target high octree depth only around important local forms, probe their fields, and revise named forms without an external model or category-specific base mesh.
 - Blender has one deliberately small sidebar panel: bridge status/start-stop, `Copy MCP Config`, **Trust Agent Scripts**/**Revoke**, and pending preview **Commit**/**Revert**. Diagnostics, manifests, audit state, captures, and asset configuration stay in bridge/tool responses instead of returning as sidebar sections.
 - Bounded helpers handle inspection, project files, external assets, long jobs, persistent bakes, evidence, preview decisions, and deliberately isolated edits. Operational clauses remain separate from, and do not demote, the trusted script used for authored work.
+
+## Assets and Image-to-3D Providers
+
+Every provider is optional. The bridge still supports authored scripts, bounded modeling helpers, scene inspection, rendering, and project workflows when third-party APIs are disabled or no provider is configured.
+
+| Provider | What the bridge supports | Setup | Network, cost, and quality |
+| --- | --- | --- | --- |
+| [Poly Haven](https://polyhaven.com/) | Search and import HDRIs, PBR textures, and models with source metadata. | None. | Downloads from Poly Haven's open API; assets are CC0. |
+| [Sketchfab](https://sketchfab.com/) | Public model search plus authenticated glTF downloads and imports with author, source, and license provenance. | Search needs no key. Downloads need your Sketchfab API token. | Asset licenses vary; attribution and the model's license follow the imported asset. |
+| [Tripo](https://platform.tripo3d.ai/) (Tripo3D API) | Hosted single-image and calibrated multi-view image-to-3D jobs, polling, cached results, import, and provenance. | Tripo API key plus **Allow Third-Party Uploads**. | Uploads references and consumes Tripo API credits. Best hosted route when multiple views are available. |
+| [Meshy](https://docs.meshy.ai/en/api) | Hosted single-image and multi-image image-to-3D jobs, balance checks, polling, cached GLB import, and provenance. | Meshy API key plus **Allow Third-Party Uploads**. | Uploads references and consumes Meshy account credits. Generated topology can be dense or fragmented and should be evaluated after import. |
+| [TripoSR](https://github.com/VAST-AI-Research/TripoSR) | Direct local single-image reconstruction, persistent tuning defaults, Z-up import normalization, cleanup, and evaluation renders. | A separate Python environment with TripoSR and CUDA-capable PyTorch, plus the local checkout path. | No vendor key, upload, or API credits. Treat it as a fast blockout route: one image cannot reveal hidden side or back structure. |
+
+When more than one generation provider is ready, the bridge asks which provider to use and starts nothing until the user answers. It does not silently prefer local, hosted, cheap, or fast. Hosted jobs also require an explicit spend approval in Blender before a request is sent. A sole local provider may be selected automatically; a hosted provider never is.
+
+### Configure Poly Haven and Sketchfab
+
+Poly Haven works immediately. For Sketchfab downloads:
+
+1. In Blender's `Agent Bridge` sidebar, expand `Image-To-3D Generation` and press `Set Up Providers`.
+2. Copy your token from [Sketchfab account settings](https://sketchfab.com/settings/password) into **Sketchfab API Token**.
+3. Leave **Remember Keys On This Machine** enabled to use the operating system credential store where available, or turn it off to keep the token only until Blender closes. The panel identifies the storage mechanism it selected.
+
+The token field blanks itself after accepting the value; the status line below it confirms whether the token is set. As an alternative for automated MCP environments, set `SKETCHFAB_API_TOKEN` or `BLENDER_AGENT_BRIDGE_SKETCHFAB_API_TOKEN` in the MCP server process.
+
+### Configure hosted Tripo and Meshy
+
+1. Create a key in the [Tripo API portal](https://platform.tripo3d.ai/api-keys) and/or [Meshy API settings](https://www.meshy.ai/settings/api).
+2. Open `Agent Bridge > Image-To-3D Generation > Set Up Providers`.
+3. Enable **Allow Third-Party Uploads**.
+4. Paste the key into **Tripo API Key** or **Meshy API Key**. The field clears after secure capture and the status line reports that the key is set.
+5. Ask the agent to check generation provider diagnostics before starting the first job.
+
+Keys entered here are held in session memory. With **Remember Keys On This Machine** enabled, they use the operating system credential facility where available; otherwise the panel reports a private user-only file fallback without describing it as encrypted. Keys are never written to `userpref.blend`, project `.blend` files, manifests, or audit logs. Tripo and Meshy use separate API billing from this extension, so review the provider's current credit pricing before approval.
+
+### Configure local TripoSR
+
+TripoSR runs outside Blender's bundled Python. The official project requires Python 3.8 or newer, a platform-compatible PyTorch installation, and approximately 6 GB of VRAM at its default settings. Create a dedicated environment rather than installing Torch into Blender:
+
+```text
+git clone https://github.com/VAST-AI-Research/TripoSR.git
+python -m venv .venv-triposr
+
+# Replace TRIPOSR_PYTHON below with:
+# Windows: .venv-triposr\Scripts\python.exe
+# macOS/Linux: .venv-triposr/bin/python
+TRIPOSR_PYTHON -m pip install --upgrade pip setuptools
+TRIPOSR_PYTHON -m pip install -r TripoSR/requirements.txt
+```
+
+Install the CUDA-compatible PyTorch build recommended by the [official PyTorch selector](https://pytorch.org/get-started/locally/) into that same environment. Then open `Set Up Providers` and set:
+
+- **Generation Python** to the environment's Python executable.
+- **TripoSR Folder** to the cloned directory containing `run.py`.
+- **TripoSR Defaults** only when you need to trade detail, VRAM, background removal, or texture behavior for a particular machine.
+
+Verify the environment independently before using the bridge:
+
+```text
+cd TripoSR
+TRIPOSR_PYTHON run.py examples/chair.png --output-dir output
+```
+
+The provider diagnostics should then report TripoSR as runnable. For final assets with meaningful unseen structure, use calibrated multi-view input with Tripo or Meshy, or author and refine the model in Blender.
 
 ## Showcase: Egypt Dogfight
 
@@ -153,6 +225,7 @@ The source `.blend` file and full 1080p videos are not committed here; the repos
 - Make reversible preview edits to common objects, materials, animation, lighting, cameras, rigs, and scene organization.
 - Capture viewport, playblast, inspection-render, thumbnail, and render-job evidence.
 - Search and import Poly Haven or Sketchfab assets through asynchronous download and import jobs.
+- Generate and import image-to-3D assets through hosted Tripo or Meshy, or run TripoSR locally for single-image blockouts.
 - Run animation and background-render workflows, including progress polling and output validation.
 - Use bounded project-directory tools, or run custom Blender Python only after the user enables session script trust.
 
@@ -167,15 +240,9 @@ Connected agents do not get blanket access by default. Enabling session script t
 | Local bridge | Off by default and bound to `127.0.0.1`. Optional bearer authentication is available; without it, any local client that can reach the bridge may call its tools. |
 | Generated Python | Refused while trust is off. With trust on, it has Blender **Run Script** permissions, including filesystem, network, subprocess, project-file, persistent-cache, and full Blender API access. |
 | Script trust | Runtime-only and visibly revocable. It clears on Revoke, timed expiry, add-on reload, or Blender exit. Opening, creating, restoring, copying, renaming, saving, or modifying `.blend` files does not change an active grant, and file operations never extend a timed grant's expiry. Static findings are advisory, not a sandbox. |
-| Credentials | Model-provider keys are never stored by the extension. Sketchfab tokens are redacted and are not saved in preferences, `.blend` files, or audit logs. |
+| Credentials | Provider keys are held in session memory and redacted from responses. Optional persistence uses the operating system credential facility where available, with a clearly reported user-only file fallback; keys are never written to Blender preferences, `.blend` files, manifests, or audit logs. |
 
 See [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md), and [docs/SAFETY_MODEL.md](docs/SAFETY_MODEL.md) for the detailed model.
-
-## Optional Sketchfab Auth
-
-Poly Haven discovery and imports do not need a token. Sketchfab public search is also tokenless, but Sketchfab model downloads/imports need an API token.
-
-Fill the empty `SKETCHFAB_API_TOKEN` field in the copied MCP config, then restart or refresh the client. The token must be available to the MCP server process; Blender Agent Bridge does not save it in preferences, `.blend` files, or audit logs.
 
 ## How It Works
 
@@ -225,6 +292,14 @@ Capture close-up inspection renders of the selected vehicle underside, review th
 
 ```text
 Search Poly Haven for a sunset HDRI, cache it as an external asset job, poll until it is ready, then queue the import into the world as a preview.
+```
+
+```text
+Check which image-to-3D providers are ready and explain their cost, privacy, and quality tradeoffs. Do not start a job.
+```
+
+```text
+Generate a 3D model from these confirmed reference-image paths. If more than one provider is available, ask me which provider to use before starting anything.
 ```
 
 ```text

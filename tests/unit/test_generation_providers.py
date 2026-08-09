@@ -241,9 +241,30 @@ class SelectionTests(unittest.TestCase):
         implemented = [s.name for s in gp.PROVIDER_SPECS if s.job_implemented]
         self.assertEqual(["triposr", "studio_endpoint", "tripo", "meshy"], implemented)
 
-    def test_local_is_preferred_over_hosted(self):
-        # Exercise the ordering rule directly: with a local backend implemented,
-        # it must win over an equally-available hosted one.
+    def test_local_and_hosted_routes_require_an_explicit_choice(self):
+        env = _env(
+            BLENDER_AGENT_BRIDGE_TRIPOSR_PYTHON="/opt/python",
+            BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr",
+            MESHY_API_KEY="x",
+            **{gp.EGRESS_ENV_VAR: "allow"},
+        )
+        result = gp.select_provider(environ=env, hardware=LAPTOP_GPU)
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["provider_selection_required"])
+        self.assertEqual(["triposr", "meshy"], result["suggested_providers"])
+
+    def test_a_sole_local_route_is_still_selected_without_a_prompt(self):
+        env = _env(
+            BLENDER_AGENT_BRIDGE_TRIPOSR_PYTHON="/opt/python",
+            BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr",
+        )
+        result = gp.select_provider(environ=env, hardware=LAPTOP_GPU)
+        self.assertTrue(result["ok"], result.get("message"))
+        self.assertEqual("triposr", result["selected"])
+
+    def test_local_only_policy_removes_hosted_routes_before_selection(self):
+        gp.set_session_generation_policy(gp.POLICY_LOCAL_ONLY)
+        self.addCleanup(gp.clear_session_generation_policy)
         env = _env(
             BLENDER_AGENT_BRIDGE_TRIPOSR_PYTHON="/opt/python",
             BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr",

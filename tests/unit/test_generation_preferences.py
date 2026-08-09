@@ -329,7 +329,7 @@ class PaidProviderTests(_StoreIsolation):
         self.assertTrue(selection["requires_explicit_choice"])
         self.assertIn("tripo", selection["suggested_providers"])
 
-    def test_a_configured_local_provider_is_chosen_over_a_paid_one(self):
+    def test_a_configured_local_and_paid_provider_require_a_choice(self):
         environ = gp.environment_overlay(
             _FakePreferences(
                 generation_python="C:/venv/python.exe",
@@ -339,9 +339,9 @@ class PaidProviderTests(_StoreIsolation):
             )
         )
         selection = gp.select_provider(environ=environ, hardware=LAPTOP_GPU)
-        self.assertTrue(selection["ok"], selection.get("message"))
-        self.assertEqual("triposr", selection["selected"])
-        self.assertFalse(gp.is_paid_provider(selection.get("selected") or ""))
+        self.assertFalse(selection["ok"])
+        self.assertTrue(selection["provider_selection_required"])
+        self.assertEqual(["triposr", "tripo"], selection["suggested_providers"])
 
 
 if __name__ == "__main__":

@@ -190,6 +190,44 @@ class CLAUDEBLENDER_AP_preferences(bpy.types.AddonPreferences):
         subtype="DIR_PATH",
         default="",
     )
+    triposr_mc_resolution: bpy.props.IntProperty(
+        name="Marching Cubes Resolution",
+        description="Default TripoSR extraction resolution; individual jobs may override it",
+        default=256,
+        min=16,
+        max=512,
+    )
+    triposr_no_remove_bg: bpy.props.BoolProperty(
+        name="Keep Input Background",
+        description="Skip TripoSR background removal by default",
+        default=False,
+    )
+    triposr_foreground_ratio: bpy.props.FloatProperty(
+        name="Foreground Ratio",
+        description="Default TripoSR foreground resize ratio after background removal",
+        default=0.85,
+        min=0.1,
+        max=1.0,
+    )
+    triposr_chunk_size: bpy.props.IntProperty(
+        name="Chunk Size",
+        description="Default TripoSR evaluation chunk size; use 0 to disable chunking",
+        default=8192,
+        min=0,
+        max=262144,
+    )
+    triposr_bake_texture: bpy.props.BoolProperty(
+        name="Bake Texture",
+        description="Bake a texture atlas by default when the TripoSR runtime supports it",
+        default=False,
+    )
+    triposr_texture_resolution: bpy.props.IntProperty(
+        name="Texture Resolution",
+        description="Default TripoSR texture atlas resolution",
+        default=2048,
+        min=256,
+        max=8192,
+    )
     generation_python: bpy.props.StringProperty(
         name="Generation Python",
         description=(
@@ -304,6 +342,13 @@ def draw_generation_settings(layout, prefs, *, title=""):
     local.label(text="Optional. Leave blank to use hosted providers only.")
     local.prop(prefs, "generation_python")
     local.prop(prefs, "triposr_root")
+    local.label(text="TripoSR Defaults")
+    local.prop(prefs, "triposr_mc_resolution")
+    local.prop(prefs, "triposr_no_remove_bg")
+    local.prop(prefs, "triposr_foreground_ratio")
+    local.prop(prefs, "triposr_chunk_size")
+    local.prop(prefs, "triposr_bake_texture")
+    local.prop(prefs, "triposr_texture_resolution")
     local.separator()
     local.prop(prefs, "generation_endpoint")
     _draw_credential(

@@ -19,6 +19,7 @@ _TOOL_REGISTRY_RELOAD_ORDER = (
     "tool_registry.domains.workflows_refinement",
     "tool_registry.domains.quality_observability",
     "tool_registry.domains.external_assets",
+    "tool_registry.domains.generation",
     "tool_registry.domains.scripts_transactions",
     "tool_registry",
 )
@@ -36,6 +37,7 @@ _TOOL_HANDLER_RELOAD_ORDER = (
     "tool_handlers.workflows_refinement",
     "tool_handlers.quality_observability",
     "tool_handlers.external_assets",
+    "tool_handlers.generation",
     "tool_handlers.scripts_transactions",
 )
 
@@ -44,6 +46,7 @@ _MODULE_NAMES = (
     "build_info",
     "user_paths",
     "properties",
+    "generation_providers",
     "preferences",
     "context_budget",
     "context_bundle",
@@ -103,6 +106,7 @@ _MODULE_NAMES = (
     "autosave",
     "lab_parity",
     "render_jobs",
+    "process_utils",
     "trusted_script_jobs",
     "asset_jobs",
     "project_files",

@@ -175,6 +175,7 @@ def prepare_reference_images(
     subject="reference model",
     collection_name="Reference Image Intake Guides",
     subject_center=(0.0, 0.0, 1.5),
+    subject_height=0.0,
     active_view="",
     create_guides=True,
     require_annotations=False,
@@ -195,11 +196,12 @@ def prepare_reference_images(
             if not isinstance(raw, dict):
                 raise ValueError(f"references[{index}] must be an object")
             image_path = _path(raw.get("image_path"), f"references[{index}].image_path")
+            axis = str(raw.get("axis") or ("FRONT" if index == 0 else "RIGHT")).strip().upper()
             view = {
                 "name": str(raw.get("name") or f"view_{index + 1}").strip()
                 or f"view_{index + 1}",
                 "image_path": image_path,
-                "axis": str(raw.get("axis") or ("FRONT" if index == 0 else "RIGHT")).strip().upper(),
+                "axis": axis,
                 "view_direction": raw.get("view_direction"),
                 "up_direction": raw.get("up_direction"),
                 "default_coordinate_space": str(
@@ -207,6 +209,11 @@ def prepare_reference_images(
                 ),
                 "default_origin": str(raw.get("default_origin") or "top_left"),
                 "plane_height": raw.get("plane_height"),
+                "subject_height": raw.get(
+                    "subject_height",
+                    0.0 if axis in {"TOP", "BOTTOM"} else subject_height,
+                ),
+                "subject_bounds": raw.get("subject_bounds"),
                 "camera_margin": raw.get("camera_margin"),
                 "guide_offset": raw.get("guide_offset"),
                 "include_image_plane": raw.get("include_image_plane", True),
@@ -284,6 +291,14 @@ def prepare_reference_images(
                     minimum=0.01,
                     maximum=100.0,
                 ),
+                subject_height=_finite(
+                    view.get("subject_height"),
+                    "subject_height",
+                    0.0,
+                    minimum=0.0,
+                    maximum=100.0,
+                ),
+                subject_bounds=view.get("subject_bounds"),
                 camera_margin=_finite(
                     view.get("camera_margin"),
                     "camera_margin",
@@ -316,6 +331,7 @@ def prepare_reference_images(
                 subject=subject,
                 collection_name=collection_name,
                 subject_center=subject_center,
+                subject_height=subject_height,
                 active_view=active_view,
                 require_reconstruction=False,
                 label=label,

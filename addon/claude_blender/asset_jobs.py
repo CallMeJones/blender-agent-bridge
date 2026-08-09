@@ -12,7 +12,7 @@ import uuid
 
 import bpy
 
-from . import external_assets, generation_spend, render_jobs, viewport_capture
+from . import external_assets, generation_spend, process_utils, render_jobs, viewport_capture
 
 
 METADATA_FILENAME = "metadata.json"
@@ -642,7 +642,6 @@ def _start_process_job(job_id, provider, args, metadata):
     blender_binary = getattr(bpy.app, "binary_path", "") or "blender"
     command = _asset_worker_command(blender_binary, script_path)
     log_handle = open(log_path, "w", encoding="utf-8", newline="\n")
-    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     try:
         process = subprocess.Popen(
             command,
@@ -650,8 +649,8 @@ def _start_process_job(job_id, provider, args, metadata):
             stdout=log_handle,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
-            creationflags=creationflags,
             env=_child_env(args, provider),
+            **process_utils.process_group_kwargs(),
         )
     finally:
         log_handle.close()
@@ -661,22 +660,7 @@ def _start_process_job(job_id, provider, args, metadata):
 
 
 def _terminate_process(process, timeout=5):
-    if process is None:
-        return None
-    if process.poll() is not None:
-        return process.poll()
-    try:
-        process.terminate()
-        process.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        try:
-            process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            pass
-    except Exception:
-        pass
-    return process.poll()
+    return process_utils.terminate_process_tree(process, timeout=timeout)
 
 
 def _import_queue_contains(job_id):

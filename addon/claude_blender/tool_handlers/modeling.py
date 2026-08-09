@@ -209,6 +209,14 @@ def create_reference_guides_from_annotations(context, args):
         plane_height=_bounded_float(
             args.get("plane_height"), 3.0, minimum=0.01, maximum=100.0
         ),
+        subject_height=_bounded_float(
+            args.get("subject_height"), 0.0, minimum=0.0, maximum=100.0
+        ),
+        subject_bounds=(
+            _float_list(args.get("subject_bounds"), 4, (0.0, 0.0, 1.0, 1.0))
+            if args.get("subject_bounds") is not None
+            else None
+        ),
         plane_location=_float_list(
             args.get("plane_location"), 3, (0.0, 0.0, 1.5)
         ),
@@ -245,6 +253,9 @@ def prepare_reference_images(context, args):
         subject_center=_float_list(
             args.get("subject_center"), 3, (0.0, 0.0, 1.5)
         ),
+        subject_height=_bounded_float(
+            args.get("subject_height"), 0.0, minimum=0.0, maximum=100.0
+        ),
         active_view=str(args.get("active_view") or ""),
         create_guides=bool(args.get("create_guides", True)),
         require_annotations=bool(args.get("require_annotations", False)),
@@ -267,6 +278,9 @@ def create_multiview_reference_guides(context, args):
             args.get("subject_center"),
             3,
             (0.0, 0.0, 1.5),
+        ),
+        subject_height=_bounded_float(
+            args.get("subject_height"), 0.0, minimum=0.0, maximum=100.0
         ),
         active_view=str(args.get("active_view") or ""),
         include_image_planes=bool(args.get("include_image_planes", True)),

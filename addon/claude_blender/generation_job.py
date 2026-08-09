@@ -21,7 +21,7 @@ import subprocess
 import time
 import urllib.request
 
-from . import generation_clients
+from . import generation_clients, process_utils
 
 MANIFEST_NAME = "asset_manifest.json"
 POLL_INTERVAL_SECONDS = 5
@@ -220,31 +220,57 @@ def _run_triposr(config, args, *, progress_callback=None):
         command.extend(["--texture-resolution", str(triposr_options["texture_resolution"])])
 
     report(0.1, "Starting TripoSR local process", phase="local_process")
+    timeout = int(args.get("timeout") or 300)
     try:
-        completed = subprocess.run(
+        process = subprocess.Popen(
             command,
             cwd=root,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=int(args.get("timeout") or 300),
-            check=False,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            stdin=subprocess.DEVNULL,
+            **process_utils.process_group_kwargs(),
         )
-    except Exception as error:  # noqa: BLE001 - local process failure is reportable
+    except Exception as error:  # noqa: BLE001 - process startup failure is reportable
         return _failure(cache_dir, "TripoSR process failed to start: %s" % error, provider="triposr")
+
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        process_utils.terminate_process_tree(process)
+        try:
+            stdout, stderr = process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            stdout, stderr = process.communicate()
+        completed_returncode = process.returncode
+        timed_out = True
+    else:
+        completed_returncode = process.returncode
+        timed_out = False
 
     stdout_path = os.path.join(cache_dir, "triposr.stdout.log")
     stderr_path = os.path.join(cache_dir, "triposr.stderr.log")
     with open(stdout_path, "w", encoding="utf-8", newline="\n") as handle:
-        handle.write(completed.stdout or "")
+        handle.write(stdout or "")
     with open(stderr_path, "w", encoding="utf-8", newline="\n") as handle:
-        handle.write(completed.stderr or "")
+        handle.write(stderr or "")
 
-    if completed.returncode != 0:
+    if timed_out:
+        return _failure(
+            cache_dir,
+            "TripoSR timed out after %d seconds" % timeout,
+            provider="triposr",
+            returncode=completed_returncode,
+            stdout_log=stdout_path,
+            stderr_log=stderr_path,
+        )
+
+    if completed_returncode != 0:
         return _failure(
             cache_dir,
             "TripoSR exited with code %s: %s"
-            % (completed.returncode, _tail(completed.stderr or completed.stdout)),
+            % (completed_returncode, _tail(stderr or stdout)),
             provider="triposr",
             stdout_log=stdout_path,
             stderr_log=stderr_path,
@@ -489,7 +515,7 @@ def run(
         "import_file": destination,
         "downloaded_files": [{"ok": True, "path": destination, "cached": False, "logical_path": os.path.basename(destination)}],
         "license": str(args.get("license_note") or "Commercial API; output rights governed by the vendor's terms."),
-        "source_url": model_url,
+        "source_url": model_url.split("?", 1)[0],
         "generation": {
             "task_id": task_id,
             "model": str(args.get("model") or ""),

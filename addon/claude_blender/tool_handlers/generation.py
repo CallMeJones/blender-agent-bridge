@@ -58,6 +58,38 @@ def _runtime_requirement_value(spec, environ, label):
     return ""
 
 
+def _triposr_job_options(args, prefs):
+    """Resolve saved TripoSR defaults with per-job arguments taking precedence."""
+
+    def value(argument, preference, default):
+        if argument in args:
+            return args.get(argument)
+        return getattr(prefs, preference, default)
+
+    return {
+        "mc_resolution": _bounded_int(
+            value("mc_resolution", "triposr_mc_resolution", 256), 256, minimum=16, maximum=512
+        ),
+        "no_remove_bg": bool(value("no_remove_bg", "triposr_no_remove_bg", False)),
+        "foreground_ratio": _bounded_float(
+            value("foreground_ratio", "triposr_foreground_ratio", 0.85),
+            0.85,
+            minimum=0.1,
+            maximum=1.0,
+        ),
+        "chunk_size": _bounded_int(
+            value("chunk_size", "triposr_chunk_size", 8192), 8192, minimum=0, maximum=262144
+        ),
+        "bake_texture": bool(value("bake_texture", "triposr_bake_texture", False)),
+        "texture_resolution": _bounded_int(
+            value("texture_resolution", "triposr_texture_resolution", 2048),
+            2048,
+            minimum=256,
+            maximum=8192,
+        ),
+    }
+
+
 def _view_warnings(views):
     """Say what a partial or uncalibrated view set will cost the result.
 
@@ -175,7 +207,9 @@ def plan_image_to_3d_approach(context, args):
             route["why_not_ready"] = forbidden
 
     ready = [route for route in routes if route["ready"]]
+    ready_generation_routes = [route for route in ready if route["id"] != "authored"]
     paid_ready = [route for route in ready if route["id"] != "authored" and route["data_leaves_machine"]]
+    provider_choice_needed = len(ready_generation_routes) > 1
 
     # With no key configured, uploads switched off, or no local runtime, the
     # authored route is the only one left -- and a question with one answer is
@@ -206,6 +240,14 @@ def plan_image_to_3d_approach(context, args):
         "question": question,
         "routes": routes,
         "ready_routes": [route["id"] for route in ready],
+        "generation_provider_selection_required": provider_choice_needed,
+        "generation_provider_choices": [route["id"] for route in ready_generation_routes],
+        "provider_question": (
+            "Which generation provider do you want to use? %s"
+            % " | ".join(route["title"] for route in ready_generation_routes)
+            if provider_choice_needed
+            else ""
+        ),
         "paid_routes": [route["id"] for route in paid_ready],
         "generation_policy": policy,
         "note": (
@@ -269,11 +311,23 @@ def start_generation_job(context, args):
     if not selection.get("ok"):
         # Hand back the full diagnostics so the caller can fix the deployment
         # rather than guess which of several conditions failed.
-        return {
+        result = {
             "ok": False,
             "message": selection.get("message") or "No generation provider is available",
             "diagnostics": selection.get("diagnostics"),
         }
+        for key in (
+            "requires_explicit_choice",
+            "provider_selection_required",
+            "suggested_providers",
+            "provider_choices",
+            "unimplemented_providers",
+            "generation_policy",
+            "policy_blocked",
+        ):
+            if key in selection:
+                result[key] = selection[key]
+        return result
 
     provider = selection["selected"]
     provider_spec = generation_providers.PROVIDERS_BY_NAME[provider]
@@ -322,18 +376,8 @@ def start_generation_job(context, args):
     }
     if "texture" in args:
         job_args["texture"] = bool(args.get("texture"))
-    for key, value in (
-        ("mc_resolution", _bounded_int(args.get("mc_resolution"), 256, minimum=16, maximum=512)),
-        ("foreground_ratio", _bounded_float(args.get("foreground_ratio"), 0.85, minimum=0.1, maximum=1.0)),
-        ("chunk_size", _bounded_int(args.get("chunk_size"), 8192, minimum=0, maximum=262144)),
-        ("texture_resolution", _bounded_int(args.get("texture_resolution"), 2048, minimum=256, maximum=8192)),
-    ):
-        if key in args:
-            job_args[key] = value
-    if "no_remove_bg" in args:
-        job_args["no_remove_bg"] = bool(args.get("no_remove_bg"))
-    if "bake_texture" in args:
-        job_args["bake_texture"] = bool(args.get("bake_texture"))
+    if provider == "triposr":
+        job_args.update(_triposr_job_options(args, prefs))
     endpoint = _first_configured(environ, provider_spec.endpoint_env_vars)
     if endpoint:
         job_args["endpoint"] = endpoint
@@ -619,24 +663,27 @@ def _orientation_profile(obj, manifest=None):
     except AttributeError:
         object_orientation = ""
     provider_normalized = bool(normalization.get("applied") or object_orientation)
+    provider = str((manifest or {}).get("provider") or "").strip().lower()
     axis_dominance_warning = dominant != "z"
-    upright_likely = bool(provider_normalized or not axis_dominance_warning)
+    missing_required_normalization = provider == "triposr" and not provider_normalized
+    upright_likely = not missing_required_normalization
     return {
         "dimensions": [round(value, 6) for value in dims],
         "dominant_axis": dominant,
         "upright_likely": upright_likely,
         "provider_normalized": provider_normalized,
+        "provider_requires_normalization": provider == "triposr",
         "object_orientation": object_orientation,
         "import_orientation_normalization": normalization,
         "axis_dominance_warning": axis_dominance_warning,
         "warning": (
-            ""
-            if upright_likely
-            else "Largest dimension is not on Blender Z and no provider import normalization is recorded."
+            "TripoSR orientation normalization is not recorded; raw output is expected to require Y-up to Z-up conversion."
+            if missing_required_normalization
+            else ""
         ),
         "note": (
-            "Provider import normalization is recorded; axis dominance alone is ambiguous for generated meshes."
-            if provider_normalized and axis_dominance_warning
+            "Bounding-box dominance cannot determine orientation for wide or elongated subjects; inspect the rendered views."
+            if axis_dominance_warning and not missing_required_normalization
             else ""
         ),
     }
@@ -649,6 +696,44 @@ def _generation_source(obj, manifest):
         provider = str(obj.get("blender_agent_bridge_asset_provider", "") or "").strip().lower()
     generation = manifest.get("generation") if isinstance(manifest.get("generation"), dict) else {}
     return provider, generation
+
+
+VERY_DENSE_FACE_THRESHOLD = 500_000
+FRAGMENTED_COMPONENT_THRESHOLD = 32
+
+
+def _topology_findings(face_count, components):
+    component_count = int((components or {}).get("component_count") or 0)
+    findings = []
+    if face_count > VERY_DENSE_FACE_THRESHOLD:
+        findings.append(
+            {
+                "code": "very_dense_mesh",
+                "severity": "warning",
+                "message": "Mesh has %d faces, which is heavy for routine viewport editing." % face_count,
+                "recommendation": "Preserve the source asset, then create a decimated or remeshed working copy.",
+            }
+        )
+    elif component_count <= 1 and face_count > 20000:
+        findings.append(
+            {
+                "code": "dense_single_component",
+                "severity": "info",
+                "message": "Mesh is a dense single component; it may be hard to edit as separate parts.",
+                "recommendation": "Use cleanup/decimation for blockout review, or part-aware reconstruction for editable assets.",
+            }
+        )
+    if component_count > FRAGMENTED_COMPONENT_THRESHOLD:
+        findings.append(
+            {
+                "code": "fragmented_mesh_components",
+                "severity": "warning",
+                "message": "Mesh contains %d disconnected components, which can complicate cleanup and editing."
+                % component_count,
+                "recommendation": "Inspect for floating fragments, then join or remove components on a working copy.",
+            }
+        )
+    return findings
 
 
 def _quality_findings(obj, manifest):
@@ -700,15 +785,7 @@ def _quality_findings(obj, manifest):
                 "recommendation": "Use bake_texture/texture_resolution when supported, or keep materials during cleanup.",
             }
         )
-    if components["component_count"] <= 1 and face_count > 20000:
-        findings.append(
-            {
-                "code": "dense_single_component",
-                "severity": "info",
-                "message": "Mesh is a dense single component; it may be hard to edit as separate parts.",
-                "recommendation": "Use cleanup/decimation for blockout review, or part-aware reconstruction for editable assets.",
-            }
-        )
+    findings.extend(_topology_findings(face_count, components))
     return {
         "provider": provider,
         "generation": generation,
@@ -767,9 +844,29 @@ def evaluate_generated_asset(context, args):
             resolution_x=_bounded_int(args.get("resolution_x"), 800, minimum=128, maximum=2048),
             resolution_y=_bounded_int(args.get("resolution_y"), 600, minimum=128, maximum=2048),
             note=str(args.get("note") or "Generated asset evaluation"),
+            isolate_targets=True,
+            create_contact_sheet=True,
         )
 
-    finding_count = sum(len(item.get("findings") or []) for item in evaluations)
+    inspection_renders = render_result.get("inspection_render") if render_result else {}
+    render_findings = []
+    if include_renders and inspection_renders:
+        failed_images = [
+            image
+            for image in inspection_renders.get("images", [])
+            if image.get("view") != "contact_sheet" and not image.get("available")
+        ]
+        if failed_images:
+            render_findings.append(
+                {
+                    "code": "inspection_render_incomplete",
+                    "severity": "warning",
+                    "message": "%d requested inspection view(s) did not render." % len(failed_images),
+                    "views": [image.get("view", "") for image in failed_images],
+                    "recommendation": "Retry the failed views or capture viewport evidence before judging orientation and shape.",
+                }
+            )
+    finding_count = sum(len(item.get("findings") or []) for item in evaluations) + len(render_findings)
     return {
         "ok": True,
         "message": "Generated asset evaluation completed",
@@ -779,7 +876,14 @@ def evaluate_generated_asset(context, args):
         "manifest": manifest if manifest_path else {},
         "evaluations": evaluations,
         "finding_count": finding_count,
-        "inspection_renders": render_result.get("inspection_render") if render_result else {},
+        "render_findings": render_findings,
+        "render_complete": bool(not include_renders or inspection_renders.get("render_complete", False)),
+        "inspection_renders": inspection_renders,
+        "contact_sheet": (
+            (render_result.get("inspection_render") or {}).get("contact_sheet", {})
+            if render_result
+            else {}
+        ),
         "render_result": render_result,
     }
 

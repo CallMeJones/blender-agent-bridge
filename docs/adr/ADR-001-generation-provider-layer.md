@@ -348,3 +348,20 @@ homes and made "did we gate this provider?" a question with two places to look.
 plus a manifest" -- the original revisit condition, unchanged -- or if the two
 verbs acquire genuinely different job lifecycles rather than different heads.
 Two verbs sharing one lifecycle is the condition this decision was made for.
+
+## Amendment, 2026-08-09: Provider Choice Does Not Gate The Bridge
+
+Generation controls have one ownership boundary: generation. Disabling hosted
+egress or setting a restrictive generation session policy must not unregister,
+disable, or otherwise change the main bridge, trusted script execution, bounded
+modeling helpers, inspection tools, or non-generation asset workflows. When no
+generation route is allowed, planning directs the caller back to authored
+scripts and helpers instead of treating the bridge as unavailable.
+
+Provider choice is also explicit whenever it is meaningful. The planning tool
+asks the user to choose when two or more runnable generation providers satisfy
+the request. `start_generation_job` repeats that guard and starts no work when a
+caller omits the provider, so skipping the planner cannot silently spend money,
+upload an image, or choose a lower-quality route. A sole local/self-hosted route
+may auto-select. A hosted route always requires explicit selection, even when it
+is the only runnable generation provider.

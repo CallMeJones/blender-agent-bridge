@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 
 
@@ -105,6 +106,39 @@ class GenerationJobTests(unittest.TestCase):
         # These keys are what the shared import/presentation tail consumes.
         for key in ("ok", "provider", "cache_dir", "manifest_path", "import_file", "downloaded_files", "license", "source_url"):
             self.assertIn(key, manifest)
+
+    def test_manifest_does_not_persist_signed_download_query(self):
+        signed_url = "https://cdn.example/model.glb?Policy=secret&Signature=temporary"
+        client = _StubClient(
+            statuses=[
+                {
+                    "status": "success",
+                    "terminal": True,
+                    "succeeded": True,
+                    "progress": 100,
+                    "model_url": signed_url,
+                }
+            ]
+        )
+        downloaded = []
+
+        def download(url, destination, timeout=300):
+            downloaded.append(url)
+            return _fake_download(url, destination, timeout)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            from claude_blender import generation_job
+
+            manifest = generation_job.run(
+                {"child_status_path": os.path.join(tmp, "s.json")},
+                {"views": _views(tmp, ["front"]), "cache_dir": os.path.join(tmp, "cache")},
+                api_key=API_KEY,
+                client=client,
+                downloader=download,
+                poll_interval=0,
+            )
+        self.assertEqual([signed_url], downloaded)
+        self.assertEqual("https://cdn.example/model.glb", manifest["source_url"])
 
     def test_missing_image_fails_before_any_upload(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -237,6 +271,33 @@ class GenerationJobTests(unittest.TestCase):
         self.assertTrue(manifest["ok"], manifest.get("message"))
         self.assertEqual("triposr", manifest["provider"])
         self.assertEqual("generated.glb", os.path.basename(manifest["import_file"]))
+
+    def test_triposr_timeout_is_reported_distinctly(self):
+        from claude_blender import generation_job
+
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_root = os.path.join(tmp, "triposr")
+            os.makedirs(runtime_root)
+            with open(os.path.join(runtime_root, "run.py"), "w", encoding="utf-8", newline="\n") as handle:
+                handle.write("import time\ntime.sleep(30)\n")
+            started = time.monotonic()
+            manifest = generation_job.run(
+                {"child_status_path": os.path.join(tmp, "s.json")},
+                {
+                    "views": _views(tmp, ["front"]),
+                    "cache_dir": os.path.join(tmp, "cache"),
+                    "provider": "triposr",
+                    "runtime_python": sys.executable,
+                    "runtime_root": runtime_root,
+                    "timeout": 1,
+                },
+                provider="triposr",
+                poll_interval=0,
+            )
+            elapsed = time.monotonic() - started
+        self.assertFalse(manifest["ok"])
+        self.assertIn("timed out after 1 seconds", manifest["message"])
+        self.assertLess(elapsed, 10)
 
     def test_triposr_passes_tunable_runtime_flags(self):
         from claude_blender import generation_job

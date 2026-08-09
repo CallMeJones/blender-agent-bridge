@@ -2275,6 +2275,7 @@ def main():
                 ],
                 "profile": "blockout",
                 "max_axis": 128,
+                "include_structure": True,
             },
         )
         assert isinstance(reference_benchmark["passed"], bool), reference_benchmark
@@ -2284,6 +2285,11 @@ def main():
         assert (
             reference_benchmark["evaluation"]["profile"] == "blockout"
         ), reference_benchmark
+        assert (
+            reference_benchmark["evaluation"]["verdict_scope"]
+            == "silhouette_and_structure"
+        ), reference_benchmark
+        assert reference_benchmark["structural_inspection"]["ok"] is True, reference_benchmark
         assert len(reference_benchmark["images"]) == 3, reference_benchmark
         assert all(
             image["available"] for image in reference_benchmark["images"]

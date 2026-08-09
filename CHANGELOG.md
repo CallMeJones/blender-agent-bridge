@@ -10,17 +10,25 @@
 - Added local/self-hosted TripoSR execution via a configured Python interpreter and checkout root, with stdout/stderr capture and generated-mesh discovery.
 - Fixed TripoSR local execution to create the indexed output folder expected by TripoSR's exporter before running the subprocess.
 - Exposed TripoSR tuning knobs on `start_generation_job`: `mc_resolution`, `no_remove_bg`, `foreground_ratio`, `chunk_size`, `bake_texture`, and `texture_resolution`.
+- Added persistent TripoSR defaults for those six controls in add-on preferences; explicit `start_generation_job` arguments still override the saved values for one run.
+- Fixed generation cancellation and TripoSR timeout handling to terminate the complete worker descendant tree, preventing local inference processes from surviving a cancelled Blender worker. Timeout failures now report as timeouts instead of misleading process-start failures.
+- Hosted generation manifests now retain stable source provenance without persisting temporary signed download query parameters.
 - Marked TripoSR manifests and planning output as a local single-view blockout route rather than a final-quality route.
-- Normalized TripoSR imports into Blender Z-up with a provider-specific X -90 / Z +90 root rotation recorded in the generated asset manifest.
+- Normalized TripoSR imports into Blender Z-up with a provider-specific X -90 / Z +90 root rotation recorded in the generated asset manifest; the correction now composes the object matrix so it also applies to GLB roots using quaternion rotation mode.
 - Added `cleanup_generated_asset` for preview-safe generated mesh cleanup: shade smooth, Weighted Normal, optional Decimate, optional Voxel Remesh, and material preservation.
-- Added `evaluate_generated_asset` for generated-output review: topology/material/component/metadata-aware orientation checks, optional front/side/top inspection renders, and single-view TripoSR relief-shell warnings.
+- Added `evaluate_generated_asset` for generated-output review: topology/material/component/metadata-aware orientation checks, isolated front/side/top inspection renders, an automatically published contact sheet, and single-view TripoSR relief-shell warnings. Temporary render visibility is restored even when capture fails.
+- Hardened generated-output evaluation for hosted meshes: assets above 500,000 faces and assets with more than 32 disconnected components are called out explicitly, failed Eevee/Cycles inspection views retry through Workbench, and incomplete visual evidence contributes its own finding instead of silently returning an empty contact sheet.
+- Limited automatic orientation failures to providers such as raw TripoSR that require a known import transform; bounding-box dominance for wide hosted subjects is now informational because it cannot establish semantic up direction.
+- Added temporary deterministic three-point lighting to inspection renders and restore all prior light visibility afterward, preventing generated assets from being judged through an accidentally unlit scene.
 - Tightened local provider diagnostics so local-process providers need both a Python interpreter and a checkout/root. Hunyuan3D and TRELLIS now expose that strategy-level readiness while remaining unimplemented launchers.
 - Preserved provider identity through generation manifests and exposed a `texture` option on the public generation job schema.
+- Kept generation policy and third-party egress controls isolated from the main bridge: disabling generation still leaves trusted scripts and bounded modeling helpers available. When more than one runnable generation provider is available, planning now asks the user to choose and direct job starts refuse to guess; a sole local/self-hosted provider may be selected automatically, while a hosted provider always requires explicit selection.
 
 ### Reference modeling
 
 - Added explicit `cell_size` support to multi-view visual hull and depth-surface carving so callers can request world-unit resolution instead of only longest-axis subdivision.
 - Added generic-character automatic part defaults. A single primary guide mass now produces body, head, left/right arm, and left/right leg parts when head/body were not explicitly labeled.
+- Added optional subject-height calibration for annotated and prepared single/multi-view guides. Silhouette-derived bounds now map the subject, rather than the whole image frame, to a requested world-space height; frame-scale mode records estimated subject height and warns on cross-view scale spread.
 
 ### Reference intake
 
@@ -30,15 +38,20 @@
 ### Measurement honesty
 
 - The reference benchmark now separates a wrong shape from a right shape posed differently. A character authored in an A-pose against a reference with clasped hands scored 0.666 silhouette IoU against a 0.72 threshold while mean edge distance held at 1.2-1.7%; the model was correct and the gate said otherwise. `conformance_diagnosis` reports `conformant`, `area_difference`, or `shape_drift`, and the area case states that a deliberate pose cannot pass the gate and should not be chased.
+- Added an optional structural benchmark term backed by `inspect_modeling_quality`. It keeps silhouette and topology verdicts separate, gates loose/non-manifold geometry and an optional face budget, and requires both terms for a combined pass without claiming riggability or production topology.
 - `inspect_modeling_quality` no longer counts boundary edges as non-manifold. bmesh reports them that way, which is true of the term and useless as a defect count: an open garment shell is meant to have a hem, and a caller clearing that number welds a skirt shut. Only edges shared by more than two faces count; boundary edges keep a separate count.
 
 ### Diagnostics
+
+- Cleared orphaned live-preview UI state after add-on reload, disable, or Blender file load when the in-memory rollback transaction no longer exists, while preserving Commit/Revert controls for genuine pending transactions.
+- Fixed Reload Scripts to refresh the generation provider policy, registry, and handler modules, with inventory tests that prevent the provider selector or future modular domains from being omitted from the reload order.
 
 - Stale add-on source now leads the bridge status. It was already reported with the exact remedy, buried among sixty sibling fields, and a live session ran on old code while the status read "connected".
 - A generation job now checks the account balance in the worker subprocess before uploading, so an account short of credits fails before the user's reference art leaves the machine rather than after.
 
 ### Documentation
 
+- Expanded the README with a supported-provider showcase and setup guide for Poly Haven, Sketchfab, hosted Tripo/Meshy generation, and local TripoSR, including provider-choice, upload, spend-approval, provenance, and credential-storage behavior.
 - Added `CONTEXT.md`, fixing the vocabulary shared by module names, tool descriptions, and agent conversations. Records the pure-module / `_scene`-adapter split, and the ambiguities that produced real defects.
 - Recorded in ADR-001 that Decision 1 held: `asset_jobs` should not be split now that it carries both catalog downloads and paid generation.
 

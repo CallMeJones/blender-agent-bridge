@@ -109,6 +109,44 @@ class ReferenceMultiViewTests(unittest.TestCase):
                 ]
             )
 
+    def test_subject_height_calibration_scales_the_subject_not_the_frame(self):
+        normalized = {
+            "curves": [
+                {
+                    "name": "silhouette",
+                    "cyclic": True,
+                    "points": [[0.2, 0.1], [0.8, 0.1], [0.8, 0.9], [0.2, 0.9]],
+                }
+            ]
+        }
+        calibrated = reference_multiview.subject_scale_calibration(
+            normalized,
+            plane_height=3.0,
+            subject_height=2.0,
+        )
+        self.assertTrue(calibrated["applied"])
+        self.assertEqual("subject_height", calibrated["mode"])
+        self.assertAlmostEqual(0.8, calibrated["subject_height_fraction"])
+        self.assertAlmostEqual(2.5, calibrated["resolved_plane_height"])
+        self.assertAlmostEqual(2.0, calibrated["estimated_world_subject_height"])
+
+    def test_frame_calibration_warns_when_subject_does_not_fill_the_frame(self):
+        frame = reference_multiview.subject_scale_calibration(
+            {
+                "curves": [
+                    {
+                        "name": "outline",
+                        "cyclic": True,
+                        "points": [[0.1, 0.2], [0.9, 0.2], [0.9, 0.7], [0.1, 0.7]],
+                    }
+                ]
+            },
+            plane_height=4.0,
+        )
+        self.assertFalse(frame["applied"])
+        self.assertAlmostEqual(2.0, frame["estimated_world_subject_height"])
+        self.assertTrue(frame["warnings"])
+
 
 if __name__ == "__main__":
     unittest.main()

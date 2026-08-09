@@ -352,6 +352,23 @@ SPECS = (
                     "minimum": 0.01,
                     "maximum": 0.99,
                 },
+                "include_structure": {
+                    "type": "boolean",
+                    "description": "Add basic topology-integrity gates from inspect_modeling_quality to the silhouette verdict.",
+                },
+                "structural_max_faces": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100000000,
+                    "description": "Optional face budget. Zero records face count without gating it.",
+                },
+                "structural_require_materials": {"type": "boolean"},
+                "structural_weight": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                    "description": "Weight of the structural score in the combined score; pass/fail always requires both terms.",
+                },
             },
             "additionalProperties": False,
         },

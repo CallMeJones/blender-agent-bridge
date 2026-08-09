@@ -8,6 +8,7 @@ import time
 import uuid
 
 import bpy
+from bpy.app.handlers import persistent
 from mathutils import Matrix
 
 from . import blender_compat
@@ -324,6 +325,59 @@ def _mark_pending(context, label):
 
 def current_transaction():
     return _current_transaction
+
+
+def _reconcile_pending_preview_state(context=None, *, reason="add-on reload"):
+    """Clear scene UI state when its in-memory rollback transaction is gone."""
+
+    transaction = current_transaction()
+    if transaction and transaction.get("status") == "pending":
+        return False
+
+    context = context or bpy.context
+    scene = getattr(context, "scene", None)
+    state = getattr(scene, "claude_blender", None)
+    if state is None:
+        return False
+
+    stale = any(
+        (
+            bool(getattr(state, "pending_preview", False)),
+            bool(getattr(state, "pending_preview_label", "")),
+            bool(getattr(state, "pending_preview_summary", "")),
+            bool(getattr(state, "pending_preview_warnings", "")),
+        )
+    )
+    if not stale:
+        return False
+
+    _clear_pending_preview_state(state)
+    message = (
+        f"Cleared stale live preview state after {reason}; "
+        "the rollback transaction was no longer available"
+    )
+    state.status = message
+    state.last_preview_summary = message
+    state.last_preview_warnings = ""
+    return True
+
+
+@persistent
+def _reconcile_preview_state_after_load(_dummy):
+    global _current_transaction
+
+    _current_transaction = None
+    _reconcile_pending_preview_state(reason="Blender file load")
+
+
+def _remove_preview_load_handler():
+    handlers = bpy.app.handlers.load_post
+    for handler in list(handlers):
+        if (
+            getattr(handler, "__name__", "") == "_reconcile_preview_state_after_load"
+            and str(getattr(handler, "__module__", "")).endswith(".live_preview")
+        ):
+            handlers.remove(handler)
 
 
 def begin(user_request="", context=None):
@@ -2225,9 +2279,14 @@ def redraw(context):
 
 
 def register():
-    pass
+    _remove_preview_load_handler()
+    bpy.app.handlers.load_post.append(_reconcile_preview_state_after_load)
+    _reconcile_pending_preview_state(reason="add-on registration")
 
 
 def unregister():
     global _current_transaction
+
+    _remove_preview_load_handler()
     _current_transaction = None
+    _reconcile_pending_preview_state(reason="add-on unload")

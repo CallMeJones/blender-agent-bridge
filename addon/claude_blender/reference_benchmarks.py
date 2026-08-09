@@ -1,10 +1,9 @@
 """Versioned metric gates for render-to-reference benchmark evaluations.
 
-**This suite measures silhouette conformance, not model quality.** Every gate
-here -- IoU, edge distance, centroid offset, error regions, landmarks -- is
-derived from the same 2D comparison of a render against a reference
-silhouette. Nothing in it inspects topology, so it cannot tell a clean
-editable mesh from a dense shell that happens to fill the same outline.
+By default this suite measures silhouette conformance, not model quality.
+Callers can now supply the optional structural metrics produced by Blender's
+modeling inspector. That adds bounded topology-integrity and polygon-budget
+gates while keeping the silhouette and structural verdicts separate.
 
 That distinction is not academic. Measured during evaluation: a lumpy voxel
 column scored 0.926 while a clean sculptable base mesh of the same subject
@@ -23,8 +22,8 @@ from __future__ import annotations
 import math
 
 
-REFERENCE_BENCHMARK_SCHEMA_VERSION = 1
-REFERENCE_BENCHMARK_SUITE_VERSION = "2026.07.1"
+REFERENCE_BENCHMARK_SCHEMA_VERSION = 2
+REFERENCE_BENCHMARK_SUITE_VERSION = "2026.08.1"
 PROFILE_ORDER = ("blockout", "refined", "review")
 
 PROFILES = {
@@ -105,6 +104,10 @@ def evaluate_comparison(
     *,
     profile="refined",
     threshold_overrides=None,
+    structural_metrics=None,
+    structural_max_faces=0,
+    structural_require_materials=False,
+    structural_weight=0.25,
 ):
     """Evaluate comparator metrics against one versioned quality profile."""
     if not isinstance(metrics, dict):
@@ -239,12 +242,37 @@ def evaluate_comparison(
             "No matched landmark targets were supplied; landmark gating was skipped"
         )
 
-    failed = [gate["gate"] for gate in gates if not gate["passed"]]
-    quality_score = round(
+    silhouette_failed = [gate["gate"] for gate in gates if not gate["passed"]]
+    silhouette_score = round(
         100.0 * sum(gate["score"] for gate in gates) / max(1, len(gates)),
         2,
     )
+    structural = {}
+    structural_failed = []
+    combined_score = silhouette_score
+    if isinstance(structural_metrics, dict):
+        structural = evaluate_structure(
+            structural_metrics,
+            max_faces=structural_max_faces,
+            require_materials=structural_require_materials,
+        )
+        structural_failed = [
+            "structure.%s" % gate for gate in structural["failed_gates"]
+        ]
+        weight = _bounded_ratio(structural_weight, "structural_weight")
+        combined_score = round(
+            silhouette_score * (1.0 - weight)
+            + structural["structural_score"] * weight,
+            2,
+        )
+    failed = silhouette_failed + structural_failed
     conformance = _conformance_diagnosis(gates)
+    verdict_scope = (
+        "silhouette_and_structure"
+        if structural
+        else "silhouette_conformance_only"
+    )
+    all_gates = len(gates) + int(structural.get("gate_count") or 0)
     return {
         "schema_version": REFERENCE_BENCHMARK_SCHEMA_VERSION,
         "suite_version": REFERENCE_BENCHMARK_SUITE_VERSION,
@@ -254,27 +282,44 @@ def evaluate_comparison(
         # Named for what it measures. "quality_score" is kept for callers that
         # already read it, but the name invited exactly the misreading this
         # payload now heads off.
-        "silhouette_conformance_score": quality_score,
-        "quality_score": quality_score,
-        "verdict_scope": "silhouette_conformance_only",
+        "silhouette_conformance_score": silhouette_score,
+        "quality_score": combined_score,
+        "combined_score": combined_score if structural else None,
+        "verdict_scope": verdict_scope,
         "is_overall_quality_verdict": False,
         "conformance_diagnosis": conformance,
-        "not_measured": [
-            "topology (component count, manifoldness, watertightness)",
-            "whether the mesh is editable, riggable, or sensibly distributed",
-            "polygon budget and face-area distribution",
-            "anything not visible in a 2D silhouette",
-        ],
-        "interpretation": (
-            "Silhouette conformance only. Use it to disqualify a shape that does not match "
-            "the reference, never to rank two candidates: a dense shell that fills the "
-            "reference hull scores higher than a clean editable mesh of the same subject "
-            "(measured: 0.926 against 0.557). To choose between candidates, or to drive a "
-            "repair loop, bring a structural measurement as well."
+        "structural_evaluation": structural,
+        "not_measured": (
+            [
+                "whether the mesh is riggable or semantically partitioned",
+                "UV quality, deformation flow, and face-area distribution",
+                "anything not visible in a 2D silhouette or basic topology inspection",
+            ]
+            if structural
+            else [
+                "topology (component count, manifoldness, watertightness)",
+                "whether the mesh is editable, riggable, or sensibly distributed",
+                "polygon budget and face-area distribution",
+                "anything not visible in a 2D silhouette",
+            ]
         ),
-        "gate_count": len(gates),
-        "passed_gate_count": len(gates) - len(failed),
+        "interpretation": (
+            "Silhouette conformance plus basic structural integrity. The combined verdict requires both, "
+            "but it still does not measure riggability, semantic parts, UV quality, or deformation flow."
+            if structural
+            else (
+                "Silhouette conformance only. Use it to disqualify a shape that does not match "
+                "the reference, never to rank two candidates: a dense shell that fills the "
+                "reference hull scores higher than a clean editable mesh of the same subject "
+                "(measured: 0.926 against 0.557). To choose between candidates, or to drive a "
+                "repair loop, bring a structural measurement as well."
+            )
+        ),
+        "gate_count": all_gates,
+        "passed_gate_count": all_gates - len(failed),
         "failed_gates": failed,
+        "silhouette_failed_gates": silhouette_failed,
+        "structural_failed_gates": structural_failed,
         "gates": gates,
         "thresholds": thresholds,
         "threshold_overrides_applied": bool(override_keys),
@@ -291,6 +336,69 @@ def evaluate_comparison(
             "matched_landmark_count": len(landmark_ratios),
         },
         "warnings": warnings,
+    }
+
+
+def evaluate_structure(metrics, *, max_faces=0, require_materials=False):
+    """Gate bounded topology metrics without claiming production readiness."""
+    if not isinstance(metrics, dict):
+        raise ValueError("structural_metrics must be an object")
+    actuals = {
+        key: int(_nonnegative_number(metrics.get(key, 0), "structural_metrics.%s" % key))
+        for key in (
+            "object_count",
+            "vertices",
+            "faces",
+            "loose_vertices",
+            "loose_edges",
+            "non_manifold_edges",
+            "unassigned_polygons",
+            "inspection_issue_count",
+            "boundary_edges",
+        )
+    }
+    gates = [
+        _minimum_gate("mesh_object_count", actuals["object_count"], 1),
+        _maximum_gate("loose_vertices", actuals["loose_vertices"], 0),
+        _maximum_gate("loose_edges", actuals["loose_edges"], 0),
+        _maximum_gate("non_manifold_edges", actuals["non_manifold_edges"], 0),
+        _maximum_gate("inspection_issue_count", actuals["inspection_issue_count"], 0),
+    ]
+    try:
+        face_limit = int(max_faces or 0)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("structural_max_faces must be an integer") from exc
+    if face_limit < 0:
+        raise ValueError("structural_max_faces must be zero or greater")
+    if face_limit:
+        gates.append(_maximum_gate("face_budget", actuals["faces"], face_limit))
+    if require_materials:
+        gates.append(_maximum_gate("unassigned_polygons", actuals["unassigned_polygons"], 0))
+    failed = [gate["gate"] for gate in gates if not gate["passed"]]
+    score = round(
+        100.0 * sum(gate["score"] for gate in gates) / max(1, len(gates)),
+        2,
+    )
+    warnings = []
+    if actuals["boundary_edges"]:
+        warnings.append(
+            "%d boundary edge(s) were reported but not failed; open garment and sheet boundaries can be intentional"
+            % actuals["boundary_edges"]
+        )
+    return {
+        "passed": not failed,
+        "status": "passed" if not failed else "failed",
+        "structural_score": score,
+        "gate_count": len(gates),
+        "passed_gate_count": len(gates) - len(failed),
+        "failed_gates": failed,
+        "gates": gates,
+        "actuals": actuals,
+        "max_faces": face_limit,
+        "require_materials": bool(require_materials),
+        "warnings": warnings,
+        "source": str(metrics.get("source") or "modeling_quality_inspection"),
+        "details": metrics.get("details") if isinstance(metrics.get("details"), list) else [],
     }
 
 

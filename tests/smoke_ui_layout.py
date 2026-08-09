@@ -85,6 +85,15 @@ class _FakeLayout:
         return None
 
 
+def _preview_load_handlers():
+    return [
+        handler
+        for handler in bpy.app.handlers.load_post
+        if getattr(handler, "__name__", "") == "_reconcile_preview_state_after_load"
+        and str(getattr(handler, "__module__", "")).endswith(".live_preview")
+    ]
+
+
 def main():
     claude_blender.register()
     original_is_running = bridge_server.is_running
@@ -263,7 +272,13 @@ def main():
             "claude_blender.commit_preview",
             "claude_blender.revert_preview",
         ], preview_layout.operators
-        state.pending_preview = False
+        live_preview.register()
+        assert not state.pending_preview
+        assert not state.pending_preview_label
+        assert not state.pending_preview_summary
+        assert not state.pending_preview_warnings
+        assert "rollback transaction was no longer available" in state.last_preview_summary
+        assert len(_preview_load_handlers()) == 1, _preview_load_handlers()
 
         transaction = live_preview.begin("Imported asset", context)
         transaction["applied_steps"].append(
@@ -274,12 +289,19 @@ def main():
         )
         state.pending_preview = True
         state.pending_preview_label = "Imported asset"
+        live_preview.register()
+        assert state.pending_preview
+        assert len(_preview_load_handlers()) == 1, _preview_load_handlers()
         imported_layout = _FakeLayout()
         imported_panel = type("_Sidebar", (), {"layout": imported_layout})()
         ui.CLAUDEBLENDER_PT_sidebar.draw(imported_panel, context)
         assert "claude_blender.revert_last_preview_step" in imported_layout.operators, imported_layout.operators
-        transaction["status"] = "reverted"
-        state.pending_preview = False
+        live_preview._reconcile_preview_state_after_load(None)
+        assert live_preview.current_transaction() is None
+        assert not state.pending_preview
+        assert not state.pending_preview_label
+        assert not state.pending_preview_summary
+        assert not state.pending_preview_warnings
 
         cube = bpy.data.objects["Cube"]
         start_location = tuple(cube.location)
@@ -310,6 +332,12 @@ def main():
             "mcp_launch_mode",
             "generation_python",
             "triposr_root",
+            "triposr_mc_resolution",
+            "triposr_no_remove_bg",
+            "triposr_foreground_ratio",
+            "triposr_chunk_size",
+            "triposr_bake_texture",
+            "triposr_texture_resolution",
             "generation_endpoint",
             "generation_endpoint_token",
             "remember_api_keys",
@@ -466,6 +494,7 @@ def main():
     finally:
         bridge_server.is_running = original_is_running
         claude_blender.unregister()
+        assert not _preview_load_handlers(), _preview_load_handlers()
 
 
 if __name__ == "__main__":

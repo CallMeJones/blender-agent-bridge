@@ -1639,12 +1639,20 @@ def _apply_import_orientation_normalization(manifest, imported_objects):
 
     delta = normalization["rotation_euler_delta"]
     rotation_applied = any(abs(float(value)) > 1e-9 for value in delta)
+    if rotation_applied:
+        from mathutils import Euler, Matrix
+
+        rotation_delta = Euler(tuple(float(value) for value in delta), "XYZ").to_matrix().to_4x4()
     for obj in targets:
         if rotation_applied:
             live_preview._record_object_transform(obj)
-            obj.rotation_euler.x += float(delta[0])
-            obj.rotation_euler.y += float(delta[1])
-            obj.rotation_euler.z += float(delta[2])
+            origin = obj.matrix_world.translation.copy()
+            obj.matrix_world = (
+                Matrix.Translation(origin)
+                @ rotation_delta
+                @ Matrix.Translation(-origin)
+                @ obj.matrix_world
+            )
         obj["blender_agent_bridge_import_orientation"] = normalization["axis_transform"]
 
     return {

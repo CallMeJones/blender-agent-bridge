@@ -85,6 +85,14 @@ class GeneratedAssetQualityTests(unittest.TestCase):
         codes = {item["code"]: item["severity"] for item in findings["findings"]}
         self.assertEqual("warning", codes["orientation_not_z_up"])
 
+    def test_wide_hosted_subject_does_not_imply_wrong_orientation(self):
+        findings = generation._quality_findings(_FakeObject(), {"provider": "meshy", "generation": {"view_count": 1}})
+
+        codes = {item["code"]: item["severity"] for item in findings["findings"]}
+        self.assertNotIn("orientation_not_z_up", codes)
+        self.assertEqual("info", codes["orientation_axis_dominance_ambiguous"])
+        self.assertTrue(findings["orientation"]["upright_likely"])
+
 
 if __name__ == "__main__":
     unittest.main()

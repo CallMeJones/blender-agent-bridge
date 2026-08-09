@@ -15,13 +15,15 @@ import urllib.parse
 import zipfile
 
 import bpy
+from mathutils import Vector
 
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 import claude_blender  # noqa: E402
-from claude_blender import asset_jobs, blender_compat, external_assets, live_preview, preferences, tool_dispatcher  # noqa: E402
+from claude_blender import asset_jobs, blender_compat, external_assets, inspection_render, live_preview, preferences, tool_dispatcher  # noqa: E402
+from claude_blender.tool_handlers import generation as generation_handlers  # noqa: E402
 
 observed_timeouts = []
 SUBPROCESS_MODEL_BYTES = b'{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[]}]}'
@@ -258,12 +260,108 @@ def main():
             "asset-worker.py",
         ], online_worker_command
         claude_blender.register()
+
+        heavy_findings = generation_handlers._topology_findings(
+            1_464_206,
+            {"component_count": 104},
+        )
+        heavy_codes = {item["code"] for item in heavy_findings}
+        assert heavy_codes == {"very_dense_mesh", "fragmented_mesh_components"}, heavy_findings
+
+        enum_item = type("_EnumItem", (), {})
+        eevee_item = enum_item()
+        eevee_item.identifier = "BLENDER_EEVEE_NEXT"
+        workbench_item = enum_item()
+        workbench_item.identifier = "BLENDER_WORKBENCH"
+        engine_property = type("_EngineProperty", (), {})()
+        engine_property.enum_items = [eevee_item, workbench_item]
+        fake_render = type("_RenderSettings", (), {})()
+        fake_render.engine = "BLENDER_EEVEE_NEXT"
+        fake_render.bl_rna = type("_RenderRNA", (), {"properties": {"engine": engine_property}})()
+        fake_scene = type("_Scene", (), {"render": fake_render})()
+        render_attempts = []
+
+        def _fallback_render():
+            render_attempts.append(fake_scene.render.engine)
+            if len(render_attempts) == 1:
+                raise RuntimeError("primary renderer unavailable")
+
+        fallback = inspection_render._render_still_with_fallback(
+            fake_scene,
+            render_callable=_fallback_render,
+        )
+        assert fallback["fallback_used"] is True, fallback
+        assert fallback["render_engine"] == "BLENDER_WORKBENCH", fallback
+        assert render_attempts == ["BLENDER_EEVEE_NEXT", "BLENDER_WORKBENCH"], render_attempts
+        assert fake_scene.render.engine == "BLENDER_EEVEE_NEXT", fake_scene.render.engine
+
+        orientation_mesh = bpy.data.meshes.new("SmokeTripoSROrientationMesh")
+        orientation_object = bpy.data.objects.new("SmokeTripoSROrientation", orientation_mesh)
+        bpy.context.scene.collection.objects.link(orientation_object)
+        orientation_object.rotation_mode = "QUATERNION"
+        orientation_object.location = (1.0, 2.0, 3.0)
+        bpy.context.view_layer.update()
+        orientation = external_assets._apply_import_orientation_normalization(
+            {"provider": "triposr"},
+            [orientation_object.name],
+        )
+        assert orientation["applied"] is True, orientation
+        assert orientation_object.rotation_mode == "QUATERNION", orientation_object.rotation_mode
+        transformed_up = orientation_object.matrix_world.to_3x3() @ Vector((0.0, -1.0, 0.0))
+        assert (transformed_up - Vector((0.0, 0.0, 1.0))).length < 1e-6, transformed_up
+        assert (orientation_object.matrix_world.translation - Vector((1.0, 2.0, 3.0))).length < 1e-6
+        assert abs(float(orientation_object.rotation_quaternion.w) - 1.0) > 1e-6, (
+            orientation_object.rotation_quaternion
+        )
+        live_preview.commit(bpy.context)
+        bpy.data.objects.remove(orientation_object, do_unlink=True)
+        bpy.data.meshes.remove(orientation_mesh)
         original_get_preferences = preferences.get_preferences
         smoke_preferences = type("_SmokePreferences", (), {"capture_cache_dir": cache_dir})()
         preferences.get_preferences = lambda _context: smoke_preferences
         bpy.ops.mesh.primitive_cube_add()
         cube = bpy.context.object
         cube.name = "TextureTarget"
+
+        bpy.ops.mesh.primitive_uv_sphere_add(location=(0.0, -0.5, 0.0), scale=(3.0, 3.0, 3.0))
+        unrelated = bpy.context.object
+        unrelated.name = "GeneratedEvaluationUnrelated"
+        unrelated.hide_render = False
+        light_names_before = set(bpy.data.lights.keys())
+        light_states_before = {
+            obj.name: bool(obj.hide_render)
+            for obj in bpy.context.scene.objects
+            if obj.type == "LIGHT"
+        }
+        evaluation = _execute(
+            bpy.context,
+            "evaluate_generated_asset",
+            {
+                "object_names": [cube.name],
+                "include_renders": True,
+                "views": ["front", "side", "top"],
+                "resolution_x": 128,
+                "resolution_y": 128,
+                "note": "Generated evaluation isolation smoke",
+            },
+        )
+        assert evaluation["ok"] is True, evaluation
+        inspection = evaluation["inspection_renders"]
+        assert inspection["targets_isolated"] is True, inspection
+        assert inspection["image_count"] == 4, inspection
+        contact_sheet = evaluation["contact_sheet"]
+        assert contact_sheet["available"] is True, contact_sheet
+        assert contact_sheet["source_image_count"] == 3, contact_sheet
+        assert os.path.isfile(contact_sheet["path"]), contact_sheet
+        assert inspection["lighting"] == "temporary_three_point_area", inspection
+        assert set(bpy.data.lights.keys()) == light_names_before, bpy.data.lights.keys()
+        assert {
+            obj.name: bool(obj.hide_render)
+            for obj in bpy.context.scene.objects
+            if obj.type == "LIGHT"
+        } == light_states_before
+        assert unrelated.hide_render is False, unrelated.hide_render
+        bpy.data.objects.remove(unrelated, do_unlink=True)
 
         hdri = _execute(
             bpy.context,

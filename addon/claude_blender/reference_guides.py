@@ -10,7 +10,7 @@ import os
 import bpy
 from mathutils import Vector
 
-from . import live_preview, reference_annotations
+from . import live_preview, reference_annotations, reference_multiview
 from .advanced_support import (
     _coerce_vector,
     _material_for_color,
@@ -776,6 +776,8 @@ def create_reference_guides_from_annotations(
     subject="",
     collection_name="Reference Annotation Guides",
     plane_height=3.0,
+    subject_height=0.0,
+    subject_bounds=None,
     plane_location=(0.0, 0.0, 1.5),
     guide_offset_y=-0.02,
     include_image_plane=True,
@@ -847,6 +849,18 @@ def create_reference_guides_from_annotations(
             _remove_unused_image(loaded_image)
         return {"ok": False, "message": str(exc)}
 
+    try:
+        subject_calibration = reference_multiview.subject_scale_calibration(
+            normalized,
+            plane_height=plane_height,
+            subject_height=subject_height,
+            subject_bounds=subject_bounds,
+        )
+    except reference_multiview.MultiViewCalibrationError as exc:
+        if existing_image is None:
+            _remove_unused_image(loaded_image)
+        return {"ok": False, "code": "invalid_subject_calibration", "message": str(exc)}
+
     resolved_subject = (
         str(subject or "").strip()
         or normalized.get("subject")
@@ -859,7 +873,7 @@ def create_reference_guides_from_annotations(
         coordinate_space="normalized",
         subject=resolved_subject,
         collection_name=collection_name,
-        plane_height=plane_height,
+        plane_height=subject_calibration["resolved_plane_height"],
         plane_location=plane_location,
         guide_offset_y=guide_offset_y,
         include_image_plane=include_image_plane,
@@ -923,6 +937,7 @@ def create_reference_guides_from_annotations(
             "world_y=center_y+guide_offset_y; "
             "world_z=center_z+(0.5-v)*plane_height"
         ),
+        "subject_scale": subject_calibration,
     }
 
     camera = {}
@@ -980,6 +995,7 @@ def create_reference_guides_from_annotations(
         f"{normalized['source_coordinate_space']} coordinates with "
         f"{normalized['source_origin']} origin."
     )
+    source_notes.extend(subject_calibration.get("warnings") or [])
     reference_brief_seed["source_notes"] = source_notes
     _set_json_prop(collection, "reference_brief_seed_json", reference_brief_seed)
 
@@ -1007,9 +1023,10 @@ def create_reference_guides_from_annotations(
                 "schema_version": normalized["schema_version"],
                 "counts": dict(normalized["counts"]),
                 "clamped_point_count": normalized["clamped_point_count"],
-                "warnings": list(normalized["warnings"]),
+                "warnings": list(normalized["warnings"]) + list(subject_calibration.get("warnings") or []),
             },
             "calibration": calibration,
+            "subject_calibration": subject_calibration,
             "camera": camera,
             "reference_brief_seed": reference_brief_seed,
         }

@@ -126,6 +126,16 @@ def evaluate_reference_model_benchmark(context, args):
             maximum=0.99,
         ),
         capture_dir=getattr(prefs, "capture_cache_dir", None),
+        include_structure=bool(args.get("include_structure", False)),
+        structural_max_faces=_bounded_int(
+            args.get("structural_max_faces"), 0, minimum=0, maximum=100000000
+        ),
+        structural_require_materials=bool(
+            args.get("structural_require_materials", False)
+        ),
+        structural_weight=_bounded_float(
+            args.get("structural_weight"), 0.25, minimum=0.0, maximum=1.0
+        ),
     )
 
 

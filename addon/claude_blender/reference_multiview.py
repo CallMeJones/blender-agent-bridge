@@ -130,6 +130,151 @@ def image_point_to_ray(
     }
 
 
+def _normalized_bounds(points, source, *, reliable):
+    prepared = []
+    for point in points:
+        if not isinstance(point, (list, tuple)) or len(point) < 2:
+            continue
+        try:
+            x, y = float(point[0]), float(point[1])
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(x) and math.isfinite(y):
+            prepared.append((max(0.0, min(1.0, x)), max(0.0, min(1.0, y))))
+    if not prepared:
+        return {}
+    minimum_x = min(point[0] for point in prepared)
+    maximum_x = max(point[0] for point in prepared)
+    minimum_y = min(point[1] for point in prepared)
+    maximum_y = max(point[1] for point in prepared)
+    width = maximum_x - minimum_x
+    height = maximum_y - minimum_y
+    if width <= _EPSILON or height <= _EPSILON:
+        return {}
+    return {
+        "bounds": [minimum_x, minimum_y, width, height],
+        "source": source,
+        "reliable": bool(reliable),
+        "point_count": len(prepared),
+    }
+
+
+def subject_bounds_from_annotations(normalized, explicit_bounds=None):
+    """Estimate normalized subject bounds, preferring an explicit box or outline."""
+    if explicit_bounds is not None:
+        if not isinstance(explicit_bounds, (list, tuple)) or len(explicit_bounds) != 4:
+            raise MultiViewCalibrationError(
+                "subject_bounds must be normalized [x, y, width, height]"
+            )
+        try:
+            x, y, width, height = (float(value) for value in explicit_bounds)
+        except (TypeError, ValueError) as exc:
+            raise MultiViewCalibrationError("subject_bounds must contain four numbers") from exc
+        if not all(math.isfinite(value) for value in (x, y, width, height)):
+            raise MultiViewCalibrationError("subject_bounds must contain finite numbers")
+        if width <= 0.0 or height <= 0.0 or x < 0.0 or y < 0.0 or x + width > 1.0 or y + height > 1.0:
+            raise MultiViewCalibrationError("subject_bounds must stay inside normalized image coordinates")
+        return {
+            "bounds": [x, y, width, height],
+            "source": "explicit",
+            "reliable": True,
+            "point_count": 4,
+        }
+
+    normalized = normalized if isinstance(normalized, dict) else {}
+    curves = [curve for curve in normalized.get("curves") or [] if isinstance(curve, dict)]
+    named = [
+        curve
+        for curve in curves
+        if any(token in str(curve.get("name") or "").casefold() for token in ("silhouette", "outline", "contour"))
+    ]
+    candidates = named or [curve for curve in curves if bool(curve.get("cyclic"))]
+    outline = _normalized_bounds(
+        [point for curve in candidates for point in (curve.get("points") or [])],
+        "named_outline" if named else "cyclic_outlines",
+        reliable=True,
+    )
+    if outline:
+        return outline
+
+    mass_points = []
+    for mass in normalized.get("masses") or []:
+        if not isinstance(mass, dict):
+            continue
+        center = mass.get("center") or []
+        radius = mass.get("radius") or []
+        if len(center) < 2 or len(radius) < 2:
+            continue
+        mass_points.extend(
+            [
+                (float(center[0]) - float(radius[0]), float(center[1]) - float(radius[1])),
+                (float(center[0]) + float(radius[0]), float(center[1]) + float(radius[1])),
+            ]
+        )
+    masses = _normalized_bounds(mass_points, "mass_bounds", reliable=False)
+    if masses:
+        return masses
+
+    landmarks = [
+        landmark.get("point")
+        for landmark in normalized.get("landmarks") or []
+        if isinstance(landmark, dict) and landmark.get("point") is not None
+    ]
+    return _normalized_bounds(landmarks, "landmark_extent", reliable=False)
+
+
+def subject_scale_calibration(
+    normalized,
+    *,
+    plane_height,
+    subject_height=0.0,
+    subject_bounds=None,
+):
+    """Resolve frame-scale or silhouette-derived subject-scale calibration."""
+    try:
+        frame_height = float(plane_height)
+        requested_height = float(subject_height or 0.0)
+    except (TypeError, ValueError) as exc:
+        raise MultiViewCalibrationError("plane_height and subject_height must be numeric") from exc
+    if not math.isfinite(frame_height) or frame_height <= 0.0:
+        raise MultiViewCalibrationError("plane_height must be greater than zero")
+    if not math.isfinite(requested_height) or requested_height < 0.0:
+        raise MultiViewCalibrationError("subject_height must be zero or greater")
+
+    detected = subject_bounds_from_annotations(normalized, subject_bounds)
+    fraction = float((detected.get("bounds") or [0.0, 0.0, 0.0, 0.0])[3])
+    applied = bool(requested_height > 0.0 and fraction > _EPSILON)
+    resolved_height = requested_height / fraction if applied else frame_height
+    estimated_subject_height = resolved_height * fraction if fraction > 0.0 else 0.0
+    warnings = []
+    if requested_height > 0.0 and not detected:
+        warnings.append(
+            "subject_height was requested but no usable silhouette, mass, landmark extent, or subject_bounds was available"
+        )
+    elif applied and not detected.get("reliable"):
+        warnings.append(
+            "subject_height used estimated bounds; provide subject_bounds or a cyclic silhouette for reliable cross-view scale"
+        )
+    elif not applied and fraction > 0.0 and abs(1.0 - fraction) > 0.01:
+        warnings.append(
+            "plane_height maps the image frame; the detected subject occupies %.2f%% of frame height and may scale differently across views"
+            % (fraction * 100.0)
+        )
+    return {
+        "mode": "subject_height" if applied else "frame_height",
+        "applied": applied,
+        "requested_subject_height": requested_height,
+        "input_plane_height": frame_height,
+        "resolved_plane_height": resolved_height,
+        "detected_subject_bounds": list(detected.get("bounds") or []),
+        "bounds_source": str(detected.get("source") or ""),
+        "bounds_reliable": bool(detected.get("reliable")),
+        "subject_height_fraction": fraction,
+        "estimated_world_subject_height": estimated_subject_height,
+        "warnings": warnings,
+    }
+
+
 def triangulate_rays(rays, *, minimum_angle_degrees=1.0):
     """Return the least-squares point nearest two or more orthographic rays."""
     prepared = []

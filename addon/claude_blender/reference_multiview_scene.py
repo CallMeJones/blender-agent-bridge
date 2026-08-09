@@ -279,6 +279,7 @@ def create_multiview_reference_guides(
     subject="reference model",
     collection_name="Multi-View Reference Guides",
     subject_center=(0.0, 0.0, 1.5),
+    subject_height=0.0,
     active_view="",
     include_image_planes=True,
     image_alpha=0.35,
@@ -350,6 +351,13 @@ def create_multiview_reference_guides(
                 subject=str(subject or "reference model"),
                 collection_name=child_name,
                 plane_height=view["plane_height"],
+                subject_height=_finite_float(
+                    view.get("subject_height"),
+                    0.0 if view["axis"] in {"TOP", "BOTTOM"} else subject_height,
+                    minimum=0.0,
+                    maximum=100.0,
+                ),
+                subject_bounds=view.get("subject_bounds"),
                 plane_location=center,
                 guide_offset_y=_finite_float(
                     view.get("guide_offset"),
@@ -389,6 +397,11 @@ def create_multiview_reference_guides(
             child["reference_view_name"] = view["name"]
             child["reference_view_axis"] = view["axis"]
             image_size = list(result.get("image_size") or [1.0, 1.0])
+            resolved_plane_height = max(
+                0.01,
+                float((result.get("plane") or {}).get("height") or view["plane_height"]),
+            )
+            view["plane_height"] = resolved_plane_height
             image_aspect = max(1.0e-9, float(image_size[0])) / max(
                 1.0e-9,
                 float(image_size[1]),
@@ -438,6 +451,7 @@ def create_multiview_reference_guides(
                 },
                 "center": list(center),
                 "plane_height": view["plane_height"],
+                "subject_calibration": dict(result.get("subject_calibration") or {}),
                 "image_size": image_size,
                 "image_aspect": image_aspect,
                 "camera": camera.name,
@@ -589,6 +603,37 @@ def create_multiview_reference_guides(
             context.scene.render.pixel_aspect_y = 1.0
             active_result["render_resolution"] = resolution
 
+        scale_entries = [
+            {
+                "view": item["name"],
+                "axis": item["axis"],
+                "world_subject_height": float(
+                    (item.get("subject_calibration") or {}).get("estimated_world_subject_height") or 0.0
+                ),
+                "mode": str((item.get("subject_calibration") or {}).get("mode") or ""),
+            }
+            for item in view_results
+            if item.get("axis") not in {"TOP", "BOTTOM"}
+            and float((item.get("subject_calibration") or {}).get("estimated_world_subject_height") or 0.0) > 0.0
+        ]
+        scale_values = [item["world_subject_height"] for item in scale_entries]
+        scale_spread = (max(scale_values) - min(scale_values)) / max(scale_values) if scale_values else 0.0
+        subject_scale_analysis = {
+            "views": scale_entries,
+            "view_count": len(scale_entries),
+            "minimum_world_subject_height": min(scale_values) if scale_values else 0.0,
+            "maximum_world_subject_height": max(scale_values) if scale_values else 0.0,
+            "relative_spread": scale_spread,
+            "consistent": scale_spread <= 0.02,
+            "all_subject_calibrated": bool(scale_entries)
+            and all(item["mode"] == "subject_height" for item in scale_entries),
+        }
+        if scale_spread > 0.02:
+            warnings.append(
+                "Detected subject world-height spread is %.2f%% across vertical views; set subject_height or per-view subject_bounds before reconstruction"
+                % (scale_spread * 100.0)
+            )
+
         master_metadata = {
             "subject": str(subject or "reference model"),
             "center": list(center),
@@ -596,6 +641,7 @@ def create_multiview_reference_guides(
             "reconstructed_landmark_count": len(reconstructed),
             "unresolved_landmark_count": len(unresolved),
             "active_view": active_result["name"],
+            "subject_scale_analysis": subject_scale_analysis,
         }
         _json_prop(master, REFERENCE_GUIDE_METADATA_PROP, master_metadata)
         transaction["applied_steps"].append(
@@ -620,6 +666,7 @@ def create_multiview_reference_guides(
             "landmarks_3d": reconstructed,
             "unresolved_landmarks": unresolved,
             "warnings": warnings,
+            "subject_scale_analysis": subject_scale_analysis,
             "active_view": active_result["name"],
             "transaction_id": transaction["id"],
         }

@@ -710,7 +710,7 @@ def generation_provider_diagnostics(environ=None, hardware=None):
 
 
 def select_provider(preferred="", environ=None, hardware=None, require_multiview=False):
-    """Choose a provider, preferring local ones and explaining any refusal."""
+    """Resolve an explicit provider or require a choice when routes compete."""
 
     diagnostics = generation_provider_diagnostics(environ=environ, hardware=hardware)
     by_name = {item["provider"]: item for item in diagnostics["providers"]}
@@ -755,37 +755,65 @@ def select_provider(preferred="", environ=None, hardware=None, require_multiview
             )
         return {"ok": True, "selected": preferred, "report": report, "diagnostics": diagnostics}
 
-    # Auto-selection covers local providers only. A hosted provider spends the
-    # user's money and sends their reference art to a third party, so it is
-    # never chosen on the user's behalf -- it must be named in the request.
-    # Available hosted providers are returned as suggestions instead, so a
-    # planner can offer one and let the user decide.
-    order = (KIND_LOCAL_PROCESS, KIND_LOCAL_HTTP)
+    # Omission is safe only when exactly one runnable local provider remains.
+    # If local and hosted routes compete, preferring local would still choose
+    # quality, speed, and privacy tradeoffs on the user's behalf. Return every
+    # candidate so the caller has to ask. A sole hosted route remains explicit
+    # because it uploads reference images and may spend credits.
     skipped_unimplemented = []
-    for kind in order:
-        for spec in PROVIDER_SPECS:
-            if spec.kind != kind:
-                continue
-            report = by_name[spec.name]
-            if not report["available"]:
-                continue
-            if require_multiview and not report["supports_multiview"]:
-                continue
-            if not spec.job_implemented:
-                skipped_unimplemented.append(spec.name)
-                continue
-            return {"ok": True, "selected": spec.name, "report": report, "diagnostics": diagnostics}
+    candidates = []
+    policy_blocked = {}
+    for spec in PROVIDER_SPECS:
+        report = by_name[spec.name]
+        if not report["available"]:
+            continue
+        if require_multiview and not report["supports_multiview"]:
+            continue
+        if not spec.job_implemented:
+            skipped_unimplemented.append(spec.name)
+            continue
+        refusal = policy_refusal(spec.name)
+        if refusal:
+            policy_blocked[spec.name] = refusal
+            continue
+        candidates.append(spec)
 
-    suggestions = [
-        spec.name
-        for spec in PROVIDER_SPECS
-        if spec.kind == KIND_HOSTED_API
-        and spec.job_implemented
-        and by_name[spec.name]["available"]
-        and (not require_multiview or spec.supports_multiview)
+    choices = [
+        {
+            "provider": spec.name,
+            "title": spec.title,
+            "kind": spec.kind,
+            "paid": spec.kind == KIND_HOSTED_API,
+            "requires_egress": bool(spec.requires_egress),
+            "cost_note": spec.cost_note,
+            "supports_multiview": bool(spec.supports_multiview),
+        }
+        for spec in candidates
     ]
+    if len(candidates) > 1:
+        names = [spec.name for spec in candidates]
+        return refuse(
+            "Multiple generation providers are available: %s. Ask the user which provider "
+            "they want, then retry with provider set explicitly; do not prefer local, hosted, "
+            "cheap, or fast on their behalf." % ", ".join(names),
+            suggested_providers=names,
+            provider_choices=choices,
+            provider_selection_required=True,
+            requires_explicit_choice=True,
+            unimplemented_providers=sorted(skipped_unimplemented),
+        )
 
-    if suggestions:
+    if len(candidates) == 1 and candidates[0].kind != KIND_HOSTED_API:
+        spec = candidates[0]
+        return {
+            "ok": True,
+            "selected": spec.name,
+            "report": by_name[spec.name],
+            "diagnostics": diagnostics,
+        }
+
+    if candidates:
+        suggestions = [candidates[0].name]
         return refuse(
             "No local generation provider is available. %s can do this but %s a paid "
             "third-party service that uploads the reference images, so name it explicitly "
@@ -795,8 +823,18 @@ def select_provider(preferred="", environ=None, hardware=None, require_multiview
                 "is" if len(suggestions) == 1 else "are",
             ),
             suggested_providers=sorted(suggestions),
+            provider_choices=choices,
+            provider_selection_required=True,
             requires_explicit_choice=True,
             unimplemented_providers=sorted(skipped_unimplemented),
+        )
+    if policy_blocked:
+        return refuse(
+            "No generation provider is permitted by the user's standing instruction for this session. "
+            "Continue with authored scripts and bounded helpers.",
+            generation_policy=session_generation_policy(),
+            policy_blocked=policy_blocked,
+            suggested_providers=[],
         )
     if skipped_unimplemented:
         return refuse(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from array import array
 import base64
 import json
 import math
@@ -26,6 +27,8 @@ VIEW_OFFSETS = {
     "rear": (0.0, 1.4, 0.1),
     "top": (0.0, -0.2, 1.4),
 }
+RENDERABLE_OBJECT_TYPES = {"MESH", "CURVE", "FONT", "SURFACE", "META", "VOLUME", "POINTCLOUD"}
+MAX_CONTACT_SHEET_IMAGES = 12
 
 
 def _safe_id(value, fallback="item"):
@@ -346,6 +349,86 @@ def _image_size(path):
                 pass
 
 
+def _contact_sheet_image(images, render_dir, render_id, *, columns=3):
+    available = [item for item in images if item.get("available") and os.path.isfile(item.get("path", ""))]
+    available = available[:MAX_CONTACT_SHEET_IMAGES]
+    if len(available) < 2:
+        return {}
+
+    loaded = []
+    sheet = None
+    try:
+        for item in available:
+            loaded.append((item, bpy.data.images.load(item["path"], check_existing=False)))
+        cell_width = max(int(image.size[0]) for _item, image in loaded)
+        cell_height = max(int(image.size[1]) for _item, image in loaded)
+        columns = max(1, min(int(columns), len(loaded)))
+        rows = int(math.ceil(len(loaded) / float(columns)))
+        width = cell_width * columns
+        height = cell_height * rows
+        if width > 16384 or height > 16384:
+            return {"available": False, "note": "Contact sheet dimensions exceed Blender's safe image limit"}
+
+        background = array("f", (0.04, 0.04, 0.04, 1.0)) * (width * height)
+        for index, (_item, source) in enumerate(loaded):
+            source_width = int(source.size[0])
+            source_height = int(source.size[1])
+            source_pixels = array("f", [0.0]) * (source_width * source_height * 4)
+            source.pixels.foreach_get(source_pixels)
+            column = index % columns
+            row = index // columns
+            offset_x = column * cell_width
+            offset_y = (rows - row - 1) * cell_height
+            for source_y in range(source_height):
+                source_start = source_y * source_width * 4
+                source_end = source_start + source_width * 4
+                target_start = ((offset_y + source_y) * width + offset_x) * 4
+                background[target_start : target_start + source_width * 4] = source_pixels[
+                    source_start:source_end
+                ]
+
+        image_id = "contact-sheet"
+        path = os.path.join(render_dir, f"{image_id}.png")
+        sheet = bpy.data.images.new(
+            f"Agent Bridge Contact Sheet {render_id}",
+            width=width,
+            height=height,
+            alpha=True,
+        )
+        sheet.pixels.foreach_set(background)
+        sheet.filepath_raw = path
+        sheet.file_format = "PNG"
+        sheet.save()
+        return {
+            "image_id": image_id,
+            "object": ", ".join(dict.fromkeys(str(item.get("object") or "") for item in available)),
+            "view": "contact_sheet",
+            "path": path,
+            "resource_uri": _image_resource_uri(render_id, image_id),
+            "available": os.path.isfile(path),
+            "size_bytes": os.path.getsize(path) if os.path.isfile(path) else 0,
+            "width": width,
+            "height": height,
+            "source_image_ids": [str(item.get("image_id") or "") for item in available],
+            "source_image_count": len(available),
+            "partial": len(images) > len(available),
+            "note": "",
+        }
+    except Exception as exc:
+        return {
+            "image_id": "contact-sheet",
+            "view": "contact_sheet",
+            "available": False,
+            "note": f"Contact sheet creation failed: {type(exc).__name__}: {exc}",
+        }
+    finally:
+        if sheet is not None:
+            bpy.data.images.remove(sheet)
+        for _item, image in loaded:
+            if image.name in bpy.data.images:
+                bpy.data.images.remove(image)
+
+
 def _duration_label(seconds):
     try:
         seconds = int(round(float(seconds)))
@@ -406,6 +489,92 @@ def _view_list(views):
     return normalized or list(DEFAULT_VIEWS)
 
 
+def _workbench_render_engine(scene):
+    try:
+        identifiers = {
+            item.identifier
+            for item in scene.render.bl_rna.properties["engine"].enum_items
+        }
+    except (AttributeError, KeyError, TypeError):
+        return ""
+    for candidate in ("BLENDER_WORKBENCH", "BLENDER_WORKBENCH_NEXT"):
+        if candidate in identifiers:
+            return candidate
+    return ""
+
+
+def _render_still_with_fallback(scene, *, render_callable=None):
+    """Render once, retrying geometry evidence in Workbench when needed."""
+
+    render_callable = render_callable or (lambda: bpy.ops.render.render(write_still=True))
+    primary_engine = str(scene.render.engine)
+    try:
+        render_callable()
+        return {
+            "render_engine": primary_engine,
+            "fallback_used": False,
+            "primary_error": "",
+        }
+    except Exception as primary_error:  # noqa: BLE001 - preserve render evidence when Eevee/Cycles fails
+        fallback_engine = _workbench_render_engine(scene)
+        if not fallback_engine or fallback_engine == primary_engine:
+            raise
+        scene.render.engine = fallback_engine
+        try:
+            render_callable()
+            return {
+                "render_engine": fallback_engine,
+                "fallback_used": True,
+                "primary_error": f"{type(primary_error).__name__}: {primary_error}",
+            }
+        except Exception as fallback_error:  # noqa: BLE001 - combine both renderer failures for diagnostics
+            raise RuntimeError(
+                "Primary render failed (%s: %s); Workbench fallback failed (%s: %s)"
+                % (
+                    type(primary_error).__name__,
+                    primary_error,
+                    type(fallback_error).__name__,
+                    fallback_error,
+                )
+            ) from fallback_error
+        finally:
+            scene.render.engine = primary_engine
+
+
+def _create_inspection_lights(scene, camera_name):
+    lights = []
+    for suffix, energy in (("Key", 1200.0), ("Fill", 700.0), ("Rim", 900.0)):
+        data = bpy.data.lights.new(
+            f"{_safe_id(camera_name, 'Agent_Bridge_Inspection')}_{suffix}_Data",
+            type="AREA",
+        )
+        data.energy = energy
+        data.shape = "DISK"
+        obj = bpy.data.objects.new(
+            f"{_safe_id(camera_name, 'Agent_Bridge_Inspection')}_{suffix}",
+            data,
+        )
+        scene.collection.objects.link(obj)
+        lights.append(obj)
+    return lights
+
+
+def _position_inspection_lights(lights, center, radius):
+    offsets = (
+        mathutils.Vector((-1.4, -2.0, 1.8)),
+        mathutils.Vector((1.8, -1.2, 0.8)),
+        mathutils.Vector((0.2, 1.8, 2.0)),
+    )
+    distance = max(2.0, float(radius) * 3.0)
+    area_size = max(1.0, float(radius) * 2.0)
+    energy_scale = max(1.0, float(radius) ** 2)
+    for light, offset, base_energy in zip(lights, offsets, (1200.0, 700.0, 900.0)):
+        light.location = center + offset.normalized() * distance
+        light.data.size = area_size
+        light.data.energy = base_energy * energy_scale
+        _look_at(light, center)
+
+
 def capture_object_inspection_renders(
     context,
     *,
@@ -419,6 +588,8 @@ def capture_object_inspection_renders(
     camera_name="Agent Bridge Inspection Camera",
     note="",
     capture_dir=None,
+    isolate_targets=False,
+    create_contact_sheet=False,
 ):
     scene = context.scene
     names = [str(name) for name in (object_names or []) if str(name).strip()]
@@ -447,14 +618,31 @@ def capture_object_inspection_renders(
         "resolution_percentage": int(scene.render.resolution_percentage),
         "filepath": str(scene.render.filepath),
         "file_format": str(scene.render.image_settings.file_format),
+        "engine": str(scene.render.engine),
     }
     camera_data = bpy.data.cameras.new(f"{_safe_id(camera_name, 'Agent_Bridge_Inspection_Camera')}_Data")
     camera_data.lens = float(lens)
     camera = bpy.data.objects.new(_safe_id(camera_name, "Agent_Bridge_Inspection_Camera"), camera_data)
     scene.collection.objects.link(camera)
+    existing_light_states = [
+        (obj, bool(obj.hide_render))
+        for obj in scene.objects
+        if getattr(obj, "type", "") == "LIGHT" and hasattr(obj, "hide_render")
+    ]
+    for obj, _was_hidden in existing_light_states:
+        obj.hide_render = True
+    inspection_lights = _create_inspection_lights(scene, camera_name)
 
     images = []
     missing = []
+    contact_sheet = {}
+    hidden_states = []
+    if isolate_targets:
+        hidden_states = [
+            (obj, bool(obj.hide_render))
+            for obj in scene.objects
+            if getattr(obj, "type", "") in RENDERABLE_OBJECT_TYPES and hasattr(obj, "hide_render")
+        ]
     try:
         scene.frame_set(target_frame)
         scene.render.resolution_x = max(64, min(4096, int(resolution_x)))
@@ -467,7 +655,12 @@ def capture_object_inspection_renders(
             if obj is None:
                 missing.append(name)
                 continue
+            if isolate_targets:
+                visible = set(_iter_target_objects(obj))
+                for candidate, _was_hidden in hidden_states:
+                    candidate.hide_render = candidate not in visible
             center, radius = _object_bounds(obj)
+            _position_inspection_lights(inspection_lights, center, radius)
             distance = max(1.0, radius * float(distance_factor))
             for view in requested_views:
                 offset = mathutils.Vector(VIEW_OFFSETS[view])
@@ -490,10 +683,13 @@ def capture_object_inspection_renders(
                     "width": 0,
                     "height": 0,
                     "note": "",
+                    "render_engine": str(scene.render.engine),
+                    "fallback_used": False,
                 }
                 try:
                     scene.render.filepath = path
-                    bpy.ops.render.render(write_still=True)
+                    render_info = _render_still_with_fallback(scene)
+                    item.update(render_info)
                     if os.path.isfile(path):
                         width, height = _image_size(path)
                         item.update(
@@ -504,15 +700,41 @@ def capture_object_inspection_renders(
                                 "height": height,
                             }
                         )
+                        if item.get("fallback_used"):
+                            item["note"] = "Primary renderer failed; captured with Workbench fallback."
+                    else:
+                        item["note"] = "Render completed but the PNG output was not written."
                 except Exception as exc:
                     item["note"] = f"Inspection render failed: {type(exc).__name__}: {exc}"
                 images.append(item)
+        if create_contact_sheet:
+            contact_sheet = _contact_sheet_image(
+                images,
+                render_dir,
+                render_id,
+                columns=len(requested_views),
+            )
+            if contact_sheet.get("available"):
+                images.append(contact_sheet)
     finally:
+        for obj, was_hidden in existing_light_states:
+            if obj.name in bpy.data.objects:
+                obj.hide_render = was_hidden
+        for light in inspection_lights:
+            light_data = getattr(light, "data", None)
+            if light.name in bpy.data.objects:
+                bpy.data.objects.remove(light, do_unlink=True)
+            if light_data is not None and light_data.name in bpy.data.lights:
+                bpy.data.lights.remove(light_data)
+        for obj, was_hidden in hidden_states:
+            if obj.name in bpy.data.objects:
+                obj.hide_render = was_hidden
         scene.render.resolution_x = original["resolution_x"]
         scene.render.resolution_y = original["resolution_y"]
         scene.render.resolution_percentage = original["resolution_percentage"]
         scene.render.filepath = original["filepath"]
         scene.render.image_settings.file_format = original["file_format"]
+        scene.render.engine = original["engine"]
         scene.camera = original["camera"]
         scene.frame_set(original["frame"])
         if camera.name in bpy.data.objects:
@@ -521,6 +743,9 @@ def capture_object_inspection_renders(
             bpy.data.cameras.remove(camera_data)
 
     available_images = [image for image in images if image.get("available")]
+    view_images = [image for image in images if image.get("view") != "contact_sheet"]
+    failed_images = [image for image in view_images if not image.get("available")]
+    fallback_images = [image for image in view_images if image.get("fallback_used")]
     metadata = {
         "ok": bool(available_images),
         "requested": True,
@@ -541,8 +766,14 @@ def capture_object_inspection_renders(
         "object_names": names,
         "missing_object_names": missing,
         "views": requested_views,
+        "targets_isolated": bool(isolate_targets),
+        "lighting": "temporary_three_point_area",
+        "contact_sheet": contact_sheet,
         "image_count": len(available_images),
         "requested_image_count": len(images),
+        "failed_image_count": len(failed_images),
+        "fallback_image_count": len(fallback_images),
+        "render_complete": not failed_images and len(view_images) == requested_image_count,
         "estimated_seconds": estimated_seconds,
         "estimated_duration": _duration_label(estimated_seconds),
         "poll_after_seconds": poll_interval,

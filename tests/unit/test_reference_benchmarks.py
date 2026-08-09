@@ -110,6 +110,43 @@ class ReferenceBenchmarkTests(unittest.TestCase):
             reference_benchmarks.profile_satisfies("unknown", "refined")
         )
 
+    def test_optional_structure_blocks_a_broken_mesh_with_a_perfect_outline(self):
+        polygon = [(0.2, 0.15), (0.8, 0.15), (0.8, 0.85), (0.2, 0.85)]
+        evaluation = reference_benchmarks.evaluate_comparison(
+            _comparison(polygon, polygon),
+            profile="review",
+            structural_metrics={
+                "object_count": 1,
+                "vertices": 100,
+                "faces": 200,
+                "loose_vertices": 0,
+                "loose_edges": 0,
+                "non_manifold_edges": 3,
+                "inspection_issue_count": 1,
+            },
+        )
+        self.assertEqual(100.0, evaluation["silhouette_conformance_score"])
+        self.assertFalse(evaluation["passed"])
+        self.assertEqual("silhouette_and_structure", evaluation["verdict_scope"])
+        self.assertIn("structure.non_manifold_edges", evaluation["failed_gates"])
+        self.assertFalse(evaluation["structural_evaluation"]["passed"])
+
+    def test_optional_structure_can_enforce_a_face_budget(self):
+        structural = reference_benchmarks.evaluate_structure(
+            {
+                "object_count": 1,
+                "vertices": 1000,
+                "faces": 2500,
+                "loose_vertices": 0,
+                "loose_edges": 0,
+                "non_manifold_edges": 0,
+                "inspection_issue_count": 0,
+            },
+            max_faces=2000,
+        )
+        self.assertFalse(structural["passed"])
+        self.assertIn("face_budget", structural["failed_gates"])
+
 
 if __name__ == "__main__":
     unittest.main()

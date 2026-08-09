@@ -84,9 +84,15 @@ check(
 )
 
 print("== validation ==")
-check("generation needs views", "views" in asset_jobs._validate_generation({"api_key": "k"}))
-check("generation needs key", "api_key" in asset_jobs._validate_generation({"views": {"front": "a.png"}}))
-check("valid generation passes", asset_jobs._validate_generation({"views": {"front": "a.png"}, "api_key": "k"}) == "")
+check("generation needs views", "views" in asset_jobs._validate_generation("tripo", {"api_key": "k"}))
+check(
+    "generation needs key",
+    "api_key" in asset_jobs._validate_generation("tripo", {"views": {"front": "a.png"}}),
+)
+check(
+    "valid generation passes",
+    asset_jobs._validate_generation("tripo", {"views": {"front": "a.png"}, "api_key": "k"}) == "",
+)
 check("poly haven needs asset_id", "asset_id" in asset_jobs._validate_poly_haven({}))
 check("sketchfab needs uid", "uid" in asset_jobs._validate_sketchfab({}))
 
@@ -114,8 +120,36 @@ print("== only a human at the keyboard can spend money ==")
 # An argument cannot carry consent: the bridge never sees the conversation, so
 # a flag saying "the user agreed" is only the caller asserting it asked.
 import bpy  # noqa: E402
-from claude_blender import generation_spend  # noqa: E402
+from claude_blender import generation_providers, generation_spend  # noqa: E402
 from claude_blender.tool_handlers import generation as generation_handler  # noqa: E402
+
+print("== saved TripoSR defaults with per-job overrides ==")
+triposr_preferences = type(
+    "_TripoSRPreferences",
+    (),
+    {
+        "triposr_mc_resolution": 192,
+        "triposr_no_remove_bg": True,
+        "triposr_foreground_ratio": 0.7,
+        "triposr_chunk_size": 4096,
+        "triposr_bake_texture": True,
+        "triposr_texture_resolution": 1024,
+    },
+)()
+saved_options = generation_handler._triposr_job_options({}, triposr_preferences)
+check("saved resolution is used", saved_options["mc_resolution"] == 192, str(saved_options))
+check("saved background mode is used", saved_options["no_remove_bg"] is True, str(saved_options))
+check("saved foreground ratio is used", saved_options["foreground_ratio"] == 0.7, str(saved_options))
+check("saved chunk size is used", saved_options["chunk_size"] == 4096, str(saved_options))
+check("saved bake mode is used", saved_options["bake_texture"] is True, str(saved_options))
+check("saved texture size is used", saved_options["texture_resolution"] == 1024, str(saved_options))
+override_options = generation_handler._triposr_job_options(
+    {"mc_resolution": 64, "no_remove_bg": False, "bake_texture": False},
+    triposr_preferences,
+)
+check("per-job resolution wins", override_options["mc_resolution"] == 64, str(override_options))
+check("per-job background mode wins", override_options["no_remove_bg"] is False, str(override_options))
+check("per-job bake mode wins", override_options["bake_texture"] is False, str(override_options))
 
 image = os.path.join(bpy.app.tempdir, "smoke_reference.png")
 with open(image, "wb") as handle:
@@ -125,9 +159,21 @@ with open(image, "wb") as handle:
 # preferences instance; the environment is the only configuration source and
 # environment_overlay(None) contributes nothing over it.
 os.environ["TRIPO_API_KEY"] = "tsk_smoke_key"
+os.environ["MESHY_API_KEY"] = "msy_smoke_key"
 os.environ["BLENDER_AGENT_BRIDGE_GENERATION_EGRESS"] = "allow"
+os.environ["BLENDER_AGENT_BRIDGE_TRIPOSR_PYTHON"] = "C:/smoke/python.exe"
+os.environ["BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT"] = "C:/smoke/TripoSR"
 generation_spend.clear_requests()
 JOB = {"provider": "tripo", "views": {"front": image}}
+original_probe_hardware = generation_providers.probe_hardware
+generation_providers.probe_hardware = lambda **_kwargs: {
+    "probed": True,
+    "cuda_available": True,
+    "device_name": "Smoke GPU",
+    "vram_gb": 8.0,
+    "compute_capability": 7.5,
+    "supports_bfloat16": False,
+}
 
 try:
     first = generation_handler.start_generation_job(bpy.context, dict(JOB))
@@ -181,16 +227,29 @@ try:
     check("declining is not a retry prompt", not after_denial.get("awaiting_user_approval"))
 
     auto = generation_handler.start_generation_job(bpy.context, {"views": {"front": image}})
-    check("omitting the provider never picks a paid one", auto.get("ok") is False, str(auto)[:90])
+    check("omitting an ambiguous provider starts nothing", auto.get("ok") is False, str(auto)[:90])
+    check("ambiguous provider requires a user choice", auto.get("provider_selection_required") is True, str(auto)[:160])
+    check(
+        "all runnable providers are offered",
+        auto.get("suggested_providers") == ["triposr", "tripo", "meshy"],
+        str(auto.get("suggested_providers")),
+    )
 
     missing = generation_handler.start_generation_job(
         bpy.context, {"provider": "tripo", "views": {"front": image + ".absent"}}
     )
     check("a missing reference image is refused first", missing.get("ok") is False)
 finally:
+    generation_providers.probe_hardware = original_probe_hardware
     generation_spend.clear_requests()
-    os.environ.pop("TRIPO_API_KEY", None)
-    os.environ.pop("BLENDER_AGENT_BRIDGE_GENERATION_EGRESS", None)
+    for name in (
+        "TRIPO_API_KEY",
+        "MESHY_API_KEY",
+        "BLENDER_AGENT_BRIDGE_GENERATION_EGRESS",
+        "BLENDER_AGENT_BRIDGE_TRIPOSR_PYTHON",
+        "BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT",
+    ):
+        os.environ.pop(name, None)
 
 if failures:
     print("\nsmoke_generation_jobs: FAILED (%d)" % len(failures))

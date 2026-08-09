@@ -21,6 +21,7 @@ from claude_blender import (  # noqa: E402
     audit_log,
     bridge_server,
     build_info,
+    generation_providers,
     preferences,
     script_runner,
     tool_dispatcher,
@@ -158,6 +159,43 @@ def main():
         bridge_status = bridge_server._scene_status()
         assert bridge_status["external_script_trust"] is True, bridge_status
         assert "pending_script" not in bridge_status, bridge_status
+        generation_providers.set_session_generation_policy(
+            generation_providers.POLICY_NO_GENERATION,
+            reason="smoke: third-party generation disabled",
+        )
+        isolation_script = _execute(
+            context,
+            "draft_script",
+            {
+                "intent": "Prove scripts remain available when generation is disabled",
+                "expected_changes": "Sets one temporary scene marker",
+                "risk_level": "low",
+                "code": "scene['generation_disabled_script_ok'] = True",
+            },
+        )
+        assert isolation_script["ok"] and context.scene["generation_disabled_script_ok"], isolation_script
+        isolation_helper = _execute(
+            context,
+            "create_primitive",
+            {
+                "primitive_type": "CUBE",
+                "name": "Generation Disabled Helper Cube",
+                "location": [0.0, 0.0, 0.0],
+                "rotation": [0.0, 0.0, 0.0],
+                "scale": [1.0, 1.0, 1.0],
+                "label": "Generation-disabled helper isolation smoke",
+            },
+        )
+        assert isolation_helper["ok"], isolation_helper
+        assert "Generation Disabled Helper Cube" in bpy.data.objects
+        reverted_helper = _execute(context, "revert_preview", {"scope": "all"})
+        assert reverted_helper["ok"], reverted_helper
+        assert "Generation Disabled Helper Cube" not in bpy.data.objects
+        authored_plan = _execute(context, "plan_image_to_3d_approach", {})
+        assert authored_plan["ready_routes"] == ["authored"], authored_plan
+        assert not authored_plan["requires_user_choice"], authored_plan
+        generation_providers.set_session_generation_policy(generation_providers.POLICY_ANY)
+        del context.scene["generation_disabled_script_ok"]
         invalid_tool = _execute(
             context,
             "draft_script",
@@ -418,6 +456,7 @@ print("created", obj.name)
         _cleanup()
         print("smoke_script_runner: ok")
     finally:
+        generation_providers.clear_session_generation_policy()
         preferences.get_preferences = original_get_preferences
         if registered:
             claude_blender.unregister()

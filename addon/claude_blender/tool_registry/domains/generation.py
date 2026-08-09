@@ -116,10 +116,12 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
  {'name': 'start_generation_job',
   'description': 'Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then '
                  'poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer '
-                 'authored scripts and bounded helpers unless the user asks for generation. Only local providers are '
-                 'selected automatically. A hosted provider such as Tripo or Meshy spends the user\'s credits and '
-                 'uploads their reference images to a third party, so it is never chosen automatically: name it in '
-                 '"provider" only when the user asked for it, or suggest it and let them decide. Call '
+                 'authored scripts and bounded helpers unless the user asks for generation. When more than one '
+                 'generation provider is runnable, omitting "provider" returns the available choices and requires '
+                 'the user to select one; the bridge does not prefer local, hosted, cheap, or fast on their behalf. '
+                 'A sole local provider may be selected automatically. A hosted provider such as Tripo or Meshy '
+                 'spends the user\'s credits and uploads their reference images to a third party, so it is never '
+                 'chosen automatically: name it in "provider" only when the user asked for it. Call '
                  'get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is '
                  'not enough to start it: the first call returns requires_confirmation with the cost, which must be '
                  'told to the user, and the user must then click Approve in the Blender sidebar. No argument grants this: '
@@ -130,9 +132,10 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
   'input_schema': {'type': 'object',
                    'properties': {'views': _VIEWS_SCHEMA,
                                   'provider': {'type': 'string',
-                                               'description': 'Omit to auto-select a local provider. Hosted providers '
-                                                              '(tripo, meshy) cost credits and upload the images, so '
-                                                              'they are never auto-selected and must be named here.'},
+                                               'description': 'Required when multiple providers are runnable. Omit only '
+                                                              'to use the sole available local provider. Hosted '
+                                                              'providers cost credits and upload the images, so they '
+                                                              'are never auto-selected.'},
                                   'model': {'type': 'string'},
                                   'face_limit': {'type': 'integer', 'minimum': 0, 'maximum': 1000000},
                                   'texture': {'type': 'boolean'},
@@ -258,7 +261,7 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
  {'name': 'evaluate_generated_asset',
   'description': 'Evaluate an imported generated mesh with topology/material/component/orientation checks and optional '
                  'front/side/top inspection renders. Flags single-view TripoSR relief-shell risk, vertex-color-only '
-                 'materials, dense single-component editability risk, and non-Z-up orientation. Use before claiming a '
+                 'materials, excessive density, fragmented components, incomplete renders, and non-Z-up orientation. Use before claiming a '
                  'generated result is more than a blockout.',
   'input_schema': {'type': 'object',
                    'properties': {'object_names': {'type': 'array', 'items': {'type': 'string'}},
