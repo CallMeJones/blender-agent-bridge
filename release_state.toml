@@ -1,4 +1,4 @@
 # Version that the release workflow is permitted to publish.
 # Keep this pinned to the public release during development and advance it only
 # when the changelog and every tracked install guide are ready for that tag.
-publication_version = "0.5.0"
+publication_version = "0.5.1"

@@ -16,12 +16,12 @@ except ImportError:  # Allows direct imports from addon/claude_blender.
 
 ADDON_ID = "claude_blender"
 ADDON_NAME = "Blender Agent Bridge"
-ADDON_VERSION_TUPLE = (0, 5, 0)
-ADDON_VERSION = "0.5.0"
+ADDON_VERSION_TUPLE = (0, 5, 1)
+ADDON_VERSION = "0.5.1"
 BLENDER_VERSION_MIN_TUPLE = blender_compat.MINIMUM_VERSION
 BLENDER_VERSION_MIN = blender_compat.MINIMUM_VERSION_TEXT
 BRIDGE_VERSION = "0.3"
-MCP_SERVER_VERSION = "0.5.0"
+MCP_SERVER_VERSION = "0.5.1"
 MCP_CONFIG_VERSION = "4"
 MCP_RUNTIME_BUNDLED = "bundled"
 MCP_RUNTIME_UVX = "uvx"

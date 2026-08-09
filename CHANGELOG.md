@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.1 - 2026-08-09
+
+### Routing
+
+- Kept dynamic helper selection within its declared 32,000-character schema budget by making part-graph/base-mesh helpers optional for generic reference matching and the multi-view evaluator optional for single-view semantic sculpting. Explicit part, feature-stack, fur-flow, and multi-view requests still retain those helpers.
+
 ## 0.5.0 - 2026-08-09
 
 ### Generation

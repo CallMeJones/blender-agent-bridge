@@ -206,14 +206,12 @@ Focused verification on 2026-08-09:
 
 ## 1. Immediate Next
 
-1. **Run fresh Blender 4.2/4.5 package smoke when those binaries are available.**
-   Only Blender 5.1.2 is installed locally today; the clean 5.1 package gate is
-   complete.
-2. **Decide the next release shape.** `0.5.0` is in the changelog and code, but
-   there is no local `v0.5.0` tag. Either tag/package the current release state
-   or roll the post-`0.5.0` fixes into a `0.5.1` release candidate and run the
-   release smoke.
-3. **Supply a real studio endpoint when available.** The contract and job path
+1. **Complete the corrected v0.5.1 release and public repository install.**
+   Clean installed-extension smoke passed locally on Blender 4.2.0, 4.5.0, and
+   5.1.2. The immutable `v0.5.0` tag failed its Linux matrix before publication
+   when tool selection exceeded the declared schema budget; v0.5.1 carries the
+   narrow routing fix and must pass the complete tag workflow.
+2. **Supply a real studio endpoint when available.** The contract and job path
    are implemented, but live local/LAN evidence remains blocked by no configured
    service URL.
 
