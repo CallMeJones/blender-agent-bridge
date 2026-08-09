@@ -34,6 +34,7 @@ class InstalledExtensionSmokeArchitectureTests(unittest.TestCase):
         self.assertIn('parser.add_argument("--skip-viewport", action="store_true")', live_bridge)
         self.assertIn('if args.skip_viewport:', orchestrator)
         self.assertIn('bridge_smoke.append("--skip-viewport")', orchestrator)
+        self.assertIn("python3 -m pip install uv", workflow)
         self.assertIn("--skip-viewport", workflow)
         self.assertIn("--skip-playblast", workflow)
 

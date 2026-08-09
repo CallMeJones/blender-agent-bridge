@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.3 - 2026-08-09
+
+### Release validation
+
+- Installed the `uv` runtime dependency in tagged Linux Blender jobs before exercising the packaged MCPB connector.
+
 ## 0.5.2 - 2026-08-09
 
 ### Release validation

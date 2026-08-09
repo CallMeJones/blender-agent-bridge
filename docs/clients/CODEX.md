@@ -55,7 +55,7 @@ Pinned `uvx` mode on macOS or Linux:
 ```toml
 [mcp_servers.blender]
 command = "uvx"
-args = ["--from", "blender-bridge==0.5.2", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
+args = ["--from", "blender-bridge==0.5.3", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
 
 [mcp_servers.blender.env]
 CLAUDE_BLENDER_MCP_RUNTIME_MODE = "uvx"

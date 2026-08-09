@@ -206,13 +206,13 @@ Focused verification on 2026-08-09:
 
 ## 1. Immediate Next
 
-1. **Complete the corrected v0.5.2 release and public repository install.**
+1. **Complete the corrected v0.5.3 release and public repository install.**
    Clean installed-extension smoke passed locally on Blender 4.2.0, 4.5.0, and
    5.1.2. The immutable `v0.5.0` tag failed before publication when tool selection
    exceeded the schema budget; `v0.5.1` fixed that gate but exposed Xvfb's blank
-   direct-viewport capture across all hosted Blender lanes. v0.5.2 keeps direct
-   viewport/playblast proof in local interactive smoke and must pass the remaining
-   hosted installation, workflow, rendered-evidence, packaging, and publication gates.
+   direct-viewport capture across all hosted Blender lanes. `v0.5.2` separated that
+   display-dependent proof correctly, then exposed a missing `uv` dependency in the
+   Linux MCPB smoke. v0.5.3 installs that dependency before the hosted package gate.
 2. **Supply a real studio endpoint when available.** The contract and job path
    are implemented, but live local/LAN evidence remains blocked by no configured
    service URL.
