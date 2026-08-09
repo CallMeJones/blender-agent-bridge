@@ -362,7 +362,7 @@ jobs:
           python-version: "3.12"
 
       - name: Download official release candidate
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: blender-agent-bridge-official-release-candidate
           path: dist
@@ -429,7 +429,7 @@ jobs:
           python-version: "3.12"
 
       - name: Download tagged blender-bridge publication candidate
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: blender-bridge-official-python-candidate
           path: dist
@@ -467,19 +467,19 @@ jobs:
       contents: write
     steps:
       - name: Download official release candidate
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: blender-agent-bridge-official-release-candidate
           path: dist
 
       - name: Download blender-bridge Python distributions
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: blender-bridge-official-python-candidate
           path: python-dist
 
       - name: Download MCPB connector
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: blender-agent-bridge-official-mcpb-candidate
           path: mcpb-dist
@@ -514,7 +514,7 @@ jobs:
           python-version: "3.12"
 
       - name: Download tested MCPB publication candidate
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: blender-agent-bridge-official-mcpb-candidate
           path: mcpb-dist
