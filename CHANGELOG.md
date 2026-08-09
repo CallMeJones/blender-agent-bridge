@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.0 - 2026-08-09
+
 ### Generation
 
 - Added first job backends for Meshy and for local/self-hosted generation. Meshy is the hosted third-party path; TripoSR direct local process and the studio HTTP endpoint are the two local/self-hosted execution contracts. All three reuse the shared external-asset job lifecycle, status polling, cache manifest, and import tail.
@@ -55,7 +57,10 @@
 - Added `CONTEXT.md`, fixing the vocabulary shared by module names, tool descriptions, and agent conversations. Records the pure-module / `_scene`-adapter split, and the ambiguities that produced real defects.
 - Recorded in ADR-001 that Decision 1 held: `asset_jobs` should not be split now that it carries both catalog downloads and paid generation.
 
-## 0.5.0 - 2026-08-06
+### Release engineering
+
+- Isolated credential-store tests to a temporary user-data root so local release verification cannot read, overwrite, or delete remembered provider keys.
+- Added repository-wide Gitleaks defaults with a narrow rule-specific exception for benchmark metric keyword arguments, and required extracted artifact-content scans before publication.
 
 ### Credentials
 

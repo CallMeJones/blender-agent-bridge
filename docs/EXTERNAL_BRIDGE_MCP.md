@@ -7,7 +7,7 @@ The extension defaults to **Bundled**, which launches the pure-Python MCP server
 Select the runtime in Blender preferences before using **Copy MCP Config**. Generated `uvx` configs pin the extension version:
 
 ```text
-uvx --from blender-bridge==0.4.1 blender-bridge
+uvx --from blender-bridge==0.5.0 blender-bridge
 ```
 
 Windows configs use `cmd /c uvx ...`; macOS and Linux invoke `uvx` directly. Blender detects a missing executable and shows installation guidance but never installs software automatically. See the [client guide matrix](clients/README.md) for complete formats.

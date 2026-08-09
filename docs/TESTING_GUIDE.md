@@ -2,15 +2,15 @@
 
 This guide is the runbook for asking Codex to test Blender Agent Bridge end to end. It is designed to cover every feature family, every bridge path, and every tool surface, then drive failures into focused fixes and reruns.
 
-Current project snapshot, checked on 2026-08-02:
+Current project snapshot, checked on 2026-08-09:
 
 - Extension: `Blender Agent Bridge`, manifest id `claude_blender`; version comes from `addon/claude_blender/blender_manifest.toml` and is checked against `build_info.py` and `CHANGELOG.md`.
 - Minimum Blender: `4.2.0`. CI tests 4.2 LTS, 4.5 LTS, and 5.1; newer versions are accepted with capability-based warnings.
 - Local Blender detected on this workstation: `C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`.
-- Canonical registry inventory: 236 Blender tool contracts across explicit domain modules.
-- Normal agent catalog inventory: 232 tool definitions; the default surface exposes exactly five gateways. The opt-in `direct` surface adds 24 curated direct helpers.
+- Canonical registry inventory: 240 Blender tool contracts across explicit domain modules.
+- Normal agent catalog inventory: 239 tool definitions; the default surface exposes exactly five gateways. The opt-in `direct` surface adds 24 curated direct helpers.
 - Intentional catalog difference: `run_approved_script` is a compatibility dispatcher path that always refuses the removed per-script flow; it is not exposed in the normal agent helper catalog.
-- The published 0.4.0 artifacts were verified on 2026-07-23. The current 0.4.1 working line contains 246 unit tests and a 22-test Blender-background suite; tagged CI repeats the supported Blender matrix under Xvfb on Linux.
+- The published 0.4.0 artifacts were verified on 2026-07-23. The current 0.5.0 release candidate contains 502 unit tests and a complete Blender-background suite; tagged CI repeats the supported Blender matrix under Xvfb on Linux.
 
 ## How To Ask Codex To Run This
 
@@ -45,7 +45,7 @@ Prepare a release verification pass using docs/TESTING_GUIDE.md and docs/RELEASE
 - Every long or visual operation must return pollable artifacts or readable resource URIs instead of relying only on console output.
 - Every bug fix gets the smallest owner test first, then the broader gate that would have caught the bug.
 - No test should require provider API keys. Optional Sketchfab download/import tests may use a per-run token from the environment. The one-time Sketchfab config dialog may copy a token to the clipboard, but tokens must never be stored in Blender preferences, `.blend` files, logs, committed files, or guide text. The credential panel fields are entry boxes only: they blank themselves on assignment, and `tests/smoke_ui_layout.py` asserts that they do.
-- Credential-store tests must not use a real key. `tests/unit/test_credential_store.py` writes disposable sentinel values through the real OS backend and removes them again; it never reads a credential the user stored.
+- Credential-store tests must not use a real key. `tests/unit/test_credential_store.py` redirects credential files to a temporary directory, writes disposable sentinel values through the real OS backend, and removes them again; it never reads or deletes a credential the user stored.
 
 ## Phase 0: Preflight
 

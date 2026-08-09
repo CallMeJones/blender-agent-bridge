@@ -1,0 +1,12 @@
+title = "Blender Agent Bridge Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Reference benchmark metric-key keyword arguments are not credentials"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(?:^|/)(?:(?:addon/)?claude_blender/)?reference_benchmarks\.py$''']
+regexes = ['''^\s*(?:normalized|pixel)_key\s*=\s*"(?:mean_edge_distance_normalized|mean_edge_distance_pixels|p95_edge_distance_normalized|p95_edge_distance_pixels)",?\s*$''']

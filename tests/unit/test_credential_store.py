@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 import unittest
 
 
@@ -14,7 +15,18 @@ from claude_blender import session_credentials as sc  # noqa: E402
 WINDOWS = sys.platform == "win32"
 
 
+def _isolate_credential_paths(test_case):
+    temporary = tempfile.TemporaryDirectory(prefix="blender-agent-bridge-credentials-")
+    original = cs.user_paths.LEGACY_BASE_DIR
+    cs.user_paths.LEGACY_BASE_DIR = temporary.name
+    test_case.addCleanup(temporary.cleanup)
+    test_case.addCleanup(setattr, cs.user_paths, "LEGACY_BASE_DIR", original)
+
+
 class BackendSelectionTests(unittest.TestCase):
+    def setUp(self):
+        _isolate_credential_paths(self)
+
     def tearDown(self):
         cs.set_backend_override(None)
 
@@ -57,6 +69,7 @@ class RestrictedFileFallbackTests(unittest.TestCase):
     """
 
     def setUp(self):
+        _isolate_credential_paths(self)
         cs.set_backend_override(cs.BACKEND_RESTRICTED_FILE)
         self.addCleanup(cs.set_backend_override, None)
         self.addCleanup(cs.forget_everything)
@@ -108,6 +121,7 @@ class WindowsDpapiTests(unittest.TestCase):
     """Exercises the real OS call, not a stand-in."""
 
     def setUp(self):
+        _isolate_credential_paths(self)
         self.assertEqual(cs.BACKEND_WINDOWS_DPAPI, cs.backend_name())
         cs.delete_credential(sc.TRIPO_API_KEY)
         sc.clear_session_credentials()
