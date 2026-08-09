@@ -87,6 +87,14 @@ jobs:
           run-id: ${{ inputs.python_run_id }}
           github-token: ${{ github.token }}
 
+      - name: Download exact tested MCPB candidate
+        uses: actions/download-artifact@v7
+        with:
+          name: blender-agent-bridge-official-mcpb-candidate
+          path: mcpb-dist
+          run-id: ${{ inputs.artifact_run_id }}
+          github-token: ${{ github.token }}
+
       - name: Verify retained artifacts and completed PyPI publication
         shell: bash
         env:
@@ -144,6 +152,14 @@ jobs:
           run-id: ${{ inputs.python_run_id }}
           github-token: ${{ github.token }}
 
+      - name: Download exact tested MCPB candidate
+        uses: actions/download-artifact@v7
+        with:
+          name: blender-agent-bridge-official-mcpb-candidate
+          path: mcpb-dist
+          run-id: ${{ inputs.artifact_run_id }}
+          github-token: ${{ github.token }}
+
       - name: Publish tagged GitHub release assets
         uses: softprops/action-gh-release@v3
         with:
@@ -154,11 +170,16 @@ jobs:
             dist/*.sha256
             python-dist/*.whl
             python-dist/*.tar.gz
+            mcpb-dist/*.mcpb
+            mcpb-dist/*.mcpb.sha256
 
   verify-publication:
     needs: [deploy-pages, publish-release]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
     steps:
       - name: Check out immutable tagged source
         uses: actions/checkout@v7
@@ -170,5 +191,19 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Download exact tested MCPB candidate
+        uses: actions/download-artifact@v7
+        with:
+          name: blender-agent-bridge-official-mcpb-candidate
+          path: mcpb-dist
+          run-id: ${{ inputs.artifact_run_id }}
+          github-token: ${{ github.token }}
+
       - name: Verify public Pages and Release archive identity
-        run: python tests/smoke_published_release_identity.py --attempts 60 --delay 5
+        shell: bash
+        run: |
+          version="${{ inputs.tag }}"
+          python tests/smoke_published_release_identity.py \
+            --expected-mcpb-sidecar "mcpb-dist/blender-agent-bridge-${version#v}.mcpb.sha256" \
+            --attempts 60 \
+            --delay 5

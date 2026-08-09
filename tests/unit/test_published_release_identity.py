@@ -46,13 +46,19 @@ def _mcpb_bytes(version):
 
 
 class PublishedReleaseIdentityTests(unittest.TestCase):
-    def test_expected_mcpb_digest_rebuilds_tagged_source(self):
-        with open(publication_smoke.MANIFEST_PATH, "rb") as handle:
-            version = publication_smoke.tomllib.load(handle)["version"]
+    def test_candidate_mcpb_digest_reads_the_retained_sidecar(self):
+        version = "1.2.3"
+        filename = f"blender-agent-bridge-{version}.mcpb"
+        digest = "a" * 64
+        with tempfile.TemporaryDirectory() as temporary:
+            sidecar_path = os.path.join(temporary, f"{filename}.sha256")
+            with open(sidecar_path, "w", encoding="utf-8") as handle:
+                handle.write(f"{digest}  {filename}\n")
 
-        digest = publication_smoke._expected_mcpb_digest(version)
-
-        self.assertEqual(64, len(digest))
+            self.assertEqual(
+                digest,
+                publication_smoke._candidate_mcpb_digest(sidecar_path, version=version),
+            )
 
     def test_mcpb_archive_contract_requires_uv_source_layout(self):
         publication_smoke._verify_mcpb_archive(_mcpb_bytes("1.2.3"), version="1.2.3")

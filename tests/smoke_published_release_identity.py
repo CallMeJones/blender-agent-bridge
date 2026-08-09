@@ -8,7 +8,6 @@ import io
 import json
 import os
 import sys
-import tempfile
 import time
 import tomllib
 import urllib.error
@@ -70,13 +69,10 @@ def _load_mcpb_builder():
     return build_mcpb
 
 
-def _expected_mcpb_digest(version):
-    build_mcpb = _load_mcpb_builder()
-    assert build_mcpb.build_info.MCP_SERVER_VERSION == version
-    with tempfile.TemporaryDirectory(prefix="bab-publication-mcpb-") as temporary:
-        output_path, _ = build_mcpb.build_mcpb(temporary)
-        with open(output_path, "rb") as handle:
-            return hashlib.sha256(handle.read()).hexdigest()
+def _candidate_mcpb_digest(sidecar_path, *, version):
+    filename = _load_mcpb_builder().mcpb_filename(version)
+    with open(sidecar_path, "rb") as handle:
+        return _sidecar_digest(handle.read(), sidecar_path, expected_filename=filename)
 
 
 def _verify_once(*, expected_mcpb_digest=None):
@@ -129,8 +125,8 @@ def _verify_once(*, expected_mcpb_digest=None):
     mcpb_sidecar_url = f"{mcpb_url}.sha256"
     mcpb_body = _download(mcpb_url, max_bytes=MAX_ARCHIVE_BYTES)
     mcpb_digest = hashlib.sha256(mcpb_body).hexdigest()
-    expected_mcpb_digest = expected_mcpb_digest or _expected_mcpb_digest(version)
-    assert mcpb_digest == expected_mcpb_digest, (mcpb_digest, expected_mcpb_digest)
+    if expected_mcpb_digest:
+        assert mcpb_digest == expected_mcpb_digest, (mcpb_digest, expected_mcpb_digest)
     assert (
         _sidecar_digest(
             _download(mcpb_sidecar_url, max_bytes=4096),
@@ -151,13 +147,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--attempts", type=int, default=1)
     parser.add_argument("--delay", type=float, default=0)
+    parser.add_argument("--expected-mcpb-sidecar", default="")
     args = parser.parse_args()
     assert args.attempts >= 1
     assert args.delay >= 0
 
     with open(MANIFEST_PATH, "rb") as handle:
         expected_version = tomllib.load(handle)["version"]
-    expected_mcpb_digest = _expected_mcpb_digest(expected_version)
+    expected_mcpb_digest = None
+    if args.expected_mcpb_sidecar:
+        expected_mcpb_digest = _candidate_mcpb_digest(
+            args.expected_mcpb_sidecar,
+            version=expected_version,
+        )
     last_error = None
     for attempt in range(1, args.attempts + 1):
         try:

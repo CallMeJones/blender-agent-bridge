@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Release validation
+
+- Bound public MCPB verification and release recovery to the retained tested-candidate sidecar instead of comparing against a cross-platform archive rebuild.
+
 ## 0.5.3 - 2026-08-09
 
 ### Release validation

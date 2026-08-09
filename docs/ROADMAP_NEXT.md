@@ -201,19 +201,17 @@ Focused verification on 2026-08-09:
   install, workflow, gateway, and doctor smoke on Blender 5.1.2. The interactive
   bridge also live-refused an omitted provider while all three routes were ready;
   a reload-inventory regression now keeps the provider policy module current.
+- Published `v0.5.3` on 2026-08-09 after 503 unit tests, clean installed-extension
+  smoke on Blender 4.2.0, 4.5.0, and 5.1.2 locally and in tagged Linux CI, official
+  ZIP/MCPB validation, PyPI publication, GitHub release publication, byte-identity
+  checks against retained candidates, and a fresh install through the public
+  Blender extension repository.
 
 ---
 
 ## 1. Immediate Next
 
-1. **Complete the corrected v0.5.3 release and public repository install.**
-   Clean installed-extension smoke passed locally on Blender 4.2.0, 4.5.0, and
-   5.1.2. The immutable `v0.5.0` tag failed before publication when tool selection
-   exceeded the schema budget; `v0.5.1` fixed that gate but exposed Xvfb's blank
-   direct-viewport capture across all hosted Blender lanes. `v0.5.2` separated that
-   display-dependent proof correctly, then exposed a missing `uv` dependency in the
-   Linux MCPB smoke. v0.5.3 installs that dependency before the hosted package gate.
-2. **Supply a real studio endpoint when available.** The contract and job path
+1. **Supply a real studio endpoint when available.** The contract and job path
    are implemented, but live local/LAN evidence remains blocked by no configured
    service URL.
 

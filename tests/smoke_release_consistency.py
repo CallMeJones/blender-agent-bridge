@@ -185,6 +185,7 @@ def _assert_local_release_metadata():
     assert "needs: [mcp-smoke, blender-smoke]" in workflow, "Tag artifact preparation must wait for both test jobs"
     assert "smoke_release_artifact_identity.py" in workflow, "Tag publication must verify archive identity"
     assert "smoke_published_release_identity.py" in workflow, "Tag publication must verify both public endpoints"
+    assert "--expected-mcpb-sidecar" in workflow, "Tag publication must bind the public MCPB to the tested candidate"
     assert "if: startsWith(github.ref, 'refs/tags/v')" in workflow, "Pages and release publication must be tag-gated"
     assert "pypa/gh-action-pypi-publish" in workflow, "Tagged releases must use PyPI Trusted Publishing"
     assert re.search(r"pypa/gh-action-pypi-publish@[0-9a-f]{40}", workflow), "PyPI publishing action must be SHA-pinned"
@@ -212,6 +213,12 @@ def _assert_local_release_metadata():
     assert "uses: softprops/action-gh-release@v3" in recovery_workflow, "Release recovery must publish the GitHub Release"
     assert "smoke_published_release_identity.py" in recovery_workflow, (
         "Release recovery must verify both public extension archives"
+    )
+    assert "blender-agent-bridge-official-mcpb-candidate" in recovery_workflow, (
+        "Release recovery must retain and republish the exact tested MCPB candidate"
+    )
+    assert "--expected-mcpb-sidecar" in recovery_workflow, (
+        "Release recovery must bind the public MCPB to the retained tested candidate"
     )
 
     _assert_no_hardcoded_release_examples(version)

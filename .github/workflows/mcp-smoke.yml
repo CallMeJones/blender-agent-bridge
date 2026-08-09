@@ -501,6 +501,9 @@ jobs:
     needs: [deploy-pages, publish-pypi, publish-release]
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
     steps:
       - name: Check out tagged source
         uses: actions/checkout@v7
@@ -510,5 +513,17 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Download tested MCPB publication candidate
+        uses: actions/download-artifact@v7
+        with:
+          name: blender-agent-bridge-official-mcpb-candidate
+          path: mcpb-dist
+
       - name: Verify public Pages and Release artifact identity
-        run: python tests/smoke_published_release_identity.py --attempts 30 --delay 5
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          python tests/smoke_published_release_identity.py \
+            --expected-mcpb-sidecar "mcpb-dist/blender-agent-bridge-${version}.mcpb.sha256" \
+            --attempts 30 \
+            --delay 5
