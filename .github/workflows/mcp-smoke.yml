@@ -300,6 +300,8 @@ jobs:
         run: >
           xvfb-run -a python3 scripts/installed_extension_live_smoke.py
           --blender "$GITHUB_WORKSPACE/blender/blender"
+          --skip-viewport
+          --skip-playblast
           --timeout 240
 
       - name: Validate and build official tagged archive

@@ -38,7 +38,7 @@ Blender and replace the complete `blender` entry. A bundled entry has this shape
 Pinned `uvx` mode on macOS/Linux changes the command to `uvx` and args to:
 
 ```json
-["--from", "blender-bridge==0.5.1", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
+["--from", "blender-bridge==0.5.2", "blender-bridge", "--bridge-url", "http://127.0.0.1:<port>"]
 ```
 
 On Windows use `"command": "cmd"` and prefix the args with `"/c", "uvx"`. Claude Code can also register the object inside `mcpServers.blender` at user scope with `claude mcp add-json --scope user blender '<server-object-json>'`. Preserve any generated environment values, such as bridge or Sketchfab tokens and the `uvx` runtime marker.

@@ -514,6 +514,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--keep-profile", action="store_true", help="Keep the temporary profile and captured artifacts.")
     parser.add_argument("--port", type=int, default=0, help="Bridge port. Defaults to 0 for an unused local port.")
     parser.add_argument("--timeout", type=float, default=90.0)
+    parser.add_argument("--skip-viewport", action="store_true")
     parser.add_argument("--skip-playblast", action="store_true")
     args = parser.parse_args(argv)
 
@@ -572,6 +573,8 @@ def main(argv: list[str] | None = None) -> int:
             timeout=max(args.timeout, 120),
         )
         bridge_smoke = [sys.executable, str(SCRIPTS / "live_bridge_smoke.py"), "--bridge-url", bridge_url, "--timeout", str(int(args.timeout))]
+        if args.skip_viewport:
+            bridge_smoke.append("--skip-viewport")
         if args.skip_playblast:
             bridge_smoke.append("--skip-playblast")
         _run(bridge_smoke, env=env, timeout=max(args.timeout, 120))

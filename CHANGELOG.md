@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.2 - 2026-08-09
+
+### Release validation
+
+- Kept hosted installed-extension smoke focused on behavior that Xvfb can prove reliably: installation, live bridge workflows, rendered evidence inventory, bundled MCP, MCPB, and scene preservation. Direct viewport and playblast capture remain required in local interactive Blender release smoke, where real display pixels are available.
+
 ## 0.5.1 - 2026-08-09
 
 ### Routing

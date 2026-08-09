@@ -8,6 +8,8 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ORCHESTRATOR = ROOT / "scripts" / "installed_extension_live_smoke.py"
 STARTUP_FIXTURE = ROOT / "scripts" / "installed_extension_startup.py"
+LIVE_BRIDGE_SMOKE = ROOT / "scripts" / "live_bridge_smoke.py"
+WORKFLOW = ROOT / ".github" / "workflows" / "mcp-smoke.yml"
 
 
 class InstalledExtensionSmokeArchitectureTests(unittest.TestCase):
@@ -23,6 +25,17 @@ class InstalledExtensionSmokeArchitectureTests(unittest.TestCase):
             'startup_path = SCRIPTS / "installed_extension_startup.py"',
             orchestrator,
         )
+
+    def test_headless_ci_skips_only_display_dependent_capture(self):
+        orchestrator = ORCHESTRATOR.read_text(encoding="utf-8")
+        live_bridge = LIVE_BRIDGE_SMOKE.read_text(encoding="utf-8")
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn('parser.add_argument("--skip-viewport", action="store_true")', live_bridge)
+        self.assertIn('if args.skip_viewport:', orchestrator)
+        self.assertIn('bridge_smoke.append("--skip-viewport")', orchestrator)
+        self.assertIn("--skip-viewport", workflow)
+        self.assertIn("--skip-playblast", workflow)
 
 
 if __name__ == "__main__":

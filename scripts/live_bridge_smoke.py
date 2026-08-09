@@ -44,6 +44,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Smoke-test a running Blender Agent Bridge.")
     parser.add_argument("--bridge-url", default="http://127.0.0.1:8765")
     parser.add_argument("--timeout", type=float, default=30.0)
+    parser.add_argument("--skip-viewport", action="store_true")
     parser.add_argument("--skip-playblast", action="store_true")
     args = parser.parse_args()
 
@@ -57,10 +58,11 @@ def main() -> int:
             f"source {health.get('addon_runtime_source_status', '?')}",
         )
 
-        viewport = _post_tool(base_url, "capture_viewport", {"max_bytes": 900000}, timeout=args.timeout)
-        _require_ok("capture_viewport", viewport)
-        visual = viewport.get("visual_context") or {}
-        print("viewport ok:", visual.get("resource_uri"), visual.get("path"))
+        if not args.skip_viewport:
+            viewport = _post_tool(base_url, "capture_viewport", {"max_bytes": 900000}, timeout=args.timeout)
+            _require_ok("capture_viewport", viewport)
+            visual = viewport.get("visual_context") or {}
+            print("viewport ok:", visual.get("resource_uri"), visual.get("path"))
 
         if not args.skip_playblast:
             playblast = _post_tool(
