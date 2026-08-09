@@ -161,13 +161,23 @@ def _has_nonparallel_views(views, minimum_angle_degrees):
     return False
 
 
-def _grid(bounds_center, bounds_size, resolution):
+def _grid(bounds_center, bounds_size, resolution, cell_size=None):
     center = _vector(bounds_center, 3, "bounds_center")
     size = _vector(bounds_size, 3, "bounds_size")
     if any(component <= 0.0 for component in size):
         raise VisualHullError("bounds_size components must be greater than zero")
-    resolution = max(8, min(80, int(resolution)))
-    cell_size = max(size) / resolution
+    if cell_size is None:
+        resolution = max(8, min(80, int(resolution)))
+        cell_size = max(size) / resolution
+        resolution_mode = "resolution"
+    else:
+        try:
+            cell_size = float(cell_size)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise VisualHullError("cell_size must be a finite number") from exc
+        if not math.isfinite(cell_size) or cell_size <= 0.0:
+            raise VisualHullError("cell_size must be greater than zero")
+        resolution_mode = "cell_size"
     dimensions = tuple(max(1, int(math.ceil(component / cell_size))) for component in size)
     cell_count = dimensions[0] * dimensions[1] * dimensions[2]
     if cell_count > MAX_GRID_CELLS:
@@ -176,7 +186,7 @@ def _grid(bounds_center, bounds_size, resolution):
         )
     actual_size = tuple(dimension * cell_size for dimension in dimensions)
     minimum = tuple(center[index] - actual_size[index] * 0.5 for index in range(3))
-    return minimum, actual_size, dimensions, cell_size, cell_count
+    return minimum, actual_size, dimensions, cell_size, cell_count, resolution_mode
 
 
 def _occupied_cells(views, minimum, dimensions, cell_size):
@@ -369,6 +379,7 @@ def carve_visual_hull(
     bounds_center,
     bounds_size,
     resolution=48,
+    cell_size=None,
     component_mode="largest",
     minimum_component_voxels=8,
     smooth_iterations=2,
@@ -379,10 +390,11 @@ def carve_visual_hull(
     prepared = prepare_calibrated_views(views, minimum_count=2)
     if not _has_nonparallel_views(prepared, minimum_view_angle_degrees):
         raise VisualHullError("Visual hull views are too parallel to bound depth")
-    minimum, actual_size, dimensions, cell_size, cell_count = _grid(
+    minimum, actual_size, dimensions, cell_size, cell_count, resolution_mode = _grid(
         bounds_center,
         bounds_size,
         resolution,
+        cell_size,
     )
     edge_evaluations = cell_count * sum(len(view["outline"]) for view in prepared)
     if edge_evaluations > MAX_SILHOUETTE_EDGE_EVALUATIONS:
@@ -435,6 +447,7 @@ def carve_visual_hull(
             "view_names": [view["name"] for view in prepared],
             "grid_dimensions": list(dimensions),
             "grid_cell_count": cell_count,
+            "resolution_mode": resolution_mode,
             "silhouette_edge_evaluations": edge_evaluations,
             "depth_layer_count": sum(len(view["depth_layers"]) for view in prepared),
             "depth_evaluations": depth_evaluations,

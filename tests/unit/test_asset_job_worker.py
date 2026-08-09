@@ -84,6 +84,21 @@ class AssetJobWorkerTests(unittest.TestCase):
         self.assertEqual(kwargs["model_password"], "worker-password")
         self.assertEqual(kwargs["provenance"], provenance)
 
+    def test_generation_worker_dispatches_every_implemented_backend(self):
+        for provider in ("tripo", "meshy", "studio_endpoint", "triposr"):
+            with self.subTest(provider=provider), mock.patch.dict(
+                os.environ,
+                {asset_job_worker.ASSET_JOB_SECRET_TOKEN_ENV: "secret"},
+                clear=False,
+            ), mock.patch("claude_blender.generation_job.run", return_value={"ok": True}) as run:
+                result = asset_job_worker.WORKER_DISPATCH[provider](
+                    {"child_status_path": "unused"},
+                    {"views": {"front": "front.png"}},
+                )
+            self.assertTrue(result["ok"])
+            self.assertEqual(provider, run.call_args.kwargs["provider"])
+            self.assertEqual("secret", run.call_args.kwargs["api_key"])
+
 
 if __name__ == "__main__":
     unittest.main()

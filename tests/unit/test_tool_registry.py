@@ -19,8 +19,8 @@ SNAPSHOT_PATH = os.path.join(ROOT, "tests", "snapshots", "tool_registry.json")
 class ToolRegistryTests(unittest.TestCase):
     def test_inventory_is_complete_and_domain_owned(self):
         specs = tool_registry.REGISTRY.specs()
-        self.assertEqual(238, len(specs))
-        self.assertEqual(237, len(tool_registry.definitions()))
+        self.assertEqual(240, len(specs))
+        self.assertEqual(239, len(tool_registry.definitions()))
         self.assertEqual(13, len(tool_registry.DOMAIN_MODULES))
         self.assertEqual({spec.name for spec in specs}, set(bridge_protocol.TOOL_CONTRACTS))
         self.assertEqual(
@@ -183,6 +183,26 @@ class ToolRegistryTests(unittest.TestCase):
                     "blender_bridge_status",
                     contract["timeout_recovery"]["status_tool"],
                 )
+
+    def test_generation_quality_tools_and_triposr_knobs_are_registered(self):
+        start_properties = tool_registry.REGISTRY.get("start_generation_job").input_schema["properties"]
+        for name in (
+            "mc_resolution",
+            "no_remove_bg",
+            "foreground_ratio",
+            "chunk_size",
+            "bake_texture",
+            "texture_resolution",
+        ):
+            with self.subTest(property=name):
+                self.assertIn(name, start_properties)
+
+        cleanup = tool_registry.REGISTRY.get("cleanup_generated_asset")
+        evaluate = tool_registry.REGISTRY.get("evaluate_generated_asset")
+        self.assertIn("generation_quality", cleanup.groups)
+        self.assertIn("generation_quality", evaluate.groups)
+        self.assertTrue(cleanup.contract["requires_live_preview"])
+        self.assertFalse(evaluate.contract["mutates_scene"])
 
     def test_sculpt_and_reference_fit_do_not_advertise_unsafe_shape_key_edits(self):
         for name in (

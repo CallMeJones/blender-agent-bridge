@@ -73,6 +73,11 @@ class ProviderSpec:
     credential_env_vars: tuple = ()
     endpoint_env_vars: tuple = ()
     runtime_env_vars: tuple = ()
+    # Requirement groups are ANDed; env vars inside a group are ORed. This
+    # lets a local model require both a Python interpreter and a checkout root
+    # while still accepting either a provider-specific Python var or the shared
+    # probe interpreter var.
+    runtime_requirements: tuple = ()
     min_vram_gb: float = 0.0
     min_compute_capability: float = 0.0
     requires_bfloat16: bool = False
@@ -103,19 +108,39 @@ PROVIDER_SPECS = (
         "triposr",
         "TripoSR",
         KIND_LOCAL_PROCESS,
-        runtime_env_vars=("BLENDER_AGENT_BRIDGE_TRIPOSR_PYTHON", "BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT"),
+        runtime_env_vars=(
+            "BLENDER_AGENT_BRIDGE_TRIPOSR_PYTHON",
+            PROBE_PYTHON_ENV_VAR,
+            "BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT",
+        ),
+        runtime_requirements=(
+            ("python", ("BLENDER_AGENT_BRIDGE_TRIPOSR_PYTHON", PROBE_PYTHON_ENV_VAR)),
+            ("root", ("BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT",)),
+        ),
         min_vram_gb=6.0,
         min_compute_capability=7.0,
         supports_multiview=False,
         max_input_images=1,
         license_note="MIT",
-        notes="Fast single-image reconstruction. Lower fidelity than diffusion-based models; good for blockouts.",
+        notes=(
+            "Fast single-image reconstruction for local blockouts. It cannot observe "
+            "occluded side/back structure, so do not treat single-view output as final quality."
+        ),
+        job_implemented=True,
     ),
     ProviderSpec(
         "hunyuan3d",
         "Hunyuan3D",
         KIND_LOCAL_PROCESS,
-        runtime_env_vars=("BLENDER_AGENT_BRIDGE_HUNYUAN3D_PYTHON", "BLENDER_AGENT_BRIDGE_HUNYUAN3D_ROOT"),
+        runtime_env_vars=(
+            "BLENDER_AGENT_BRIDGE_HUNYUAN3D_PYTHON",
+            PROBE_PYTHON_ENV_VAR,
+            "BLENDER_AGENT_BRIDGE_HUNYUAN3D_ROOT",
+        ),
+        runtime_requirements=(
+            ("python", ("BLENDER_AGENT_BRIDGE_HUNYUAN3D_PYTHON", PROBE_PYTHON_ENV_VAR)),
+            ("root", ("BLENDER_AGENT_BRIDGE_HUNYUAN3D_ROOT",)),
+        ),
         min_vram_gb=12.0,
         min_compute_capability=8.0,
         requires_bfloat16=True,
@@ -128,7 +153,15 @@ PROVIDER_SPECS = (
         "trellis",
         "TRELLIS",
         KIND_LOCAL_PROCESS,
-        runtime_env_vars=("BLENDER_AGENT_BRIDGE_TRELLIS_PYTHON", "BLENDER_AGENT_BRIDGE_TRELLIS_ROOT"),
+        runtime_env_vars=(
+            "BLENDER_AGENT_BRIDGE_TRELLIS_PYTHON",
+            PROBE_PYTHON_ENV_VAR,
+            "BLENDER_AGENT_BRIDGE_TRELLIS_ROOT",
+        ),
+        runtime_requirements=(
+            ("python", ("BLENDER_AGENT_BRIDGE_TRELLIS_PYTHON", PROBE_PYTHON_ENV_VAR)),
+            ("root", ("BLENDER_AGENT_BRIDGE_TRELLIS_ROOT",)),
+        ),
         min_vram_gb=16.0,
         min_compute_capability=8.0,
         supports_multiview=True,
@@ -145,6 +178,7 @@ PROVIDER_SPECS = (
         supports_multiview=True,
         max_input_images=6,
         notes="Self-hosted server on the local network. Counts as local: no third-party egress.",
+        job_implemented=True,
     ),
     ProviderSpec(
         "tripo",
@@ -169,6 +203,7 @@ PROVIDER_SPECS = (
         max_input_images=4,
         license_note="Commercial API; output rights governed by the vendor's terms.",
         cost_note="Charged per job against the account's Meshy credit balance.",
+        job_implemented=True,
     ),
 )
 
@@ -293,7 +328,12 @@ _CREDENTIAL_BY_ATTRIBUTE = dict(PREFERENCE_CREDENTIAL_MAP)
 
 # One preference selects the interpreter for every local provider.
 PREFERENCE_PYTHON_ATTRIBUTE = "generation_python"
-PREFERENCE_PYTHON_ENV_VARS = (PROBE_PYTHON_ENV_VAR, "BLENDER_AGENT_BRIDGE_TRIPOSR_PYTHON")
+PREFERENCE_PYTHON_ENV_VARS = (
+    PROBE_PYTHON_ENV_VAR,
+    "BLENDER_AGENT_BRIDGE_TRIPOSR_PYTHON",
+    "BLENDER_AGENT_BRIDGE_HUNYUAN3D_PYTHON",
+    "BLENDER_AGENT_BRIDGE_TRELLIS_PYTHON",
+)
 PREFERENCE_EGRESS_ATTRIBUTE = "generation_egress_allowed"
 
 
@@ -350,6 +390,23 @@ def environment_overlay(prefs, credentials=None):
 
 def _configured_env_names(names, environ):
     return [name for name in names if str(environ.get(name, "") or "").strip()]
+
+
+def _runtime_requirement_groups(spec):
+    if spec.runtime_requirements:
+        return tuple(spec.runtime_requirements)
+    if spec.runtime_env_vars:
+        return (("runtime", tuple(spec.runtime_env_vars)),)
+    return ()
+
+
+def _missing_runtime_requirements(spec, environ):
+    missing = []
+    for label, names in _runtime_requirement_groups(spec):
+        names = tuple(names)
+        if not _configured_env_names(names, environ):
+            missing.append((str(label or "runtime"), names))
+    return missing
 
 
 def empty_hardware_probe():
@@ -564,10 +621,15 @@ def provider_availability(spec, hardware=None, environ=None):
             block("missing_endpoint", "Set one of: %s" % ", ".join(spec.endpoint_env_vars))
 
     if spec.kind == KIND_LOCAL_PROCESS:
-        if not _configured_env_names(spec.runtime_env_vars, source):
+        missing_runtime = _missing_runtime_requirements(spec, source)
+        if missing_runtime:
             block(
                 "missing_runtime",
-                "Point at a prepared environment with one of: %s" % ", ".join(spec.runtime_env_vars),
+                "Point at a prepared environment: %s"
+                % "; ".join(
+                    "%s requires one of: %s" % (label, ", ".join(names))
+                    for label, names in missing_runtime
+                ),
             )
         for code, remedy in _hardware_blockers(spec, hw):
             block(code, remedy)
@@ -678,6 +740,12 @@ def select_provider(preferred="", environ=None, hardware=None, require_multiview
             return refuse(
                 "Provider %s is not available: %s"
                 % (preferred, "; ".join(report["remedies"]) or "unknown reason"),
+                report=report,
+            )
+        if not report["runnable"]:
+            return refuse(
+                "Provider %s cannot start a generation job: %s"
+                % (preferred, report["run_blocker"] or "no runnable backend"),
                 report=report,
             )
         if require_multiview and not report["supports_multiview"]:

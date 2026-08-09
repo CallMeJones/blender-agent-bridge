@@ -1,5 +1,5 @@
 {
-  "catalog_tool_count": 237,
+  "catalog_tool_count": 239,
   "contracts": {
     "adaptive_remesh": {
       "description": "Adaptively refine sculpt topology by subdividing edges that exceed a bounded local target derived from edge length, semantic-region weight, and face curvature. Retains interpolated semantic point attributes, optionally relaxes spacing and projects vertices back to the source surface, and enforces input, per-pass, and result vertex limits. This is a form-preserving refinement pass; it does not decimate or promise production retopology.",
@@ -3665,6 +3665,79 @@
       "supports_headless": false,
       "timeout_seconds": 30
     },
+    "cleanup_generated_asset": {
+      "description": "Preview-safe cleanup pass for generated meshes after import. Shades the mesh smooth, can add Weighted Normal, Decimate, and Voxel Remesh modifiers non-destructively, and preserves existing materials unless the caller deliberately changes them later. Use for TripoSR/local blockouts before visual review; it does not make single-view output final-quality.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "add_weighted_normals": {
+            "type": "boolean"
+          },
+          "decimate_ratio": {
+            "description": "Add a non-destructive Decimate modifier when below 1.0.",
+            "maximum": 1.0,
+            "minimum": 0.01,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_objects": {
+            "maximum": 64,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preserve_materials": {
+            "type": "boolean"
+          },
+          "remesh_voxel_size": {
+            "description": "Add a non-destructive Voxel Remesh modifier when above 0.",
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "selected_only": {
+            "type": "boolean"
+          },
+          "shade_smooth": {
+            "type": "boolean"
+          },
+          "target_object_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true,
+      "timeout_seconds": 60
+    },
     "clear_animation": {
       "description": "Clear object, data, shape-key, and optionally material animation from selected or named objects. Applies immediately with preview revert support.",
       "input_schema": {
@@ -5949,7 +6022,7 @@
     },
     "create_multiview_depth_surface": {
       "description": "Fuse one or more explicitly calibrated front/back depth images or sparse signed depth samples with two to six cyclic multi-view silhouettes. Depth values are measured in world units from each view center along its forward vector. The bounded voxel intersection remains watertight, filters disconnected occupancy, requires every depth source to overlap, and creates a reversible preview without invoking a learned depth model.",
-      "duration_hint": "Loads and downsamples at most twelve local depth sources, spatially indexes sparse samples, then carves at most 512000 grid cells under aggregate silhouette and depth workload caps.",
+      "duration_hint": "Loads and downsamples at most twelve local depth sources, spatially indexes sparse samples, then carves at most 512000 grid cells under aggregate silhouette and depth workload caps. Use cell_size for predictable world-unit resolution.",
       "has_side_effects": true,
       "input_schema": {
         "additionalProperties": false,
@@ -5975,6 +6048,10 @@
             "maxItems": 3,
             "minItems": 3,
             "type": "array"
+          },
+          "cell_size": {
+            "minimum": 1e-06,
+            "type": "number"
           },
           "collection_name": {
             "type": "string"
@@ -6398,7 +6475,7 @@
     },
     "create_multiview_visual_hull": {
       "description": "Intersect two to six calibrated cyclic silhouettes from a multi-view reference collection into a bounded watertight voxel boundary mesh. Automatically chooses the largest outline per view or accepts explicit overrides, rejects parallel view sets, filters disconnected occupancy, and applies bounded surface relaxation. Use this as the deterministic primary volume before adaptive topology and semantic form repair.",
-      "duration_hint": "Carves at most 512000 grid cells under a 100-million silhouette-edge workload cap and may take several seconds at high resolution.",
+      "duration_hint": "Carves at most 512000 grid cells under a 100-million silhouette-edge workload cap. Use cell_size for predictable world-unit resolution, or resolution for longest-axis subdivision.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -6423,6 +6500,10 @@
             "maxItems": 3,
             "minItems": 3,
             "type": "array"
+          },
+          "cell_size": {
+            "minimum": 1e-06,
+            "type": "number"
           },
           "collection_name": {
             "type": "string"
@@ -9656,6 +9737,96 @@
         "type": "object"
       },
       "requires_live_preview": true
+    },
+    "evaluate_generated_asset": {
+      "description": "Evaluate an imported generated mesh with topology/material/component/orientation checks and optional front/side/top inspection renders. Flags single-view TripoSR relief-shell risk, vertex-color-only materials, dense single-component editability risk, and non-Z-up orientation. Use before claiming a generated result is more than a blockout.",
+      "duration_hint": "Optional inspection renders can take several seconds per object/view.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_renders": {
+            "type": "boolean"
+          },
+          "manifest_path": {
+            "description": "Optional generated asset manifest; enables provider/view-count-specific findings.",
+            "type": "string"
+          },
+          "max_objects": {
+            "maximum": 64,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "resolution_x": {
+            "maximum": 2048,
+            "minimum": 128,
+            "type": "integer"
+          },
+          "resolution_y": {
+            "maximum": 2048,
+            "minimum": 128,
+            "type": "integer"
+          },
+          "selected_only": {
+            "type": "boolean"
+          },
+          "target_object_name": {
+            "type": "string"
+          },
+          "views": {
+            "items": {
+              "enum": [
+                "front_below",
+                "underside",
+                "side",
+                "front",
+                "rear",
+                "top"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "files:read",
+        "files:write"
+      ],
+      "supports_headless": true,
+      "timeout_recovery": {
+        "poll_after_seconds": 5,
+        "recoverable": true,
+        "resource_tool": "get_visual_evidence_resources",
+        "status_tool": "blender_bridge_status"
+      },
+      "timeout_seconds": 180
     },
     "evaluate_multiview_reference_match": {
       "description": "Render a model through every calibrated reference-guide camera in a single-view or multi-view collection, compare silhouettes and optional landmarks, apply the versioned reference benchmark profile per view, and return aggregate, worst-view, gate, redline, and repair-priority evidence. Measures silhouette conformance only: it can tell you a shape does not match the reference, and cannot tell a clean editable mesh from a dense shell filling the same outline. Use it to locate where a model is the wrong shape, never to rank two candidates or to decide a model is good -- a lumpy voxel column measured 0.926 here against 0.557 for a clean base mesh of the same subject. Do not drive a repair loop on this number alone; if the score falls while the model visibly improves, believe the model.",
@@ -17404,25 +17575,51 @@
       "timeout_seconds": 30
     },
     "start_generation_job": {
-      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. Only local providers are selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it, or suggest it and let them decide. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and the user must then click Approve in the Blender sidebar. No argument grants this: call again with the same arguments once they have approved. The finished model is cached like any external asset, so import it with start_external_asset_import_job.",
+      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. Only local providers are selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it, or suggest it and let them decide. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and the user must then click Approve in the Blender sidebar. No argument grants this: call again with the same arguments once they have approved. The finished model is cached like any external asset, so import it with start_external_asset_import_job. TripoSR is a single-image local blockout route: use its knobs to tune extraction, but do not treat it as final multi-view quality.",
       "duration_hint": "Returns quickly after starting the job. Generation itself typically takes one to a few minutes; poll get_generation_job_status.",
       "has_side_effects": true,
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "bake_texture": {
+            "description": "TripoSR: bake a texture atlas instead of relying on vertex colors when the runtime supports it.",
+            "type": "boolean"
+          },
           "cache_dir": {
             "type": "string"
+          },
+          "chunk_size": {
+            "description": "TripoSR evaluation chunk size. Lower values reduce VRAM use but can run slower; 0 disables chunking.",
+            "maximum": 262144,
+            "minimum": 0,
+            "type": "integer"
           },
           "face_limit": {
             "maximum": 1000000,
             "minimum": 0,
             "type": "integer"
           },
+          "foreground_ratio": {
+            "description": "TripoSR foreground resize ratio when background removal is enabled. Default is 0.85.",
+            "maximum": 1.0,
+            "minimum": 0.1,
+            "type": "number"
+          },
           "job_name": {
             "type": "string"
           },
+          "mc_resolution": {
+            "description": "TripoSR marching-cubes grid resolution. Higher values preserve detail but create heavier meshes.",
+            "maximum": 512,
+            "minimum": 16,
+            "type": "integer"
+          },
           "model": {
             "type": "string"
+          },
+          "no_remove_bg": {
+            "description": "TripoSR: skip automatic background removal. Use only when the input is already foreground-isolated.",
+            "type": "boolean"
           },
           "note": {
             "type": "string"
@@ -17430,6 +17627,15 @@
           "provider": {
             "description": "Omit to auto-select a local provider. Hosted providers (tripo, meshy) cost credits and upload the images, so they are never auto-selected and must be named here.",
             "type": "string"
+          },
+          "texture": {
+            "type": "boolean"
+          },
+          "texture_resolution": {
+            "description": "TripoSR texture atlas resolution when bake_texture is true.",
+            "maximum": 8192,
+            "minimum": 256,
+            "type": "integer"
           },
           "timeout": {
             "maximum": 300,
@@ -25806,6 +26012,10 @@
             "minItems": 3,
             "type": "array"
           },
+          "cell_size": {
+            "minimum": 1e-06,
+            "type": "number"
+          },
           "collection_name": {
             "type": "string"
           },
@@ -26289,6 +26499,10 @@
             "maxItems": 3,
             "minItems": 3,
             "type": "array"
+          },
+          "cell_size": {
+            "minimum": 1e-06,
+            "type": "number"
           },
           "collection_name": {
             "type": "string"
@@ -32593,23 +32807,49 @@
       "name": "plan_image_to_3d_approach"
     },
     {
-      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. Only local providers are selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it, or suggest it and let them decide. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and the user must then click Approve in the Blender sidebar. No argument grants this: call again with the same arguments once they have approved. The finished model is cached like any external asset, so import it with start_external_asset_import_job.",
+      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. Only local providers are selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it, or suggest it and let them decide. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and the user must then click Approve in the Blender sidebar. No argument grants this: call again with the same arguments once they have approved. The finished model is cached like any external asset, so import it with start_external_asset_import_job. TripoSR is a single-image local blockout route: use its knobs to tune extraction, but do not treat it as final multi-view quality.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "bake_texture": {
+            "description": "TripoSR: bake a texture atlas instead of relying on vertex colors when the runtime supports it.",
+            "type": "boolean"
+          },
           "cache_dir": {
             "type": "string"
+          },
+          "chunk_size": {
+            "description": "TripoSR evaluation chunk size. Lower values reduce VRAM use but can run slower; 0 disables chunking.",
+            "maximum": 262144,
+            "minimum": 0,
+            "type": "integer"
           },
           "face_limit": {
             "maximum": 1000000,
             "minimum": 0,
             "type": "integer"
           },
+          "foreground_ratio": {
+            "description": "TripoSR foreground resize ratio when background removal is enabled. Default is 0.85.",
+            "maximum": 1.0,
+            "minimum": 0.1,
+            "type": "number"
+          },
           "job_name": {
             "type": "string"
           },
+          "mc_resolution": {
+            "description": "TripoSR marching-cubes grid resolution. Higher values preserve detail but create heavier meshes.",
+            "maximum": 512,
+            "minimum": 16,
+            "type": "integer"
+          },
           "model": {
             "type": "string"
+          },
+          "no_remove_bg": {
+            "description": "TripoSR: skip automatic background removal. Use only when the input is already foreground-isolated.",
+            "type": "boolean"
           },
           "note": {
             "type": "string"
@@ -32617,6 +32857,15 @@
           "provider": {
             "description": "Omit to auto-select a local provider. Hosted providers (tripo, meshy) cost credits and upload the images, so they are never auto-selected and must be named here.",
             "type": "string"
+          },
+          "texture": {
+            "type": "boolean"
+          },
+          "texture_resolution": {
+            "description": "TripoSR texture atlas resolution when bake_texture is true.",
+            "maximum": 8192,
+            "minimum": 256,
+            "type": "integer"
           },
           "timeout": {
             "maximum": 300,
@@ -32649,6 +32898,118 @@
         "type": "object"
       },
       "name": "start_generation_job"
+    },
+    {
+      "description": "Preview-safe cleanup pass for generated meshes after import. Shades the mesh smooth, can add Weighted Normal, Decimate, and Voxel Remesh modifiers non-destructively, and preserves existing materials unless the caller deliberately changes them later. Use for TripoSR/local blockouts before visual review; it does not make single-view output final-quality.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "add_weighted_normals": {
+            "type": "boolean"
+          },
+          "decimate_ratio": {
+            "description": "Add a non-destructive Decimate modifier when below 1.0.",
+            "maximum": 1.0,
+            "minimum": 0.01,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_objects": {
+            "maximum": 64,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preserve_materials": {
+            "type": "boolean"
+          },
+          "remesh_voxel_size": {
+            "description": "Add a non-destructive Voxel Remesh modifier when above 0.",
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "selected_only": {
+            "type": "boolean"
+          },
+          "shade_smooth": {
+            "type": "boolean"
+          },
+          "target_object_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "cleanup_generated_asset"
+    },
+    {
+      "description": "Evaluate an imported generated mesh with topology/material/component/orientation checks and optional front/side/top inspection renders. Flags single-view TripoSR relief-shell risk, vertex-color-only materials, dense single-component editability risk, and non-Z-up orientation. Use before claiming a generated result is more than a blockout.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_renders": {
+            "type": "boolean"
+          },
+          "manifest_path": {
+            "description": "Optional generated asset manifest; enables provider/view-count-specific findings.",
+            "type": "string"
+          },
+          "max_objects": {
+            "maximum": 64,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "resolution_x": {
+            "maximum": 2048,
+            "minimum": 128,
+            "type": "integer"
+          },
+          "resolution_y": {
+            "maximum": 2048,
+            "minimum": 128,
+            "type": "integer"
+          },
+          "selected_only": {
+            "type": "boolean"
+          },
+          "target_object_name": {
+            "type": "string"
+          },
+          "views": {
+            "items": {
+              "enum": [
+                "front_below",
+                "underside",
+                "side",
+                "front",
+                "rear",
+                "top"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "name": "evaluate_generated_asset"
     },
     {
       "description": "Poll an asynchronous generation job for status, progress, provider task id, cached manifest path, and import readiness. When completed, import the cached model with start_external_asset_import_job.",
@@ -32766,6 +33127,8 @@
       "set_generation_policy",
       "plan_image_to_3d_approach",
       "start_generation_job",
+      "cleanup_generated_asset",
+      "evaluate_generated_asset",
       "get_generation_job_status"
     ],
     "inspection_docs": [
@@ -32933,7 +33296,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "0862d5c25c1f1bded347854e790d30d77cd9cc1447f93ec74ba18df0f1121ebb",
+  "registry_digest": "084e2a7cbfe7c00c68ba4168e5c76d6953a56a5c48e75c7c7d82453282f04c95",
   "schema_version": 1,
   "specs": [
     {
@@ -45135,7 +45498,7 @@
     {
       "contract": {
         "description": "Create a bounded visual-hull mesh from calibrated multi-view silhouette guides",
-        "duration_hint": "Carves at most 512000 grid cells under a 100-million silhouette-edge workload cap and may take several seconds at high resolution.",
+        "duration_hint": "Carves at most 512000 grid cells under a 100-million silhouette-edge workload cap. Use cell_size for predictable world-unit resolution, or resolution for longest-axis subdivision.",
         "long_running": true,
         "mutates_scene": true,
         "permissions": [
@@ -45180,6 +45543,10 @@
             "maxItems": 3,
             "minItems": 3,
             "type": "array"
+          },
+          "cell_size": {
+            "minimum": 1e-06,
+            "type": "number"
           },
           "collection_name": {
             "type": "string"
@@ -45718,7 +46085,7 @@
     {
       "contract": {
         "description": "Create a depth-constrained visual-hull surface from calibrated local evidence",
-        "duration_hint": "Loads and downsamples at most twelve local depth sources, spatially indexes sparse samples, then carves at most 512000 grid cells under aggregate silhouette and depth workload caps.",
+        "duration_hint": "Loads and downsamples at most twelve local depth sources, spatially indexes sparse samples, then carves at most 512000 grid cells under aggregate silhouette and depth workload caps. Use cell_size for predictable world-unit resolution.",
         "has_side_effects": true,
         "long_running": true,
         "mutates_scene": true,
@@ -45768,6 +46135,10 @@
             "maxItems": 3,
             "minItems": 3,
             "type": "array"
+          },
+          "cell_size": {
+            "minimum": 1e-06,
+            "type": "number"
           },
           "collection_name": {
             "type": "string"
@@ -57451,29 +57822,50 @@
     },
     {
       "contract": {
-        "description": "Start an asynchronous paid image-to-3D generation job and return a job id to poll",
+        "description": "Start an asynchronous image-to-3D generation job and return a job id to poll",
         "duration_hint": "Returns quickly after starting the job. Generation itself typically takes one to a few minutes; poll get_generation_job_status.",
         "has_side_effects": true,
         "input_schema": {
           "additionalProperties": false,
           "properties": {
+            "bake_texture": {
+              "type": "boolean"
+            },
             "cache_dir": {
               "type": "string"
+            },
+            "chunk_size": {
+              "type": "integer"
             },
             "face_limit": {
               "type": "integer"
             },
+            "foreground_ratio": {
+              "type": "number"
+            },
             "job_name": {
               "type": "string"
             },
+            "mc_resolution": {
+              "type": "integer"
+            },
             "model": {
               "type": "string"
+            },
+            "no_remove_bg": {
+              "type": "boolean"
             },
             "note": {
               "type": "string"
             },
             "provider": {
               "type": "string"
+            },
+            "texture": {
+              "type": "boolean"
+            },
+            "texture_resolution": {
+              "type": "integer"
             },
             "timeout": {
               "type": "integer"
@@ -57522,7 +57914,7 @@
         },
         "timeout_seconds": 30
       },
-      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. Only local providers are selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it, or suggest it and let them decide. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and the user must then click Approve in the Blender sidebar. No argument grants this: call again with the same arguments once they have approved. The finished model is cached like any external asset, so import it with start_external_asset_import_job.",
+      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. Only local providers are selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it, or suggest it and let them decide. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and the user must then click Approve in the Blender sidebar. No argument grants this: call again with the same arguments once they have approved. The finished model is cached like any external asset, so import it with start_external_asset_import_job. TripoSR is a single-image local blockout route: use its knobs to tune extraction, but do not treat it as final multi-view quality.",
       "exposure": "catalog",
       "groups": [
         "external_assets"
@@ -57531,19 +57923,45 @@
       "input_schema": {
         "additionalProperties": false,
         "properties": {
+          "bake_texture": {
+            "description": "TripoSR: bake a texture atlas instead of relying on vertex colors when the runtime supports it.",
+            "type": "boolean"
+          },
           "cache_dir": {
             "type": "string"
+          },
+          "chunk_size": {
+            "description": "TripoSR evaluation chunk size. Lower values reduce VRAM use but can run slower; 0 disables chunking.",
+            "maximum": 262144,
+            "minimum": 0,
+            "type": "integer"
           },
           "face_limit": {
             "maximum": 1000000,
             "minimum": 0,
             "type": "integer"
           },
+          "foreground_ratio": {
+            "description": "TripoSR foreground resize ratio when background removal is enabled. Default is 0.85.",
+            "maximum": 1.0,
+            "minimum": 0.1,
+            "type": "number"
+          },
           "job_name": {
             "type": "string"
           },
+          "mc_resolution": {
+            "description": "TripoSR marching-cubes grid resolution. Higher values preserve detail but create heavier meshes.",
+            "maximum": 512,
+            "minimum": 16,
+            "type": "integer"
+          },
           "model": {
             "type": "string"
+          },
+          "no_remove_bg": {
+            "description": "TripoSR: skip automatic background removal. Use only when the input is already foreground-isolated.",
+            "type": "boolean"
           },
           "note": {
             "type": "string"
@@ -57551,6 +57969,15 @@
           "provider": {
             "description": "Omit to auto-select a local provider. Hosted providers (tripo, meshy) cost credits and upload the images, so they are never auto-selected and must be named here.",
             "type": "string"
+          },
+          "texture": {
+            "type": "boolean"
+          },
+          "texture_resolution": {
+            "description": "TripoSR texture atlas resolution when bake_texture is true.",
+            "maximum": 8192,
+            "minimum": 256,
+            "type": "integer"
           },
           "timeout": {
             "maximum": 300,
@@ -57584,6 +58011,274 @@
       },
       "name": "start_generation_job",
       "order": 1910,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "generation"
+    },
+    {
+      "contract": {
+        "description": "Preview-safe generated mesh cleanup with optional non-destructive modifiers",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "add_weighted_normals": {
+              "type": "boolean"
+            },
+            "decimate_ratio": {
+              "type": "number"
+            },
+            "label": {
+              "type": "string"
+            },
+            "max_objects": {
+              "type": "integer"
+            },
+            "object_names": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "preserve_materials": {
+              "type": "boolean"
+            },
+            "remesh_voxel_size": {
+              "type": "number"
+            },
+            "selected_only": {
+              "type": "boolean"
+            },
+            "shade_smooth": {
+              "type": "boolean"
+            },
+            "target_object_name": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true,
+        "timeout_seconds": 60
+      },
+      "description": "Preview-safe cleanup pass for generated meshes after import. Shades the mesh smooth, can add Weighted Normal, Decimate, and Voxel Remesh modifiers non-destructively, and preserves existing materials unless the caller deliberately changes them later. Use for TripoSR/local blockouts before visual review; it does not make single-view output final-quality.",
+      "exposure": "catalog",
+      "groups": [
+        "external_assets",
+        "generation_quality"
+      ],
+      "handler_key": "cleanup_generated_asset",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "add_weighted_normals": {
+            "type": "boolean"
+          },
+          "decimate_ratio": {
+            "description": "Add a non-destructive Decimate modifier when below 1.0.",
+            "maximum": 1.0,
+            "minimum": 0.01,
+            "type": "number"
+          },
+          "label": {
+            "type": "string"
+          },
+          "max_objects": {
+            "maximum": 64,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preserve_materials": {
+            "type": "boolean"
+          },
+          "remesh_voxel_size": {
+            "description": "Add a non-destructive Voxel Remesh modifier when above 0.",
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "selected_only": {
+            "type": "boolean"
+          },
+          "shade_smooth": {
+            "type": "boolean"
+          },
+          "target_object_name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "cleanup_generated_asset",
+      "order": 1915,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "generation"
+    },
+    {
+      "contract": {
+        "description": "Evaluate imported generated mesh quality and optionally capture inspection renders",
+        "duration_hint": "Optional inspection renders can take several seconds per object/view.",
+        "has_side_effects": true,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "include_renders": {
+              "type": "boolean"
+            },
+            "manifest_path": {
+              "type": "string"
+            },
+            "max_objects": {
+              "type": "integer"
+            },
+            "note": {
+              "type": "string"
+            },
+            "object_names": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "resolution_x": {
+              "type": "integer"
+            },
+            "resolution_y": {
+              "type": "integer"
+            },
+            "selected_only": {
+              "type": "boolean"
+            },
+            "target_object_name": {
+              "type": "string"
+            },
+            "views": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read",
+          "files:read",
+          "files:write"
+        ],
+        "supports_headless": true,
+        "timeout_recovery": {
+          "poll_after_seconds": 5,
+          "recoverable": true,
+          "resource_tool": "get_visual_evidence_resources",
+          "status_tool": "blender_bridge_status"
+        },
+        "timeout_seconds": 180
+      },
+      "description": "Evaluate an imported generated mesh with topology/material/component/orientation checks and optional front/side/top inspection renders. Flags single-view TripoSR relief-shell risk, vertex-color-only materials, dense single-component editability risk, and non-Z-up orientation. Use before claiming a generated result is more than a blockout.",
+      "exposure": "catalog",
+      "groups": [
+        "external_assets",
+        "generation_quality"
+      ],
+      "handler_key": "evaluate_generated_asset",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_renders": {
+            "type": "boolean"
+          },
+          "manifest_path": {
+            "description": "Optional generated asset manifest; enables provider/view-count-specific findings.",
+            "type": "string"
+          },
+          "max_objects": {
+            "maximum": 64,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "resolution_x": {
+            "maximum": 2048,
+            "minimum": 128,
+            "type": "integer"
+          },
+          "resolution_y": {
+            "maximum": 2048,
+            "minimum": 128,
+            "type": "integer"
+          },
+          "selected_only": {
+            "type": "boolean"
+          },
+          "target_object_name": {
+            "type": "string"
+          },
+          "views": {
+            "items": {
+              "enum": [
+                "front_below",
+                "underside",
+                "side",
+                "front",
+                "rear",
+                "top"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "name": "evaluate_generated_asset",
+      "order": 1918,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -57658,5 +58353,5 @@
       "owner": "generation"
     }
   ],
-  "tool_count": 238
+  "tool_count": 240
 }

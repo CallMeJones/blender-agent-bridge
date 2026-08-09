@@ -117,12 +117,17 @@ class HardwareRoutingTests(unittest.TestCase):
         report = gp.provider_availability(
             gp.PROVIDERS_BY_NAME["triposr"],
             hardware=LAPTOP_GPU,
-            environ=_env(BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr"),
+            environ=_env(
+                BLENDER_AGENT_BRIDGE_TRIPOSR_PYTHON="/opt/python",
+                BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr",
+            ),
         )
         self.assertTrue(report["available"], report["remedies"])
+        self.assertTrue(report["runnable"], report["run_blocker"])
 
     def test_studio_gpu_can_run_every_local_model(self):
         env = _env(
+            BLENDER_AGENT_BRIDGE_GENERATION_PROBE_PYTHON="/opt/python",
             BLENDER_AGENT_BRIDGE_TRELLIS_ROOT="/opt/trellis",
             BLENDER_AGENT_BRIDGE_HUNYUAN3D_ROOT="/opt/hunyuan",
             BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr",
@@ -143,7 +148,10 @@ class HardwareRoutingTests(unittest.TestCase):
         report = gp.provider_availability(
             gp.PROVIDERS_BY_NAME["triposr"],
             hardware=None,
-            environ=_env(BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr"),
+            environ=_env(
+                BLENDER_AGENT_BRIDGE_TRIPOSR_PYTHON="/opt/python",
+                BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr",
+            ),
         )
         self.assertIn("hardware_unknown", report["blockers"])
 
@@ -193,81 +201,68 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual([], result.get("suggested_providers", []))
 
     def test_unimplemented_local_provider_is_never_auto_selected(self):
-        # TripoSR is available on this hardware but has no job backend, so it
+        # Hunyuan3D is available on this hardware but has no job backend, so it
         # must not be selected. With no usable local provider, the hosted one is
         # suggested rather than silently used.
         env = _env(
-            BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr",
+            BLENDER_AGENT_BRIDGE_HUNYUAN3D_PYTHON="/opt/python",
+            BLENDER_AGENT_BRIDGE_HUNYUAN3D_ROOT="/opt/hunyuan",
             TRIPO_API_KEY="k",
             **{gp.EGRESS_ENV_VAR: "allow"},
         )
-        result = gp.select_provider(environ=env, hardware=LAPTOP_GPU)
+        result = gp.select_provider(environ=env, hardware=STUDIO_GPU)
         self.assertFalse(result["ok"])
-        self.assertIn("triposr", result["unimplemented_providers"])
+        self.assertIn("hunyuan3d", result["unimplemented_providers"])
         self.assertIn("tripo", result["suggested_providers"])
 
     def test_only_unimplemented_providers_refuses_and_names_them(self):
-        env = _env(BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr")
-        result = gp.select_provider(environ=env, hardware=LAPTOP_GPU)
+        env = _env(
+            BLENDER_AGENT_BRIDGE_HUNYUAN3D_PYTHON="/opt/python",
+            BLENDER_AGENT_BRIDGE_HUNYUAN3D_ROOT="/opt/hunyuan",
+        )
+        result = gp.select_provider(environ=env, hardware=STUDIO_GPU)
         self.assertFalse(result["ok"])
-        self.assertIn("triposr", result["unimplemented_providers"])
+        self.assertIn("hunyuan3d", result["unimplemented_providers"])
         self.assertIn("not yet implemented", result["message"])
 
     def test_explicit_choice_of_an_unimplemented_provider_still_reports_availability(self):
         # Asking for it by name is a planning question, not a routing one.
-        env = _env(BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr")
+        env = _env(
+            BLENDER_AGENT_BRIDGE_HUNYUAN3D_PYTHON="/opt/python",
+            BLENDER_AGENT_BRIDGE_HUNYUAN3D_ROOT="/opt/hunyuan",
+        )
         report = gp.provider_availability(
-            gp.PROVIDERS_BY_NAME["triposr"], hardware=LAPTOP_GPU, environ=env
+            gp.PROVIDERS_BY_NAME["hunyuan3d"], hardware=STUDIO_GPU, environ=env
         )
         self.assertTrue(report["available"])
         self.assertFalse(report["job_implemented"])
 
-    def test_exactly_one_provider_is_implemented_today(self):
+    def test_implemented_providers_are_declared_explicitly(self):
         implemented = [s.name for s in gp.PROVIDER_SPECS if s.job_implemented]
-        self.assertEqual(["tripo"], implemented)
+        self.assertEqual(["triposr", "studio_endpoint", "tripo", "meshy"], implemented)
 
     def test_local_is_preferred_over_hosted(self):
         # Exercise the ordering rule directly: with a local backend implemented,
         # it must win over an equally-available hosted one.
-        import dataclasses
-
-        original = gp.PROVIDER_SPECS
-        gp.PROVIDER_SPECS = tuple(
-            dataclasses.replace(spec, job_implemented=True) if spec.name == "triposr" else spec
-            for spec in original
+        env = _env(
+            BLENDER_AGENT_BRIDGE_TRIPOSR_PYTHON="/opt/python",
+            BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr",
+            MESHY_API_KEY="x",
+            **{gp.EGRESS_ENV_VAR: "allow"},
         )
-        try:
-            env = _env(
-                BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr",
-                MESHY_API_KEY="x",
-                **{gp.EGRESS_ENV_VAR: "allow"},
-            )
-            result = gp.select_provider(environ=env, hardware=LAPTOP_GPU)
-            self.assertTrue(result["ok"], result.get("message"))
-            self.assertEqual("triposr", result["selected"])
-        finally:
-            gp.PROVIDER_SPECS = original
+        result = gp.select_provider(environ=env, hardware=LAPTOP_GPU)
+        self.assertTrue(result["ok"], result.get("message"))
+        self.assertEqual("triposr", result["selected"])
 
     def test_multiview_requirement_skips_single_image_provider(self):
-        import dataclasses
-
-        original = gp.PROVIDER_SPECS
-        gp.PROVIDER_SPECS = tuple(
-            dataclasses.replace(spec, job_implemented=True)
-            if spec.name in ("triposr", "studio_endpoint")
-            else spec
-            for spec in original
+        env = _env(
+            BLENDER_AGENT_BRIDGE_TRIPOSR_PYTHON="/opt/python",
+            BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr",
+            BLENDER_AGENT_BRIDGE_GENERATION_ENDPOINT="http://gpu-box.studio.local:8080",
         )
-        try:
-            env = _env(
-                BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr",
-                BLENDER_AGENT_BRIDGE_GENERATION_ENDPOINT="http://gpu-box.studio.local:8080",
-            )
-            result = gp.select_provider(environ=env, hardware=LAPTOP_GPU, require_multiview=True)
-            self.assertTrue(result["ok"], result.get("message"))
-            self.assertEqual("studio_endpoint", result["selected"])
-        finally:
-            gp.PROVIDER_SPECS = original
+        result = gp.select_provider(environ=env, hardware=LAPTOP_GPU, require_multiview=True)
+        self.assertTrue(result["ok"], result.get("message"))
+        self.assertEqual("studio_endpoint", result["selected"])
 
     def test_no_provider_available_explains_itself(self):
         result = gp.select_provider(environ=_env(), hardware=LAPTOP_GPU)
@@ -341,7 +336,10 @@ class HardwareProbeTests(unittest.TestCase):
         report = gp.provider_availability(
             gp.PROVIDERS_BY_NAME["triposr"],
             hardware=probe,
-            environ=_env(BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr"),
+            environ=_env(
+                BLENDER_AGENT_BRIDGE_TRIPOSR_PYTHON="/opt/python",
+                BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT="/opt/triposr",
+            ),
         )
         self.assertFalse(report["available"])
         self.assertIn("hardware_unknown", report["blockers"])

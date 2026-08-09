@@ -239,16 +239,27 @@ def _redact_sketchfab(args):
     }
 
 
-def _redact_generation(args):
+def _redact_generation(provider, args):
     views = args.get("views") if isinstance(args.get("views"), dict) else {}
+    provider = str(provider or "tripo").strip().lower()
     return {
-        "provider": "tripo",
+        "provider": provider,
         "generation_kind": "multiview" if len(views) > 1 else "image",
         "view_names": sorted(str(name) for name in views),
         "view_count": len(views),
         "model": str(args.get("model") or ""),
         "face_limit": _bounded_int(args.get("face_limit"), 0, minimum=0, maximum=1000000),
+        "texture": bool(args.get("texture")) if "texture" in args else None,
+        "mc_resolution": _bounded_int(args.get("mc_resolution"), 0, minimum=0, maximum=512),
+        "no_remove_bg": bool(args.get("no_remove_bg")) if "no_remove_bg" in args else None,
+        "foreground_ratio": args.get("foreground_ratio") if "foreground_ratio" in args else None,
+        "chunk_size": _bounded_int(args.get("chunk_size"), 0, minimum=0, maximum=262144),
+        "bake_texture": bool(args.get("bake_texture")) if "bake_texture" in args else None,
+        "texture_resolution": _bounded_int(args.get("texture_resolution"), 0, minimum=0, maximum=8192),
         "api_key_supplied": bool(str(args.get("api_key") or "").strip()),
+        "endpoint_supplied": bool(str(args.get("endpoint") or "").strip()),
+        "runtime_python_supplied": bool(str(args.get("runtime_python") or "").strip()),
+        "runtime_root_supplied": bool(str(args.get("runtime_root") or "").strip()),
         "cache_dir": str(args.get("cache_dir") or ""),
         "timeout": _bounded_int(args.get("timeout"), 120, minimum=1, maximum=300),
     }
@@ -266,14 +277,37 @@ def _validate_sketchfab(args):
     return ""
 
 
-def _validate_generation(args):
+def _validate_generation_for(provider):
+    def validate(args):
+        return _validate_generation(provider, args)
+    return validate
+
+
+def _redact_generation_for(provider):
+    def redact(args):
+        return _redact_generation(provider, args)
+    return redact
+
+
+def _validate_generation(provider, args):
+    provider = str(provider or "tripo").strip().lower()
     views = args.get("views")
     if not isinstance(views, dict) or not any(
         str(entry or "").strip() for entry in views.values()
     ):
         return "views must map at least one view name to an image path"
-    if not str(args.get("api_key") or "").strip():
-        return "api_key is required for generation jobs"
+    if provider in {"tripo", "meshy"} and not str(args.get("api_key") or "").strip():
+        return "api_key is required for %s generation jobs" % provider
+    if provider == "triposr":
+        supplied = [path for path in views.values() if str(path or "").strip()]
+        if len(supplied) != 1:
+            return "TripoSR generation jobs require exactly one view"
+        if not str(args.get("runtime_python") or "").strip():
+            return "runtime_python is required for TripoSR generation jobs"
+        if not str(args.get("runtime_root") or "").strip():
+            return "runtime_root is required for TripoSR generation jobs"
+    if provider == "studio_endpoint" and not str(args.get("endpoint") or "").strip():
+        return "endpoint is required for studio endpoint generation jobs"
     return ""
 
 
@@ -304,10 +338,28 @@ JOB_PROVIDER_SPECS = {
         "spends_money": False,
     },
     "tripo": {
-        "validate": _validate_generation,
-        "redact": _redact_generation,
+        "validate": _validate_generation_for("tripo"),
+        "redact": _redact_generation_for("tripo"),
         "secrets": (("api_key", ASSET_JOB_SECRET_TOKEN_ENV),),
         "spends_money": True,
+    },
+    "meshy": {
+        "validate": _validate_generation_for("meshy"),
+        "redact": _redact_generation_for("meshy"),
+        "secrets": (("api_key", ASSET_JOB_SECRET_TOKEN_ENV),),
+        "spends_money": True,
+    },
+    "studio_endpoint": {
+        "validate": _validate_generation_for("studio_endpoint"),
+        "redact": _redact_generation_for("studio_endpoint"),
+        "secrets": (("api_key", ASSET_JOB_SECRET_TOKEN_ENV),),
+        "spends_money": False,
+    },
+    "triposr": {
+        "validate": _validate_generation_for("triposr"),
+        "redact": _redact_generation_for("triposr"),
+        "secrets": (),
+        "spends_money": False,
     },
 }
 
@@ -424,7 +476,13 @@ def _progress_metadata(update):
     update = update if isinstance(update, dict) else {}
     expected = int(update.get("expected_size") or 0)
     downloaded = int(update.get("bytes_downloaded") or 0)
-    progress = round(min(0.99, max(0.0, downloaded / expected)), 4) if expected else 0.0
+    if expected:
+        progress = round(min(0.99, max(0.0, downloaded / expected)), 4)
+    else:
+        try:
+            progress = round(min(0.99, max(0.0, float(update.get("progress")))), 4)
+        except (TypeError, ValueError):
+            progress = 0.0
     return {
         "phase": str(update.get("phase") or "download"),
         "current_url": str(update.get("url") or ""),
@@ -436,7 +494,7 @@ def _progress_metadata(update):
         "progress": progress,
         "attempt": int(update.get("attempt") or 0),
         "resumed": bool(update.get("resumed", False)),
-        "message": "External asset download/cache in progress",
+        "message": str(update.get("message") or "External asset download/cache in progress"),
     }
 
 
@@ -502,6 +560,21 @@ def _run_download_job(job_id, provider, args, metadata_path):
                     timeout=_bounded_int(args.get("timeout"), 120, minimum=1, maximum=300),
                     progress_callback=progress_callback,
                     provenance=dict(args.get("provenance") or {}),
+                )
+            elif provider in {"tripo", "meshy", "studio_endpoint", "triposr"}:
+                from . import generation_job
+
+                manifest = generation_job.run(
+                    {
+                        "job_id": job_id,
+                        "provider": provider,
+                        "child_status_path": _child_status_path(os.path.dirname(metadata_path)),
+                    },
+                    args,
+                    provider=provider,
+                    progress_callback=progress_callback,
+                    api_key=str(args.get("api_key") or ""),
+                    poll_interval=0 if provider == "triposr" else generation_job.POLL_INTERVAL_SECONDS,
                 )
             else:
                 manifest = {"ok": False, "message": f"Unsupported external asset provider: {provider}"}

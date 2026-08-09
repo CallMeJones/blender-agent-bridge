@@ -327,6 +327,11 @@ def create_multiview_visual_hull(context, args):
         resolution=_bounded_int(
             args.get("resolution"), 48, minimum=8, maximum=80
         ),
+        cell_size=(
+            _bounded_float(args.get("cell_size"), 0.1, minimum=0.000001, maximum=1000.0)
+            if args.get("cell_size") not in (None, "")
+            else None
+        ),
         component_mode=str(args.get("component_mode") or "largest"),
         minimum_component_voxels=_bounded_int(
             args.get("minimum_component_voxels"), 8, minimum=1, maximum=100000
@@ -366,6 +371,11 @@ def create_multiview_depth_surface(context, args):
         ),
         resolution=_bounded_int(
             args.get("resolution"), 48, minimum=8, maximum=80
+        ),
+        cell_size=(
+            _bounded_float(args.get("cell_size"), 0.1, minimum=0.000001, maximum=1000.0)
+            if args.get("cell_size") not in (None, "")
+            else None
         ),
         component_mode=str(args.get("component_mode") or "largest"),
         minimum_component_voxels=_bounded_int(

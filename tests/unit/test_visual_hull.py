@@ -147,6 +147,36 @@ class VisualHullTests(unittest.TestCase):
             visual_hull.MAX_GRID_CELLS,
         )
 
+    def test_cell_size_controls_grid_resolution_in_world_units(self):
+        square = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+        result = visual_hull.carve_visual_hull(
+            [
+                _view(
+                    "front",
+                    (1.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0),
+                    (0.0, 0.0, 1.0),
+                    square,
+                ),
+                _view(
+                    "side",
+                    (0.0, -1.0, 0.0),
+                    (-1.0, 0.0, 0.0),
+                    (0.0, 0.0, 1.0),
+                    square,
+                ),
+            ],
+            bounds_center=(0.0, 0.0, 0.0),
+            bounds_size=(2.0, 1.0, 0.5),
+            resolution=80,
+            cell_size=0.25,
+            smooth_iterations=0,
+        )
+        self.assertEqual([8, 4, 2], result["stats"]["grid_dimensions"])
+        self.assertEqual(64, result["stats"]["grid_cell_count"])
+        self.assertEqual("cell_size", result["stats"]["resolution_mode"])
+        self.assertAlmostEqual(0.25, result["stats"]["cell_size"])
+
     def test_outline_edge_workload_is_bounded(self):
         dense = [
             (

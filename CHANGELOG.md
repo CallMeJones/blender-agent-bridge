@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+### Generation
+
+- Added first job backends for Meshy and for local/self-hosted generation. Meshy is the hosted third-party path; TripoSR direct local process and the studio HTTP endpoint are the two local/self-hosted execution contracts. All three reuse the shared external-asset job lifecycle, status polling, cache manifest, and import tail.
+- Added Meshy request/status handling for image-to-3D and multi-image-to-3D, including balance preflight, GLB URL extraction, 402 credit handling, and secret redaction.
+- Added a bridge-compatible local/self-hosted studio endpoint contract with optional bearer auth: `POST /image-to-3d`, optional `GET /balance`, and `GET /tasks/{id}`.
+- Added local/self-hosted TripoSR execution via a configured Python interpreter and checkout root, with stdout/stderr capture and generated-mesh discovery.
+- Fixed TripoSR local execution to create the indexed output folder expected by TripoSR's exporter before running the subprocess.
+- Exposed TripoSR tuning knobs on `start_generation_job`: `mc_resolution`, `no_remove_bg`, `foreground_ratio`, `chunk_size`, `bake_texture`, and `texture_resolution`.
+- Marked TripoSR manifests and planning output as a local single-view blockout route rather than a final-quality route.
+- Normalized TripoSR imports into Blender Z-up with a provider-specific X -90 / Z +90 root rotation recorded in the generated asset manifest.
+- Added `cleanup_generated_asset` for preview-safe generated mesh cleanup: shade smooth, Weighted Normal, optional Decimate, optional Voxel Remesh, and material preservation.
+- Added `evaluate_generated_asset` for generated-output review: topology/material/component/metadata-aware orientation checks, optional front/side/top inspection renders, and single-view TripoSR relief-shell warnings.
+- Tightened local provider diagnostics so local-process providers need both a Python interpreter and a checkout/root. Hunyuan3D and TRELLIS now expose that strategy-level readiness while remaining unimplemented launchers.
+- Preserved provider identity through generation manifests and exposed a `texture` option on the public generation job schema.
+
+### Reference modeling
+
+- Added explicit `cell_size` support to multi-view visual hull and depth-surface carving so callers can request world-unit resolution instead of only longest-axis subdivision.
+- Added generic-character automatic part defaults. A single primary guide mass now produces body, head, left/right arm, and left/right leg parts when head/body were not explicitly labeled.
+
+### Reference intake
+
+- Added a `border_flood` mask mode that treats whatever the image border can reach as background. It is the only mode that separates a light subject from a light backdrop: on a measured reference sheet the apron read rgb(0.92, 0.93, 0.94) against a rgb(1, 1, 1) backdrop, where `luminance` calls the apron and the backdrop both subject and `background_color` calls both background, deleting the uniform. Neither errors; both return a plausible mask. `auto` now reaches it instead of selecting `background_color` with no colour to supply and raising.
+- Partial and mislabelled view sets now warn. Slots are positional, so a three-quarter image placed in `left` degrades the mesh rather than failing, and a missing slot is invented rather than omitted.
+
+### Measurement honesty
+
+- The reference benchmark now separates a wrong shape from a right shape posed differently. A character authored in an A-pose against a reference with clasped hands scored 0.666 silhouette IoU against a 0.72 threshold while mean edge distance held at 1.2-1.7%; the model was correct and the gate said otherwise. `conformance_diagnosis` reports `conformant`, `area_difference`, or `shape_drift`, and the area case states that a deliberate pose cannot pass the gate and should not be chased.
+- `inspect_modeling_quality` no longer counts boundary edges as non-manifold. bmesh reports them that way, which is true of the term and useless as a defect count: an open garment shell is meant to have a hem, and a caller clearing that number welds a skirt shut. Only edges shared by more than two faces count; boundary edges keep a separate count.
+
+### Diagnostics
+
+- Stale add-on source now leads the bridge status. It was already reported with the exact remedy, buried among sixty sibling fields, and a live session ran on old code while the status read "connected".
+- A generation job now checks the account balance in the worker subprocess before uploading, so an account short of credits fails before the user's reference art leaves the machine rather than after.
+
+### Documentation
+
+- Added `CONTEXT.md`, fixing the vocabulary shared by module names, tool descriptions, and agent conversations. Records the pure-module / `_scene`-adapter split, and the ambiguities that produced real defects.
+- Recorded in ADR-001 that Decision 1 held: `asset_jobs` should not be split now that it carries both catalog downloads and paid generation.
+
 ## 0.5.0 - 2026-08-06
 
 ### Credentials

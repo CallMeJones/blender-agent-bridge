@@ -51,6 +51,15 @@ LAPTOP_GPU = {
     "supports_bfloat16": False,
 }
 
+STUDIO_GPU = {
+    "probed": True,
+    "cuda_available": True,
+    "device_name": "NVIDIA A100-SXM4-40GB",
+    "vram_gb": 40.0,
+    "compute_capability": 8.0,
+    "supports_bfloat16": True,
+}
+
 
 class PreferenceOverlayTests(_StoreIsolation):
     def test_empty_preferences_contribute_nothing_but_the_egress_policy(self):
@@ -167,10 +176,7 @@ class PreferenceDrivenAvailabilityTests(_StoreIsolation):
 class RunnabilityTests(_StoreIsolation):
     """"Configured" and "can actually run" are different questions."""
 
-    def test_a_fully_configured_provider_without_a_backend_is_not_runnable(self):
-        # The failure this pins: TripoSR reported available with no blockers
-        # and no remedies, so a reader concluded that restoring its env vars
-        # gave them a working free route. It would not have.
+    def test_a_fully_configured_triposr_provider_is_runnable(self):
         environ = gp.environment_overlay(
             _FakePreferences(
                 generation_python="C:/venv/python.exe", triposr_root="C:/blend/TripoSR"
@@ -180,13 +186,16 @@ class RunnabilityTests(_StoreIsolation):
             gp.PROVIDERS_BY_NAME["triposr"], hardware=LAPTOP_GPU, environ=environ
         )
         self.assertTrue(report["available"], report["remedies"])
-        self.assertFalse(report["runnable"])
-        self.assertEqual("no_job_backend", report["run_status"])
-        self.assertIn("no job backend", report["run_blocker"])
+        self.assertTrue(report["runnable"], report["run_blocker"])
+        self.assertEqual("runnable", report["run_status"])
 
     def test_the_blocker_says_configuration_will_not_help(self):
+        environ = {
+            "BLENDER_AGENT_BRIDGE_TRELLIS_PYTHON": "C:/venv/python.exe",
+            "BLENDER_AGENT_BRIDGE_TRELLIS_ROOT": "C:/blend/TRELLIS",
+        }
         report = gp.provider_availability(
-            gp.PROVIDERS_BY_NAME["trellis"], hardware=LAPTOP_GPU, environ={}
+            gp.PROVIDERS_BY_NAME["trellis"], hardware=STUDIO_GPU, environ=environ
         )
         self.assertIn("will not make it run", report["run_blocker"])
 
@@ -330,8 +339,8 @@ class PaidProviderTests(_StoreIsolation):
             )
         )
         selection = gp.select_provider(environ=environ, hardware=LAPTOP_GPU)
-        # TripoSR has no job backend yet, so this still refuses -- but the
-        # refusal must not quietly fall through to the paid provider.
+        self.assertTrue(selection["ok"], selection.get("message"))
+        self.assertEqual("triposr", selection["selected"])
         self.assertFalse(gp.is_paid_provider(selection.get("selected") or ""))
 
 

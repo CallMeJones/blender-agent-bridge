@@ -1222,6 +1222,7 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
                                                   'maxItems': 3},
                                   'bounds_padding': {'type': 'number', 'minimum': 0.0, 'maximum': 0.5},
                                   'resolution': {'type': 'integer', 'minimum': 8, 'maximum': 80},
+                                  'cell_size': {'type': 'number', 'minimum': 0.000001},
                                   'component_mode': {'type': 'string', 'enum': ['largest', 'all']},
                                   'minimum_component_voxels': {'type': 'integer',
                                                                'minimum': 1,
@@ -1242,8 +1243,9 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
                'permissions': ['scene:read', 'scene:mutate', 'preview:write'],
                'supports_headless': True,
                'long_running': True,
-               'duration_hint': 'Carves at most 512000 grid cells under a 100-million silhouette-edge workload cap '
-                                'and may take several seconds at high resolution.'},
+               'duration_hint': 'Carves at most 512000 grid cells under a 100-million silhouette-edge workload cap. '
+                                'Use cell_size for predictable world-unit resolution, or resolution for longest-axis '
+                                'subdivision.'},
   'handler_key': 'create_multiview_visual_hull',
   'order': 1074,
   'groups': ('advanced_create', 'procedural_3d', 'model_quality', 'reference_modeling', 'visual_hull'),
@@ -1265,6 +1267,7 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
                                                   'maxItems': 3},
                                   'bounds_padding': {'type': 'number', 'minimum': 0.0, 'maximum': 0.5},
                                   'resolution': {'type': 'integer', 'minimum': 8, 'maximum': 80},
+                                  'cell_size': {'type': 'number', 'minimum': 0.000001},
                                   'component_mode': {'type': 'string', 'enum': ['largest', 'all']},
                                   'minimum_component_voxels': {'type': 'integer',
                                                                'minimum': 1,
@@ -1294,7 +1297,7 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
                'long_running': True,
                'duration_hint': 'Loads and downsamples at most twelve local depth sources, spatially indexes sparse '
                                 'samples, then carves at most 512000 grid cells under aggregate silhouette and depth '
-                                'workload caps.'},
+                                'workload caps. Use cell_size for predictable world-unit resolution.'},
   'handler_key': 'create_multiview_depth_surface',
   'order': 1076,
   'groups': ('advanced_create', 'procedural_3d', 'model_quality', 'reference_modeling', 'visual_hull', 'depth_fusion'),

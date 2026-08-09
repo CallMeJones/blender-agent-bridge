@@ -154,6 +154,152 @@ class GenerationJobTests(unittest.TestCase):
         self.assertEqual(1.0, updates[-1]["progress"])
         self.assertIn("upload", [u.get("phase") for u in updates])
 
+    def test_provider_name_is_preserved_for_meshy_jobs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = _StubClient()
+            manifest = _run(tmp, _views(tmp, ["front"]), client=client, provider="meshy")
+        self.assertTrue(manifest["ok"], manifest.get("message"))
+        self.assertEqual("meshy", manifest["provider"])
+        self.assertEqual("image", client.created[0])
+
+    def test_studio_endpoint_can_run_without_a_token(self):
+        from claude_blender import generation_job
+
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = generation_job.run(
+                {"child_status_path": os.path.join(tmp, "s.json")},
+                {
+                    "views": _views(tmp, ["front"]),
+                    "cache_dir": os.path.join(tmp, "cache"),
+                    "provider": "studio_endpoint",
+                },
+                provider="studio_endpoint",
+                api_key="",
+                client=_StubClient(),
+                downloader=_fake_download,
+                poll_interval=0,
+            )
+        self.assertTrue(manifest["ok"], manifest.get("message"))
+        self.assertEqual("studio_endpoint", manifest["provider"])
+
+    def test_triposr_missing_runtime_fails_before_local_process(self):
+        from claude_blender import generation_job
+
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = generation_job.run(
+                {"child_status_path": os.path.join(tmp, "s.json")},
+                {
+                    "views": _views(tmp, ["front"]),
+                    "cache_dir": os.path.join(tmp, "cache"),
+                    "provider": "triposr",
+                },
+                provider="triposr",
+                poll_interval=0,
+            )
+        self.assertFalse(manifest["ok"])
+        self.assertEqual("triposr", manifest["provider"])
+        self.assertIn("runtime_python", manifest["message"])
+
+    def test_triposr_precreates_indexed_output_folder(self):
+        from claude_blender import generation_job
+
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_root = os.path.join(tmp, "triposr")
+            os.makedirs(runtime_root)
+            run_py = os.path.join(runtime_root, "run.py")
+            with open(run_py, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(
+                    "import argparse, os\n"
+                    "parser = argparse.ArgumentParser()\n"
+                    "parser.add_argument('image')\n"
+                    "parser.add_argument('--output-dir', required=True)\n"
+                    "parser.add_argument('--model-save-format', default='glb')\n"
+                    "args, _ = parser.parse_known_args()\n"
+                    "target = os.path.join(args.output_dir, '0')\n"
+                    "if not os.path.isdir(target):\n"
+                    "    raise SystemExit('missing indexed output folder')\n"
+                    "with open(os.path.join(target, 'mesh.' + args.model_save_format), 'wb') as out:\n"
+                    "    out.write(b'glTF-stub')\n"
+                )
+            manifest = generation_job.run(
+                {"child_status_path": os.path.join(tmp, "s.json")},
+                {
+                    "views": _views(tmp, ["front"]),
+                    "cache_dir": os.path.join(tmp, "cache"),
+                    "provider": "triposr",
+                    "runtime_python": sys.executable,
+                    "runtime_root": runtime_root,
+                    "timeout": 30,
+                },
+                provider="triposr",
+                poll_interval=0,
+            )
+        self.assertTrue(manifest["ok"], manifest.get("message"))
+        self.assertEqual("triposr", manifest["provider"])
+        self.assertEqual("generated.glb", os.path.basename(manifest["import_file"]))
+
+    def test_triposr_passes_tunable_runtime_flags(self):
+        from claude_blender import generation_job
+
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_root = os.path.join(tmp, "triposr")
+            os.makedirs(runtime_root)
+            run_py = os.path.join(runtime_root, "run.py")
+            with open(run_py, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(
+                    "import argparse, json, os\n"
+                    "parser = argparse.ArgumentParser()\n"
+                    "parser.add_argument('image')\n"
+                    "parser.add_argument('--output-dir', required=True)\n"
+                    "parser.add_argument('--model-save-format', default='glb')\n"
+                    "parser.add_argument('--mc-resolution', type=int)\n"
+                    "parser.add_argument('--foreground-ratio', type=float)\n"
+                    "parser.add_argument('--chunk-size', type=int)\n"
+                    "parser.add_argument('--no-remove-bg', action='store_true')\n"
+                    "parser.add_argument('--bake-texture', action='store_true')\n"
+                    "parser.add_argument('--texture-resolution', type=int)\n"
+                    "args, _ = parser.parse_known_args()\n"
+                    "target = os.path.join(args.output_dir, '0')\n"
+                    "os.makedirs(target, exist_ok=True)\n"
+                    "with open(os.path.join(args.output_dir, 'flags.json'), 'w', encoding='utf-8') as out:\n"
+                    "    json.dump(vars(args), out, sort_keys=True)\n"
+                    "with open(os.path.join(target, 'mesh.' + args.model_save_format), 'wb') as out:\n"
+                    "    out.write(b'glTF-stub')\n"
+                )
+            cache_dir = os.path.join(tmp, "cache")
+            manifest = generation_job.run(
+                {"child_status_path": os.path.join(tmp, "s.json")},
+                {
+                    "views": _views(tmp, ["front"]),
+                    "cache_dir": cache_dir,
+                    "provider": "triposr",
+                    "runtime_python": sys.executable,
+                    "runtime_root": runtime_root,
+                    "timeout": 30,
+                    "mc_resolution": 64,
+                    "foreground_ratio": 0.7,
+                    "chunk_size": 4096,
+                    "bake_texture": True,
+                    "texture_resolution": 1024,
+                },
+                provider="triposr",
+                poll_interval=0,
+            )
+            with open(
+                os.path.join(cache_dir, "triposr-output", "flags.json"),
+                "r",
+                encoding="utf-8",
+            ) as handle:
+                flags = json.load(handle)
+        self.assertTrue(manifest["ok"], manifest.get("message"))
+        self.assertEqual(64, flags["mc_resolution"])
+        self.assertEqual(0.7, flags["foreground_ratio"])
+        self.assertEqual(4096, flags["chunk_size"])
+        self.assertTrue(flags["bake_texture"])
+        self.assertEqual(1024, flags["texture_resolution"])
+        self.assertEqual("local_blockout", manifest["generation"]["intended_use"])
+        self.assertEqual(64, manifest["generation"]["triposr_options"]["mc_resolution"])
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -189,6 +335,16 @@ class BalanceGateTests(unittest.TestCase):
         self.assertEqual(10.0, manifest["credits_available"])
         self.assertEqual(30.0, manifest["credits_required"])
         self.assertFalse(manifest["uploaded"])
+        self.assertEqual([], client.uploaded)
+        self.assertIsNone(client.created)
+
+    def test_a_short_account_with_real_balance_payload_fails_before_upload(self):
+        # Real Tripo balance responses are dictionaries, not bare numbers.
+        with tempfile.TemporaryDirectory() as tmp:
+            client = _BalanceClient({"balance": 10.0, "frozen": 0.0})
+            manifest = _run(tmp, _views(tmp, ["front"]), client=client)
+        self.assertFalse(manifest["ok"])
+        self.assertIn("Not enough credits", manifest["message"])
         self.assertEqual([], client.uploaded)
         self.assertIsNone(client.created)
 

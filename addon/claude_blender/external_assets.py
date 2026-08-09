@@ -7,6 +7,7 @@ import hashlib
 import calendar
 import http.client
 import ipaddress
+import math
 import os
 import re
 import shutil
@@ -1597,6 +1598,63 @@ def _show_imported_geometry(context, imported_objects):
     }
 
 
+def _provider_import_normalization(manifest):
+    provider = str((manifest or {}).get("provider") or "").strip().lower()
+    if provider == "triposr":
+        return {
+            "provider": provider,
+            "axis_transform": "triposr_image_plane_to_blender_z_up",
+            "rotation_euler_delta": [round(math.radians(-90.0), 8), 0.0, round(math.radians(90.0), 8)],
+            "applied_by": "bridge_post_import",
+            "reason": (
+                "TripoSR GLB output imports lying on Blender Y and camera-facing sideways; rotate roots "
+                "-90 degrees on X and +90 degrees on Z so generated blockouts stand in Blender Z-up."
+            ),
+        }
+    return {}
+
+
+def _apply_import_orientation_normalization(manifest, imported_objects):
+    normalization = _provider_import_normalization(manifest)
+    if not normalization:
+        return {}
+    if bpy is None or live_preview is None:
+        return {**normalization, "applied": False, "objects": []}
+
+    imported_set = {str(name) for name in imported_objects or []}
+    targets = []
+    for name in imported_objects or []:
+        obj = bpy.data.objects.get(name)
+        if obj is None:
+            continue
+        parent = getattr(obj, "parent", None)
+        # Rotate roots only; child meshes inherit the root transform and should
+        # not receive the correction twice.
+        if parent is not None and parent.name in imported_set:
+            continue
+        targets.append(obj)
+
+    if not targets:
+        return {**normalization, "applied": False, "objects": []}
+
+    delta = normalization["rotation_euler_delta"]
+    rotation_applied = any(abs(float(value)) > 1e-9 for value in delta)
+    for obj in targets:
+        if rotation_applied:
+            live_preview._record_object_transform(obj)
+            obj.rotation_euler.x += float(delta[0])
+            obj.rotation_euler.y += float(delta[1])
+            obj.rotation_euler.z += float(delta[2])
+        obj["blender_agent_bridge_import_orientation"] = normalization["axis_transform"]
+
+    return {
+        **normalization,
+        "applied": True,
+        "rotation_applied": rotation_applied,
+        "objects": [obj.name for obj in targets],
+    }
+
+
 def _apply_model_import(context, manifest, *, label="Import external model", allow_duplicate=False):
     error = _require_blender()
     if error:
@@ -1654,6 +1712,7 @@ def _apply_model_import(context, manifest, *, label="Import external model", all
             obj[ASSET_KEY_PROPERTY] = asset_key
             obj[ASSET_PROVIDER_PROPERTY] = str(manifest.get("provider") or "")
             obj[ASSET_SOURCE_URL_PROPERTY] = str(manifest.get("source_url") or "")
+    orientation_normalization = _apply_import_orientation_normalization(manifest, imported_objects)
     for name in imported_meshes:
         live_preview._record_created_id("mesh", name)
     for kind, names in (
@@ -1679,6 +1738,7 @@ def _apply_model_import(context, manifest, *, label="Import external model", all
             "asset_id": manifest.get("asset_id") or manifest.get("uid"),
             "source_file": path,
             "created_objects": imported_objects,
+            "orientation_normalization": orientation_normalization,
             "created_data": [
                 *[{"kind": "object", "name": name} for name in imported_objects],
                 *[{"kind": "collection", "name": name} for name in imported_collections],
@@ -1709,6 +1769,8 @@ def _apply_model_import(context, manifest, *, label="Import external model", all
     manifest["imported_node_groups"] = imported_node_groups
     manifest["imported_materials"] = imported_materials
     manifest["imported_images"] = imported_images
+    if orientation_normalization:
+        manifest["import_orientation_normalization"] = orientation_normalization
     manifest["transaction_id"] = transaction["id"]
     _write_manifest(manifest["cache_dir"], manifest)
     presentation = _show_imported_geometry(context, imported_objects)
@@ -1720,6 +1782,7 @@ def _apply_model_import(context, manifest, *, label="Import external model", all
         "manifest": manifest,
         "transaction_id": transaction["id"],
         "asset_key": asset_key,
+        "orientation_normalization": orientation_normalization,
         "presentation": presentation,
         "revert_guidance": "Use revert_preview with scope=last_step to remove only this import, or scope=all to revert the full pending preview.",
     }

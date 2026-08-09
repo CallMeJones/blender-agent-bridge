@@ -86,7 +86,13 @@ def _progress_callback(config, update):
     update = update if isinstance(update, dict) else {}
     expected = int(update.get("expected_size") or 0)
     downloaded = int(update.get("bytes_downloaded") or 0)
-    progress = round(min(0.99, max(0.0, downloaded / expected)), 4) if expected else 0.0
+    if expected:
+        progress = round(min(0.99, max(0.0, downloaded / expected)), 4)
+    else:
+        try:
+            progress = round(min(0.99, max(0.0, float(update.get("progress")))), 4)
+        except (TypeError, ValueError):
+            progress = 0.0
     _write_status(
         config,
         "running",
@@ -100,7 +106,7 @@ def _progress_callback(config, update):
         progress=progress,
         attempt=int(update.get("attempt") or 0),
         resumed=bool(update.get("resumed", False)),
-        message="External asset download/cache in progress",
+        message=str(update.get("message") or "External asset download/cache in progress"),
     )
 
 
@@ -131,17 +137,23 @@ def _download_sketchfab(config, args):
     )
 
 
-def _generate_tripo(config, args):
-    from . import generation_job
+def _generate_provider(provider):
+    def generate(config, args):
+        from . import generation_job
 
-    return generation_job.run(
-        config,
-        args,
-        progress_callback=lambda update: _progress_callback(config, update),
-        # The key never appears in the on-disk config; asset_jobs passes it
-        # through the child environment.
-        api_key=os.environ.get(ASSET_JOB_SECRET_TOKEN_ENV, ""),
-    )
+        return generation_job.run(
+            config,
+            args,
+            provider=provider,
+            progress_callback=lambda update: _progress_callback(config, update),
+            # The key never appears in the on-disk config; asset_jobs passes it
+            # through the child environment for every credential-bearing
+            # generation provider.
+            api_key=os.environ.get(ASSET_JOB_SECRET_TOKEN_ENV, ""),
+            poll_interval=0 if provider == "triposr" else generation_job.POLL_INTERVAL_SECONDS,
+        )
+
+    return generate
 
 
 # Provider name -> worker. One row per asset source; the branches that used to
@@ -149,7 +161,10 @@ def _generate_tripo(config, args):
 WORKER_DISPATCH = {
     "poly_haven": _download_poly_haven,
     "sketchfab": _download_sketchfab,
-    "tripo": _generate_tripo,
+    "tripo": _generate_provider("tripo"),
+    "meshy": _generate_provider("meshy"),
+    "studio_endpoint": _generate_provider("studio_endpoint"),
+    "triposr": _generate_provider("triposr"),
 }
 
 

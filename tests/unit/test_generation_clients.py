@@ -37,6 +37,10 @@ def api_error(status, code, message):
     return status, json.dumps({"code": code, "status": "error", "message": message})
 
 
+def raw(payload, status=200):
+    return status, json.dumps(payload)
+
+
 def _client(transport):
     return gc.TripoClient(KEY, transport=transport)
 
@@ -52,6 +56,8 @@ class ConstructionTests(unittest.TestCase):
     def test_missing_key_is_rejected(self):
         with self.assertRaises(gc.GenerationError):
             gc.TripoClient("")
+        with self.assertRaises(gc.GenerationError):
+            gc.MeshyClient("")
 
     def test_default_base_url_is_v3(self):
         self.assertIn("openapi.tripo3d.ai/v3", gc.TRIPO_BASE_URL)
@@ -81,6 +87,16 @@ class DefaultTransportTests(unittest.TestCase):
         with self.assertRaises(gc.GenerationError) as caught:
             gc._default_transport("GET", "http://insecure.test/x", {}, None, 5)
         self.assertIn("non-HTTPS", str(caught.exception))
+
+    def test_local_transport_allows_http_for_studio_endpoint(self):
+        def transport(method, url, headers, body, timeout):
+            self.assertEqual("http://studio.local/image-to-3d", url)
+            return raw({"task_id": "studio-task"})
+
+        task = gc.StudioEndpointClient("http://studio.local", transport=transport).create_image_task(
+            "data:image/png;base64,AA=="
+        )
+        self.assertEqual("studio-task", task)
 
 
 class BalanceTests(unittest.TestCase):
@@ -249,6 +265,113 @@ class ErrorHandlingTests(unittest.TestCase):
         with self.assertRaises(gc.GenerationError) as caught:
             _client(transport).task_status("t")
         self.assertNotIn(KEY, str(caught.exception))
+
+
+class MeshyClientTests(unittest.TestCase):
+    def test_upload_encodes_local_image_as_data_uri(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            uri = gc.MeshyClient(KEY, transport=FakeTransport()).upload_image(_png(tmp))
+        self.assertTrue(uri.startswith("data:image/png;base64,"))
+
+    def test_balance_uses_meshy_balance_path(self):
+        transport = FakeTransport(raw({"balance": 123.0}))
+        self.assertEqual(123.0, gc.MeshyClient(KEY, transport=transport).balance())
+        self.assertTrue(transport.calls[0]["url"].endswith("/balance"))
+
+    def test_image_task_uses_meshy_body_shape(self):
+        transport = FakeTransport(raw({"result": "mesh-task"}))
+        task = gc.MeshyClient(KEY, transport=transport).create_image_task(
+            "data:image/png;base64,AA==",
+            model="meshy-6",
+            face_limit=12000,
+            texture=True,
+        )
+        self.assertEqual("mesh-task", task)
+        call = transport.calls[0]
+        self.assertTrue(call["url"].endswith("/image-to-3d"))
+        body = json.loads(call["body"].decode())
+        self.assertEqual("data:image/png;base64,AA==", body["image_url"])
+        self.assertEqual("meshy-6", body["ai_model"])
+        self.assertEqual(["glb"], body["target_formats"])
+        self.assertTrue(body["should_texture"])
+        self.assertEqual(12000, body["target_polycount"])
+
+    def test_multiview_task_uses_meshy_endpoint_and_status_path(self):
+        transport = FakeTransport(
+            raw({"result": "mesh-mv"}),
+            raw({"status": "SUCCEEDED", "progress": 100, "model_urls": {"glb": "https://x/m.glb"}, "consumed_credits": 42}),
+        )
+        client = gc.MeshyClient(KEY, transport=transport)
+        task = client.create_multiview_task(
+            {
+                "front": ("data:f", "front.png"),
+                "left": ("data:l", "left.png"),
+                "custom": ("data:c", "custom.png"),
+            }
+        )
+        status = client.task_status(task)
+        body = json.loads(transport.calls[0]["body"].decode())
+        self.assertEqual(["data:f", "data:l", "data:c"], body["image_urls"])
+        self.assertTrue(transport.calls[0]["url"].endswith("/multi-image-to-3d"))
+        self.assertTrue(transport.calls[1]["url"].endswith("/multi-image-to-3d/mesh-mv"))
+        self.assertTrue(status["succeeded"])
+        self.assertEqual("https://x/m.glb", status["model_url"])
+        self.assertEqual(42, status["credits_consumed"])
+
+    def test_meshy_insufficient_credit_is_flagged(self):
+        transport = FakeTransport(raw({"message": "no credits"}, status=402))
+        with self.assertRaises(gc.GenerationError) as caught:
+            gc.MeshyClient(KEY, transport=transport).create_image_task("data:image/png;base64,AA==")
+        self.assertTrue(caught.exception.insufficient_credit)
+
+    def test_meshy_key_never_appears_in_errors(self):
+        transport = FakeTransport(raw({"message": "bad %s" % KEY}, status=500))
+        with self.assertRaises(gc.GenerationError) as caught:
+            gc.MeshyClient(KEY, transport=transport).task_status("t")
+        self.assertNotIn(KEY, str(caught.exception))
+
+
+class StudioEndpointClientTests(unittest.TestCase):
+    def test_token_is_optional_and_endpoint_must_be_http_url(self):
+        with self.assertRaises(gc.GenerationError):
+            gc.StudioEndpointClient("studio.local")
+        client = gc.StudioEndpointClient("http://studio.local", transport=FakeTransport(raw({"credits": 7})))
+        self.assertEqual(7.0, client.balance())
+
+    def test_plain_http_studio_endpoint_must_be_local(self):
+        with self.assertRaises(gc.GenerationError):
+            gc.StudioEndpointClient("http://example.com")
+        client = gc.StudioEndpointClient("https://example.com", transport=FakeTransport(raw({"credits": 7})))
+        self.assertEqual(7.0, client.balance())
+
+    def test_create_task_sends_ordered_views_and_optional_token(self):
+        transport = FakeTransport(raw({"task_id": "studio-1"}))
+        task = gc.StudioEndpointClient(
+            "http://studio.local/api",
+            api_key=KEY,
+            transport=transport,
+        ).create_multiview_task(
+            {"right": ("data:r", "right.png"), "front": ("data:f", "front.png")},
+            model="house-style",
+            texture=False,
+        )
+        self.assertEqual("studio-1", task)
+        call = transport.calls[0]
+        self.assertEqual("Bearer %s" % KEY, call["headers"]["Authorization"])
+        body = json.loads(call["body"].decode())
+        self.assertEqual(
+            [{"name": "front", "image_url": "data:f"}, {"name": "right", "image_url": "data:r"}],
+            body["views"],
+        )
+        self.assertEqual("house-style", body["model"])
+        self.assertFalse(body["texture"])
+
+    def test_status_accepts_completed_and_provider_neutral_model_url(self):
+        transport = FakeTransport(raw({"status": "completed", "progress": 100, "model_url": "https://x/model.glb"}))
+        status = gc.StudioEndpointClient("http://studio.local", transport=transport).task_status("abc")
+        self.assertTrue(status["terminal"])
+        self.assertTrue(status["succeeded"])
+        self.assertEqual("https://x/model.glb", status["model_url"])
 
 
 if __name__ == "__main__":

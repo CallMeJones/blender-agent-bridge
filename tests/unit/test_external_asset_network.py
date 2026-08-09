@@ -59,6 +59,18 @@ class ExternalAssetNetworkTests(unittest.TestCase):
         context.wrap_socket.assert_called_once_with(raw_socket, server_hostname="assets.example")
         self.assertIs(wrapped_socket, connection.sock)
 
+    def test_triposr_imports_are_marked_for_y_up_to_z_up_normalization(self):
+        normalization = external_assets._provider_import_normalization({"provider": "triposr"})
+
+        self.assertEqual("triposr_image_plane_to_blender_z_up", normalization["axis_transform"])
+        self.assertAlmostEqual(-1.57079633, normalization["rotation_euler_delta"][0], places=6)
+        self.assertAlmostEqual(1.57079633, normalization["rotation_euler_delta"][2], places=6)
+        self.assertEqual("bridge_post_import", normalization["applied_by"])
+        self.assertIn("Z-up", normalization["reason"])
+
+    def test_other_imports_have_no_provider_specific_orientation_normalization(self):
+        self.assertEqual({}, external_assets._provider_import_normalization({"provider": "sketchfab"}))
+
 
 if __name__ == "__main__":
     unittest.main()

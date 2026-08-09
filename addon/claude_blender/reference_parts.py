@@ -12,13 +12,14 @@ ROLE_ALIASES = {
     "ear": ("ear", "ears"),
     "eye": ("eye", "eyes"),
     "nose": ("nose",),
+    "arm": ("arm", "arms", "hand", "hands"),
     "paw": ("paw", "paws", "foot", "feet"),
     "leg": ("leg", "legs", "limb", "limbs"),
     "tail": ("tail",),
 }
 
 FEATURE_ROLES = {"eye", "nose"}
-ORGANIC_ROLES = {"body", "head", "muzzle", "ear", "paw", "leg", "tail", "generic"}
+ORGANIC_ROLES = {"body", "head", "muzzle", "ear", "arm", "paw", "leg", "tail", "generic"}
 
 
 def _vector3(value, default=(0.0, 0.0, 0.0)):
@@ -251,6 +252,89 @@ def _cute_quadruped_defaults(primary):
     return parts
 
 
+def _generic_character_defaults(primary):
+    center = _vector3(primary.get("center"))
+    radii = _vector3(primary.get("radii"), (0.7, 0.45, 1.2))
+    basis = _basis(primary.get("basis"))
+    right, depth, up = basis
+    body_center = _add(center, _scale(up, -radii[2] * 0.18))
+    head_center = _add(center, _scale(up, radii[2] * 0.58))
+    body_radii = (radii[0] * 0.55, radii[1] * 0.85, radii[2] * 0.46)
+    head_radii = (radii[0] * 0.32, radii[1] * 0.62, radii[2] * 0.20)
+    arm_radii = (radii[0] * 0.15, radii[1] * 0.45, radii[2] * 0.42)
+    leg_radii = (radii[0] * 0.18, radii[1] * 0.50, radii[2] * 0.40)
+    source = {
+        "kind": "profile_default",
+        "profile": "generic_character",
+        "source_object": str(primary.get("source_object") or ""),
+    }
+    return [
+        _part(
+            name="body",
+            role="body",
+            center=body_center,
+            radii=body_radii,
+            basis=basis,
+            source=source,
+            confidence="profile_default",
+        ),
+        _part(
+            name="head",
+            role="head",
+            center=head_center,
+            radii=head_radii,
+            basis=basis,
+            source=source,
+            parent="body",
+            confidence="profile_default",
+        ),
+        _part(
+            name="left_arm",
+            role="arm",
+            center=_add(_add(body_center, _scale(right, -body_radii[0] * 1.15)), _scale(up, body_radii[2] * 0.08)),
+            radii=arm_radii,
+            basis=basis,
+            source=source,
+            parent="body",
+            symmetry_key="arm",
+            confidence="profile_default",
+        ),
+        _part(
+            name="right_arm",
+            role="arm",
+            center=_add(_add(body_center, _scale(right, body_radii[0] * 1.15)), _scale(up, body_radii[2] * 0.08)),
+            radii=arm_radii,
+            basis=basis,
+            source=source,
+            parent="body",
+            symmetry_key="arm",
+            confidence="profile_default",
+        ),
+        _part(
+            name="left_leg",
+            role="leg",
+            center=_add(_add(body_center, _scale(right, -body_radii[0] * 0.32)), _scale(up, -body_radii[2] * 0.90)),
+            radii=leg_radii,
+            basis=basis,
+            source=source,
+            parent="body",
+            symmetry_key="leg",
+            confidence="profile_default",
+        ),
+        _part(
+            name="right_leg",
+            role="leg",
+            center=_add(_add(body_center, _scale(right, body_radii[0] * 0.32)), _scale(up, -body_radii[2] * 0.90)),
+            radii=leg_radii,
+            basis=basis,
+            source=source,
+            parent="body",
+            symmetry_key="leg",
+            confidence="profile_default",
+        ),
+    ]
+
+
 def _landmark_parts(landmarks, fallback_form, existing_names):
     if fallback_form is None:
         return []
@@ -346,6 +430,16 @@ def infer_part_graph(
             )
         parts = _cute_quadruped_defaults(primary) + [
             part for part in parts if part["role"] not in {"generic", "body", "head"}
+        ]
+    elif profile == "generic_character" and primary is not None and not {"head", "body"}.issubset(explicit_roles):
+        if parts:
+            warnings.append(
+                "Generated generic_character default parts because guide masses did not explicitly label head/body."
+            )
+        parts = _generic_character_defaults(primary) + [
+            part
+            for part in parts
+            if part["role"] not in {"generic", "body", "head", "arm", "leg"}
         ]
     elif primary is not None and not parts:
         parts = [

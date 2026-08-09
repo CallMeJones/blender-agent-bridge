@@ -8,10 +8,11 @@ subprocess worker, cancel, restart recovery, and the whole cache/import tail.
 
 from __future__ import annotations
 
+import json
 import os
 
 from .. import asset_jobs, generation_providers, preferences
-from .support import _bounded_int
+from .support import _bounded_float, _bounded_int
 
 
 def _generation_environ(context):
@@ -40,6 +41,21 @@ def get_generation_provider_diagnostics(context, args):
 
 
 _VIEW_SLOTS = ("front", "left", "back", "right")
+
+
+def _first_configured(environ, names):
+    for name in names:
+        value = str(environ.get(name, "") or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _runtime_requirement_value(spec, environ, label):
+    for requirement_label, names in getattr(spec, "runtime_requirements", ()) or ():
+        if str(requirement_label or "").strip().lower() == label:
+            return _first_configured(environ, names)
+    return ""
 
 
 def _view_warnings(views):
@@ -126,11 +142,26 @@ def plan_image_to_3d_approach(context, args):
                 "data_leaves_machine": bool(spec.requires_egress),
                 "ready": bool(report.get("runnable")),
                 "why_not_ready": str(report.get("run_blocker") or ""),
-                "produces": "A generated mesh, typically dense and not rig-ready.",
+                "produces": (
+                    "A fast local blockout mesh. Single-view TripoSR cannot know the back or side structure."
+                    if spec.name == "triposr"
+                    else "A generated mesh, typically dense and not rig-ready."
+                ),
                 "blockers": [] if no_backend else (report.get("blockers") or []),
                 "remedies": [] if no_backend else (report.get("remedies") or []),
                 "actionable": not no_backend,
                 "license_note": spec.license_note,
+                "quality_route": (
+                    "blockout"
+                    if spec.name == "triposr"
+                    else ("multi_view_final_candidate" if spec.supports_multiview else "generated")
+                ),
+                "quality_note": (
+                    "Prefer hosted Tripo multi-view or a studio endpoint when the final asset needs plausible "
+                    "side/back structure."
+                    if spec.name == "triposr"
+                    else ""
+                ),
             }
         )
 
@@ -245,6 +276,7 @@ def start_generation_job(context, args):
         }
 
     provider = selection["selected"]
+    provider_spec = generation_providers.PROVIDERS_BY_NAME[provider]
 
     # A standing instruction outranks everything below it, including an
     # explicit confirm_paid. If the user said "no APIs, just scripts" an hour
@@ -273,24 +305,52 @@ def start_generation_job(context, args):
         }
 
     api_key = ""
-    for name in generation_providers.PROVIDERS_BY_NAME[provider].credential_env_vars:
+    for name in provider_spec.credential_env_vars:
         api_key = str(environ.get(name, "") or "").strip()
         if api_key:
             break
 
     prefs = preferences.get_preferences(context)
+    job_args = {
+        "views": views,
+        "api_key": api_key,
+        "model": str(args.get("model") or ""),
+        "face_limit": _bounded_int(args.get("face_limit"), 0, minimum=0, maximum=1000000),
+        "cache_dir": str(args.get("cache_dir") or ""),
+        "timeout": _bounded_int(args.get("timeout"), 120, minimum=1, maximum=300),
+        "license_note": provider_spec.license_note,
+    }
+    if "texture" in args:
+        job_args["texture"] = bool(args.get("texture"))
+    for key, value in (
+        ("mc_resolution", _bounded_int(args.get("mc_resolution"), 256, minimum=16, maximum=512)),
+        ("foreground_ratio", _bounded_float(args.get("foreground_ratio"), 0.85, minimum=0.1, maximum=1.0)),
+        ("chunk_size", _bounded_int(args.get("chunk_size"), 8192, minimum=0, maximum=262144)),
+        ("texture_resolution", _bounded_int(args.get("texture_resolution"), 2048, minimum=256, maximum=8192)),
+    ):
+        if key in args:
+            job_args[key] = value
+    if "no_remove_bg" in args:
+        job_args["no_remove_bg"] = bool(args.get("no_remove_bg"))
+    if "bake_texture" in args:
+        job_args["bake_texture"] = bool(args.get("bake_texture"))
+    endpoint = _first_configured(environ, provider_spec.endpoint_env_vars)
+    if endpoint:
+        job_args["endpoint"] = endpoint
+    runtime_python = _runtime_requirement_value(provider_spec, environ, "python")
+    if runtime_python:
+        job_args["runtime_python"] = runtime_python
+    runtime_root = _runtime_requirement_value(provider_spec, environ, "root")
+    if runtime_root:
+        job_args["runtime_root"] = runtime_root
+
     started = asset_jobs.start_external_asset_download(
         context,
         provider=provider,
         job_name=str(args.get("job_name") or "generation"),
         note=str(args.get("note") or ""),
         capture_dir=getattr(prefs, "capture_cache_dir", None),
-        views=views,
-        api_key=api_key,
-        model=str(args.get("model") or ""),
-        face_limit=_bounded_int(args.get("face_limit"), 0, minimum=0, maximum=1000000),
-        cache_dir=str(args.get("cache_dir") or ""),
-        timeout=_bounded_int(args.get("timeout"), 120, minimum=1, maximum=300),
+        **job_args,
     )
     # Carried on both the approval request and the started job: the cost of a
     # partial view set is worth stating before the user approves it, and worth
@@ -312,6 +372,415 @@ def get_generation_job_status(context, args):
         "ok": bool(job.get("available", False)),
         "message": "Generation job status collected" if job.get("available") else job.get("message", "Generation job was not found"),
         "asset_job": job,
+    }
+
+
+def _resolve_scene_objects(context, args, *, default_active=True):
+    import bpy
+
+    names = []
+    object_names = args.get("object_names")
+    if isinstance(object_names, str):
+        names.append(object_names)
+    elif isinstance(object_names, (list, tuple)):
+        names.extend(str(name) for name in object_names)
+    target_name = str(args.get("target_object_name") or "").strip()
+    if target_name:
+        names.insert(0, target_name)
+
+    seen = set()
+    objects = []
+    missing = []
+    for name in names:
+        name = str(name or "").strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        obj = bpy.data.objects.get(name)
+        if obj is None:
+            missing.append(name)
+        else:
+            objects.append(obj)
+
+    if not objects and bool(args.get("selected_only", False)):
+        objects = list(getattr(context, "selected_objects", []) or [])
+    if not objects and default_active and getattr(context, "active_object", None):
+        objects = [context.active_object]
+
+    max_objects = _bounded_int(args.get("max_objects"), 12, minimum=1, maximum=64)
+    return objects[:max_objects], missing
+
+
+def _mesh_objects(objects):
+    return [obj for obj in objects or [] if getattr(obj, "type", "") == "MESH" and getattr(obj, "data", None)]
+
+
+def cleanup_generated_asset(context, args):
+    from .. import live_preview
+
+    objects, missing = _resolve_scene_objects(context, args)
+    meshes = _mesh_objects(objects)
+    if not meshes:
+        return {
+            "ok": False,
+            "message": "A generated mesh object is required for cleanup",
+            "missing_object_names": missing,
+        }
+
+    shade_smooth = bool(args.get("shade_smooth", True))
+    add_weighted_normals = bool(args.get("add_weighted_normals", True))
+    decimate_ratio = _bounded_float(args.get("decimate_ratio"), 1.0, minimum=0.01, maximum=1.0)
+    remesh_voxel_size = _bounded_float(args.get("remesh_voxel_size"), 0.0, minimum=0.0, maximum=10.0)
+    preserve_materials = bool(args.get("preserve_materials", True))
+    label = str(args.get("label") or "Clean up generated asset")
+
+    transaction = live_preview.begin(label, context)
+    changed = []
+    for obj in meshes:
+        entry = {
+            "object": obj.name,
+            "materials_before": [
+                slot.material.name if slot.material else "" for slot in getattr(obj, "material_slots", [])
+            ],
+            "shade_smooth": False,
+            "modifiers": [],
+        }
+        if shade_smooth:
+            live_preview._record_mesh_data_snapshot(obj)
+            for polygon in obj.data.polygons:
+                polygon.use_smooth = True
+            entry["shade_smooth"] = True
+
+        if add_weighted_normals:
+            modifier = obj.modifiers.new("Agent Bridge Generated Weighted Normals", "WEIGHTED_NORMAL")
+            live_preview._record_created_modifier(obj, modifier)
+            if hasattr(modifier, "keep_sharp"):
+                modifier.keep_sharp = True
+            entry["modifiers"].append({"name": modifier.name, "type": modifier.type})
+
+        if decimate_ratio < 0.999:
+            modifier = obj.modifiers.new("Agent Bridge Generated Decimate", "DECIMATE")
+            live_preview._record_created_modifier(obj, modifier)
+            modifier.ratio = decimate_ratio
+            entry["modifiers"].append({"name": modifier.name, "type": modifier.type, "ratio": decimate_ratio})
+
+        if remesh_voxel_size > 0:
+            modifier = obj.modifiers.new("Agent Bridge Generated Voxel Remesh", "REMESH")
+            live_preview._record_created_modifier(obj, modifier)
+            if hasattr(modifier, "mode"):
+                modifier.mode = "VOXEL"
+            if hasattr(modifier, "voxel_size"):
+                modifier.voxel_size = remesh_voxel_size
+            if hasattr(modifier, "use_remove_disconnected"):
+                modifier.use_remove_disconnected = False
+            entry["modifiers"].append(
+                {"name": modifier.name, "type": modifier.type, "voxel_size": remesh_voxel_size}
+            )
+
+        if preserve_materials:
+            after = [slot.material.name if slot.material else "" for slot in getattr(obj, "material_slots", [])]
+            entry["materials_preserved"] = after == entry["materials_before"]
+        changed.append(entry)
+
+    transaction["applied_steps"].append(
+        {
+            "type": "cleanup_generated_asset",
+            "label": label,
+            "objects": [obj.name for obj in meshes],
+            "shade_smooth": shade_smooth,
+            "add_weighted_normals": add_weighted_normals,
+            "decimate_ratio": decimate_ratio,
+            "remesh_voxel_size": remesh_voxel_size,
+            "expected_changes": "Cleaned generated mesh shading and added optional non-destructive cleanup modifiers.",
+        }
+    )
+    live_preview.redraw(context)
+    live_preview._mark_pending(context, label)
+    return {
+        "ok": True,
+        "message": "Prepared generated asset cleanup for %d mesh object(s)" % len(meshes),
+        "objects": [obj.name for obj in meshes],
+        "changed": changed,
+        "missing_object_names": missing,
+        "transaction_id": transaction["id"],
+    }
+
+
+def _mesh_component_stats(obj):
+    mesh = getattr(obj, "data", None)
+    if mesh is None:
+        return {"component_count": 0, "largest_component_vertices": 0, "isolated_vertices": 0}
+    vertex_count = len(mesh.vertices)
+    adjacency = [[] for _ in range(vertex_count)]
+    for edge in mesh.edges:
+        a, b = int(edge.vertices[0]), int(edge.vertices[1])
+        if 0 <= a < vertex_count and 0 <= b < vertex_count:
+            adjacency[a].append(b)
+            adjacency[b].append(a)
+    seen = [False] * vertex_count
+    component_sizes = []
+    isolated = 0
+    for index in range(vertex_count):
+        if seen[index]:
+            continue
+        stack = [index]
+        seen[index] = True
+        size = 0
+        has_edge = False
+        while stack:
+            current = stack.pop()
+            size += 1
+            if adjacency[current]:
+                has_edge = True
+            for nxt in adjacency[current]:
+                if not seen[nxt]:
+                    seen[nxt] = True
+                    stack.append(nxt)
+        if not has_edge:
+            isolated += size
+        component_sizes.append(size)
+    component_sizes.sort(reverse=True)
+    return {
+        "component_count": len(component_sizes),
+        "largest_component_vertices": component_sizes[0] if component_sizes else 0,
+        "isolated_vertices": isolated,
+        "component_sizes": component_sizes[:12],
+    }
+
+
+def _material_profile(obj):
+    mesh = getattr(obj, "data", None)
+    materials = [slot.material for slot in getattr(obj, "material_slots", []) if slot.material]
+    node_types = []
+    image_texture_count = 0
+    vertex_color_node_count = 0
+    for material in materials:
+        if not getattr(material, "use_nodes", False) or not getattr(material, "node_tree", None):
+            continue
+        for node in material.node_tree.nodes:
+            node_types.append(getattr(node, "bl_idname", ""))
+            if getattr(node, "bl_idname", "") == "ShaderNodeTexImage":
+                image_texture_count += 1
+            if getattr(node, "bl_idname", "") in {"ShaderNodeVertexColor", "ShaderNodeAttribute"}:
+                vertex_color_node_count += 1
+    color_attributes = []
+    if mesh is not None and hasattr(mesh, "color_attributes"):
+        color_attributes = [
+            {"name": attr.name, "domain": attr.domain, "data_type": attr.data_type}
+            for attr in mesh.color_attributes
+        ]
+    uv_layers = [layer.name for layer in getattr(mesh, "uv_layers", [])] if mesh is not None else []
+    return {
+        "material_count": len(materials),
+        "materials": [material.name for material in materials],
+        "uv_layer_count": len(uv_layers),
+        "uv_layers": uv_layers,
+        "color_attributes": color_attributes,
+        "image_texture_count": image_texture_count,
+        "vertex_color_node_count": vertex_color_node_count,
+        "node_types": sorted(set(item for item in node_types if item)),
+        "material_type": (
+            "texture_atlas"
+            if image_texture_count
+            else ("vertex_color" if color_attributes or vertex_color_node_count else "plain_material")
+        ),
+    }
+
+
+def _manifest_for_evaluation(args):
+    manifest_path = str(args.get("manifest_path") or "").strip()
+    if not manifest_path:
+        return {}, ""
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as handle:
+            manifest = json.load(handle)
+        if not isinstance(manifest, dict):
+            return {"ok": False, "message": "Manifest root must be a JSON object"}, manifest_path
+        return manifest, manifest_path
+    except Exception as error:  # noqa: BLE001 - reported in evaluation output
+        return {"ok": False, "message": "Could not read manifest: %s" % error}, manifest_path
+
+
+def _manifest_orientation_normalization(manifest):
+    if not isinstance(manifest, dict):
+        return {}
+    normalization = manifest.get("import_orientation_normalization")
+    return normalization if isinstance(normalization, dict) else {}
+
+
+def _orientation_profile(obj, manifest=None):
+    dims = tuple(float(component) for component in getattr(obj, "dimensions", (0.0, 0.0, 0.0)))
+    axes = {"x": dims[0], "y": dims[1], "z": dims[2]}
+    dominant = max(axes, key=lambda key: axes[key]) if axes else "z"
+    normalization = _manifest_orientation_normalization(manifest)
+    object_orientation = ""
+    try:
+        object_orientation = str(obj.get("blender_agent_bridge_import_orientation", "") or "")
+    except AttributeError:
+        object_orientation = ""
+    provider_normalized = bool(normalization.get("applied") or object_orientation)
+    axis_dominance_warning = dominant != "z"
+    upright_likely = bool(provider_normalized or not axis_dominance_warning)
+    return {
+        "dimensions": [round(value, 6) for value in dims],
+        "dominant_axis": dominant,
+        "upright_likely": upright_likely,
+        "provider_normalized": provider_normalized,
+        "object_orientation": object_orientation,
+        "import_orientation_normalization": normalization,
+        "axis_dominance_warning": axis_dominance_warning,
+        "warning": (
+            ""
+            if upright_likely
+            else "Largest dimension is not on Blender Z and no provider import normalization is recorded."
+        ),
+        "note": (
+            "Provider import normalization is recorded; axis dominance alone is ambiguous for generated meshes."
+            if provider_normalized and axis_dominance_warning
+            else ""
+        ),
+    }
+
+
+def _generation_source(obj, manifest):
+    manifest = manifest if isinstance(manifest, dict) else {}
+    provider = str((manifest or {}).get("provider") or "").strip().lower()
+    if not provider:
+        provider = str(obj.get("blender_agent_bridge_asset_provider", "") or "").strip().lower()
+    generation = manifest.get("generation") if isinstance(manifest.get("generation"), dict) else {}
+    return provider, generation
+
+
+def _quality_findings(obj, manifest):
+    provider, generation = _generation_source(obj, manifest)
+    material = _material_profile(obj)
+    components = _mesh_component_stats(obj)
+    orientation = _orientation_profile(obj, manifest)
+    mesh = getattr(obj, "data", None)
+    face_count = len(mesh.polygons) if mesh is not None else 0
+    vertex_count = len(mesh.vertices) if mesh is not None else 0
+    try:
+        view_count = int(generation.get("view_count") or 0)
+    except (TypeError, ValueError):
+        view_count = 0
+    findings = []
+    if not orientation["upright_likely"]:
+        findings.append(
+            {
+                "code": "orientation_not_z_up",
+                "severity": "warning",
+                "message": orientation["warning"],
+                "recommendation": "Use provider import normalization or rotate Y-up output to Blender Z-up.",
+            }
+        )
+    elif orientation["axis_dominance_warning"]:
+        findings.append(
+            {
+                "code": "orientation_axis_dominance_ambiguous",
+                "severity": "info",
+                "message": orientation["note"],
+                "recommendation": "Inspect the front/side/top renders before treating bounding-box dominance as orientation failure.",
+            }
+        )
+    if provider == "triposr" and view_count <= 1:
+        findings.append(
+            {
+                "code": "single_view_relief_shell_risk",
+                "severity": "warning",
+                "message": "Single-view TripoSR cannot observe side/back structure and often produces a relief-shell blockout.",
+                "recommendation": "Use hosted Tripo multi-view or a studio endpoint for final-quality side/back structure.",
+            }
+        )
+    if material["material_type"] == "vertex_color":
+        findings.append(
+            {
+                "code": "vertex_color_only_material",
+                "severity": "info",
+                "message": "Imported material uses vertex colors and has no texture atlas.",
+                "recommendation": "Use bake_texture/texture_resolution when supported, or keep materials during cleanup.",
+            }
+        )
+    if components["component_count"] <= 1 and face_count > 20000:
+        findings.append(
+            {
+                "code": "dense_single_component",
+                "severity": "info",
+                "message": "Mesh is a dense single component; it may be hard to edit as separate parts.",
+                "recommendation": "Use cleanup/decimation for blockout review, or part-aware reconstruction for editable assets.",
+            }
+        )
+    return {
+        "provider": provider,
+        "generation": generation,
+        "orientation": orientation,
+        "material": material,
+        "components": components,
+        "topology": {"vertices": vertex_count, "faces": face_count},
+        "findings": findings,
+        "relief_shell_risk": any(item["code"] == "single_view_relief_shell_risk" for item in findings),
+    }
+
+
+def evaluate_generated_asset(context, args):
+    from .. import advanced_modeling, inspection_render
+
+    objects, missing = _resolve_scene_objects(context, args)
+    meshes = _mesh_objects(objects)
+    if not meshes:
+        return {
+            "ok": False,
+            "message": "A generated mesh object is required for evaluation",
+            "missing_object_names": missing,
+        }
+    manifest, manifest_path = _manifest_for_evaluation(args)
+    include_renders = bool(args.get("include_renders", True))
+    views = args.get("views") if isinstance(args.get("views"), list) else ["front", "side", "top"]
+    views = [str(view) for view in views if str(view) in {"front_below", "underside", "side", "front", "rear", "top"}]
+    if not views:
+        views = ["front", "side", "top"]
+
+    evaluations = []
+    for obj in meshes:
+        quality = advanced_modeling.inspect_modeling_quality(
+            context,
+            object_names=[obj.name],
+            selected_only=False,
+            include_children=False,
+            max_objects=1,
+            require_materials=True,
+        )
+        profile = _quality_findings(obj, manifest if len(meshes) == 1 else {})
+        evaluations.append(
+            {
+                "object": obj.name,
+                "quality": quality,
+                **profile,
+            }
+        )
+
+    render_result = {}
+    if include_renders:
+        render_result = inspection_render.capture_object_inspection_renders(
+            context,
+            object_names=[obj.name for obj in meshes],
+            views=views,
+            resolution_x=_bounded_int(args.get("resolution_x"), 800, minimum=128, maximum=2048),
+            resolution_y=_bounded_int(args.get("resolution_y"), 600, minimum=128, maximum=2048),
+            note=str(args.get("note") or "Generated asset evaluation"),
+        )
+
+    finding_count = sum(len(item.get("findings") or []) for item in evaluations)
+    return {
+        "ok": True,
+        "message": "Generated asset evaluation completed",
+        "objects": [obj.name for obj in meshes],
+        "missing_object_names": missing,
+        "manifest_path": manifest_path,
+        "manifest": manifest if manifest_path else {},
+        "evaluations": evaluations,
+        "finding_count": finding_count,
+        "inspection_renders": render_result.get("inspection_render") if render_result else {},
+        "render_result": render_result,
     }
 
 

@@ -34,6 +34,31 @@ A session-scoped permission, granted by a person in Blender, allowing
 agent-authored Python to run.
 _Avoid_: sandbox, permission, approval
 
+## Language: generation
+
+**Hosted third-party generation**:
+An image-to-3D provider outside the user's control, such as Tripo or Meshy. It
+may spend credits and receives uploaded reference images.
+_Avoid_: local, self-hosted
+
+**Local/self-hosted generation**:
+3D generation models running under the user's or studio's control, either on
+the same machine or on a trusted network server reached by domain or IP. This is
+the umbrella that contains both direct local runners such as TripoSR and studio
+inference endpoints.
+_Avoid_: hosted provider, paid API, LLM
+
+**Local process generation**:
+A local/self-hosted execution path where the bridge worker starts a Python
+process on the same machine and collects its output files.
+_Avoid_: endpoint, hosted API
+
+**Studio endpoint**:
+A local/self-hosted execution path where the bridge worker talks to an HTTP
+inference service on a local or private-network host. The model may be TripoSR,
+Hunyuan3D, TRELLIS, or another runtime hidden behind that service.
+_Avoid_: third-party API
+
 ## Language: reference modelling
 
 **Reference sheet**:
@@ -120,6 +145,20 @@ tested without launching Blender, and keep the adapter thin.
   then refused every job. Resolved: **available** means configured; **runnable**
   means a job can start.
 
+- **"non-manifold"** was used for two unrelated things: an edge shared by more
+  than two faces, which is a defect, and a boundary edge, which is what an open
+  shell has. bmesh calls both non-manifold and the quality report followed it,
+  so every garment in an authored character reported dozens of "non-manifold
+  edges" with no defect present -- and clearing that number means welding a
+  skirt shut. Resolved: **non-manifold** means more than two faces on an edge;
+  an open shell has **boundary edges** and they are counted separately.
+
 - **"reference"** as a bare noun is ambiguous between the user's artwork and the
   scene geometry built from it. Use **reference sheet** for the artwork and
   **calibrated guide** for the geometry.
+
+All three resolved ambiguities above share one shape: a number that was
+accurate about something other than what its name implied, reported without the
+scope that made it meaningful. It is the most productive defect class this
+project has found, and it is invisible to tests -- each was caught by running
+the real thing and comparing the claim against the artifact.
