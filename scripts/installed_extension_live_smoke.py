@@ -102,6 +102,8 @@ def _run(
 
 def _prepare_profile(profile_dir: Path) -> dict[str, str]:
     env = os.environ.copy()
+    for key in ("PYTHONHOME", "PYTHONPATH"):
+        env.pop(key, None)
     env["BLENDER_USER_CONFIG"] = str(profile_dir / "config")
     env["BLENDER_USER_SCRIPTS"] = str(profile_dir / "scripts")
     env["BLENDER_USER_CACHE"] = str(profile_dir / "cache")

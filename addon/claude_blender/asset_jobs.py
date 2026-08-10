@@ -66,10 +66,48 @@ def _job_dir_candidates(capture_dir=None, *, context=None, preferred_dir=None):
             "fallback_reason": "",
         }
         return [{**info, "asset_job_root": os.path.join(capture_dir, "asset-jobs")}]
-    return [
+    current = [
         {**info, "asset_job_root": os.path.join(info["capture_dir"], "asset-jobs")}
         for info in viewport_capture.capture_dir_candidates(context=context, preferred_dir=preferred_dir)
     ]
+    candidates = list(current)
+    seen = {os.path.normcase(os.path.realpath(info["capture_dir"])) for info in current}
+    for info in current:
+        project_root = os.path.dirname(info["capture_dir"])
+        project_root_real = os.path.realpath(project_root)
+        try:
+            session_entries = sorted(os.scandir(project_root), key=lambda entry: entry.name, reverse=True)
+        except OSError:
+            continue
+        for entry in session_entries:
+            try:
+                if not entry.is_dir(follow_symlinks=False):
+                    continue
+            except OSError:
+                continue
+            session_dir = entry.path
+            session_real = os.path.realpath(session_dir)
+            try:
+                if os.path.commonpath((project_root_real, session_real)) != project_root_real:
+                    continue
+            except ValueError:
+                continue
+            normalized = os.path.normcase(session_real)
+            if normalized in seen:
+                continue
+            asset_job_root = os.path.join(session_dir, "asset-jobs")
+            if not os.path.isdir(asset_job_root):
+                continue
+            seen.add(normalized)
+            candidates.append(
+                {
+                    **info,
+                    "capture_dir": session_dir,
+                    "session_id": entry.name,
+                    "asset_job_root": asset_job_root,
+                }
+            )
+    return candidates
 
 
 def _metadata_path(job_dir):
@@ -408,6 +446,9 @@ def _require_spend_approval(provider, args):
         return {
             "ok": False,
             "spend_approval": state,
+            "approval_status_tool": "get_generation_approval_status",
+            "approval_status_arguments": {"request_id": state.get("request_id", "")},
+            "poll_after_seconds": 0,
             "message": (
                 "The user declined this paid job in Blender. Do not ask again for the same "
                 "job; offer a free route or a different approach."
@@ -425,11 +466,19 @@ def _require_spend_approval(provider, args):
         "ok": False,
         "awaiting_user_approval": True,
         "spend_approval": request,
+        "approval_status_tool": "get_generation_approval_status",
+        "approval_status_arguments": {"request_id": request["request_id"]},
+        "poll_after_seconds": 2,
+        "client_guidance": (
+            "Poll get_generation_approval_status with this request_id every 2 seconds. Do not ask the user to report "
+            "their click. If approved, call start_generation_job once with the exact same arguments; if declined or "
+            "expired, stop."
+        ),
         "message": (
             "%s costs money and cannot start until the user approves it in Blender. %s%s "
-            "Tell them the cost, then ask them to click Approve on the pending request in "
-            "the Agent Bridge sidebar. Call again with the same arguments once they have; "
-            "no argument skips this."
+            "Tell them the cost, ask them to click Approve or Decline in the Agent Bridge sidebar, then poll "
+            "get_generation_approval_status instead of asking them to report the click. Call again with the exact "
+            "same arguments only after approval; no argument skips this."
             % (
                 notice.get("title") or provider,
                 "The earlier request expired. " if status == generation_spend.STATUS_EXPIRED else "",
@@ -483,7 +532,7 @@ def _progress_metadata(update):
             progress = round(min(0.99, max(0.0, float(update.get("progress")))), 4)
         except (TypeError, ValueError):
             progress = 0.0
-    return {
+    metadata = {
         "phase": str(update.get("phase") or "download"),
         "current_url": str(update.get("url") or ""),
         "current_file": str(update.get("path") or ""),
@@ -496,6 +545,13 @@ def _progress_metadata(update):
         "resumed": bool(update.get("resumed", False)),
         "message": str(update.get("message") or "External asset download/cache in progress"),
     }
+    task_id = str(update.get("task_id") or "").strip()
+    if task_id:
+        metadata["provider_task_id"] = task_id
+    task_kind = str(update.get("task_kind") or "").strip()
+    if task_kind:
+        metadata["provider_task_kind"] = task_kind
+    return metadata
 
 
 def _is_cancel_requested(job_id):
@@ -844,6 +900,9 @@ def start_external_asset_download(
         "current_file_progress": 0.0,
         "attempt": 0,
         "resumed": False,
+        "provider_task_id": "",
+        "provider_task_kind": "",
+        "remote_cancellation": {},
         "progress": 0.0,
         "elapsed_seconds": 0,
         "poll_interval_seconds": DEFAULT_ASSET_JOB_POLL_INTERVAL_SECONDS,
@@ -942,8 +1001,9 @@ def external_asset_job_status(job_id, *, context=None, preferred_dir=None, captu
         except Exception:
             latest = dict(metadata)
         stored_status = str(latest.get("status") or "unknown")
+        stored_cancel_requested = bool(latest.get("cancel_requested"))
         child_status_name = str(child_status.get("status") or "")
-        if child_status:
+        if child_status and stored_status not in terminal_statuses:
             for key in (
                 "ok",
                 "completed_at",
@@ -961,10 +1021,24 @@ def external_asset_job_status(job_id, *, context=None, preferred_dir=None, captu
                 "current_file_progress",
                 "attempt",
                 "resumed",
+                "provider_task_id",
+                "provider_task_kind",
             ):
                 if key in child_status:
                     latest[key] = child_status[key]
-        if cancel_requested and not thread_running and not process_running:
+        elif child_status:
+            for key in ("provider_task_id", "provider_task_kind"):
+                if not latest.get(key) and child_status.get(key):
+                    latest[key] = child_status[key]
+        effective_cancel_requested = cancel_requested or stored_cancel_requested or stored_status == "cancelled"
+        if (
+            stored_status == "cancelled"
+            and child_status_name not in terminal_statuses
+            and latest.get("message")
+            and latest.get("message") == child_status.get("message")
+        ):
+            latest["message"] = "External asset job cancelled"
+        if effective_cancel_requested and not thread_running and not process_running:
             status = "cancelled"
             latest["ok"] = False
             latest["message"] = latest.get("message") or "External asset job cancelled"
@@ -973,16 +1047,16 @@ def external_asset_job_status(job_id, *, context=None, preferred_dir=None, captu
         elif stored_status in terminal_statuses:
             status = stored_status
         elif thread_running or process_running:
-            status = "cancelling" if cancel_requested else "running"
+            status = "cancelling" if effective_cancel_requested else "running"
         elif returncode == 0 and stored_status not in terminal_statuses:
             status = "unknown"
             latest["message"] = "External asset worker exited before final status was recorded"
         elif returncode not in {None, 0}:
-            status = "cancelled" if cancel_requested else "failed"
+            status = "cancelled" if effective_cancel_requested else "failed"
             latest["message"] = latest.get("message") or f"External asset worker exited with code {returncode}"
         elif stored_status in {"starting", "running", "cancelling"}:
             if latest.get("pid") and render_jobs._pid_alive(latest.get("pid")):
-                status = "cancelling" if cancel_requested else "running"
+                status = "cancelling" if effective_cancel_requested else "running"
                 latest["message"] = latest.get("message") or "External asset worker still running (recovered across bridge session)"
             else:
                 status = "unknown"
@@ -1000,7 +1074,7 @@ def external_asset_job_status(job_id, *, context=None, preferred_dir=None, captu
                 "status": status,
                 "ok": bool(latest.get("ok")) and status == "completed",
                 "elapsed_seconds": int(round(elapsed)),
-                "cancel_requested": bool(cancel_requested),
+                "cancel_requested": bool(effective_cancel_requested),
                 "poll_after_seconds": 0 if terminal else int(latest.get("poll_interval_seconds") or DEFAULT_ASSET_JOB_POLL_INTERVAL_SECONDS),
                 "returncode": returncode if returncode is not None else latest.get("returncode"),
                 "log_tail": _log_tail(latest.get("log_path") or "", max_bytes=4096),
@@ -1014,7 +1088,14 @@ def external_asset_job_status(job_id, *, context=None, preferred_dir=None, captu
         return latest
 
 
-def cancel_external_asset_job(job_id, *, context=None, preferred_dir=None, capture_dir=None):
+def cancel_external_asset_job(
+    job_id,
+    *,
+    context=None,
+    preferred_dir=None,
+    capture_dir=None,
+    remote_cancellation=None,
+):
     metadata = external_asset_job_status(job_id, context=context, preferred_dir=preferred_dir, capture_dir=capture_dir)
     if not metadata.get("available"):
         return {"ok": False, "message": metadata.get("message", "External asset job was not found"), "asset_job": metadata}
@@ -1037,6 +1118,7 @@ def cancel_external_asset_job(job_id, *, context=None, preferred_dir=None, captu
             cancel_requested=True,
             poll_after_seconds=0,
             returncode=returncode,
+            remote_cancellation=dict(remote_cancellation or {}),
             message="External asset worker process cancelled",
         )
         with _LOCK:
@@ -1046,6 +1128,7 @@ def cancel_external_asset_job(job_id, *, context=None, preferred_dir=None, captu
         metadata.get("metadata_path", ""),
         status="cancelling",
         cancel_requested=True,
+        remote_cancellation=dict(remote_cancellation or {}),
         message="Cancellation requested; any in-flight HTTP read may finish before the job stops",
     )
     return {"ok": True, "message": "External asset job cancellation requested", "asset_job": metadata}

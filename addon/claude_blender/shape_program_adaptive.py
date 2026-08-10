@@ -1061,6 +1061,7 @@ def mesh_shape_program_adaptive(
     vertices = shape_program.smooth_shape_mesh(
         vertices, faces, smooth_iterations
     )
+    component_summary = shape_program.mesh_component_summary(faces)
     depth_histogram = Counter(leaf.depth for leaf in surface_leaves)
     residuals = [leaf.residual for leaf in surface_leaves]
     region_stats = []
@@ -1113,6 +1114,10 @@ def mesh_shape_program_adaptive(
             "mesh_edge_count": mesh_edge_count,
             "vertex_count": len(vertices),
             "face_count": len(faces),
+            **component_summary,
+            "disconnected_component_count": max(
+                0, component_summary["component_count"] - 1
+            ),
             "smooth_iterations": smooth_iterations,
             "iso_level": iso_level,
             "digest": shape_program.shape_program_digest(prepared.program),

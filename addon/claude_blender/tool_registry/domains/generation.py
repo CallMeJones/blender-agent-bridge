@@ -125,7 +125,8 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
                  'get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is '
                  'not enough to start it: the first call returns requires_confirmation with the cost, which must be '
                  'told to the user, and the user must then click Approve in the Blender sidebar. No argument grants this: '
-                 'call again with the same arguments once they have approved. The finished model '
+                 'poll get_generation_approval_status with the returned request id so the user does not have to report '
+                 'their click, then call again with the exact same arguments only after approval. The finished model '
                  'is cached like any external asset, so import it with start_external_asset_import_job. TripoSR is a '
                  'single-image local blockout route: use its knobs to tune extraction, but do not treat it as final '
                  'multi-view quality.',
@@ -207,6 +208,29 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
                                 'additionalProperties': False}},
   'handler_key': 'start_generation_job',
   'order': 1910,
+  'groups': ('external_assets',),
+  'exposure': 'catalog',
+  'owner': 'generation'},
+
+ {'name': 'get_generation_approval_status',
+  'description': 'Poll one paid hosted-generation approval request after start_generation_job asks the user to decide '
+                 'in Blender. Returns pending, approved, declined, expired, or consumed state plus the next action. Poll '
+                 'the returned request id every two seconds instead of asking the user to report whether they clicked '
+                 'Approve or Decline. Approval never starts a job by itself: after approved, call start_generation_job '
+                 'once with the exact original arguments. TripoSR is local and never creates a spend request.',
+  'input_schema': {'type': 'object',
+                   'properties': {'request_id': {'type': 'string'}},
+                   'required': ['request_id'],
+                   'additionalProperties': False},
+  'contract': {'description': 'Poll a Blender UI decision for one paid generation request',
+               'mutates_scene': False,
+               'supports_headless': True,
+               'input_schema': {'type': 'object',
+                                'properties': {'request_id': {'type': 'string'}},
+                                'required': ['request_id'],
+                                'additionalProperties': False}},
+  'handler_key': 'get_generation_approval_status',
+  'order': 1912,
   'groups': ('external_assets',),
   'exposure': 'catalog',
   'owner': 'generation'},

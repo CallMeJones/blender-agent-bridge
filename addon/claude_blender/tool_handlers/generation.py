@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import os
 
-from .. import asset_jobs, generation_providers, preferences
+from .. import asset_jobs, generation_clients, generation_providers, generation_spend, preferences
 from .support import _bounded_float, _bounded_int
 
 
@@ -417,6 +417,86 @@ def get_generation_job_status(context, args):
         "message": "Generation job status collected" if job.get("available") else job.get("message", "Generation job was not found"),
         "asset_job": job,
     }
+
+
+def get_generation_approval_status(_context, args):
+    request_id = str(args.get("request_id") or "").strip()
+    record = generation_spend.request_state(request_id)
+    if record is None:
+        return {
+            "ok": False,
+            "available": False,
+            "request_id": request_id,
+            "message": "Generation approval request was not found in this Blender session",
+        }
+
+    status = str(record.get("status") or "")
+    if status == generation_spend.STATUS_PENDING:
+        message = "Waiting for the user to approve or decline this paid generation request in Blender"
+        next_action = "wait_for_user"
+    elif status == generation_spend.STATUS_APPROVED:
+        message = "The user approved this paid generation request in Blender"
+        next_action = "start_exact_job"
+    elif status == generation_spend.STATUS_DENIED:
+        message = "The user declined this paid generation request in Blender"
+        next_action = "stop"
+    elif status == generation_spend.STATUS_EXPIRED:
+        message = "This generation approval expired before the paid job started"
+        next_action = "request_new_approval"
+    else:
+        message = "This single-use generation approval has already been consumed"
+        next_action = "approval_consumed"
+
+    return {
+        "ok": True,
+        "available": True,
+        "request_id": request_id,
+        "provider": str(record.get("provider") or ""),
+        "title": str(record.get("title") or ""),
+        "status": status,
+        "decision_received": status in {generation_spend.STATUS_APPROVED, generation_spend.STATUS_DENIED},
+        "approved": status == generation_spend.STATUS_APPROVED,
+        "declined": status == generation_spend.STATUS_DENIED,
+        "ready_to_start": status == generation_spend.STATUS_APPROVED,
+        "terminal": status != generation_spend.STATUS_PENDING,
+        "poll_after_seconds": 2 if status == generation_spend.STATUS_PENDING else 0,
+        "next_action": next_action,
+        "message": message,
+        "spend_approval": record,
+    }
+
+
+def cancel_provider_generation_task(context, asset_job):
+    """Cancel supported hosted tasks without persisting provider credentials."""
+
+    asset_job = asset_job if isinstance(asset_job, dict) else {}
+    provider = str(asset_job.get("provider") or "").strip().lower()
+    task_id = str(asset_job.get("provider_task_id") or "").strip()
+    if provider != "meshy" or not task_id:
+        return {}
+
+    spec = generation_providers.PROVIDERS_BY_NAME.get(provider)
+    environ = _generation_environ(context)
+    api_key = _first_configured(environ, getattr(spec, "credential_env_vars", ()) or ())
+    if not api_key:
+        return {
+            "ok": False,
+            "provider": provider,
+            "task_id": task_id,
+            "message": "Meshy task ID was recovered, but no Meshy credential is configured",
+        }
+    try:
+        return generation_clients.MeshyClient(api_key, timeout=15).cancel_task(
+            task_id,
+            task_kind=str(asset_job.get("provider_task_kind") or ""),
+        )
+    except generation_clients.GenerationError as error:
+        return {
+            "ok": False,
+            "provider": provider,
+            "task_id": task_id,
+            "message": "Meshy provider cancellation failed: %s" % error,
+        }
 
 
 def _resolve_scene_objects(context, args, *, default_active=True):

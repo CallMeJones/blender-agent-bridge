@@ -22,7 +22,7 @@ SUPPORTED_OPERATIONS = ("union", "subtract", "intersect")
 MAX_NODES = 64
 MAX_SWEEP_POINTS = 64
 MAX_GRID_SAMPLES = 950_000
-MAX_SDF_EVALUATIONS = 32_000_000
+MAX_SDF_EVALUATIONS = 64_000_000
 MAX_OUTPUT_VERTICES = 750_000
 MAX_OUTPUT_FACES = 1_500_000
 MIN_RESOLUTION = 8
@@ -129,6 +129,20 @@ def _normalize_points(raw, field):
     ]
 
 
+def _positive_vector2(raw, field):
+    if not isinstance(raw, (list, tuple)) or len(raw) != 2:
+        raise ShapeProgramError(f"{field} must contain two numbers")
+    return tuple(
+        _number(
+            value,
+            f"{field}[{index}]",
+            minimum=1.0e-5,
+            maximum=10000.0,
+        )
+        for index, value in enumerate(raw)
+    )
+
+
 def _normalize_node(raw, index):
     field = f"nodes[{index}]"
     if not isinstance(raw, dict):
@@ -163,6 +177,23 @@ def _normalize_node(raw, index):
     semantic_role = str(raw.get("semantic_role") or "").strip()
     if semantic_role:
         node["semantic_role"] = semantic_role[:120]
+    raw_target_ids = raw.get("target_ids")
+    if raw_target_ids is not None:
+        if operation not in {"subtract", "intersect"}:
+            raise ShapeProgramError(
+                f"{field}.target_ids requires subtract or intersect"
+            )
+        if not isinstance(raw_target_ids, (list, tuple)) or not raw_target_ids:
+            raise ShapeProgramError(f"{field}.target_ids must contain node ids")
+        target_ids = [
+            _identifier(value, f"{field}.target_ids[{item_index}]")
+            for item_index, value in enumerate(raw_target_ids)
+        ]
+        if len(target_ids) > MAX_NODES or len(set(target_ids)) != len(target_ids):
+            raise ShapeProgramError(
+                f"{field}.target_ids must contain unique node ids"
+            )
+        node["target_ids"] = target_ids
 
     if node_type == "sphere":
         node["radius"] = _number(raw.get("radius", 1.0), f"{field}.radius", minimum=1.0e-5, maximum=10000.0)
@@ -199,6 +230,17 @@ def _normalize_node(raw, index):
             maximum_absolute=_MAX_COORDINATE,
         )
         node["radius"] = _number(raw.get("radius", 0.25), f"{field}.radius", minimum=1.0e-5, maximum=10000.0)
+        if raw.get("cross_section") is not None:
+            node["cross_section"] = _positive_vector2(
+                raw.get("cross_section"), f"{field}.cross_section"
+            )
+        if raw.get("cross_section_rotation") is not None:
+            node["cross_section_rotation"] = _number(
+                raw.get("cross_section_rotation"),
+                f"{field}.cross_section_rotation",
+                minimum=-math.tau * 100.0,
+                maximum=math.tau * 100.0,
+            )
     elif node_type == "cylinder":
         node["radius"] = _number(raw.get("radius", 0.5), f"{field}.radius", minimum=1.0e-5, maximum=10000.0)
         node["depth"] = _number(raw.get("depth", 1.0), f"{field}.depth", minimum=1.0e-5, maximum=10000.0)
@@ -237,6 +279,37 @@ def _normalize_node(raw, index):
             _number(value, f"{field}.radii[{item_index}]", minimum=1.0e-5, maximum=10000.0)
             for item_index, value in enumerate(radii)
         ]
+        raw_cross_sections = raw.get("cross_sections")
+        if raw_cross_sections is not None:
+            if (
+                not isinstance(raw_cross_sections, (list, tuple))
+                or len(raw_cross_sections) != len(points)
+            ):
+                raise ShapeProgramError(
+                    f"{field}.cross_sections must contain one [width, depth] pair per sweep point"
+                )
+            node["cross_sections"] = [
+                _positive_vector2(value, f"{field}.cross_sections[{item_index}]")
+                for item_index, value in enumerate(raw_cross_sections)
+            ]
+        raw_rotations = raw.get("cross_section_rotations")
+        if raw_rotations is not None:
+            if (
+                not isinstance(raw_rotations, (list, tuple))
+                or len(raw_rotations) != len(points)
+            ):
+                raise ShapeProgramError(
+                    f"{field}.cross_section_rotations must contain one angle per sweep point"
+                )
+            node["cross_section_rotations"] = [
+                _number(
+                    value,
+                    f"{field}.cross_section_rotations[{item_index}]",
+                    minimum=-math.tau * 100.0,
+                    maximum=math.tau * 100.0,
+                )
+                for item_index, value in enumerate(raw_rotations)
+            ]
     return node
 
 
@@ -272,6 +345,29 @@ def _validate_parent_graph(nodes):
                 f"the supported {_MIN_SCALE} to {_MAX_SCALE} range"
             )
     return by_id
+
+
+def _validate_boolean_targets(nodes, by_id):
+    positions = {node["id"]: index for index, node in enumerate(nodes)}
+    for node in nodes:
+        for target_id in node.get("target_ids", ()):
+            target = by_id.get(target_id)
+            if target is None:
+                raise ShapeProgramError(
+                    f"Node {node['id']!r} references missing boolean target {target_id!r}"
+                )
+            if positions[target_id] >= positions[node["id"]]:
+                raise ShapeProgramError(
+                    f"Node {node['id']!r} must target an earlier node"
+                )
+            if node["enabled"] and not target["enabled"]:
+                raise ShapeProgramError(
+                    f"Enabled node {node['id']!r} cannot target disabled node {target_id!r}"
+                )
+            if target["operation"] != "union":
+                raise ShapeProgramError(
+                    f"Boolean target {target_id!r} must use the union operation"
+                )
 
 
 def normalize_shape_program(program):
@@ -312,7 +408,8 @@ def normalize_shape_program(program):
     if len(set(identifiers)) != len(identifiers):
         duplicate = next(item for item in identifiers if identifiers.count(item) > 1)
         raise ShapeProgramError(f"Duplicate node id {duplicate!r}")
-    _validate_parent_graph(nodes)
+    by_id = _validate_parent_graph(nodes)
+    _validate_boolean_targets(nodes, by_id)
     enabled = [node for node in nodes if node["enabled"]]
     if not enabled:
         raise ShapeProgramError("At least one node must be enabled")
@@ -382,6 +479,14 @@ def shape_program_summary(program):
 
 def _subtract(left, right):
     return tuple(left[index] - right[index] for index in range(3))
+
+
+def _add(left, right):
+    return tuple(left[index] + right[index] for index in range(3))
+
+
+def _scale(vector, amount):
+    return tuple(component * amount for component in vector)
 
 
 def _dot(left, right):
@@ -465,6 +570,67 @@ def _segment_distance(point, first, second, first_radius, second_radius):
     return _length(_subtract(point, nearest)) - radius
 
 
+def _ellipse_distance(point, radii):
+    scaled = (point[0] / radii[0], point[1] / radii[1])
+    squared_scaled = (
+        point[0] / (radii[0] * radii[0]),
+        point[1] / (radii[1] * radii[1]),
+    )
+    k0 = math.hypot(*scaled)
+    k1 = math.hypot(*squared_scaled)
+    if k1 <= _EPSILON:
+        return -min(radii)
+    return k0 * (k0 - 1.0) / k1
+
+
+def _segment_cross_section_distance(
+    point,
+    first,
+    second,
+    first_cross_section,
+    second_cross_section,
+    first_rotation=0.0,
+    second_rotation=0.0,
+):
+    segment = _subtract(second, first)
+    length_squared = _dot(segment, segment)
+    if length_squared <= _EPSILON:
+        return _ellipsoid_distance(
+            _subtract(point, first),
+            (first_cross_section[0], first_cross_section[1], min(first_cross_section)),
+        )
+    projected_factor = _dot(_subtract(point, first), segment) / length_squared
+    factor = max(0.0, min(1.0, projected_factor))
+    nearest = tuple(
+        first[index] + segment[index] * factor for index in range(3)
+    )
+    tangent = _scale(segment, 1.0 / math.sqrt(length_squared))
+    reference = (0.0, 0.0, 1.0)
+    if abs(_dot(tangent, reference)) > 0.9:
+        reference = (0.0, 1.0, 0.0)
+    first_axis_raw = _cross(tangent, reference)
+    first_axis = _scale(first_axis_raw, 1.0 / _length(first_axis_raw))
+    second_axis = _cross(tangent, first_axis)
+    rotation = first_rotation + (second_rotation - first_rotation) * factor
+    cosine, sine = math.cos(rotation), math.sin(rotation)
+    rotated_first = _add(_scale(first_axis, cosine), _scale(second_axis, sine))
+    rotated_second = _add(_scale(first_axis, -sine), _scale(second_axis, cosine))
+    offset = _subtract(point, nearest)
+    radii = tuple(
+        first_cross_section[index]
+        + (second_cross_section[index] - first_cross_section[index]) * factor
+        for index in range(2)
+    )
+    local_first = _dot(offset, rotated_first)
+    local_second = _dot(offset, rotated_second)
+    if projected_factor < 0.0 or projected_factor > 1.0:
+        return _ellipsoid_distance(
+            (local_first, local_second, _dot(offset, tangent)),
+            (radii[0], radii[1], min(radii)),
+        )
+    return _ellipse_distance((local_first, local_second), radii)
+
+
 def _bounded_power(value, exponent):
     if value <= 0.0:
         return 0.0
@@ -483,6 +649,18 @@ def _primitive_distance(point, node):
     if node_type == "box":
         return _box_distance(point, node["size"], node["rounding"])
     if node_type == "capsule":
+        cross_section = node.get("cross_section")
+        if cross_section is not None:
+            rotation = node.get("cross_section_rotation", 0.0)
+            return _segment_cross_section_distance(
+                point,
+                node["point_a"],
+                node["point_b"],
+                cross_section,
+                cross_section,
+                rotation,
+                rotation,
+            )
         return _segment_distance(
             point, node["point_a"], node["point_b"], node["radius"], node["radius"]
         )
@@ -513,6 +691,21 @@ def _primitive_distance(point, node):
         field = _bounded_power(field_base, vertical * 0.5)
         return min(_MAX_DISTANCE, (field - 1.0) * min(radii))
     if node_type == "sweep":
+        cross_sections = node.get("cross_sections")
+        rotations = node.get("cross_section_rotations") or [0.0] * len(node["points"])
+        if cross_sections is not None:
+            return min(
+                _segment_cross_section_distance(
+                    point,
+                    node["points"][index],
+                    node["points"][index + 1],
+                    cross_sections[index],
+                    cross_sections[index + 1],
+                    rotations[index],
+                    rotations[index + 1],
+                )
+                for index in range(len(node["points"]) - 1)
+            )
         return min(
             _segment_distance(
                 point,
@@ -537,17 +730,69 @@ def _smooth_max(first, second, blend):
     return -_smooth_min(-first, -second, blend)
 
 
+def _is_identity_transform(transform):
+    return (
+        transform["location"] == (0.0, 0.0, 0.0)
+        and transform["rotation"] == (0.0, 0.0, 0.0)
+        and transform["scale"] == (1.0, 1.0, 1.0)
+    )
+
+
+def _cached_local_point_and_scale(point, node, by_id, cache):
+    cached = cache.get(node["id"])
+    if cached is not None:
+        return cached
+    parent_id = node.get("parent_id")
+    if parent_id:
+        local, distance_scale = _cached_local_point_and_scale(
+            point, by_id[parent_id], by_id, cache
+        )
+    else:
+        local, distance_scale = point, 1.0
+    transform = node["transform"]
+    if not _is_identity_transform(transform):
+        local = _inverse_transform(local, transform)
+        distance_scale *= min(transform["scale"])
+    cache[node["id"]] = (local, distance_scale)
+    return cache[node["id"]]
+
+
 def _evaluate_prepared(program, point, by_id=None, transform_chains=None):
     by_id = by_id or {node["id"]: node for node in program["nodes"]}
-    transform_chains = transform_chains or _transform_chains(program["nodes"], by_id)
-    result = None
+    local_cache = {}
+    distances = {}
     for node in program["nodes"]:
         if not node["enabled"]:
             continue
-        local, distance_scale = _local_point_and_scale(
-            point, node, transform_chains
+        local, distance_scale = _cached_local_point_and_scale(
+            point, node, by_id, local_cache
         )
-        distance = _primitive_distance(local, node) * distance_scale
+        distances[node["id"]] = _primitive_distance(local, node) * distance_scale
+
+    targeted_values = {
+        node["id"]: distances[node["id"]]
+        for node in program["nodes"]
+        if node["enabled"] and node["operation"] == "union"
+    }
+    for node in program["nodes"]:
+        if not node["enabled"] or not node.get("target_ids"):
+            continue
+        distance = distances[node["id"]]
+        for target_id in node["target_ids"]:
+            if node["operation"] == "subtract":
+                targeted_values[target_id] = _smooth_max(
+                    targeted_values[target_id], -distance, node["blend"]
+                )
+            else:
+                targeted_values[target_id] = _smooth_max(
+                    targeted_values[target_id], distance, node["blend"]
+                )
+
+    result = None
+    for node in program["nodes"]:
+        if not node["enabled"] or node.get("target_ids"):
+            continue
+        distance = targeted_values.get(node["id"], distances[node["id"]])
         if result is None:
             result = distance
         elif node["operation"] == "union":
@@ -587,9 +832,15 @@ class PreparedShapeProgram:
             len(node["points"]) - 1 if node["type"] == "sweep" else 1
             for node in self.enabled_nodes
         )
+        required_transform_nodes = set()
+        for enabled in self.enabled_nodes:
+            current = enabled
+            while current is not None and current["id"] not in required_transform_nodes:
+                required_transform_nodes.add(current["id"])
+                current = self.by_id.get(current.get("parent_id"))
         self.transform_units = sum(
-            len(self.transform_chains[node["id"]])
-            for node in self.enabled_nodes
+            not _is_identity_transform(self.by_id[node_id]["transform"])
+            for node_id in required_transform_nodes
         )
         self.work_units_per_sample = self.primitive_units + self.transform_units
 
@@ -724,6 +975,46 @@ def smooth_shape_mesh(vertices, faces, iterations):
                 )
             current = following
     return current
+
+
+def mesh_component_summary(faces):
+    """Return connected face-component counts for a bounded compiled mesh."""
+
+    if not faces:
+        return {"component_count": 0, "component_face_counts": []}
+    parent = list(range(len(faces)))
+    rank = [0] * len(faces)
+    vertex_owner = {}
+
+    def find(item):
+        while parent[item] != item:
+            parent[item] = parent[parent[item]]
+            item = parent[item]
+        return item
+
+    def union(first, second):
+        first_root, second_root = find(first), find(second)
+        if first_root == second_root:
+            return
+        if rank[first_root] < rank[second_root]:
+            first_root, second_root = second_root, first_root
+        parent[second_root] = first_root
+        if rank[first_root] == rank[second_root]:
+            rank[first_root] += 1
+
+    for face_index, face in enumerate(faces):
+        for vertex_id in face:
+            owner = vertex_owner.setdefault(vertex_id, face_index)
+            union(face_index, owner)
+    counts = {}
+    for face_index in range(len(faces)):
+        root = find(face_index)
+        counts[root] = counts.get(root, 0) + 1
+    face_counts = sorted(counts.values(), reverse=True)
+    return {
+        "component_count": len(face_counts),
+        "component_face_counts": face_counts,
+    }
 
 
 def mesh_shape_program(program, *, resolution=48, iso_level=0.0, smooth_iterations=1):
@@ -893,6 +1184,7 @@ def mesh_shape_program(program, *, resolution=48, iso_level=0.0, smooth_iteratio
             "Shape program produced no surface inside the requested bounds"
         )
     vertices = smooth_shape_mesh(vertices, faces, smooth_iterations)
+    component_summary = mesh_component_summary(faces)
     return {
         "vertices": vertices,
         "faces": faces,
@@ -907,6 +1199,10 @@ def mesh_shape_program(program, *, resolution=48, iso_level=0.0, smooth_iteratio
             "estimated_work_units": estimated_work_units,
             "vertex_count": len(vertices),
             "face_count": len(faces),
+            **component_summary,
+            "disconnected_component_count": max(
+                0, component_summary["component_count"] - 1
+            ),
             "smooth_iterations": max(0, min(10, int(smooth_iterations))),
             "iso_level": iso_level,
             "digest": shape_program_digest(normalized),

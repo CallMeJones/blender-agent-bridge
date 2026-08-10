@@ -12,6 +12,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 from claude_blender import shape_program  # noqa: E402
+from claude_blender import shape_program_adaptive  # noqa: E402
 
 
 def _program(nodes, bounds=None):
@@ -110,8 +111,8 @@ class ShapeProgramTests(unittest.TestCase):
         )
         self.assertEqual(prepared.node_units, 2)
         self.assertEqual(prepared.primitive_units, 3)
-        self.assertEqual(prepared.transform_units, 3)
-        self.assertEqual(prepared.work_units_per_sample, 6)
+        self.assertEqual(prepared.transform_units, 0)
+        self.assertEqual(prepared.work_units_per_sample, 3)
 
     def test_normalization_rejects_ambiguous_or_unsafe_graphs(self):
         with self.assertRaisesRegex(shape_program.ShapeProgramError, "Duplicate"):
@@ -201,9 +202,163 @@ class ShapeProgramTests(unittest.TestCase):
             result["stats"]["node_evaluation_count"] * 7,
             result["stats"]["primitive_evaluation_count"],
         )
-        self.assertGreater(
+        self.assertEqual(
             result["stats"]["estimated_work_units"],
             result["stats"]["primitive_evaluation_count"],
+        )
+
+    def test_parent_transforms_are_evaluated_once_per_sample(self):
+        program = _program(
+            [
+                {
+                    "id": "body",
+                    "type": "sphere",
+                    "radius": 0.2,
+                    "transform": {"location": [1.0, 0.0, 0.0]},
+                },
+                {
+                    "id": "feature",
+                    "parent_id": "body",
+                    "type": "sphere",
+                    "radius": 0.4,
+                },
+            ]
+        )
+        prepared = shape_program.prepare_shape_program(program)
+        with mock.patch.object(
+            shape_program,
+            "_inverse_transform",
+            wraps=shape_program._inverse_transform,
+        ) as inverse:
+            prepared.evaluate([1.0, 0.0, 0.0])
+        self.assertEqual(inverse.call_count, 1)
+        self.assertEqual(prepared.transform_units, 1)
+
+    def test_32_node_program_fits_the_bounded_adaptive_work_budget(self):
+        nodes = [
+            {
+                "id": f"mass_{index}",
+                "type": "sphere",
+                "radius": 0.1,
+                "transform": {"location": [index * 0.01, 0.0, 0.0]},
+            }
+            for index in range(32)
+        ]
+        prepared = shape_program.prepare_shape_program(_program(nodes))
+        self.assertEqual(prepared.node_units, 32)
+        self.assertLessEqual(prepared.work_units_per_sample, 64)
+        self.assertLessEqual(
+            prepared.work_units_per_sample
+            * shape_program_adaptive.MAX_ADAPTIVE_SDF_SAMPLES,
+            shape_program.MAX_SDF_EVALUATIONS,
+        )
+
+    def test_elliptical_path_cross_sections_do_not_inflate_narrow_axis(self):
+        capsule = _program(
+            [
+                {
+                    "id": "limb",
+                    "type": "capsule",
+                    "point_a": [0, 0, -0.5],
+                    "point_b": [0, 0, 0.5],
+                    "radius": 0.5,
+                    "cross_section": [0.2, 0.5],
+                }
+            ]
+        )
+        self.assertGreater(
+            shape_program.evaluate_shape_program(capsule, [0.3, 0.0, 0.0]),
+            0.0,
+        )
+        self.assertLess(
+            shape_program.evaluate_shape_program(capsule, [0.0, 0.3, 0.0]),
+            0.0,
+        )
+
+    def test_elliptical_path_cross_sections_close_at_segment_ends(self):
+        capsule = _program(
+            [
+                {
+                    "id": "strap",
+                    "type": "capsule",
+                    "point_a": [0.0, 0.0, -0.5],
+                    "point_b": [0.0, 0.0, 0.5],
+                    "radius": 0.5,
+                    "cross_section": [0.5, 0.2],
+                }
+            ]
+        )
+        self.assertLess(
+            shape_program.evaluate_shape_program(capsule, [0.0, 0.0, 0.6]),
+            0.0,
+        )
+        self.assertGreater(
+            shape_program.evaluate_shape_program(capsule, [0.0, 0.0, 0.8]),
+            0.0,
+        )
+
+    def test_scoped_boolean_only_modifies_its_named_target(self):
+        common = [
+            {
+                "id": "body",
+                "type": "sphere",
+                "radius": 0.8,
+                "transform": {"location": [-0.7, 0.0, 0.0]},
+            },
+            {
+                "id": "ornament",
+                "type": "sphere",
+                "radius": 0.45,
+                "transform": {"location": [0.7, 0.0, 0.0]},
+            },
+        ]
+        cutter = {
+            "id": "body_cut",
+            "type": "sphere",
+            "operation": "subtract",
+            "radius": 0.3,
+            "transform": {"location": [0.7, 0.0, 0.0]},
+        }
+        global_program = _program([*common, cutter])
+        scoped_program = _program(
+            [*common, {**cutter, "target_ids": ["body"]}]
+        )
+        self.assertGreater(
+            shape_program.evaluate_shape_program(global_program, [0.7, 0.0, 0.0]),
+            0.0,
+        )
+        self.assertLess(
+            shape_program.evaluate_shape_program(scoped_program, [0.7, 0.0, 0.0]),
+            0.0,
+        )
+
+    def test_compiled_mesh_reports_disconnected_components(self):
+        result = shape_program.mesh_shape_program(
+            _program(
+                [
+                    {
+                        "id": "left",
+                        "type": "sphere",
+                        "radius": 0.45,
+                        "transform": {"location": [-1.0, 0.0, 0.0]},
+                    },
+                    {
+                        "id": "right",
+                        "type": "sphere",
+                        "radius": 0.45,
+                        "transform": {"location": [1.0, 0.0, 0.0]},
+                    },
+                ],
+                bounds={"min": [-2, -1, -1], "max": [2, 1, 1]},
+            ),
+            resolution=16,
+            smooth_iterations=0,
+        )
+        self.assertEqual(result["stats"]["component_count"], 2)
+        self.assertEqual(result["stats"]["disconnected_component_count"], 1)
+        self.assertEqual(
+            sum(result["stats"]["component_face_counts"]),
+            result["stats"]["face_count"],
         )
 
     def test_numeric_payloads_reject_boolean_and_extreme_coordinates(self):

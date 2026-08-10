@@ -2,9 +2,31 @@
 
 ## Unreleased
 
+## 0.5.4 - 2026-08-10
+
+### Generation
+
+- Fixed local TripoSR texture baking across mixed CPU/CUDA tensor placement and converted xatlas OBJ-atlas payloads into real textured GLBs instead of accepting OBJ text mislabeled with a `.glb` suffix.
+- Added a Blender import smoke for baked TripoSR assets that verifies the packed texture, material node, provider provenance, and X -90 / Z +90 orientation normalization.
+- Persisted hosted generation task identity in recoverable job metadata and made the existing external-asset cancel path delete pending or in-progress Meshy image and multi-image tasks at the provider before terminating the local worker. Credentials remain session-only and are never added to job files.
+- Live-proved Meshy provider-side cancellation and restart recovery from the installed Blender 5.1.2 extension: the job persisted its remote image-task identity before cancellation, Meshy acknowledged the provider DELETE, and a post-Reload Scripts lookup recovered the terminal job and remote cancellation receipt from its previous capture session. Terminal recovery self-heals stale child progress written by older builds.
+- Added and live-proved `get_generation_approval_status`, which detected a real Blender Decline click while the client polled the exact request instead of asking the user to report it. Hosted Tripo and Meshy remain gated; local TripoSR remains approval-free. Approved requests now expire and include the paid texture choice in their single-use fingerprint.
+
+### Reference modeling
+
+- Raised the bounded SDF work allowance to 64 million operations and cached parent transforms per sample, allowing representative 32-node adaptive programs to compile within the existing sample ceiling.
+- Added elliptical capsule and sweep cross-sections with oriented ellipsoidal end caps, targeted subtract/intersect booleans, and disconnected-component reporting to implicit shape programs, with the strict public tool schema updated to expose every new field.
+
+### Live validation
+
+- Passed Blender 5.1 live smokes for reference feature stacks, part-derived weight/groom flow, multi-view depth surfaces, adaptive remesh, edit-mesh helpers, lower-level semantic sculpting, and retained adaptive-manifold diagnostics at maximum depths 7, 8, and 9.
+- Added a generic installed-extension generated-manifest evaluation smoke and used it on a hard-surface desk fan, covering import provenance, orientation normalization, topology, materials, components, and the expected single-view relief-shell warning.
+
 ### Release validation
 
 - Bound public MCPB verification and release recovery to the retained tested-candidate sidecar instead of comparing against a cross-platform archive rebuild.
+- Isolated installed-extension smoke subprocesses from ambient `PYTHONHOME` and `PYTHONPATH`, preventing a repository uv interpreter from injecting an incompatible standard library into Blender's bundled Python.
+- Restored the pure-Python external-asset smoke after adding Blender-dependent recovery coverage by moving that probe into `smoke_generation_jobs` and running the generation smoke on ordinary pushes and release tags.
 
 ## 0.5.3 - 2026-08-09
 

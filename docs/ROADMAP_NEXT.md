@@ -1,8 +1,8 @@
 # Next On The Roadmap
 
-Last updated 2026-08-09, after the local generation/modeling backend batch on
-`main`. This supersedes the 2026-08-05 note written after the live
-character-reference evaluation.
+Last updated 2026-08-10, after the texture-baking, shape-program expressiveness,
+and live-validation batch on `main`. This supersedes the 2026-08-05 note written
+after the live character-reference evaluation.
 
 Findings referenced as F1-F26 live in
 `test-artifacts/sculpt-eval-20260803/IMPROVEMENTS.md` (local only, gitignored);
@@ -142,6 +142,37 @@ Done since the 2026-08-05 roadmap:
   `inspect_modeling_quality`. It independently gates loose/non-manifold
   geometry and an optional face budget, then requires silhouette and structure
   for a combined pass while retaining the non-overall-verdict warning.
+- TripoSR texture baking is now live-proven on CUDA. A compatibility runner fixes
+  mixed CPU/CUDA texture sampling and converts xatlas's OBJ atlas payload into a
+  real GLB with its texture embedded. Blender 5.1.2 imported the resulting
+  1.07 MB teapot GLB with one material, one packed 512-square image, provider
+  provenance, and the exact X -90 / Z +90 normalization.
+- Representative 32-node adaptive shape programs now fit the bounded evaluator:
+  the SDF ceiling is 64 million work units and parent transforms are cached once
+  per sample. F18-F20 are implemented with elliptical capsule/sweep sections,
+  targeted booleans, and disconnected-component reporting.
+- Blender 5.1.2 live smokes passed for eye/muzzle/ear feature stacks,
+  part-derived weight groups and fur flow, multi-view depth surfaces,
+  `adaptive_remesh`, `edit_mesh`, lower-level semantic sculpt tools, and all
+  retained adaptive-manifold diagnostics at maximum depths 7, 8, and 9.
+- Meshy provider-side cancellation is implemented and live-proven: generation
+  task ids and task kinds survive restart metadata, and the shared cancel tool
+  calls Meshy's single-image or multi-image DELETE endpoint before stopping the
+  local worker. Terminal recovery now also ignores stale child progress so the
+  cancelled message and cancellation-request flag remain authoritative.
+- Paid hosted-generation decisions are now observable without a chat round trip.
+  The start refusal returns a request id and polling contract;
+  `get_generation_approval_status` reports Approve, Decline, expiry, or prior
+  consumption. Tripo and Meshy use it, while local TripoSR remains outside the
+  spend gate. A live Blender 5.1 session detected a real Tripo Decline decision
+  through polling without the user reporting the click, and no provider job was
+  submitted.
+- Non-character coverage now includes a second category. A hard-surface red desk
+  fan generated locally through TripoSR in 14 seconds and imported through the
+  clean installed extension with 13,312 vertices, 26,620 manifold triangles,
+  two components, stable provenance, and the expected Z-up normalization. The
+  evaluator correctly classified its vertex-color material and warned that one
+  view cannot establish the cage/motor structure on the unseen side.
 
 Focused verification on 2026-08-09:
 
@@ -206,6 +237,26 @@ Focused verification on 2026-08-09:
   ZIP/MCPB validation, PyPI publication, GitHub release publication, byte-identity
   checks against retained candidates, and a fresh install through the public
   Blender extension repository.
+- 2026-08-10 focused generation/modeling verification: 69 generation-client,
+  generation-job, and worker tests passed; 26 uniform/adaptive shape-program
+  tests passed. Blender 5.1.2 passed the baked-TripoSR installed import smoke and
+  the selected feature-stack, grooming, advanced-helper, semantic-sculpt, and
+  adaptive-manifold suites.
+- A fresh 0.5.4 clean-profile package passed the installed extension, interactive
+  UI, workflow sweep, five-tool MCP, bundled doctor, MCPB build, MCPB doctor, and
+  installed MCP smokes on Blender 5.1.2. The final post-recovery-fix retained
+  artifacts are byte-identical to the smoke-built candidates: extension ZIP
+  SHA-256 `e14c9b6e475726f1f14e4d2ea7910078a25f83df4fbdfe1276ca9589851024e9`
+  and MCPB SHA-256
+  `7c47dd10eefc2d17cbbe6e4435bfae67f4b6b406b77f8b3d2f2ded991844c033`.
+- Meshy provider-side cancellation is live-proven from the installed Blender
+  5.1.2 extension. Generation job `20260810-101631-e24fdcb8` persisted remote
+  image task `019feabe-b4da-72fb-8786-0f2e86cea48b`, Meshy acknowledged its
+  provider DELETE, and the terminal cancelled job retained the task kind, task
+  id, and successful remote-cancellation receipt. After Reload Scripts and a
+  bridge restart, the historical-session locator recovered the same job with
+  `cancel_requested: true` and the canonical cancelled message; no second paid
+  provider request was made.
 
 ---
 
@@ -214,6 +265,18 @@ Focused verification on 2026-08-09:
 1. **Supply a real studio endpoint when available.** The contract and job path
    are implemented, but live local/LAN evidence remains blocked by no configured
    service URL.
+2. **Recreate or recover the exact F14 lamp fixture.** Every retained adaptive
+   manifold diagnostic passes, but the historical two-edge residue cannot be
+   closed algorithmically without its seven-node program.
+3. **Broaden reference subjects and decomposition.** Add live vehicle, garment,
+   and hard-surface/prop cases, then extend F7 semantic-part defaults beyond
+   characters where those cases justify it.
+4. **Add Hunyuan3D/TRELLIS launchers when suitable hardware or a studio service
+   is available.** Their readiness strategy exists; direct execution does not.
+5. **Finish current-candidate install coverage.** The final post-recovery 0.5.4
+   artifact is clean-profile proven on Blender 5.1.2. Re-run that exact candidate
+   on Blender 4.2/4.5 in release CI, then complete one genuinely separate-machine
+   clean install; earlier 4.2/4.5/5.1 evidence predates these final fixes.
 
 ---
 
@@ -267,26 +330,31 @@ Remaining provider work:
   credits, cached a 2.96 MB textured GLB, and imported with stable Meshy
   provenance. Its evaluation found 10,259 faces and 1,182 disconnected
   components, so provider plumbing passes while editability quality does not.
+  Meshy provider cancellation/recovery is now unit-covered and live-proven:
+  task identity survived into recoverable metadata before the installed bridge
+  sent and recorded a successful provider-side cancellation, and the terminal
+  record was recovered from a prior capture session after Reload Scripts.
   Studio endpoint remains contract/unit-covered and blocked by no configured
   service.
-- **TripoSR texture baking.** The live ceramic-teapot run succeeds without
-  baking, but `bake_texture=true` currently fails inside TripoSR's renderer
-  because `grid_sample` receives mixed CUDA and CPU tensors.
+- **TripoSR texture baking (done).** CUDA texture baking, atlas-to-GLB conversion,
+  strict GLB payload validation, packed material import, provenance, and
+  orientation normalization are live-proven on the ceramic teapot.
 
 ---
 
 ## 3. Reference And Modeling Defects Left
 
-**F14 residue.** Manifold dual contouring took the seven-node lamp from 140
-pinched edges to 2 and fixed every diagnostic case. The remaining 2 are likely
-patches meeting across a cell boundary rather than within one cell, which is a
-different mechanism from the one already handled. Uniform meshing remains
-correct for every case.
+**F14 residue.** Every retained cavity-breakthrough case is manifold at adaptive
+maximum depths 7, 8, and 9, and targeted booleans now prevent one common source
+of unrelated cuts. The historical seven-node lamp improved from 140 pinched
+edges to 2, but its exact program was not retained. Recreate that fixture before
+claiming the final cross-cell residue is solved. Uniform meshing remains the
+documented fallback.
 
-**32-node programs exceed the SDF work-unit limit.** Pre-existing and verified
-against the previous commit. A 32-node character program cannot compile in
-adaptive mode at all. Either the budget needs raising or the evaluator needs to
-be cheaper per sample.
+**32-node SDF budget (done).** Parent transforms are evaluated once per sample,
+identity transforms add no work, and the bounded ceiling is now 64 million SDF
+work units. A representative 32-node transformed program is regression-covered
+within the one-million adaptive-sample ceiling.
 
 **F5 subject calibration (done).** `subject_height` now maps silhouette-derived
 or explicit normalized subject bounds to a shared world height. Keeping the old
@@ -308,11 +376,12 @@ integrity and face-budget gates from the existing modeling inspector. The
 payload keeps silhouette and structural scores separate and still states what
 is not measured.
 
-**F18-F20: shape-program expressiveness.** Only `ellipsoid`, `box`, and
-`superquadric` have non-circular cross-sections, so limbs and garments built
-from `sweep` or `capsule` inflate. Booleans are global, so a cut meant for one
-part carves everything in that volume. Stacked primitives silently disconnect
-when they do not overlap, and nothing reports component count.
+**F18-F20 shape-program expressiveness (done).** Capsules accept an elliptical
+`cross_section` plus rotation; sweeps accept width/depth and rotation per point.
+Subtract/intersect nodes may target named earlier union nodes, while omitted
+targets preserve global behavior. Uniform and adaptive results report component
+count, face counts per component, and disconnected-component count. The strict
+bridge schema exposes all five new fields.
 
 ---
 
@@ -320,21 +389,17 @@ when they do not overlap, and nothing reports component count.
 
 These areas need live or packaged evidence before being used as launch claims:
 
-- Meshy cancellation/recovery evidence beyond the completed generation/import
-  smoke, and studio-endpoint local/LAN generation after a real service URL exists.
-- Clean install from a packaged zip on a genuinely separate machine. A clean
-  temporary-profile install is now proven on this workstation.
-- Blender 4.2 and 4.5 installed-extension smoke. The code has compatibility
-  work, but this release state still needs fresh evidence.
+- Studio-endpoint local/LAN generation after a real service URL exists.
+- Blender 4.2/4.5 clean-profile smoke for the final post-recovery 0.5.4 archive,
+  plus one packaged install on a genuinely separate machine. Blender 5.1.2 is
+  proven on this workstation.
 - More non-character subjects. Ceramic-teapot runs now cover both local TripoSR
-  and hosted Meshy, but broader categories remain untested.
-- Feature-stack live quality: `create_eye_stack`, `create_muzzle_stack`,
-  `create_ear_stack`.
-- Part-derived grooming in a live scene:
-  `create_part_weight_vertex_groups` and `create_fur_flow_field_from_parts`.
-- `create_multiview_depth_surface`, `adaptive_remesh`, and `edit_mesh` on a real
-  reference-derived model.
-- The lower-level semantic sculpt tools outside the scripted repair loop.
+  and hosted Meshy, and a hard-surface desk fan now covers local TripoSR, but
+  vehicles, garments, and larger asymmetric props remain untested.
+- F6 automatic hull-resolution defaults or a per-axis cell-size triple, if live
+  subject evidence shows the current explicit scalar `cell_size` is insufficient.
+- F7 automatic semantic decomposition for props, garments, and vehicles, after
+  broader live subjects establish useful category rules.
 
 ---
 

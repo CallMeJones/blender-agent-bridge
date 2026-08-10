@@ -164,6 +164,14 @@ _SHAPE_VECTOR3_SCHEMA = {
 }
 
 
+_SHAPE_POSITIVE_VECTOR2_SCHEMA = {
+    'type': 'array',
+    'items': {'type': 'number', 'minimum': 0.00001, 'maximum': 10000.0},
+    'minItems': 2,
+    'maxItems': 2,
+}
+
+
 _COLOR4_SCHEMA = {
     'type': 'array',
     'items': {'type': 'number', 'minimum': 0.0, 'maximum': 1.0},
@@ -213,6 +221,14 @@ _SHAPE_NODE_SCHEMA = {
             'enum': ['union', 'subtract', 'intersect'],
             'description': 'Sequential boolean operation. The first enabled node must use union.',
         },
+        'target_ids': {
+            'type': 'array',
+            'items': {'type': 'string', 'minLength': 1, 'maxLength': 64},
+            'minItems': 1,
+            'maxItems': 64,
+            'uniqueItems': True,
+            'description': 'Optional earlier union-node ids affected by this subtract or intersect; omitted means global.',
+        },
         'blend': {
             'type': 'number',
             'minimum': 0.0,
@@ -243,6 +259,16 @@ _SHAPE_NODE_SCHEMA = {
         'rounding': {'type': 'number', 'minimum': 0.0, 'maximum': 1000.0},
         'point_a': _SHAPE_VECTOR3_SCHEMA,
         'point_b': _SHAPE_VECTOR3_SCHEMA,
+        'cross_section': {
+            **_SHAPE_POSITIVE_VECTOR2_SCHEMA,
+            'description': 'Optional capsule width/depth pair; omitted keeps a circular radius.',
+        },
+        'cross_section_rotation': {
+            'type': 'number',
+            'minimum': -1000.0,
+            'maximum': 1000.0,
+            'description': 'Capsule cross-section rotation around its centerline in radians.',
+        },
         'depth': {'type': 'number', 'minimum': 0.00001, 'maximum': 10000.0},
         'major_radius': {'type': 'number', 'minimum': 0.00001, 'maximum': 10000.0},
         'minor_radius': {'type': 'number', 'minimum': 0.00001, 'maximum': 10000.0},
@@ -258,6 +284,20 @@ _SHAPE_NODE_SCHEMA = {
             'minItems': 2,
             'maxItems': 64,
             'description': 'Local centerline points for a tapered sweep.',
+        },
+        'cross_sections': {
+            'type': 'array',
+            'items': _SHAPE_POSITIVE_VECTOR2_SCHEMA,
+            'minItems': 2,
+            'maxItems': 64,
+            'description': 'Optional width/depth pair per sweep point for non-circular tapered paths.',
+        },
+        'cross_section_rotations': {
+            'type': 'array',
+            'items': {'type': 'number', 'minimum': -1000.0, 'maximum': 1000.0},
+            'minItems': 2,
+            'maxItems': 64,
+            'description': 'Optional cross-section rotation in radians per sweep point.',
         },
     },
     'required': ['id', 'type'],
@@ -601,7 +641,8 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
   'description': 'Compile a bounded semantic implicit-shape program into one continuous watertight mesh using uniform '
                  'marching tetrahedra or adaptive octree dual contouring with localized high-resolution regions. The connected '
                  'LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, '
-                 'superquadrics, and tapered sweeps with smooth union, subtraction, and intersection. Stores the '
+                 'superquadrics, circular or elliptical tapered paths, targeted booleans, and smooth global union, '
+                 'subtraction, and intersection. Stores the '
                  'canonical program on the object for later inspection and revision.',
   'input_schema': {'type': 'object',
                    'properties': {**_SHAPE_COMPILE_PROPERTIES,

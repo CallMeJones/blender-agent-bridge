@@ -497,7 +497,7 @@ class MeshyClient:
         return task_id
 
     def task_status(self, task_id):
-        path = self._task_paths.get(str(task_id), "image-to-3d")
+        path = self._task_path(task_id)
         data = self._request("GET", "%s/%s" % (path, task_id), label="task status")
         status = str(data.get("status") or "unknown").lower()
         message = _error_message(data, "")
@@ -512,6 +512,30 @@ class MeshyClient:
             "created_at": data.get("created_at"),
             "error_message": message,
             "output": data,
+        }
+
+    def _task_path(self, task_id, task_kind=""):
+        kind = str(task_kind or "").strip().lower().replace("-", "_")
+        if kind in {"multiview", "multi_image", "multiimage"}:
+            return "multi-image-to-3d"
+        if kind in {"image", "single_image", "single"}:
+            return "image-to-3d"
+        return self._task_paths.get(str(task_id), "image-to-3d")
+
+    def cancel_task(self, task_id, *, task_kind=""):
+        """Delete a pending or in-progress Meshy task at the provider."""
+
+        task_id = str(task_id or "").strip()
+        if not task_id:
+            raise GenerationError("Meshy task cancellation requires a task_id")
+        path = self._task_path(task_id, task_kind)
+        self._request("DELETE", "%s/%s" % (path, task_id), label="task cancellation")
+        return {
+            "ok": True,
+            "provider": "meshy",
+            "task_id": task_id,
+            "task_kind": "multiview" if path == "multi-image-to-3d" else "image",
+            "message": "Meshy task cancelled at the provider",
         }
 
 

@@ -107,6 +107,7 @@ _MODULE_NAMES = (
     "lab_parity",
     "render_jobs",
     "process_utils",
+    "generation_spend",
     "trusted_script_jobs",
     "asset_jobs",
     "project_files",

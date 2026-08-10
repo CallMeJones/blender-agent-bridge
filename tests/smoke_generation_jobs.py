@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -104,6 +105,8 @@ for name, spec in sorted(asset_jobs.JOB_PROVIDER_SPECS.items()):
     check("%s declares a spend policy" % name, "spends_money" in spec)
     check("%s spend policy is a bool" % name, isinstance(spec.get("spends_money"), bool))
 check("tripo is declared paid", asset_jobs.JOB_PROVIDER_SPECS["tripo"]["spends_money"] is True)
+check("meshy is declared paid", asset_jobs.JOB_PROVIDER_SPECS["meshy"]["spends_money"] is True)
+check("local TripoSR is declared free", asset_jobs.JOB_PROVIDER_SPECS["triposr"]["spends_money"] is False)
 check(
     "poly haven is declared free",
     asset_jobs.JOB_PROVIDER_SPECS["poly_haven"]["spends_money"] is False,
@@ -151,6 +154,72 @@ check("per-job resolution wins", override_options["mc_resolution"] == 64, str(ov
 check("per-job background mode wins", override_options["no_remove_bg"] is False, str(override_options))
 check("per-job bake mode wins", override_options["bake_texture"] is False, str(override_options))
 
+print("== historical job recovery preserves provider cancellation ==")
+with tempfile.TemporaryDirectory(prefix="bab-generation-recovery-") as temp_dir:
+    project_root = os.path.join(temp_dir, "capture-root", "project")
+    current_capture_dir = os.path.join(project_root, "current-session")
+    previous_capture_dir = os.path.join(project_root, "previous-session")
+    recovered_job_id = "recovered-cancelled-job"
+    recovered_job_dir = os.path.join(previous_capture_dir, "asset-jobs", recovered_job_id)
+    os.makedirs(recovered_job_dir)
+    metadata_path = os.path.join(recovered_job_dir, asset_jobs.METADATA_FILENAME)
+    child_status_path = os.path.join(recovered_job_dir, asset_jobs.CHILD_STATUS_FILENAME)
+    remote_cancellation = {
+        "ok": True,
+        "provider": "meshy",
+        "task_id": "mesh-task",
+        "task_kind": "image",
+        "message": "Meshy task cancelled at the provider",
+    }
+    asset_jobs._write_json(
+        metadata_path,
+        {
+            "available": True,
+            "job_id": recovered_job_id,
+            "metadata_path": metadata_path,
+            "child_status_path": child_status_path,
+            "status": "cancelled",
+            "ok": False,
+            "message": "Generating (1%)",
+            "cancel_requested": False,
+            "completed_at": 2.0,
+            "started_at": 1.0,
+            "provider_task_id": "mesh-task",
+            "provider_task_kind": "image",
+            "remote_cancellation": remote_cancellation,
+        },
+    )
+    asset_jobs._write_json(
+        child_status_path,
+        {
+            "status": "running",
+            "message": "Generating (1%)",
+            "progress": 0.3,
+            "provider_task_id": "mesh-task",
+            "provider_task_kind": "image",
+        },
+    )
+    original_capture_dir_candidates = asset_jobs.viewport_capture.capture_dir_candidates
+    asset_jobs.viewport_capture.capture_dir_candidates = lambda **_kwargs: [
+        {
+            "capture_dir": current_capture_dir,
+            "storage_scope": "global",
+            "project_id": "project",
+            "session_id": "current-session",
+            "base_dir": os.path.dirname(project_root),
+            "fallback_reason": "",
+        }
+    ]
+    try:
+        recovered = asset_jobs.external_asset_job_status(recovered_job_id)
+    finally:
+        asset_jobs.viewport_capture.capture_dir_candidates = original_capture_dir_candidates
+    check("historical job is discovered", recovered.get("available") is True, str(recovered))
+    check("terminal cancellation wins over stale child state", recovered.get("status") == "cancelled", str(recovered))
+    check("recovered cancellation remains requested", recovered.get("cancel_requested") is True, str(recovered))
+    check("stale child message is healed", recovered.get("message") == "External asset job cancelled", str(recovered))
+    check("provider cancellation receipt survives recovery", recovered.get("remote_cancellation") == remote_cancellation, str(recovered))
+
 image = os.path.join(bpy.app.tempdir, "smoke_reference.png")
 with open(image, "wb") as handle:
     handle.write(b"\x89PNG\r\n\x1a\n")
@@ -182,6 +251,11 @@ try:
     check("refusal states the cost", "30" in (first.get("cost") or {}).get("cost_note", ""))
     check("refusal names the upload", (first.get("cost") or {}).get("uploads_reference_images") is True)
     check("refusal points at a free path", bool(first.get("free_alternative")))
+    check("refusal supplies an approval status tool", first.get("approval_status_tool") == "get_generation_approval_status")
+    approval_args = first.get("approval_status_arguments") or {}
+    pending_status = generation_handler.get_generation_approval_status(bpy.context, approval_args)
+    check("agent can observe a pending click", pending_status.get("status") == generation_spend.STATUS_PENDING)
+    check("pending click tells the agent to keep polling", pending_status.get("poll_after_seconds") == 2)
 
     # The bypass that made the previous gate ornamental: refuse, then retry.
     check(
@@ -208,6 +282,10 @@ try:
     # The operator wiring is covered by smoke_ui_layout, which registers the
     # add-on; this smoke drives the store the operator writes to.
     generation_spend.set_status(pending[0]["request_id"], generation_spend.STATUS_APPROVED)
+    approved_status = generation_handler.get_generation_approval_status(
+        bpy.context, {"request_id": pending[0]["request_id"]}
+    )
+    check("agent observes approval", approved_status.get("ready_to_start") is True, str(approved_status))
     check(
         "the job runs once the user approves in Blender",
         generation_handler.start_generation_job(bpy.context, dict(JOB)).get("ok") is True,
@@ -222,6 +300,10 @@ try:
     generation_spend.set_status(
         denied["spend_approval"]["request_id"], generation_spend.STATUS_DENIED
     )
+    denied_status = generation_handler.get_generation_approval_status(
+        bpy.context, {"request_id": denied["spend_approval"]["request_id"]}
+    )
+    check("agent observes decline", denied_status.get("declined") is True, str(denied_status))
     after_denial = generation_handler.start_generation_job(bpy.context, dict(JOB))
     check("a declined job stays declined", after_denial.get("ok") is False)
     check("declining is not a retry prompt", not after_denial.get("awaiting_user_approval"))

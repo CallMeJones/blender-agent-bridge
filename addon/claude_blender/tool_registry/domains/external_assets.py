@@ -447,13 +447,15 @@ SPECS = tuple(ToolSpec(**payload) for payload in [{'name': 'list_poly_haven_cate
   'owner': 'external_assets'},
  {'name': 'cancel_external_asset_job',
   'description': 'Cancel an asynchronous external asset download/cache job. Subprocess jobs are terminated; in-process '
-                 'compatibility jobs stop cooperatively.',
+                 'compatibility jobs stop cooperatively. Meshy generation jobs are also cancelled at the provider when '
+                 'their recoverable remote task id and session credential are available.',
   'input_schema': {'type': 'object',
                    'properties': {'job_id': {'type': 'string'}},
                    'required': ['job_id'],
                    'additionalProperties': False},
   'contract': {'description': 'Cancel an asynchronous external asset download/cache job; subprocess jobs are '
-                              'terminated and in-process compatibility jobs stop cooperatively',
+                               'terminated, in-process compatibility jobs stop cooperatively, and supported hosted '
+                               'generation tasks are cancelled at the provider',
                'mutates_scene': False,
                'has_side_effects': True,
                'permissions': ['files:write'],

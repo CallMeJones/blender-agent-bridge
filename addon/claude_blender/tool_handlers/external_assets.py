@@ -138,10 +138,23 @@ def get_external_asset_job_status(context, args):
 
 def cancel_external_asset_job(context, args):
     prefs = preferences.get_preferences(context)
-    return asset_jobs.cancel_external_asset_job(
-        str(args.get("job_id") or ""),
+    preferred_dir = getattr(prefs, "capture_cache_dir", None)
+    job_id = str(args.get("job_id") or "")
+    job = asset_jobs.external_asset_job_status(
+        job_id,
         context=context,
-        preferred_dir=getattr(prefs, "capture_cache_dir", None),
+        preferred_dir=preferred_dir,
+    )
+    remote_cancellation = {}
+    if job.get("available"):
+        from . import generation as generation_handler
+
+        remote_cancellation = generation_handler.cancel_provider_generation_task(context, job)
+    return asset_jobs.cancel_external_asset_job(
+        job_id,
+        context=context,
+        preferred_dir=preferred_dir,
+        remote_cancellation=remote_cancellation,
     )
 
 

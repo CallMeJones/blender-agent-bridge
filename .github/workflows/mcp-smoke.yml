@@ -264,6 +264,7 @@ jobs:
             smoke_semantic_sculpt
             smoke_trusted_script_jobs
             smoke_context_docs
+            smoke_generation_jobs
             smoke_ui_layout
           )
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
@@ -277,6 +278,7 @@ jobs:
               smoke_context_planner
               smoke_external_asset_imports
               smoke_full_tool_inventory
+              smoke_generation_jobs
               smoke_live_helpers
               smoke_project_files
               smoke_presentation_helpers

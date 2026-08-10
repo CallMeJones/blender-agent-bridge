@@ -93,21 +93,26 @@ def _progress_callback(config, update):
             progress = round(min(0.99, max(0.0, float(update.get("progress")))), 4)
         except (TypeError, ValueError):
             progress = 0.0
-    _write_status(
-        config,
-        "running",
-        phase=str(update.get("phase") or "download"),
-        current_url=str(update.get("url") or ""),
-        current_file=str(update.get("path") or ""),
-        partial_path=str(update.get("partial_path") or ""),
-        bytes_downloaded=downloaded,
-        expected_size_bytes=expected,
-        current_file_progress=progress,
-        progress=progress,
-        attempt=int(update.get("attempt") or 0),
-        resumed=bool(update.get("resumed", False)),
-        message=str(update.get("message") or "External asset download/cache in progress"),
-    )
+    status_update = {
+        "phase": str(update.get("phase") or "download"),
+        "current_url": str(update.get("url") or ""),
+        "current_file": str(update.get("path") or ""),
+        "partial_path": str(update.get("partial_path") or ""),
+        "bytes_downloaded": downloaded,
+        "expected_size_bytes": expected,
+        "current_file_progress": progress,
+        "progress": progress,
+        "attempt": int(update.get("attempt") or 0),
+        "resumed": bool(update.get("resumed", False)),
+        "message": str(update.get("message") or "External asset download/cache in progress"),
+    }
+    task_id = str(update.get("task_id") or "").strip()
+    if task_id:
+        status_update["provider_task_id"] = task_id
+    task_kind = str(update.get("task_kind") or "").strip()
+    if task_kind:
+        status_update["provider_task_kind"] = task_kind
+    _write_status(config, "running", **status_update)
 
 
 def _download_poly_haven(config, args):

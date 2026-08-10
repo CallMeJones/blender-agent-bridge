@@ -298,6 +298,67 @@ def main():
         _execute(context, "revert_preview")
         assert bpy.data.objects.get(second_name) is None
         assert bpy.data.materials.get(existing_material.name) is existing_material
+
+        expressive_program = {
+            "bounds": {"min": [-2.2, -1.2, -1.5], "max": [2.2, 1.2, 1.5]},
+            "nodes": [
+                {
+                    "id": "flattened_body",
+                    "type": "capsule",
+                    "point_a": [-1.0, 0.0, -0.7],
+                    "point_b": [-1.0, 0.0, 0.7],
+                    "radius": 0.7,
+                    "cross_section": [0.7, 0.32],
+                    "cross_section_rotation": 0.2,
+                },
+                {
+                    "id": "unrelated_mass",
+                    "type": "sphere",
+                    "radius": 0.45,
+                    "transform": {"location": [1.3, 0.0, 0.0]},
+                },
+                {
+                    "id": "elliptical_sweep",
+                    "type": "sweep",
+                    "points": [[-1.0, 0.0, 0.5], [-0.8, 0.0, 1.0], [-0.4, 0.0, 1.1]],
+                    "radii": [0.2, 0.16, 0.1],
+                    "cross_sections": [[0.2, 0.08], [0.16, 0.06], [0.1, 0.04]],
+                    "cross_section_rotations": [0.0, 0.15, 0.3],
+                    "blend": 0.08,
+                },
+                {
+                    "id": "body_cavity",
+                    "type": "sphere",
+                    "radius": 0.28,
+                    "operation": "subtract",
+                    "target_ids": ["flattened_body"],
+                    "transform": {"location": [-1.0, 0.0, 0.0]},
+                },
+            ],
+        }
+        expressive_samples = _execute(
+            context,
+            "sample_shape_program_sdf",
+            {"program": expressive_program, "points": [[-1.0, 0.0, -0.1], [1.3, 0.0, 0.0]]},
+        )
+        assert expressive_samples["samples"][0]["inside"] is False, expressive_samples
+        assert expressive_samples["samples"][1]["inside"] is True, expressive_samples
+        expressive = _execute(
+            context,
+            "compile_shape_program",
+            {
+                "program": expressive_program,
+                "object_name": "Expressive Shape Program",
+                "resolution": 18,
+                "smooth_iterations": 0,
+            },
+        )
+        expressive_obj = bpy.data.objects[expressive["object"]]
+        expressive_name = expressive_obj.name
+        assert expressive["stats"]["component_count"] >= 2, expressive
+        _assert_closed(expressive_obj)
+        _execute(context, "revert_preview")
+        assert bpy.data.objects.get(expressive_name) is None
     finally:
         try:
             claude_blender.unregister()
@@ -307,3 +368,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    print("smoke_shape_program: ok")

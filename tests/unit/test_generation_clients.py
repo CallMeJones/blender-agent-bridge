@@ -318,6 +318,26 @@ class MeshyClientTests(unittest.TestCase):
         self.assertEqual("https://x/m.glb", status["model_url"])
         self.assertEqual(42, status["credits_consumed"])
 
+    def test_cancel_recovered_multiview_task_uses_delete_endpoint(self):
+        transport = FakeTransport(raw({}))
+        result = gc.MeshyClient(KEY, transport=transport).cancel_task(
+            "mesh-recovered",
+            task_kind="multiview",
+        )
+        self.assertTrue(result["ok"])
+        self.assertEqual("DELETE", transport.calls[0]["method"])
+        self.assertTrue(
+            transport.calls[0]["url"].endswith("/multi-image-to-3d/mesh-recovered")
+        )
+
+    def test_cancel_created_image_task_remembers_endpoint(self):
+        transport = FakeTransport(raw({"result": "mesh-task"}), raw({}))
+        client = gc.MeshyClient(KEY, transport=transport)
+        client.create_image_task("data:image/png;base64,AA==")
+        result = client.cancel_task("mesh-task")
+        self.assertTrue(result["ok"])
+        self.assertTrue(transport.calls[1]["url"].endswith("/image-to-3d/mesh-task"))
+
     def test_meshy_insufficient_credit_is_flagged(self):
         transport = FakeTransport(raw({"message": "no credits"}, status=402))
         with self.assertRaises(gc.GenerationError) as caught:

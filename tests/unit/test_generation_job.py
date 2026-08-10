@@ -187,6 +187,32 @@ class GenerationJobTests(unittest.TestCase):
         self.assertTrue(updates)
         self.assertEqual(1.0, updates[-1]["progress"])
         self.assertIn("upload", [u.get("phase") for u in updates])
+        submitted = next(update for update in updates if update.get("task_id") == "task-img")
+        self.assertEqual("image", submitted["task_kind"])
+        task_updates = [update for update in updates if update.get("task_id") == "task-img"]
+        self.assertTrue(task_updates)
+        self.assertTrue(all(update.get("task_kind") == "image" for update in task_updates))
+
+    def test_multiview_progress_keeps_task_kind_after_submit(self):
+        updates = []
+        with tempfile.TemporaryDirectory() as tmp:
+            client = _StubClient(
+                statuses=[
+                    {"status": "running", "terminal": False, "succeeded": False, "progress": 25},
+                    {
+                        "status": "success",
+                        "terminal": True,
+                        "succeeded": True,
+                        "progress": 100,
+                        "model_url": "https://x/model.glb",
+                    },
+                ]
+            )
+            _run(tmp, _views(tmp, ["front", "left"]), client=client, collect=updates)
+        task_updates = [update for update in updates if update.get("task_id") == "task-mv"]
+
+        self.assertTrue(task_updates)
+        self.assertTrue(all(update.get("task_kind") == "multiview" for update in task_updates))
 
     def test_provider_name_is_preserved_for_meshy_jobs(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -360,6 +386,53 @@ class GenerationJobTests(unittest.TestCase):
         self.assertEqual(1024, flags["texture_resolution"])
         self.assertEqual("local_blockout", manifest["generation"]["intended_use"])
         self.assertEqual(64, manifest["generation"]["triposr_options"]["mc_resolution"])
+        self.assertEqual(
+            "device_aligned_positions",
+            manifest["generation"]["texture_bake_compatibility"],
+        )
+        self.assertEqual(
+            "xatlas_obj_atlas_embedded_glb",
+            manifest["generation"]["texture_bake_export_compatibility"],
+        )
+
+    def test_triposr_rejects_obj_payload_mislabeled_as_glb(self):
+        from claude_blender import generation_job
+
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime_root = os.path.join(tmp, "triposr")
+            os.makedirs(runtime_root)
+            with open(
+                os.path.join(runtime_root, "run.py"),
+                "w",
+                encoding="utf-8",
+                newline="\n",
+            ) as handle:
+                handle.write(
+                    "import argparse, os\n"
+                    "parser = argparse.ArgumentParser()\n"
+                    "parser.add_argument('image')\n"
+                    "parser.add_argument('--output-dir', required=True)\n"
+                    "args, _ = parser.parse_known_args()\n"
+                    "target = os.path.join(args.output_dir, '0')\n"
+                    "os.makedirs(target, exist_ok=True)\n"
+                    "with open(os.path.join(target, 'mesh.glb'), 'wb') as out:\n"
+                    "    out.write(b'v 0 0 0\\n')\n"
+                )
+            manifest = generation_job.run(
+                {"child_status_path": os.path.join(tmp, "s.json")},
+                {
+                    "views": _views(tmp, ["front"]),
+                    "cache_dir": os.path.join(tmp, "cache"),
+                    "provider": "triposr",
+                    "runtime_python": sys.executable,
+                    "runtime_root": runtime_root,
+                    "timeout": 30,
+                },
+                provider="triposr",
+                poll_interval=0,
+            )
+        self.assertFalse(manifest["ok"])
+        self.assertIn("does not contain a GLB payload", manifest["message"])
 
 
 if __name__ == "__main__":

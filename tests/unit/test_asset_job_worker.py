@@ -17,6 +17,49 @@ from claude_blender import asset_job_worker  # noqa: E402
 
 
 class AssetJobWorkerTests(unittest.TestCase):
+    def test_generation_progress_persists_remote_task_identity(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = os.path.join(temp_dir, "child-status.json")
+            asset_job_worker._progress_callback(
+                {"child_status_path": path},
+                {
+                    "progress": 0.3,
+                    "phase": "poll",
+                    "task_id": "mesh-task",
+                    "task_kind": "multiview",
+                },
+            )
+            status = asset_job_worker._read_json(path)
+
+        self.assertEqual("mesh-task", status["provider_task_id"])
+        self.assertEqual("multiview", status["provider_task_kind"])
+
+    def test_generation_progress_does_not_clear_remote_task_identity(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = os.path.join(temp_dir, "child-status.json")
+            config = {"child_status_path": path}
+            asset_job_worker._progress_callback(
+                config,
+                {
+                    "progress": 0.3,
+                    "phase": "poll",
+                    "task_id": "mesh-task",
+                    "task_kind": "multiview",
+                },
+            )
+            asset_job_worker._progress_callback(
+                config,
+                {
+                    "progress": 0.4,
+                    "phase": "poll",
+                    "task_id": "mesh-task",
+                },
+            )
+            status = asset_job_worker._read_json(path)
+
+        self.assertEqual("mesh-task", status["provider_task_id"])
+        self.assertEqual("multiview", status["provider_task_kind"])
+
     def test_status_write_retries_transient_windows_replace_contention(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = os.path.join(temp_dir, "child-status.json")

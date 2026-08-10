@@ -19,8 +19,8 @@ SNAPSHOT_PATH = os.path.join(ROOT, "tests", "snapshots", "tool_registry.json")
 class ToolRegistryTests(unittest.TestCase):
     def test_inventory_is_complete_and_domain_owned(self):
         specs = tool_registry.REGISTRY.specs()
-        self.assertEqual(240, len(specs))
-        self.assertEqual(239, len(tool_registry.definitions()))
+        self.assertEqual(241, len(specs))
+        self.assertEqual(240, len(tool_registry.definitions()))
         self.assertEqual(13, len(tool_registry.DOMAIN_MODULES))
         self.assertEqual({spec.name for spec in specs}, set(bridge_protocol.TOOL_CONTRACTS))
         self.assertEqual(
@@ -184,6 +184,19 @@ class ToolRegistryTests(unittest.TestCase):
                     contract["timeout_recovery"]["status_tool"],
                 )
 
+        node_properties = tool_registry.REGISTRY.get("compile_shape_program").input_schema[
+            "properties"
+        ]["program"]["properties"]["nodes"]["items"]["properties"]
+        for name in (
+            "target_ids",
+            "cross_section",
+            "cross_section_rotation",
+            "cross_sections",
+            "cross_section_rotations",
+        ):
+            with self.subTest(shape_node_property=name):
+                self.assertIn(name, node_properties)
+
     def test_generation_quality_tools_and_triposr_knobs_are_registered(self):
         start_properties = tool_registry.REGISTRY.get("start_generation_job").input_schema["properties"]
         for name in (
@@ -199,8 +212,10 @@ class ToolRegistryTests(unittest.TestCase):
 
         cleanup = tool_registry.REGISTRY.get("cleanup_generated_asset")
         evaluate = tool_registry.REGISTRY.get("evaluate_generated_asset")
+        approval = tool_registry.REGISTRY.get("get_generation_approval_status")
         self.assertIn("generation_quality", cleanup.groups)
         self.assertIn("generation_quality", evaluate.groups)
+        self.assertFalse(approval.contract["mutates_scene"])
         self.assertTrue(cleanup.contract["requires_live_preview"])
         self.assertFalse(evaluate.contract["mutates_scene"])
 

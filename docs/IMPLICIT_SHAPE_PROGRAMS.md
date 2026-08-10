@@ -64,6 +64,10 @@ The first enabled node must use `union`. Later nodes use:
 - `intersect` to crop a form;
 - `blend` to soften the active boolean boundary in program units.
 
+Subtract and intersect nodes may also name earlier union nodes in `target_ids`.
+That confines a cutter to the intended semantic forms; omitting `target_ids`
+retains the original global sequential behavior.
+
 Nodes may use `parent_id`. Parent transforms move and scale semantic children as a unit, which lets a client widen a head while keeping its muzzle and ears attached. Program coordinates are object-local, so later object transforms do not invalidate the stored graph.
 
 ## Primitive Vocabulary
@@ -73,11 +77,11 @@ Nodes may use `parent_id`. Parent transforms move and scale semantic children as
 | `sphere` | `radius` | joints, sockets, round masses |
 | `ellipsoid` | `radii` | heads, bodies, cheeks, paws |
 | `box` | `size`, `rounding` | panels, housings, clipped masses |
-| `capsule` | `point_a`, `point_b`, `radius` | limbs, handles, bones |
+| `capsule` | `point_a`, `point_b`, `radius`, optional `cross_section`, `cross_section_rotation` | limbs, handles, flattened straps |
 | `cylinder` | `radius`, `depth`, `rounding` | shafts, necks, mechanical forms |
 | `torus` | `major_radius`, `minor_radius` | rings, rims, curled forms |
 | `superquadric` | `radii`, `exponents` | boxy-to-pointed organic masses |
-| `sweep` | `points`, `radii` | tails, horns, cables, branches, curved limbs |
+| `sweep` | `points`, `radii`, optional `cross_sections`, `cross_section_rotations` | tails, horns, cables, ribbons, curved limbs |
 
 Every node also supports local `location`, XYZ Euler `rotation` in radians, positive `scale`, `enabled`, and an optional `semantic_role` label.
 
@@ -112,7 +116,7 @@ Uniform marching tetrahedra remains the default because it is predictable while 
 
 `adaptive_base_depth` is the minimum surface depth; depth 5 corresponds to 32 root divisions. `adaptive_max_depth` is the hard ceiling for automatic QEF-error refinement, explicit regions, and bounded topology repair. Lower error thresholds refine more curved or inconsistent cells. Explicit regions refine only potentially surface-containing cells they intersect, not their full volume.
 
-The result reports surface leaves by depth, QEF residuals, automatic/region/topology refinement counts, skipped minimal-edge segments, and per-region surface/target-depth counts. A region with zero surface leaves did not affect the mesh and should be moved or removed. The compiler rejects unpaired, inconsistently oriented, or non-manifold mesh edges instead of returning a cracked result.
+The result reports surface leaves by depth, QEF residuals, automatic/region/topology refinement counts, skipped minimal-edge segments, per-region surface/target-depth counts, and disconnected mesh-component counts. A region with zero surface leaves did not affect the mesh and should be moved or removed. The compiler rejects unpaired, inconsistently oriented, or non-manifold mesh edges instead of returning a cracked result.
 
 ## Recommended Reference Workflow
 
@@ -136,7 +140,8 @@ Compilation is deliberately bounded:
 - resolution 8-96 along the longest bounds axis;
 - adaptive base depth 3-7 and maximum depth 3-9;
 - at most 16 adaptive sphere/box refinement regions;
-- fixed grid-sample, octree-cell, SDF-work, vertex, and face ceilings;
+- a 64-million SDF-work ceiling, with parent transforms evaluated once per sample instead of once per child;
+- fixed grid-sample, octree-cell, vertex, and face ceilings;
 - rejection when the surface reaches a compile boundary;
 - closed uniform marching-tetrahedra or adaptive minimal-edge dual output.
 
@@ -162,6 +167,11 @@ seven-node lamp with a hollowed shade, pinched edges fell from 140 to 2.
 A small residue remains on some programs. Where it occurs the error names it as a pinched
 edge and points at `meshing_mode: uniform`, which handles every case correctly.
 
+All retained cavity-breakthrough diagnostics now compile manifold at maximum depths 7,
+8, and 9. Targeted booleans also avoid accidental cuts through unrelated union forms.
+The final two-edge seven-node lamp case remains an open legacy fixture problem because
+that exact program was not retained for a reproducible algorithmic fix.
+
 ## Current Limits
 
-Adaptive mode reduces empty-volume work and concentrates topology, but it is still a bounded CPU decoder rather than a learned 3D prior. Extremely ambiguous topology may require a higher base depth or uniform mode, and maximum-depth/cell/work limits can refuse oversized requests. The primitive vocabulary expresses continuous mass and path structure, not arbitrary engraved detail, pores, individual hair, or learned hidden-surface inference. Use calibrated visual hull/depth tools for multi-view evidence, semantic sculpt tools for measured local correction, and fur-flow/groom tools after the core surface is stable.
+Adaptive mode reduces empty-volume work and concentrates topology, but it is still a bounded CPU decoder rather than a learned 3D prior. Extremely ambiguous topology may require a higher base depth or uniform mode, and maximum-depth/cell/work limits can refuse oversized requests. Circular and elliptical path sections plus targeted booleans cover continuous masses, straps, garments, and local cavities; they do not express arbitrary engraved detail, pores, individual hair, or learned hidden-surface inference. Use calibrated visual hull/depth tools for multi-view evidence, semantic sculpt tools for measured local correction, and fur-flow/groom tools after the core surface is stable.

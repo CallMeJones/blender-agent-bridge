@@ -1,5 +1,5 @@
 {
-  "catalog_tool_count": 239,
+  "catalog_tool_count": 240,
   "contracts": {
     "adaptive_remesh": {
       "description": "Adaptively refine sculpt topology by subdividing edges that exceed a bounded local target derived from edge length, semantic-region weight, and face curvature. Retains interpolated semantic point attributes, optionally relaxes spacing and projects vertices back to the source surface, and enforces input, per-pass, and result vertex limits. This is a form-preserving refinement pass; it does not decimate or promise production retopology.",
@@ -3286,7 +3286,7 @@
       "supports_headless": true
     },
     "cancel_external_asset_job": {
-      "description": "Cancel an asynchronous external asset download/cache job. Subprocess jobs are terminated; in-process compatibility jobs stop cooperatively.",
+      "description": "Cancel an asynchronous external asset download/cache job. Subprocess jobs are terminated; in-process compatibility jobs stop cooperatively. Meshy generation jobs are also cancelled at the provider when their recoverable remote task id and session credential are available.",
       "has_side_effects": true,
       "input_schema": {
         "additionalProperties": false,
@@ -3965,7 +3965,7 @@
       }
     },
     "compile_shape_program": {
-      "description": "Compile a bounded semantic implicit-shape program into one continuous watertight mesh using uniform marching tetrahedra or adaptive octree dual contouring with localized high-resolution regions. The connected LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, superquadrics, and tapered sweeps with smooth union, subtraction, and intersection. Stores the canonical program on the object for later inspection and revision.",
+      "description": "Compile a bounded semantic implicit-shape program into one continuous watertight mesh using uniform marching tetrahedra or adaptive octree dual contouring with localized high-resolution regions. The connected LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, superquadrics, circular or elliptical tapered paths, targeted booleans, and smooth global union, subtraction, and intersection. Stores the canonical program on the object for later inspection and revision.",
       "duration_hint": "Bounded uniform or adaptive SDF evaluation and watertight mesh extraction.",
       "input_schema": {
         "additionalProperties": false,
@@ -4092,6 +4092,50 @@
                       "minimum": 0.0,
                       "type": "number"
                     },
+                    "cross_section": {
+                      "description": "Optional capsule width/depth pair; omitted keeps a circular radius.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_section_rotation": {
+                      "description": "Capsule cross-section rotation around its centerline in radians.",
+                      "maximum": 1000.0,
+                      "minimum": -1000.0,
+                      "type": "number"
+                    },
+                    "cross_section_rotations": {
+                      "description": "Optional cross-section rotation in radians per sweep point.",
+                      "items": {
+                        "maximum": 1000.0,
+                        "minimum": -1000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_sections": {
+                      "description": "Optional width/depth pair per sweep point for non-circular tapered paths.",
+                      "items": {
+                        "items": {
+                          "maximum": 10000.0,
+                          "minimum": 1e-05,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
                     "depth": {
                       "maximum": 10000.0,
                       "minimum": 1e-05,
@@ -4208,6 +4252,18 @@
                       "maxItems": 3,
                       "minItems": 3,
                       "type": "array"
+                    },
+                    "target_ids": {
+                      "description": "Optional earlier union-node ids affected by this subtract or intersect; omitted means global.",
+                      "items": {
+                        "maxLength": 64,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array",
+                      "uniqueItems": true
                     },
                     "transform": {
                       "additionalProperties": false,
@@ -11241,6 +11297,37 @@
       ],
       "supports_headless": true
     },
+    "get_generation_approval_status": {
+      "description": "Poll one paid hosted-generation approval request after start_generation_job asks the user to decide in Blender. Returns pending, approved, declined, expired, or consumed state plus the next action. Poll the returned request id every two seconds instead of asking the user to report whether they clicked Approve or Decline. Approval never starts a job by itself: after approved, call start_generation_job once with the exact original arguments. TripoSR is local and never creates a spend request.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "supports_headless": true
+    },
     "get_generation_job_status": {
       "description": "Poll an asynchronous generation job for status, progress, provider task id, cached manifest path, and import readiness. When completed, import the cached model with start_external_asset_import_job.",
       "input_schema": {
@@ -15640,6 +15727,50 @@
                       "minimum": 0.0,
                       "type": "number"
                     },
+                    "cross_section": {
+                      "description": "Optional capsule width/depth pair; omitted keeps a circular radius.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_section_rotation": {
+                      "description": "Capsule cross-section rotation around its centerline in radians.",
+                      "maximum": 1000.0,
+                      "minimum": -1000.0,
+                      "type": "number"
+                    },
+                    "cross_section_rotations": {
+                      "description": "Optional cross-section rotation in radians per sweep point.",
+                      "items": {
+                        "maximum": 1000.0,
+                        "minimum": -1000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_sections": {
+                      "description": "Optional width/depth pair per sweep point for non-circular tapered paths.",
+                      "items": {
+                        "items": {
+                          "maximum": 10000.0,
+                          "minimum": 1e-05,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
                     "depth": {
                       "maximum": 10000.0,
                       "minimum": 1e-05,
@@ -15756,6 +15887,18 @@
                       "maxItems": 3,
                       "minItems": 3,
                       "type": "array"
+                    },
+                    "target_ids": {
+                      "description": "Optional earlier union-node ids affected by this subtract or intersect; omitted means global.",
+                      "items": {
+                        "maxLength": 64,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array",
+                      "uniqueItems": true
                     },
                     "transform": {
                       "additionalProperties": false,
@@ -17656,7 +17799,7 @@
       "timeout_seconds": 30
     },
     "start_generation_job": {
-      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. When more than one generation provider is runnable, omitting \"provider\" returns the available choices and requires the user to select one; the bridge does not prefer local, hosted, cheap, or fast on their behalf. A sole local provider may be selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and the user must then click Approve in the Blender sidebar. No argument grants this: call again with the same arguments once they have approved. The finished model is cached like any external asset, so import it with start_external_asset_import_job. TripoSR is a single-image local blockout route: use its knobs to tune extraction, but do not treat it as final multi-view quality.",
+      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. When more than one generation provider is runnable, omitting \"provider\" returns the available choices and requires the user to select one; the bridge does not prefer local, hosted, cheap, or fast on their behalf. A sole local provider may be selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and the user must then click Approve in the Blender sidebar. No argument grants this: poll get_generation_approval_status with the returned request id so the user does not have to report their click, then call again with the exact same arguments only after approval. The finished model is cached like any external asset, so import it with start_external_asset_import_job. TripoSR is a single-image local blockout route: use its knobs to tune extraction, but do not treat it as final multi-view quality.",
       "duration_hint": "Returns quickly after starting the job. Generation itself typically takes one to a few minutes; poll get_generation_job_status.",
       "has_side_effects": true,
       "input_schema": {
@@ -18461,6 +18604,50 @@
                       "minimum": 0.0,
                       "type": "number"
                     },
+                    "cross_section": {
+                      "description": "Optional capsule width/depth pair; omitted keeps a circular radius.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_section_rotation": {
+                      "description": "Capsule cross-section rotation around its centerline in radians.",
+                      "maximum": 1000.0,
+                      "minimum": -1000.0,
+                      "type": "number"
+                    },
+                    "cross_section_rotations": {
+                      "description": "Optional cross-section rotation in radians per sweep point.",
+                      "items": {
+                        "maximum": 1000.0,
+                        "minimum": -1000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_sections": {
+                      "description": "Optional width/depth pair per sweep point for non-circular tapered paths.",
+                      "items": {
+                        "items": {
+                          "maximum": 10000.0,
+                          "minimum": 1e-05,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
                     "depth": {
                       "maximum": 10000.0,
                       "minimum": 1e-05,
@@ -18577,6 +18764,18 @@
                       "maxItems": 3,
                       "minItems": 3,
                       "type": "array"
+                    },
+                    "target_ids": {
+                      "description": "Optional earlier union-node ids affected by this subtract or intersect; omitted means global.",
+                      "items": {
+                        "maxLength": 64,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array",
+                      "uniqueItems": true
                     },
                     "transform": {
                       "additionalProperties": false,
@@ -21547,7 +21746,7 @@
       "name": "assign_material_to_selected"
     },
     {
-      "description": "Compile a bounded semantic implicit-shape program into one continuous watertight mesh using uniform marching tetrahedra or adaptive octree dual contouring with localized high-resolution regions. The connected LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, superquadrics, and tapered sweeps with smooth union, subtraction, and intersection. Stores the canonical program on the object for later inspection and revision.",
+      "description": "Compile a bounded semantic implicit-shape program into one continuous watertight mesh using uniform marching tetrahedra or adaptive octree dual contouring with localized high-resolution regions. The connected LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, superquadrics, circular or elliptical tapered paths, targeted booleans, and smooth global union, subtraction, and intersection. Stores the canonical program on the object for later inspection and revision.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -21673,6 +21872,50 @@
                       "minimum": 0.0,
                       "type": "number"
                     },
+                    "cross_section": {
+                      "description": "Optional capsule width/depth pair; omitted keeps a circular radius.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_section_rotation": {
+                      "description": "Capsule cross-section rotation around its centerline in radians.",
+                      "maximum": 1000.0,
+                      "minimum": -1000.0,
+                      "type": "number"
+                    },
+                    "cross_section_rotations": {
+                      "description": "Optional cross-section rotation in radians per sweep point.",
+                      "items": {
+                        "maximum": 1000.0,
+                        "minimum": -1000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_sections": {
+                      "description": "Optional width/depth pair per sweep point for non-circular tapered paths.",
+                      "items": {
+                        "items": {
+                          "maximum": 10000.0,
+                          "minimum": 1e-05,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
                     "depth": {
                       "maximum": 10000.0,
                       "minimum": 1e-05,
@@ -21789,6 +22032,18 @@
                       "maxItems": 3,
                       "minItems": 3,
                       "type": "array"
+                    },
+                    "target_ids": {
+                      "description": "Optional earlier union-node ids affected by this subtract or intersect; omitted means global.",
+                      "items": {
+                        "maxLength": 64,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array",
+                      "uniqueItems": true
                     },
                     "transform": {
                       "additionalProperties": false,
@@ -22138,6 +22393,50 @@
                       "minimum": 0.0,
                       "type": "number"
                     },
+                    "cross_section": {
+                      "description": "Optional capsule width/depth pair; omitted keeps a circular radius.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_section_rotation": {
+                      "description": "Capsule cross-section rotation around its centerline in radians.",
+                      "maximum": 1000.0,
+                      "minimum": -1000.0,
+                      "type": "number"
+                    },
+                    "cross_section_rotations": {
+                      "description": "Optional cross-section rotation in radians per sweep point.",
+                      "items": {
+                        "maximum": 1000.0,
+                        "minimum": -1000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_sections": {
+                      "description": "Optional width/depth pair per sweep point for non-circular tapered paths.",
+                      "items": {
+                        "items": {
+                          "maximum": 10000.0,
+                          "minimum": 1e-05,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
                     "depth": {
                       "maximum": 10000.0,
                       "minimum": 1e-05,
@@ -22254,6 +22553,18 @@
                       "maxItems": 3,
                       "minItems": 3,
                       "type": "array"
+                    },
+                    "target_ids": {
+                      "description": "Optional earlier union-node ids affected by this subtract or intersect; omitted means global.",
+                      "items": {
+                        "maxLength": 64,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array",
+                      "uniqueItems": true
                     },
                     "transform": {
                       "additionalProperties": false,
@@ -22527,6 +22838,50 @@
                       "minimum": 0.0,
                       "type": "number"
                     },
+                    "cross_section": {
+                      "description": "Optional capsule width/depth pair; omitted keeps a circular radius.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_section_rotation": {
+                      "description": "Capsule cross-section rotation around its centerline in radians.",
+                      "maximum": 1000.0,
+                      "minimum": -1000.0,
+                      "type": "number"
+                    },
+                    "cross_section_rotations": {
+                      "description": "Optional cross-section rotation in radians per sweep point.",
+                      "items": {
+                        "maximum": 1000.0,
+                        "minimum": -1000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_sections": {
+                      "description": "Optional width/depth pair per sweep point for non-circular tapered paths.",
+                      "items": {
+                        "items": {
+                          "maximum": 10000.0,
+                          "minimum": 1e-05,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
                     "depth": {
                       "maximum": 10000.0,
                       "minimum": 1e-05,
@@ -22643,6 +22998,18 @@
                       "maxItems": 3,
                       "minItems": 3,
                       "type": "array"
+                    },
+                    "target_ids": {
+                      "description": "Optional earlier union-node ids affected by this subtract or intersect; omitted means global.",
+                      "items": {
+                        "maxLength": 64,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array",
+                      "uniqueItems": true
                     },
                     "transform": {
                       "additionalProperties": false,
@@ -32440,7 +32807,7 @@
       "name": "get_external_asset_job_status"
     },
     {
-      "description": "Cancel an asynchronous external asset download/cache job. Subprocess jobs are terminated; in-process compatibility jobs stop cooperatively.",
+      "description": "Cancel an asynchronous external asset download/cache job. Subprocess jobs are terminated; in-process compatibility jobs stop cooperatively. Meshy generation jobs are also cancelled at the provider when their recoverable remote task id and session credential are available.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -32969,7 +33336,7 @@
       "name": "plan_image_to_3d_approach"
     },
     {
-      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. When more than one generation provider is runnable, omitting \"provider\" returns the available choices and requires the user to select one; the bridge does not prefer local, hosted, cheap, or fast on their behalf. A sole local provider may be selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and the user must then click Approve in the Blender sidebar. No argument grants this: call again with the same arguments once they have approved. The finished model is cached like any external asset, so import it with start_external_asset_import_job. TripoSR is a single-image local blockout route: use its knobs to tune extraction, but do not treat it as final multi-view quality.",
+      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. When more than one generation provider is runnable, omitting \"provider\" returns the available choices and requires the user to select one; the bridge does not prefer local, hosted, cheap, or fast on their behalf. A sole local provider may be selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and the user must then click Approve in the Blender sidebar. No argument grants this: poll get_generation_approval_status with the returned request id so the user does not have to report their click, then call again with the exact same arguments only after approval. The finished model is cached like any external asset, so import it with start_external_asset_import_job. TripoSR is a single-image local blockout route: use its knobs to tune extraction, but do not treat it as final multi-view quality.",
       "input_schema": {
         "additionalProperties": false,
         "properties": {
@@ -33060,6 +33427,22 @@
         "type": "object"
       },
       "name": "start_generation_job"
+    },
+    {
+      "description": "Poll one paid hosted-generation approval request after start_generation_job asks the user to decide in Blender. Returns pending, approved, declined, expired, or consumed state plus the next action. Poll the returned request id every two seconds instead of asking the user to report whether they clicked Approve or Decline. Approval never starts a job by itself: after approved, call start_generation_job once with the exact original arguments. TripoSR is local and never creates a spend request.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_generation_approval_status"
     },
     {
       "description": "Preview-safe cleanup pass for generated meshes after import. Shades the mesh smooth, can add Weighted Normal, Decimate, and Voxel Remesh modifiers non-destructively, and preserves existing materials unless the caller deliberately changes them later. Use for TripoSR/local blockouts before visual review; it does not make single-view output final-quality.",
@@ -33289,6 +33672,7 @@
       "set_generation_policy",
       "plan_image_to_3d_approach",
       "start_generation_job",
+      "get_generation_approval_status",
       "cleanup_generated_asset",
       "evaluate_generated_asset",
       "get_generation_job_status"
@@ -33458,7 +33842,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "e3469ca19e2dacd30bd4d336aed062409384f6314fac153f164aa21fbe97b7d0",
+  "registry_digest": "8dd5d30478a3c30e7053374cea0035c082e2f5bf2adaff67ac29f26ef199b8e7",
   "schema_version": 1,
   "specs": [
     {
@@ -38893,7 +39277,7 @@
         },
         "timeout_seconds": 300
       },
-      "description": "Compile a bounded semantic implicit-shape program into one continuous watertight mesh using uniform marching tetrahedra or adaptive octree dual contouring with localized high-resolution regions. The connected LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, superquadrics, and tapered sweeps with smooth union, subtraction, and intersection. Stores the canonical program on the object for later inspection and revision.",
+      "description": "Compile a bounded semantic implicit-shape program into one continuous watertight mesh using uniform marching tetrahedra or adaptive octree dual contouring with localized high-resolution regions. The connected LLM can compose hierarchical spheres, ellipsoids, rounded boxes, capsules, cylinders, tori, superquadrics, circular or elliptical tapered paths, targeted booleans, and smooth global union, subtraction, and intersection. Stores the canonical program on the object for later inspection and revision.",
       "exposure": "catalog",
       "groups": [
         "advanced_create",
@@ -39028,6 +39412,50 @@
                       "minimum": 0.0,
                       "type": "number"
                     },
+                    "cross_section": {
+                      "description": "Optional capsule width/depth pair; omitted keeps a circular radius.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_section_rotation": {
+                      "description": "Capsule cross-section rotation around its centerline in radians.",
+                      "maximum": 1000.0,
+                      "minimum": -1000.0,
+                      "type": "number"
+                    },
+                    "cross_section_rotations": {
+                      "description": "Optional cross-section rotation in radians per sweep point.",
+                      "items": {
+                        "maximum": 1000.0,
+                        "minimum": -1000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_sections": {
+                      "description": "Optional width/depth pair per sweep point for non-circular tapered paths.",
+                      "items": {
+                        "items": {
+                          "maximum": 10000.0,
+                          "minimum": 1e-05,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
                     "depth": {
                       "maximum": 10000.0,
                       "minimum": 1e-05,
@@ -39144,6 +39572,18 @@
                       "maxItems": 3,
                       "minItems": 3,
                       "type": "array"
+                    },
+                    "target_ids": {
+                      "description": "Optional earlier union-node ids affected by this subtract or intersect; omitted means global.",
+                      "items": {
+                        "maxLength": 64,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array",
+                      "uniqueItems": true
                     },
                     "transform": {
                       "additionalProperties": false,
@@ -39621,6 +40061,50 @@
                       "minimum": 0.0,
                       "type": "number"
                     },
+                    "cross_section": {
+                      "description": "Optional capsule width/depth pair; omitted keeps a circular radius.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_section_rotation": {
+                      "description": "Capsule cross-section rotation around its centerline in radians.",
+                      "maximum": 1000.0,
+                      "minimum": -1000.0,
+                      "type": "number"
+                    },
+                    "cross_section_rotations": {
+                      "description": "Optional cross-section rotation in radians per sweep point.",
+                      "items": {
+                        "maximum": 1000.0,
+                        "minimum": -1000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_sections": {
+                      "description": "Optional width/depth pair per sweep point for non-circular tapered paths.",
+                      "items": {
+                        "items": {
+                          "maximum": 10000.0,
+                          "minimum": 1e-05,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
                     "depth": {
                       "maximum": 10000.0,
                       "minimum": 1e-05,
@@ -39737,6 +40221,18 @@
                       "maxItems": 3,
                       "minItems": 3,
                       "type": "array"
+                    },
+                    "target_ids": {
+                      "description": "Optional earlier union-node ids affected by this subtract or intersect; omitted means global.",
+                      "items": {
+                        "maxLength": 64,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array",
+                      "uniqueItems": true
                     },
                     "transform": {
                       "additionalProperties": false,
@@ -40066,6 +40562,50 @@
                       "minimum": 0.0,
                       "type": "number"
                     },
+                    "cross_section": {
+                      "description": "Optional capsule width/depth pair; omitted keeps a circular radius.",
+                      "items": {
+                        "maximum": 10000.0,
+                        "minimum": 1e-05,
+                        "type": "number"
+                      },
+                      "maxItems": 2,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_section_rotation": {
+                      "description": "Capsule cross-section rotation around its centerline in radians.",
+                      "maximum": 1000.0,
+                      "minimum": -1000.0,
+                      "type": "number"
+                    },
+                    "cross_section_rotations": {
+                      "description": "Optional cross-section rotation in radians per sweep point.",
+                      "items": {
+                        "maximum": 1000.0,
+                        "minimum": -1000.0,
+                        "type": "number"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "cross_sections": {
+                      "description": "Optional width/depth pair per sweep point for non-circular tapered paths.",
+                      "items": {
+                        "items": {
+                          "maximum": 10000.0,
+                          "minimum": 1e-05,
+                          "type": "number"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
                     "depth": {
                       "maximum": 10000.0,
                       "minimum": 1e-05,
@@ -40182,6 +40722,18 @@
                       "maxItems": 3,
                       "minItems": 3,
                       "type": "array"
+                    },
+                    "target_ids": {
+                      "description": "Optional earlier union-node ids affected by this subtract or intersect; omitted means global.",
+                      "items": {
+                        "maxLength": 64,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 64,
+                      "minItems": 1,
+                      "type": "array",
+                      "uniqueItems": true
                     },
                     "transform": {
                       "additionalProperties": false,
@@ -56430,7 +56982,7 @@
     },
     {
       "contract": {
-        "description": "Cancel an asynchronous external asset download/cache job; subprocess jobs are terminated and in-process compatibility jobs stop cooperatively",
+        "description": "Cancel an asynchronous external asset download/cache job; subprocess jobs are terminated, in-process compatibility jobs stop cooperatively, and supported hosted generation tasks are cancelled at the provider",
         "has_side_effects": true,
         "input_schema": {
           "additionalProperties": false,
@@ -56450,7 +57002,7 @@
         ],
         "supports_headless": true
       },
-      "description": "Cancel an asynchronous external asset download/cache job. Subprocess jobs are terminated; in-process compatibility jobs stop cooperatively.",
+      "description": "Cancel an asynchronous external asset download/cache job. Subprocess jobs are terminated; in-process compatibility jobs stop cooperatively. Meshy generation jobs are also cancelled at the provider when their recoverable remote task id and session credential are available.",
       "exposure": "compact_direct",
       "groups": [
         "external_assets"
@@ -58157,7 +58709,7 @@
         },
         "timeout_seconds": 30
       },
-      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. When more than one generation provider is runnable, omitting \"provider\" returns the available choices and requires the user to select one; the bridge does not prefer local, hosted, cheap, or fast on their behalf. A sole local provider may be selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and the user must then click Approve in the Blender sidebar. No argument grants this: call again with the same arguments once they have approved. The finished model is cached like any external asset, so import it with start_external_asset_import_job. TripoSR is a single-image local blockout route: use its knobs to tune extraction, but do not treat it as final multi-view quality.",
+      "description": "Start an asynchronous image-to-3D generation job from one or more calibrated reference images, then poll get_generation_job_status until terminal. Generation is not the default modelling path; prefer authored scripts and bounded helpers unless the user asks for generation. When more than one generation provider is runnable, omitting \"provider\" returns the available choices and requires the user to select one; the bridge does not prefer local, hosted, cheap, or fast on their behalf. A sole local provider may be selected automatically. A hosted provider such as Tripo or Meshy spends the user's credits and uploads their reference images to a third party, so it is never chosen automatically: name it in \"provider\" only when the user asked for it. Call get_generation_provider_diagnostics when provider readiness is unknown. Naming a paid provider is not enough to start it: the first call returns requires_confirmation with the cost, which must be told to the user, and the user must then click Approve in the Blender sidebar. No argument grants this: poll get_generation_approval_status with the returned request id so the user does not have to report their click, then call again with the exact same arguments only after approval. The finished model is cached like any external asset, so import it with start_external_asset_import_job. TripoSR is a single-image local blockout route: use its knobs to tune extraction, but do not treat it as final multi-view quality.",
       "exposure": "catalog",
       "groups": [
         "external_assets"
@@ -58254,6 +58806,60 @@
       },
       "name": "start_generation_job",
       "order": 1910,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "generation"
+    },
+    {
+      "contract": {
+        "description": "Poll a Blender UI decision for one paid generation request",
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "request_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "request_id"
+          ],
+          "type": "object"
+        },
+        "mutates_scene": false,
+        "supports_headless": true
+      },
+      "description": "Poll one paid hosted-generation approval request after start_generation_job asks the user to decide in Blender. Returns pending, approved, declined, expired, or consumed state plus the next action. Poll the returned request id every two seconds instead of asking the user to report whether they clicked Approve or Decline. Approval never starts a job by itself: after approved, call start_generation_job once with the exact original arguments. TripoSR is local and never creates a spend request.",
+      "exposure": "catalog",
+      "groups": [
+        "external_assets"
+      ],
+      "handler_key": "get_generation_approval_status",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_generation_approval_status",
+      "order": 1912,
       "output_schema": {
         "additionalProperties": true,
         "properties": {
@@ -58596,5 +59202,5 @@
       "owner": "generation"
     }
   ],
-  "tool_count": 240
+  "tool_count": 241
 }

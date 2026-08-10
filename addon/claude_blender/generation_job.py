@@ -143,6 +143,22 @@ def _find_generated_mesh(output_dir):
     return candidates[0] if candidates else ""
 
 
+def _generated_mesh_payload_error(path):
+    if os.path.splitext(path)[1].lower() != ".glb":
+        return ""
+    try:
+        with open(path, "rb") as handle:
+            magic = handle.read(4)
+    except OSError as error:
+        return "Could not read generated GLB: %s" % error
+    if magic != b"glTF":
+        return (
+            "Generated file is named .glb but does not contain a GLB payload; "
+            "the provider exporter likely wrote another format"
+        )
+    return ""
+
+
 def _run_triposr(config, args, *, progress_callback=None):
     def report(fraction, message, **extra):
         if progress_callback:
@@ -192,15 +208,6 @@ def _run_triposr(config, args, *, progress_callback=None):
     # TripoSR writes each input to output_dir/<index>/mesh.*, but the script
     # does not create that indexed folder before export.
     os.makedirs(os.path.join(output_dir, "0"), exist_ok=True)
-    command = [
-        python_executable,
-        run_py,
-        image_path,
-        "--output-dir",
-        output_dir,
-        "--model-save-format",
-        "glb",
-    ]
     triposr_options = {
         "mc_resolution": _bounded_int(args.get("mc_resolution"), 256, minimum=16, maximum=512),
         "no_remove_bg": bool(args.get("no_remove_bg", False)),
@@ -209,6 +216,20 @@ def _run_triposr(config, args, *, progress_callback=None):
         "bake_texture": bool(args.get("bake_texture", args.get("texture", False))),
         "texture_resolution": _bounded_int(args.get("texture_resolution"), 2048, minimum=256, maximum=8192),
     }
+    compatibility_runner = os.path.join(os.path.dirname(__file__), "triposr_compat_runner.py")
+    command = [python_executable]
+    if triposr_options["bake_texture"]:
+        command.append(compatibility_runner)
+    command.extend(
+        [
+            run_py,
+            image_path,
+            "--output-dir",
+            output_dir,
+            "--model-save-format",
+            "glb",
+        ]
+    )
     if triposr_options["no_remove_bg"]:
         command.append("--no-remove-bg")
     else:
@@ -285,6 +306,15 @@ def _run_triposr(config, args, *, progress_callback=None):
             stdout_log=stdout_path,
             stderr_log=stderr_path,
         )
+    payload_error = _generated_mesh_payload_error(mesh_path)
+    if payload_error:
+        return _failure(
+            cache_dir,
+            payload_error,
+            provider="triposr",
+            stdout_log=stdout_path,
+            stderr_log=stderr_path,
+        )
     destination = os.path.join(cache_dir, "generated%s" % os.path.splitext(mesh_path)[1].lower())
     if os.path.abspath(mesh_path) != os.path.abspath(destination):
         shutil.copy2(mesh_path, destination)
@@ -319,6 +349,14 @@ def _run_triposr(config, args, *, progress_callback=None):
                 "occluded side/back structure and should not be treated as final asset quality."
             ),
             "triposr_options": triposr_options,
+            "texture_bake_compatibility": (
+                "device_aligned_positions" if triposr_options["bake_texture"] else "not_requested"
+            ),
+            "texture_bake_export_compatibility": (
+                "xatlas_obj_atlas_embedded_glb"
+                if triposr_options["bake_texture"]
+                else "not_requested"
+            ),
         },
         "bytes": size,
         "stdout_log": stdout_path,
@@ -458,7 +496,14 @@ def run(
             insufficient_credit=bool(getattr(error, "insufficient_credit", False)),
         )
 
-    report(0.3, "Task %s submitted" % task_id, phase="poll", task_id=task_id)
+    task_kind = "multiview" if len(tokens) > 1 else "image"
+    report(
+        0.3,
+        "Task %s submitted" % task_id,
+        phase="poll",
+        task_id=task_id,
+        task_kind=task_kind,
+    )
 
     deadline = time.time() + MAX_POLL_SECONDS
     status = {}
@@ -469,7 +514,13 @@ def run(
         except generation_clients.GenerationError as error:
             return _failure(cache_dir, "Polling failed: %s" % error, provider=provider, task_id=task_id)
         remote = max(0, min(100, int(status.get("progress") or 0)))
-        report(0.3 + 0.55 * (remote / 100.0), "Generating (%d%%)" % remote, phase="poll", task_id=task_id)
+        report(
+            0.3 + 0.55 * (remote / 100.0),
+            "Generating (%d%%)" % remote,
+            phase="poll",
+            task_id=task_id,
+            task_kind=task_kind,
+        )
         if status.get("terminal"):
             break
     else:
@@ -499,7 +550,13 @@ def run(
             task_id=task_id,
         )
 
-    report(0.9, "Downloading generated model", phase="download", task_id=task_id)
+    report(
+        0.9,
+        "Downloading generated model",
+        phase="download",
+        task_id=task_id,
+        task_kind=task_kind,
+    )
     suffix = os.path.splitext(model_url.split("?", 1)[0])[1].lower() or ".glb"
     destination = os.path.join(cache_dir, "generated%s" % suffix)
     try:
@@ -526,5 +583,11 @@ def run(
         "bytes": size,
         "message": "Generated model cached from %d view(s)" % len(views),
     }
-    report(1.0, manifest["message"], phase="completed", task_id=task_id)
+    report(
+        1.0,
+        manifest["message"],
+        phase="completed",
+        task_id=task_id,
+        task_kind=task_kind,
+    )
     return _write_manifest(cache_dir, manifest)

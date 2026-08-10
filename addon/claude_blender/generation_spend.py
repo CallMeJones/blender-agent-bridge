@@ -50,6 +50,7 @@ def job_fingerprint(provider, args):
         "views": {str(name): str(path) for name, path in sorted(views.items())},
         "model": str((args or {}).get("model") or ""),
         "face_limit": int((args or {}).get("face_limit") or 0),
+        "texture": bool((args or {}).get("texture")) if "texture" in (args or {}) else None,
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
@@ -57,7 +58,7 @@ def job_fingerprint(provider, args):
 
 def _expire_locked(now):
     for record in _REQUESTS.values():
-        if record["status"] == STATUS_PENDING and now > record["expires_at"]:
+        if record["status"] in (STATUS_PENDING, STATUS_APPROVED) and now > record["expires_at"]:
             record["status"] = STATUS_EXPIRED
 
 
@@ -103,6 +104,16 @@ def approval_state(fingerprint):
                 if record["status"] == status:
                     return dict(record)
         return dict(matches[-1])
+
+
+def request_state(request_id):
+    """Return one exact UI request so a connected client can poll the decision."""
+
+    now = time.time()
+    with _LOCK:
+        _expire_locked(now)
+        record = _REQUESTS.get(str(request_id or ""))
+        return dict(record) if record is not None else None
 
 
 def consume_approval(fingerprint):
