@@ -18,6 +18,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
 bpy.ops.preferences.addon_enable(module="bl_ext.user_default.claude_blender")
+from bl_ext.user_default.claude_blender import shape_program as sp  # noqa: E402
 from bl_ext.user_default.claude_blender import shape_program_adaptive as spa  # noqa: E402
 
 failures = []
@@ -59,6 +60,30 @@ UNION_ONLY = program(
      "transform": {"location": [0.0, -0.18, 0.72]}}
 )
 
+SWEEP_CAVITY = {
+    "schema_version": 1,
+    "name": "F14 sweep cavity",
+    "bounds": {"min": [-6.9, -6.4, -6.5], "max": [8.3, 6.4, 6.3]},
+    "nodes": [
+        {
+            "id": "shade",
+            "type": "sweep",
+            "points": [[0.0, 0.0, 0.0], [0.35, 0.0, 0.15],
+                       [0.75, 0.0, 0.10], [1.25, 0.0, -0.20]],
+            "radii": [0.34, 0.48, 0.70, 0.95],
+            "operation": "union",
+        },
+        {
+            "id": "cavity",
+            "type": "sweep",
+            "points": [[0.08, 0.06, 0.0], [0.42, 0.06, 0.14],
+                       [0.82, 0.06, 0.07], [1.20, 0.06, -0.22]],
+            "radii": [0.16, 0.32, 0.62, 0.58],
+            "operation": "subtract",
+        },
+    ],
+}
+
 
 def compile_program(label, spec, base_depth, max_depth):
     try:
@@ -70,7 +95,7 @@ def compile_program(label, spec, base_depth, max_depth):
     faces = result.get("faces") or []
     counts, balance = spa._mesh_edge_usage(faces)
     bad = [edge for edge, count in counts.items() if count != 2 or balance[edge] != 0]
-    return {"faces": faces, "bad": bad}, ""
+    return {"faces": faces, "bad": bad, "stats": result.get("stats") or {}}, ""
 
 
 print("== a subtract cavity breaking through the surface ==")
@@ -91,6 +116,32 @@ if deep:
     check("deeper refinement stays manifold", not deep["bad"], str(deep["bad"][:3]))
 if shallow and deep:
     check("deeper refinement adds detail", len(deep["faces"]) > len(shallow["faces"]))
+
+print("== multi-point sweep cavity across cell boundaries ==")
+for depth in (7, 8, 9):
+    outcome, error = compile_program("sweep cavity", SWEEP_CAVITY, 4, depth)
+    check("sweep cavity compiles at max_depth %d" % depth, outcome is not None, error[:70])
+    if outcome:
+        check("  sweep cavity is manifold at max_depth %d" % depth,
+              not outcome["bad"], str(outcome["bad"][:3]))
+        check("  sweep cavity stays connected at max_depth %d" % depth,
+              outcome["stats"].get("component_count") == 1,
+              str(outcome["stats"].get("component_count")))
+        if depth == 7:
+            check("  depth 7 exercises cross-cell fan splitting",
+                  outcome["stats"].get("topology_split_vertex_count", 0) > 0,
+                  str(outcome["stats"].get("topology_split_vertex_count")))
+
+uniform_cavity = sp.mesh_shape_program(SWEEP_CAVITY, resolution=64, smooth_iterations=0)
+uniform_counts, uniform_balance = spa._mesh_edge_usage(uniform_cavity["faces"])
+uniform_bad = [
+    edge for edge, count in uniform_counts.items()
+    if count != 2 or uniform_balance[edge] != 0
+]
+check("uniform sweep cavity is manifold", not uniform_bad, str(uniform_bad[:3]))
+check("uniform sweep cavity is also connected",
+      uniform_cavity["stats"].get("component_count") == 1,
+      str(uniform_cavity["stats"].get("component_count")))
 
 print("== unchanged behaviour ==")
 enclosed_shallow, _ = compile_program("enclosed", ENCLOSED, 4, 7)

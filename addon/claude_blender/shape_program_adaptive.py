@@ -862,6 +862,81 @@ def _mesh_edge_usage(faces):
     return counts, direction_balance
 
 
+def _split_disconnected_vertex_fans(vertices, faces):
+    """Give each disconnected face fan around a vertex its own vertex id.
+
+    Cell-local patch vertices cannot catch every adaptive case. Two patches can
+    be locally connected in neighboring cells yet form separate face fans once
+    the dual mesh is assembled. If they retain one vertex id, their shared
+    dual edge is pinched even though the surface coordinates are valid.
+
+    Faces belong to one fan when they meet through an edge used by exactly two
+    faces. Edges with three or more users are the pinch boundaries, so excluding
+    them separates the sheets without deleting faces or moving geometry.
+    """
+
+    edge_faces = defaultdict(list)
+    vertex_faces = defaultdict(list)
+    for face_index, face in enumerate(faces):
+        for vertex_id in face:
+            vertex_faces[vertex_id].append(face_index)
+        for index, first in enumerate(face):
+            second = face[(index + 1) % len(face)]
+            edge_faces[tuple(sorted((first, second)))].append(face_index)
+
+    result_vertices = list(vertices)
+    result_faces = [list(face) for face in faces]
+    split_count = 0
+    for vertex_id in sorted(vertex_faces):
+        incident = vertex_faces[vertex_id]
+        if len(incident) < 2:
+            continue
+        adjacency = {face_index: set() for face_index in incident}
+        for face_index in incident:
+            face = faces[face_index]
+            position = face.index(vertex_id)
+            neighbors = (face[position - 1], face[(position + 1) % len(face)])
+            for neighbor in neighbors:
+                users = edge_faces[tuple(sorted((vertex_id, neighbor)))]
+                if len(users) != 2:
+                    continue
+                first, second = users
+                adjacency[first].add(second)
+                adjacency[second].add(first)
+
+        components = []
+        unseen = set(incident)
+        while unseen:
+            pending = [min(unseen)]
+            unseen.remove(pending[0])
+            component = []
+            while pending:
+                face_index = pending.pop()
+                component.append(face_index)
+                for neighbor in sorted(adjacency[face_index], reverse=True):
+                    if neighbor in unseen:
+                        unseen.remove(neighbor)
+                        pending.append(neighbor)
+            components.append(sorted(component))
+
+        for component in sorted(components, key=lambda item: item[0])[1:]:
+            if len(result_vertices) >= shape_program.MAX_OUTPUT_VERTICES:
+                raise shape_program.ShapeProgramError(
+                    "Adaptive mesh exceeds the "
+                    f"{shape_program.MAX_OUTPUT_VERTICES} vertex limit"
+                )
+            replacement = len(result_vertices)
+            result_vertices.append(vertices[vertex_id])
+            split_count += 1
+            for face_index in component:
+                result_faces[face_index] = [
+                    replacement if item == vertex_id else item
+                    for item in result_faces[face_index]
+                ]
+
+    return result_vertices, [tuple(face) for face in result_faces], split_count
+
+
 def _mesh_edge_status(faces):
     counts, direction_balance = _mesh_edge_usage(faces)
     invalid = [
@@ -985,6 +1060,7 @@ def mesh_shape_program_adaptive(
     _check_boundary(builder)
     root = builder.build()
     topology_repair_passes = 0
+    topology_split_vertices = 0
     while True:
         leaves = _leaves(root)
         surface_leaves = [leaf for leaf in leaves if leaf.vertex is not None]
@@ -1026,8 +1102,6 @@ def mesh_shape_program_adaptive(
         _edge_use, invalid_edges = _mesh_edge_status(faces)
         if not invalid_edges and not skipped_segments:
             break
-        # Split vertices are appended past the end of surface_leaves and have
-        # no cell of their own, so they cannot be refined; skip them.
         repair_leaves = {
             vertex_owner[vertex_id]
             for edge in invalid_edges
@@ -1039,6 +1113,14 @@ def mesh_shape_program_adaptive(
             leaf for leaf in repair_candidates if leaf.depth < max_depth
         )
         if not repair_leaves or topology_repair_passes >= max_depth + 1:
+            if invalid_edges:
+                vertices, faces, split_count = _split_disconnected_vertex_fans(
+                    vertices, faces
+                )
+                topology_split_vertices = split_count
+                _edge_use, invalid_edges = _mesh_edge_status(faces)
+            if not invalid_edges and not skipped_segments:
+                break
             if invalid_edges:
                 _validate_closed(faces)
             raise shape_program.ShapeProgramError(
@@ -1104,6 +1186,7 @@ def mesh_shape_program_adaptive(
             "region_refined_cell_count": builder.region_refined_cells,
             "topology_refined_cell_count": builder.topology_refined_cells,
             "topology_repair_passes": topology_repair_passes,
+            "topology_split_vertex_count": topology_split_vertices,
             "sample_count": builder.sampler.sdf_evaluation_count,
             "lattice_sample_count": len(builder.sampler.lattice_cache),
             "lattice_cache_hits": builder.sampler.lattice_cache_hits,

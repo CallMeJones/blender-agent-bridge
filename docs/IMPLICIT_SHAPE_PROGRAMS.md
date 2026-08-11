@@ -157,20 +157,23 @@ manifold, and the compiler refuses such a mesh.
 The compiler now groups each cell's sign-changing edges into connected surface patches and
 emits one vertex per patch, so touching sheets stay separate. Faces built from a minimal
 edge take the vertex belonging to the patch that edge touches. Ambiguous saddle faces are
-resolved by sampling the face centre.
+resolved by sampling the face centre. The normal local-refinement repair runs first. If a
+maximum-depth mesh still has disconnected face fans sharing a dual vertex, the compiler
+duplicates only that vertex per fan, preserving every face and coordinate before running
+the same manifold validator again.
 
 Measured on a sphere subtracted through the wall of an ellipsoid, previously 4 pinched
 edges at max_depth 7, 30 at 8 and 84 at 9 -- refinement made it worse, and a program that
 compiled at one depth could fail at a deeper one. All three now compile cleanly. On a
-seven-node lamp with a hollowed shade, pinched edges fell from 140 to 2.
-
-A small residue remains on some programs. Where it occurs the error names it as a pinched
-edge and points at `meshing_mode: uniform`, which handles every case correctly.
+seven-node lamp with a hollowed shade, cell-local patch vertices reduced the historical
+failure from 140 pinched edges to a two-edge cross-cell residue.
 
 All retained cavity-breakthrough diagnostics now compile manifold at maximum depths 7,
-8, and 9. Targeted booleans also avoid accidental cuts through unrelated union forms.
-The final two-edge seven-node lamp case remains an open legacy fixture problem because
-that exact program was not retained for a reproducible algorithmic fix.
+8, and 9. The original lamp coordinates were not retained, so a deterministic connected
+multi-point sweep/subtract fixture pins the same cross-cell failure instead: it exercises
+the final fan split at depth 7, remains manifold and connected through depths 8 and 9, and
+matches uniform mode's component structure. Targeted booleans also avoid accidental cuts
+through unrelated union forms.
 
 ## Current Limits
 

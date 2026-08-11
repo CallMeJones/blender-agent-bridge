@@ -153,5 +153,53 @@ class DeterminismTests(unittest.TestCase):
         self.assertEqual([], spa.cell_surface_components(values, 10.0))
 
 
+class VertexFanSplitTests(unittest.TestCase):
+    def test_pinched_edge_is_split_into_two_manifold_sheets(self):
+        # Two tetrahedron surfaces share edge 0-1. Every face and coordinate is
+        # valid, but the shared ids make four faces meet on one edge.
+        vertices = [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (0.0, 1.0, 0.0),
+            (0.0, 0.0, 1.0),
+            (0.0, -1.0, 0.0),
+            (0.0, 0.0, -1.0),
+        ]
+        faces = [
+            (0, 2, 1), (0, 1, 3), (1, 2, 3), (2, 0, 3),
+            (0, 1, 4), (0, 5, 1), (1, 5, 4), (4, 5, 0),
+        ]
+        counts, _balance = spa._mesh_edge_usage(faces)
+        self.assertEqual(4, counts[(0, 1)])
+
+        split_vertices, split_faces, split_count = (
+            spa._split_disconnected_vertex_fans(vertices, faces)
+        )
+
+        self.assertEqual(2, split_count)
+        self.assertEqual(len(vertices) + 2, len(split_vertices))
+        self.assertEqual(len(faces), len(split_faces))
+        counts, balance = spa._mesh_edge_usage(split_faces)
+        self.assertTrue(all(count == 2 for count in counts.values()))
+        self.assertTrue(all(value == 0 for value in balance.values()))
+
+    def test_manifold_fan_is_unchanged(self):
+        vertices = [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (0.0, 1.0, 0.0),
+            (0.0, 0.0, 1.0),
+        ]
+        faces = [(0, 2, 1), (0, 1, 3), (1, 2, 3), (2, 0, 3)]
+
+        split_vertices, split_faces, split_count = (
+            spa._split_disconnected_vertex_fans(vertices, faces)
+        )
+
+        self.assertEqual(0, split_count)
+        self.assertEqual(vertices, split_vertices)
+        self.assertEqual(faces, split_faces)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -9,6 +9,7 @@ Start with the top-level `README.md`, then use these deeper notes for developmen
 - [CONNECTION_DIAGNOSTICS.md](CONNECTION_DIAGNOSTICS.md) - deterministic read-only MCP, socket, bridge, version, manifest, schema, and gateway health checks.
 - [RELEASE.md](RELEASE.md) - release build, GitHub Actions, GitHub Pages, and detailed verification commands.
 - [TESTING_GUIDE.md](TESTING_GUIDE.md) - comprehensive automated testing runbook for feature, tool, bridge, MCP, visual, safety, and release coverage.
+- [ROADMAP_NEXT.md](ROADMAP_NEXT.md) - released baseline, immediate priorities, remaining validation, and deliberately deferred work.
 - [clients/README.md](clients/README.md) - verified bundled and `uvx` setup guides for Codex, Claude, Cursor, VS Code/Cline/Roo, ChatGPT, Gemini CLI, OpenCode, and Ollama hosts.
 - [SHOWCASE.md](SHOWCASE.md) - curated community showcase and submission requirements.
 - [ADDING_A_TOOL.md](ADDING_A_TOOL.md) - canonical registry, handler, safety, snapshot, and test workflow for contributors.

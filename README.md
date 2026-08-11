@@ -23,6 +23,7 @@ Blender Agent Bridge is a Blender extension plus a localhost MCP bridge. It lets
   <a href="https://platform.tripo3d.ai/"><img alt="Tripo3D generation" src="https://img.shields.io/badge/Image--to--3D-Tripo-2563EB"></a>
   <a href="https://www.meshy.ai/"><img alt="Meshy generation" src="https://img.shields.io/badge/Image--to--3D-Meshy-7C3AED"></a>
   <a href="https://github.com/VAST-AI-Research/TripoSR"><img alt="Local TripoSR generation" src="https://img.shields.io/badge/Local%20Image--to--3D-TripoSR-374151"></a>
+  <a href="#configure-a-self-hosted-studio-endpoint"><img alt="Self-hosted studio generation" src="https://img.shields.io/badge/Self--hosted-Studio%20endpoint-455A64"></a>
 </p>
 
 ## 1. Install the Blender Extension
@@ -59,6 +60,10 @@ Updates use the same repository: sync it in `Get Extensions`, install the offere
 6. Enable `Blender Agent Bridge`, close Preferences, open the 3D View sidebar with `N`, select `Agent Bridge`, and press `Start`.
 
 The extension ZIP already includes the MCP server, so the recommended bundled mode needs no Python package, `pip`, `uv`, or `uvx` installation. See [Install from GitHub](docs/INSTALL_FROM_GITHUB.md) for checksum verification, command-line installation, updates, and troubleshooting.
+
+### Current release evidence
+
+The current public release passed the [tagged release gate](https://github.com/CallMeJones/blender-agent-bridge/actions/workflows/mcp-smoke.yml): conventional unit tests, the complete Blender smoke suite, and clean installed-extension live smoke on Blender 4.2.0, 4.5.0, and 5.1.2. The gate promotes and verifies one tested extension ZIP, MCPB, wheel, source distribution, GitHub Release, PyPI release, and Pages repository set. A fresh isolated Blender 5.1 profile also installed and enabled the exact version advertised by the public extension repository.
 
 ## 2. Connect Claude, Codex, or Cursor
 
@@ -138,7 +143,7 @@ AI agents are getting good at using tools, but Blender needs guardrails. This br
 
 ## Assets and Image-to-3D Providers
 
-Every provider is optional. The bridge still supports authored scripts, bounded modeling helpers, scene inspection, rendering, and project workflows when third-party APIs are disabled or no provider is configured.
+Every provider is optional. Turning off **Allow Third-Party Uploads** disables hosted generation without disabling the bridge. Authored scripts, bounded modeling helpers, scene inspection, previews, rendering, project workflows, Poly Haven, local TripoSR, and a configured studio endpoint continue to work independently.
 
 | Provider | What the bridge supports | Setup | Network, cost, and quality |
 | --- | --- | --- | --- |
@@ -147,8 +152,11 @@ Every provider is optional. The bridge still supports authored scripts, bounded 
 | [Tripo](https://platform.tripo3d.ai/) (Tripo3D API) | Hosted single-image and calibrated multi-view image-to-3D jobs, polling, cached results, import, and provenance. | Tripo API key plus **Allow Third-Party Uploads**. | Uploads references and consumes Tripo API credits. Best hosted route when multiple views are available. |
 | [Meshy](https://docs.meshy.ai/en/api) | Hosted single-image and multi-image image-to-3D jobs, balance checks, polling, cached GLB import, and provenance. | Meshy API key plus **Allow Third-Party Uploads**. | Uploads references and consumes Meshy account credits. Generated topology can be dense or fragmented and should be evaluated after import. |
 | [TripoSR](https://github.com/VAST-AI-Research/TripoSR) | Direct local single-image reconstruction, persistent tuning defaults, Z-up import normalization, cleanup, and evaluation renders. | A separate Python environment with TripoSR and CUDA-capable PyTorch, plus the local checkout path. | No vendor key, upload, or API credits. Treat it as a fast blockout route: one image cannot reveal hidden side or back structure. |
+| **Studio endpoint** | Self-hosted single-view or multi-view generation through a small bridge-compatible HTTP API, with polling, cached import, and provenance. | A service base URL and optional bearer token under **Set Up Providers**. The inference service itself is not bundled. | Counts as local/self-hosted, so no third-party-upload or vendor-spend approval is required. Plain HTTP is limited to localhost/private-network hosts; public hostnames require HTTPS. |
 
-When more than one generation provider is ready, the bridge asks which provider to use and starts nothing until the user answers. It does not silently prefer local, hosted, cheap, or fast. Hosted Tripo and Meshy jobs also require an explicit spend approval in Blender before a request is sent. The agent can poll the exact approval request and detect Approve, Decline, or expiry without asking the user to report the click. Local TripoSR does not create a spend request. A sole local provider may be selected automatically; a hosted provider never is.
+When more than one generation provider is ready, the bridge asks which provider to use and starts nothing until the user answers. It does not silently prefer local, hosted, cheap, or fast. Hosted Tripo and Meshy jobs also require an explicit spend approval in Blender before a request is sent. The agent can poll the exact approval request and detect Approve, Decline, or expiry without asking the user to report the click. Local TripoSR and the self-hosted studio endpoint do not create spend requests. A sole local provider may be selected automatically; a hosted provider never is.
+
+The release has live evidence for Tripo single-view and multi-view generation, Meshy single-view generation plus provider cancellation/recovery, and TripoSR generation, texture baking, cancellation/recovery, import, and evaluation. Meshy's multi-image client is implemented but not yet live-proven. The studio endpoint is contract- and unit-tested but still needs a real service deployment for live evidence. Hunyuan3D and TRELLIS appear only as strategy-level readiness diagnostics today; they do not have direct launchers and must not be presented as runnable providers.
 
 ### Configure Poly Haven and Sketchfab
 
@@ -200,6 +208,26 @@ TRIPOSR_PYTHON run.py examples/chair.png --output-dir output
 
 The provider diagnostics should then report TripoSR as runnable. For final assets with meaningful unseen structure, use calibrated multi-view input with Tripo or Meshy, or author and refine the model in Blender.
 
+### Configure a self-hosted studio endpoint
+
+The studio route is for an image-to-3D service running on this computer, another machine on the local network, or an HTTPS server your studio controls. The bridge does not install or operate that service. In **Set Up Providers**, enter its base URL under **Studio Endpoint** and, when required, enter an **Endpoint Token**. The token follows the same session/credential-store rules as the hosted provider keys.
+
+The service contract is intentionally small:
+
+```text
+POST /image-to-3d
+  {"views": [{"name": "front", "image_url": "data:..."}], ...}
+  -> {"task_id": "..."}
+
+GET /tasks/{task_id}
+  -> {"status": "...", "progress": 0, "model_url": "..."}
+
+GET /balance
+  -> optional; the job continues when the service does not expose it
+```
+
+Task creation may also include `model`, `face_limit`, and `texture`. Status responses may return the GLB URL as `model_url` or `model_urls.glb`. Plain HTTP is accepted only for localhost, private/link-local IPs, single-label hosts, or `.local`/`.localhost` names; use HTTPS for a public domain. The bridge treats this route as local/self-hosted and does not show a vendor spend prompt, so the service owner remains responsible for its compute and billing policy. A Hunyuan3D or TRELLIS server can eventually sit behind this contract even though direct launchers are not currently included.
+
 ## Showcase: Egypt Dogfight
 
 These compressed images come from the `egypt.blend` project used while testing the bridge. The agent inspected a scene, used helper/workflow tools, captured playblast and render evidence, repaired issues, kicked off longer render jobs through bridge tooling, and validated the resulting output without relying on shell scripts or hidden in-Blender chat loops.
@@ -225,7 +253,7 @@ The source `.blend` file and full 1080p videos are not committed here; the repos
 - Make reversible preview edits to common objects, materials, animation, lighting, cameras, rigs, and scene organization.
 - Capture viewport, playblast, inspection-render, thumbnail, and render-job evidence.
 - Search and import Poly Haven or Sketchfab assets through asynchronous download and import jobs.
-- Generate and import image-to-3D assets through hosted Tripo or Meshy, or run TripoSR locally for single-image blockouts.
+- Generate and import image-to-3D assets through hosted Tripo or Meshy, run TripoSR locally for single-image blockouts, or call a configured self-hosted studio endpoint.
 - Run animation and background-render workflows, including progress polling and output validation.
 - Use bounded project-directory tools, or run custom Blender Python only after the user enables session script trust.
 
@@ -310,7 +338,7 @@ Live helper changes, including external asset imports, remain pending until you 
 
 ## Development
 
-Contributor setup, build commands, and the complete test matrix live in [Development](docs/DEVELOPMENT.md), [Testing Guide](docs/TESTING_GUIDE.md), and [Release](docs/RELEASE.md). See [Contributing](CONTRIBUTING.md) before opening a change, and [Adding a Tool](docs/ADDING_A_TOOL.md) for registry and handler conventions.
+Contributor setup, build commands, and the complete test matrix live in [Development](docs/DEVELOPMENT.md), [Testing Guide](docs/TESTING_GUIDE.md), and [Release](docs/RELEASE.md). Current priorities and deliberately deferred work live in [Next on the Roadmap](docs/ROADMAP_NEXT.md). See [Contributing](CONTRIBUTING.md) before opening a change, and [Adding a Tool](docs/ADDING_A_TOOL.md) for registry and handler conventions.
 
 The [documentation index](docs/README.md) links the architecture, MCP, preview, safety, client, and launch guides.
 
