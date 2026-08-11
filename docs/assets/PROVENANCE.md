@@ -27,6 +27,14 @@ signed URLs, credentials, local paths, the generated GLB, and the original
 references. The image and report are retained only as verifiable project
 documentation; no standalone stock-media license is granted.
 
+## Maintainer Example Renders
+
+`showcase-lamp.jpg`, `showcase-stang.jpg`, and `showcase-orchid.jpg` are
+compressed Blender 5.1 material renders exported from maintainer-supplied local
+`.blend` files on 2026-08-11. The source `.blend` files are not distributed in
+this repository. The images are retained as documentation examples of authored
+scene/model output; no standalone stock-media license is granted.
+
 ## File Inventory
 
 | File | Bytes | SHA-256 | Purpose |
@@ -39,3 +47,6 @@ documentation; no standalone stock-media license is granted.
 | `egypt-inspection-closeup.jpg` | 30,112 | `b2332f6c0d20e7df5aa4ea2232f485448da6c7758d9507d73213bfaace1a7cfc` | Object inspection close-up |
 | `egypt-workflow-strip.jpg` | 30,906 | `4ade95d409b1ddda8581d9118d2aec13a29f6c39c497ee0681fccbec59653fe9` | Planning/review workflow strip |
 | `meshy-vehicle-multiview-contact-sheet.jpg` | 101,481 | `9a68a0eec51c04d6fad849d666ae948017e38943213b769d41cb57c66c28713a` | Sanitized front/side/rear/top Meshy vehicle evidence |
+| `showcase-lamp.jpg` | 37,700 | `47874e81fec7add232b73c38c359d6336703268fe9e616b05abb1ef47641ede1` | Material-rendered desk lamp showcase still |
+| `showcase-orchid.jpg` | 82,706 | `fd4a380ecd6cbe31e7ad9140fb923622ad623e3d557f17fa32910720d050ea25` | Material-rendered orchid window showcase still |
+| `showcase-stang.jpg` | 37,059 | `44f71111470ff7b9d460f0b76a16f16cbf7bef55d07e0760dfe3e06dcc1b45be` | Material-rendered fastback car showcase still |

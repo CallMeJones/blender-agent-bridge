@@ -7,6 +7,7 @@ Start with the top-level `README.md`, then use these deeper notes for developmen
 - [LAUNCH_CHECKLIST.md](LAUNCH_CHECKLIST.md) - canonical public-beta launch status across UI, testing, compatibility, security, packaging, GitHub, and community work.
 - [INSTALL_FROM_GITHUB.md](INSTALL_FROM_GITHUB.md) - GitHub remote-repository install, manual release ZIP fallback, update steps, troubleshooting, and maintainer release smoke.
 - [CONNECTION_DIAGNOSTICS.md](CONNECTION_DIAGNOSTICS.md) - deterministic read-only MCP, socket, bridge, version, manifest, schema, and gateway health checks.
+- [GENERATION_PROVIDERS.md](GENERATION_PROVIDERS.md) - optional Poly Haven, Sketchfab, Tripo, Meshy, local TripoSR, and self-hosted studio setup.
 - [RELEASE.md](RELEASE.md) - release build, GitHub Actions, GitHub Pages, and detailed verification commands.
 - [TESTING_GUIDE.md](TESTING_GUIDE.md) - comprehensive automated testing runbook for feature, tool, bridge, MCP, visual, safety, and release coverage.
 - [ROADMAP_NEXT.md](ROADMAP_NEXT.md) - released baseline, immediate priorities, remaining validation, and deliberately deferred work.
