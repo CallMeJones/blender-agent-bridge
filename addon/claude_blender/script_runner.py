@@ -31,6 +31,7 @@ CHECKPOINT_FILENAME_RE = re.compile(
     r"-(?:agent|claude)-\d{8}-\d{6}(?:-\d{6})?(?:-\d+)?\.blend$",
     re.IGNORECASE,
 )
+CHECKPOINT_PATH_RESERVE = 128
 
 _runtime_external_trust_expires_at = 0.0
 _runtime_external_trust_session = False
@@ -473,8 +474,12 @@ def checkpoint_metadata(context, path, *, ok=None, message=""):
 
 
 def create_checkpoint(context, checkpoint_dir=None):
-    directory = bpy.path.abspath(checkpoint_dir or _default_checkpoint_dir())
-    os.makedirs(directory, exist_ok=True)
+    directory = user_paths.safe_path(
+        bpy.path.abspath(checkpoint_dir or _default_checkpoint_dir()),
+        fallback_parts=("checkpoints",),
+        reserve=CHECKPOINT_PATH_RESERVE,
+    )
+    directory = user_paths.ensure_dir(directory, fallback_parts=("checkpoints",))
     current_path = bpy.data.filepath
     if current_path:
         base = os.path.splitext(os.path.basename(current_path))[0]

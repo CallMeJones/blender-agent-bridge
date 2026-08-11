@@ -20,8 +20,14 @@ LATEST_CAPTURE_RESOURCE_URI = "blender://captures/latest"
 LATEST_CAPTURE_METADATA_URI = "blender://captures/latest/metadata"
 MIN_RESIZED_DIMENSION = 64
 MAX_RESIZE_ATTEMPTS = 8
+WINDOWS_CAPTURE_ROOT_RESERVE = 120
+WINDOWS_CAPTURE_DIR_RESERVE = 80
 
 _capture_session_id = ""
+
+
+def _windows_path_budget_exceeded(path, *, reserve=0, platform=None):
+    return user_paths.path_budget_exceeded(path, reserve=reserve, platform=platform)
 
 
 def default_capture_dir():
@@ -73,6 +79,8 @@ def _is_default_or_empty_capture_dir(value):
 
 
 def _can_prepare_dir(path):
+    if _windows_path_budget_exceeded(path, reserve=WINDOWS_CAPTURE_DIR_RESERVE):
+        return False
     try:
         os.makedirs(path, exist_ok=True)
         return True
@@ -80,20 +88,43 @@ def _can_prepare_dir(path):
         return False
 
 
-def _global_capture_dir_info(context=None, *, create=False):
+def _global_capture_dir_info(
+    context=None,
+    *,
+    create=False,
+    fallback_reason="unsaved_or_unwritable_project",
+):
     session_id = capture_session_id()
     project = project_id(context)
     base_dir = default_capture_dir()
     capture_dir = os.path.join(base_dir, project, session_id)
     if create:
-        os.makedirs(capture_dir, exist_ok=True)
+        capture_dir = user_paths.ensure_dir(
+            capture_dir,
+            fallback_parts=("captures", project, session_id),
+        )
+        base_dir = os.path.dirname(os.path.dirname(capture_dir))
     return {
         "capture_dir": capture_dir,
         "storage_scope": "global",
         "project_id": project,
         "session_id": session_id,
         "base_dir": base_dir,
-        "fallback_reason": "unsaved_or_unwritable_project",
+        "fallback_reason": fallback_reason,
+    }
+
+
+def _temp_capture_dir_info(context=None):
+    session_id = capture_session_id()
+    project = project_id(context)
+    base_dir = user_paths.temp_user_data_path("captures")
+    return {
+        "capture_dir": os.path.join(base_dir, project, session_id),
+        "storage_scope": "global",
+        "project_id": project,
+        "session_id": session_id,
+        "base_dir": base_dir,
+        "fallback_reason": "user_data_path_unwritable",
     }
 
 
@@ -112,7 +143,11 @@ def resolve_capture_dir(context=None, *, preferred_dir=None, create=False):
         project_root = project_capture_root(context)
         if project_root:
             project_dir = os.path.join(project_root, session_id)
-            if not create or _can_prepare_dir(project_dir):
+            path_budget_exceeded = _windows_path_budget_exceeded(
+                project_dir,
+                reserve=WINDOWS_CAPTURE_DIR_RESERVE,
+            )
+            if not path_budget_exceeded and (not create or _can_prepare_dir(project_dir)):
                 return {
                     "capture_dir": project_dir,
                     "storage_scope": "project",
@@ -121,19 +156,44 @@ def resolve_capture_dir(context=None, *, preferred_dir=None, create=False):
                     "base_dir": project_root,
                     "fallback_reason": "",
                 }
+            if path_budget_exceeded:
+                return _global_capture_dir_info(
+                    context,
+                    create=create,
+                    fallback_reason="project_capture_path_exceeds_windows_budget",
+                )
         return _global_capture_dir_info(context, create=create)
 
     base_dir = os.path.abspath(os.path.expanduser(str(preferred_dir)))
     capture_dir = os.path.join(base_dir, project, session_id)
+    if _windows_path_budget_exceeded(
+        capture_dir,
+        reserve=WINDOWS_CAPTURE_DIR_RESERVE,
+    ):
+        return _global_capture_dir_info(
+            context,
+            create=create,
+            fallback_reason="custom_capture_path_exceeds_windows_budget",
+        )
+    storage_scope = "custom"
+    fallback_reason = ""
     if create:
-        os.makedirs(capture_dir, exist_ok=True)
+        requested_capture_dir = capture_dir
+        capture_dir = user_paths.ensure_dir(
+            capture_dir,
+            fallback_parts=("captures", project, session_id),
+        )
+        if _normalized_path(capture_dir) != _normalized_path(requested_capture_dir):
+            storage_scope = "global"
+            fallback_reason = "custom_capture_path_unwritable"
+            base_dir = os.path.dirname(os.path.dirname(capture_dir))
     return {
         "capture_dir": capture_dir,
-        "storage_scope": "custom",
+        "storage_scope": storage_scope,
         "project_id": project,
         "session_id": session_id,
         "base_dir": base_dir,
-        "fallback_reason": "",
+        "fallback_reason": fallback_reason,
     }
 
 
@@ -182,6 +242,12 @@ def _capture_dir_candidates(capture_dir=None, *, context=None, preferred_dir=Non
     fallback = _global_capture_dir_info(context)
     if _normalized_path(fallback["capture_dir"]) != _normalized_path(primary["capture_dir"]):
         candidates.append(fallback)
+    temp_fallback = _temp_capture_dir_info(context)
+    if all(
+        _normalized_path(temp_fallback["capture_dir"]) != _normalized_path(candidate["capture_dir"])
+        for candidate in candidates
+    ):
+        candidates.append(temp_fallback)
     return candidates
 
 

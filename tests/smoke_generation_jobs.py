@@ -252,6 +252,8 @@ os.environ["BLENDER_AGENT_BRIDGE_TRIPOSR_ROOT"] = "C:/smoke/TripoSR"
 generation_spend.clear_requests()
 JOB = {"provider": "tripo", "views": {"front": image}}
 original_probe_hardware = generation_providers.probe_hardware
+original_redraw = generation_handler._redraw_sidebar
+redraw_calls = []
 generation_providers.probe_hardware = lambda **_kwargs: {
     "probed": True,
     "cuda_available": True,
@@ -260,6 +262,7 @@ generation_providers.probe_hardware = lambda **_kwargs: {
     "compute_capability": 7.5,
     "supports_bfloat16": False,
 }
+generation_handler._redraw_sidebar = lambda context: redraw_calls.append(context)
 
 try:
     meshy_untextured = generation_handler.start_generation_job(
@@ -283,6 +286,7 @@ try:
         == "blender_working",
         str(meshy_untextured.get("spend_approval")),
     )
+    check("paid approval redraws the sidebar immediately", bool(redraw_calls))
     meshy_ultra = generation_handler.start_generation_job(
         bpy.context,
         {
@@ -393,6 +397,7 @@ try:
     )
     check("a missing reference image is refused first", missing.get("ok") is False)
 finally:
+    generation_handler._redraw_sidebar = original_redraw
     generation_providers.probe_hardware = original_probe_hardware
     generation_spend.clear_requests()
     for name in (

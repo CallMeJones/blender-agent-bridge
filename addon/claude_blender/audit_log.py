@@ -39,11 +39,14 @@ def _now():
 
 
 def audit_path():
+    configured = os.environ.get("CLAUDE_BLENDER_AUDIT_LOG", "")
+    if configured:
+        return configured
     if user_paths is not None:
-        default_path = user_paths.user_data_path("audit.jsonl")
+        default_path = os.path.join(user_paths.user_data_dir(), "audit.jsonl")
     else:
         default_path = os.path.join(os.path.expanduser("~"), ".claude_blender", "audit.jsonl")
-    return os.environ.get("CLAUDE_BLENDER_AUDIT_LOG", default_path)
+    return default_path
 
 
 def _safe_key(key):

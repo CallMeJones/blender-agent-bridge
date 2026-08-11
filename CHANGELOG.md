@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.5.6 - 2026-08-11
+
+### UI
+
+- Refresh the paid-generation approval sidebar immediately when a job enters user-approval state, so the Approve/Decline controls appear without waiting for a hover or manual redraw.
+
+### Reliability
+
+- Fall back to the global Blender Agent Bridge user-data directory when deep Windows extension-profile paths would exceed the practical path budget for captures or trusted-script checkpoints.
+- Fall back again to temp user-data storage when the configured/global runtime directory is not writable, covering captures, checkpoints, credential files, and audit logs without crashing the bridge.
+- Added a native Windows descendant-process termination fallback so cancel/recovery can stop subprocess children even when `taskkill /T /F` is denied.
+- Added smoke coverage for immediate paid-approval redraws and Windows path-budget fallback behavior.
+
 ## 0.5.5 - 2026-08-11
 
 ### Generation

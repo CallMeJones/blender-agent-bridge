@@ -19,10 +19,10 @@ Use Blender's **Copy MCP Config** values in `~/.codex/config.toml`, or add the s
 Pinned `uvx` mode on macOS/Linux launches:
 
 ```text
-uvx --from blender-bridge==0.5.5 blender-bridge --bridge-url http://127.0.0.1:<port>
+uvx --from blender-bridge==0.5.6 blender-bridge --bridge-url http://127.0.0.1:<port>
 ```
 
-Windows uses `cmd /c uvx --from blender-bridge==0.5.5 blender-bridge ...`. Translate the generated command, args, and any environment values into the shared `[mcp_servers.blender_agent_bridge]` TOML shape shown in the [Codex guide](CODEX.md). Preserve bridge tokens, the `uvx` runtime marker, and the optional Sketchfab token when present; do not paste bridge secrets into chat messages.
+Windows uses `cmd /c uvx --from blender-bridge==0.5.6 blender-bridge ...`. Translate the generated command, args, and any environment values into the shared `[mcp_servers.blender_agent_bridge]` TOML shape shown in the [Codex guide](CODEX.md). Preserve bridge tokens, the `uvx` runtime marker, and the optional Sketchfab token when present; do not paste bridge secrets into chat messages.
 
 Restart or refresh the ChatGPT desktop app's MCP host after replacing the entry, then ask: `Check Blender bridge status, find and invoke the scene-object inspection tool, and make no changes.`
 

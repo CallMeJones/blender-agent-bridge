@@ -35,6 +35,24 @@ def main():
     try:
         claude_blender.register()
         original_default_capture_dir = viewport_capture.default_capture_dir
+        long_windows_capture_root = "C:\\" + ("deep-profile\\" * 14) + "captures"
+        assert viewport_capture._windows_path_budget_exceeded(
+            long_windows_capture_root,
+            reserve=viewport_capture.WINDOWS_CAPTURE_ROOT_RESERVE,
+            platform="nt",
+        )
+        assert viewport_capture.user_paths.safe_path(
+            long_windows_capture_root,
+            fallback_parts=("captures",),
+            reserve=viewport_capture.WINDOWS_CAPTURE_ROOT_RESERVE,
+            platform="nt",
+        ) == viewport_capture.user_paths.legacy_user_data_path("captures")
+        assert viewport_capture.user_paths.safe_path(
+            long_windows_capture_root,
+            fallback_parts=("captures",),
+            reserve=viewport_capture.WINDOWS_CAPTURE_ROOT_RESERVE,
+            platform="posix",
+        ) == long_windows_capture_root
         viewport_capture.default_capture_dir = lambda: os.path.join(cache_dir, "user-data", "captures")
 
         if ui._docs_timer_is_registered():

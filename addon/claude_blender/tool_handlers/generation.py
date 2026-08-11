@@ -23,6 +23,16 @@ from .. import (
 from .support import _bounded_float, _bounded_int
 
 
+def _redraw_sidebar(context):
+    try:
+        from .. import live_preview
+
+        live_preview.redraw(context)
+    except Exception:
+        # Approval creation must not fail because a UI area is unavailable.
+        pass
+
+
 def _generation_environ(context):
     prefs = preferences.get_preferences(context)
     environ = dict(os.environ)
@@ -435,6 +445,8 @@ def start_generation_job(context, args):
         capture_dir=getattr(prefs, "capture_cache_dir", None),
         **job_args,
     )
+    if isinstance(started, dict) and started.get("awaiting_user_approval"):
+        _redraw_sidebar(context)
     # Carried on both the approval request and the started job: the cost of a
     # partial view set is worth stating before the user approves it, and worth
     # repeating once the mesh exists and looks wrong on the unseen side.
