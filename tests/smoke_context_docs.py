@@ -52,7 +52,7 @@ def main():
             fallback_parts=("captures",),
             reserve=viewport_capture.WINDOWS_CAPTURE_ROOT_RESERVE,
             platform="posix",
-        ) == long_windows_capture_root
+        ) == os.path.abspath(os.path.expanduser(long_windows_capture_root))
         viewport_capture.default_capture_dir = lambda: os.path.join(cache_dir, "user-data", "captures")
 
         if ui._docs_timer_is_registered():
