@@ -540,9 +540,11 @@ class CLAUDEBLENDER_OT_approve_external_script_trust(bpy.types.Operator):
                 "Trust lasts until Revoke, add-on reload, or Blender exit.\n"
                 "Opening, creating, restoring, copying, renaming, or modifying .blend files does not change it."
             )
+            live_preview.redraw(context)
             self.report({"INFO"}, "External script trust approved")
             return {"FINISHED"}
         state.last_response = f"External script trust was not approved.\n{message}"
+        live_preview.redraw(context)
         self.report({"ERROR"}, message)
         return {"CANCELLED"}
 
@@ -558,6 +560,7 @@ class CLAUDEBLENDER_OT_revoke_external_script_trust(bpy.types.Operator):
         result = script_runner.revoke_external_script_trust_window(context)
         message = result.get("message", "External script trust revoked")
         state.last_response = message
+        live_preview.redraw(context)
         if result.get("ok"):
             self.report({"INFO"}, message)
             return {"FINISHED"}

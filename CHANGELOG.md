@@ -6,6 +6,10 @@
 
 - Closed the remaining adaptive dual-contouring cross-cell residue by splitting disconnected face fans only after local topology refinement is exhausted. A connected multi-point sweep/subtract regression now stays manifold at maximum depths 7, 8, and 9 and matches uniform-mode component structure.
 
+### UI
+
+- Refresh the Agent Bridge sidebar immediately after approving or revoking session script trust instead of waiting for the next mouse hover to trigger a redraw.
+
 ## 0.5.4 - 2026-08-10
 
 ### Generation

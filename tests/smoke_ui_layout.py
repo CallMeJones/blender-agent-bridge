@@ -210,6 +210,21 @@ def main():
         ], trusted_layout.operators
         assert script_runner.revoke_external_script_trust_window(context)["ok"]
 
+        redraw_contexts = []
+        original_redraw = live_preview.redraw
+        live_preview.redraw = lambda redraw_context: redraw_contexts.append(redraw_context)
+        try:
+            approve_result = bpy.ops.claude_blender.approve_external_script_trust("EXEC_DEFAULT")
+            assert approve_result == {"FINISHED"}, approve_result
+            assert redraw_contexts == [context], redraw_contexts
+
+            redraw_contexts.clear()
+            revoke_result = bpy.ops.claude_blender.revoke_external_script_trust("EXEC_DEFAULT")
+            assert revoke_result == {"FINISHED"}, revoke_result
+            assert redraw_contexts == [context], redraw_contexts
+        finally:
+            live_preview.redraw = original_redraw
+
         state.last_script_error_summary = "Old script failure"
         state.last_checkpoint_status = "Checkpoint disabled"
         history_layout = _FakeLayout()
