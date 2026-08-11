@@ -72,25 +72,21 @@ class DefaultTransportTests(unittest.TestCase):
     """Covers the real transport, which the FakeTransport tests never reach."""
 
     def test_no_redirect_handler_is_accepted_by_build_opener(self):
-        import urllib.request
-
         # build_opener rejects anything that is not a BaseHandler subclass.
         opener = gc.build_no_redirect_opener()
         handlers = [
             handler
             for handler in opener.handlers
-            if isinstance(handler, urllib.request.HTTPRedirectHandler)
+            if isinstance(handler, gc._NoRedirect)
         ]
         self.assertEqual(1, len(handlers))
 
     def test_redirects_are_refused(self):
-        import urllib.request
-
         opener = gc.build_no_redirect_opener()
         handler = next(
             item
             for item in opener.handlers
-            if isinstance(item, urllib.request.HTTPRedirectHandler)
+            if isinstance(item, gc._NoRedirect)
         )
         self.assertIsNone(
             handler.redirect_request(None, None, 302, "Found", {}, "https://evil.test/")

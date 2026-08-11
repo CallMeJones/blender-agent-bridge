@@ -15,6 +15,22 @@ sys.path.insert(0, os.path.join(ROOT, "addon"))
 def _load_generation_handler():
     module_name = "claude_blender.tool_handlers.generation"
     previous = sys.modules.pop(module_name, None)
+    parent_package = sys.modules.get("claude_blender")
+    tool_handlers_package = sys.modules.get("claude_blender.tool_handlers")
+    parent_attrs = {}
+    if parent_package is not None:
+        for name in ("asset_jobs", "generation_providers", "preferences"):
+            parent_attrs[name] = (
+                True,
+                getattr(parent_package, name),
+            ) if hasattr(parent_package, name) else (False, None)
+    tool_handler_attrs = {}
+    if tool_handlers_package is not None:
+        for name in ("generation", "support"):
+            tool_handler_attrs[name] = (
+                True,
+                getattr(tool_handlers_package, name),
+            ) if hasattr(tool_handlers_package, name) else (False, None)
     support = types.ModuleType("claude_blender.tool_handlers.support")
     support._bounded_int = lambda value, default, minimum=0, maximum=1000: int(default)
     support._bounded_float = lambda value, default, minimum=0.0, maximum=1000.0: float(default)
@@ -68,6 +84,18 @@ def _load_generation_handler():
     }
     with mock.patch.dict(sys.modules, stubs):
         module = importlib.import_module(module_name)
+    if parent_package is not None:
+        for name, (existed, value) in parent_attrs.items():
+            if existed:
+                setattr(parent_package, name, value)
+            elif hasattr(parent_package, name):
+                delattr(parent_package, name)
+    if tool_handlers_package is not None:
+        for name, (existed, value) in tool_handler_attrs.items():
+            if existed:
+                setattr(tool_handlers_package, name, value)
+            elif hasattr(tool_handlers_package, name):
+                delattr(tool_handlers_package, name)
     # The parent package may already expose real modules when this test runs as
     # part of the full suite; pin the handler globals to these deterministic
     # stubs instead of relying on import order.

@@ -158,7 +158,18 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 def build_no_redirect_opener(*handlers):
     """Build an opener that never replays request headers across redirects."""
 
-    return urllib.request.build_opener(*handlers, _NoRedirect)
+    opener = urllib.request.build_opener(*handlers, _NoRedirect)
+    opener.handlers = [
+        handler
+        for handler in opener.handlers
+        if not (
+            type(handler) is urllib.request.HTTPRedirectHandler
+            and not isinstance(handler, _NoRedirect)
+        )
+    ]
+    if not any(isinstance(handler, _NoRedirect) for handler in opener.handlers):
+        opener.add_handler(_NoRedirect())
+    return opener
 
 
 def _default_transport(method, url, headers, body, timeout):
