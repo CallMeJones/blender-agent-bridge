@@ -75,12 +75,25 @@ class DefaultTransportTests(unittest.TestCase):
         import urllib.request
 
         # build_opener rejects anything that is not a BaseHandler subclass.
-        opener = urllib.request.build_opener(gc._NoRedirect)
-        self.assertTrue(any(isinstance(h, gc._NoRedirect) for h in opener.handlers))
+        opener = gc.build_no_redirect_opener()
+        handlers = [
+            handler
+            for handler in opener.handlers
+            if isinstance(handler, urllib.request.HTTPRedirectHandler)
+        ]
+        self.assertEqual(1, len(handlers))
 
     def test_redirects_are_refused(self):
+        import urllib.request
+
+        opener = gc.build_no_redirect_opener()
+        handler = next(
+            item
+            for item in opener.handlers
+            if isinstance(item, urllib.request.HTTPRedirectHandler)
+        )
         self.assertIsNone(
-            gc._NoRedirect().redirect_request(None, None, 302, "Found", {}, "https://evil.test/")
+            handler.redirect_request(None, None, 302, "Found", {}, "https://evil.test/")
         )
 
     def test_non_https_is_refused_before_any_request(self):
@@ -120,6 +133,22 @@ class UploadTests(unittest.TestCase):
         self.assertTrue(call["url"].endswith("/files"))
         self.assertIn("multipart/form-data; boundary=", call["headers"]["Content-Type"])
         self.assertIn(b'name="file"', call["body"])
+
+    def test_upload_rejects_content_replaced_after_approval(self):
+        from claude_blender import generation_references
+
+        transport = FakeTransport(ok({"file_token": "must-not-upload"}))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = _png(tmp)
+            expected = generation_references.validate_reference_images(
+                {"front": path}, provider="tripo"
+            )["front"]
+            with open(path, "wb") as handle:
+                handle.write(b"\x89PNG\r\n\x1a\nchanged")
+            with self.assertRaises(gc.GenerationError) as caught:
+                _client(transport).upload_image(path, expected_identity=expected)
+        self.assertEqual("invalid_local_input", caught.exception.error_type)
+        self.assertEqual([], transport.calls)
 
     def test_upload_without_token_raises(self):
         transport = FakeTransport(ok({}))
@@ -214,6 +243,13 @@ class TaskStatusTests(unittest.TestCase):
         self.assertFalse(status["terminal"])
         self.assertEqual(42, status["progress"])
 
+    def test_malformed_progress_is_a_retryable_structured_error(self):
+        transport = FakeTransport(ok({"status": "running", "progress": "unknown"}))
+        with self.assertRaises(gc.GenerationError) as caught:
+            _client(transport).task_status("t")
+        self.assertTrue(caught.exception.retryable)
+        self.assertEqual("invalid_provider_response", caught.exception.error_type)
+
     def test_failure_states_are_terminal_but_not_successful(self):
         for state in ("failed", "cancelled", "banned"):
             transport = FakeTransport(ok({"status": state}))
@@ -268,6 +304,23 @@ class ErrorHandlingTests(unittest.TestCase):
 
 
 class MeshyClientTests(unittest.TestCase):
+    def test_explicit_meshy_7_and_blender_working_options_are_supported(self):
+        transport = FakeTransport(raw({"result": "mesh-7"}))
+        gc.MeshyClient(KEY, transport=transport).create_image_task(
+            "data:image/png;base64,AA==",
+            meshy_options={
+                "preset": "blender_working",
+                "ai_model": "meshy-7",
+                "ultra_mode": True,
+            },
+        )
+        body = json.loads(transport.calls[0]["body"].decode())
+        self.assertEqual("meshy-7", body["ai_model"])
+        self.assertTrue(body["ultra_mode"])
+        self.assertTrue(body["should_remesh"])
+        self.assertTrue(body["save_pre_remeshed_model"])
+        self.assertEqual("4k", body["texture_resolution"])
+
     def test_upload_encodes_local_image_as_data_uri(self):
         with tempfile.TemporaryDirectory() as tmp:
             uri = gc.MeshyClient(KEY, transport=FakeTransport()).upload_image(_png(tmp))
@@ -277,6 +330,26 @@ class MeshyClientTests(unittest.TestCase):
         transport = FakeTransport(raw({"balance": 123.0}))
         self.assertEqual(123.0, gc.MeshyClient(KEY, transport=transport).balance())
         self.assertTrue(transport.calls[0]["url"].endswith("/balance"))
+
+    def test_malformed_meshy_progress_is_a_retryable_structured_error(self):
+        transport = FakeTransport(raw({"status": "IN_PROGRESS", "progress": "unknown"}))
+        with self.assertRaises(gc.GenerationError) as caught:
+            gc.MeshyClient(KEY, transport=transport).task_status("t")
+        self.assertTrue(caught.exception.retryable)
+        self.assertEqual("invalid_provider_response", caught.exception.error_type)
+
+    def test_invalid_balance_is_a_structured_provider_error(self):
+        transport = FakeTransport(raw({"balance": "unknown"}))
+        with self.assertRaises(gc.GenerationError) as caught:
+            gc.MeshyClient(KEY, transport=transport).balance()
+        self.assertEqual("invalid_provider_response", caught.exception.error_type)
+
+    def test_missing_upload_file_is_a_structured_local_input_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = os.path.join(tmp, "removed.png")
+            with self.assertRaises(gc.GenerationError) as caught:
+                gc.MeshyClient(KEY, transport=FakeTransport()).upload_image(missing)
+        self.assertEqual("invalid_local_input", caught.exception.error_type)
 
     def test_image_task_uses_meshy_body_shape(self):
         transport = FakeTransport(raw({"result": "mesh-task"}))
@@ -312,11 +385,48 @@ class MeshyClientTests(unittest.TestCase):
         status = client.task_status(task)
         body = json.loads(transport.calls[0]["body"].decode())
         self.assertEqual(["data:f", "data:l", "data:c"], body["image_urls"])
+        self.assertNotIn("model_type", body)
+        self.assertNotIn("ultra_mode", body)
         self.assertTrue(transport.calls[0]["url"].endswith("/multi-image-to-3d"))
         self.assertTrue(transport.calls[1]["url"].endswith("/multi-image-to-3d/mesh-mv"))
         self.assertTrue(status["succeeded"])
         self.assertEqual("https://x/m.glb", status["model_url"])
         self.assertEqual(42, status["credits_consumed"])
+
+    def test_status_preserves_structured_errors_and_artifact_urls(self):
+        transport = FakeTransport(
+            raw(
+                {
+                    "status": "FAILED",
+                    "progress": 100,
+                    "model_urls": {
+                        "glb": "https://x/model.glb?Signature=one",
+                        "pre_remeshed_glb": "https://x/raw.glb?Signature=two",
+                    },
+                    "thumbnail_url": "https://x/preview.png",
+                    "alpha_thumbnail_url": "https://x/alpha.png",
+                    "thumbnail_urls": {"front": "https://x/front.png"},
+                    "texture_urls": [{"base_color": "https://x/base.png", "normal": "https://x/normal.png"}],
+                    "task_error": {
+                        "type": "InvalidImageError",
+                        "code": "bad_input",
+                        "message": "image failed validation",
+                        "doc_url": "https://docs.meshy.ai/error/bad-input",
+                    },
+                    "expires_at": 999,
+                    "preceding_tasks": 3,
+                }
+            )
+        )
+        status = gc.MeshyClient(KEY, transport=transport).task_status("failed-task")
+
+        self.assertEqual("InvalidImageError", status["task_error"]["type"])
+        self.assertEqual("https://docs.meshy.ai/error/bad-input", status["task_error"]["doc_url"])
+        self.assertEqual("https://x/raw.glb?Signature=two", status["artifact_urls"]["pre_remeshed_glb"])
+        self.assertEqual("https://x/front.png", status["artifact_urls"]["thumbnail_front"])
+        self.assertEqual("https://x/base.png", status["artifact_urls"]["texture_0_base_color"])
+        self.assertEqual(999, status["expires_at"])
+        self.assertEqual(3, status["preceding_tasks"])
 
     def test_cancel_recovered_multiview_task_uses_delete_endpoint(self):
         transport = FakeTransport(raw({}))
@@ -343,6 +453,20 @@ class MeshyClientTests(unittest.TestCase):
         with self.assertRaises(gc.GenerationError) as caught:
             gc.MeshyClient(KEY, transport=transport).create_image_task("data:image/png;base64,AA==")
         self.assertTrue(caught.exception.insufficient_credit)
+
+    def test_meshy_rate_limit_and_server_errors_are_retryable(self):
+        for http_status in (429, 500, 503):
+            transport = FakeTransport(raw({"message": "temporary"}, status=http_status))
+            with self.assertRaises(gc.GenerationError) as caught:
+                gc.MeshyClient(KEY, transport=transport).task_status("t")
+            self.assertTrue(caught.exception.retryable, http_status)
+
+    def test_meshy_non_json_server_error_is_retryable(self):
+        transport = FakeTransport((503, "service unavailable"))
+        with self.assertRaises(gc.GenerationError) as caught:
+            gc.MeshyClient(KEY, transport=transport).task_status("t")
+        self.assertTrue(caught.exception.retryable)
+        self.assertEqual("invalid_provider_response", caught.exception.error_type)
 
     def test_meshy_key_never_appears_in_errors(self):
         transport = FakeTransport(raw({"message": "bad %s" % KEY}, status=500))
@@ -392,6 +516,13 @@ class StudioEndpointClientTests(unittest.TestCase):
         self.assertTrue(status["terminal"])
         self.assertTrue(status["succeeded"])
         self.assertEqual("https://x/model.glb", status["model_url"])
+
+    def test_malformed_studio_progress_is_a_retryable_structured_error(self):
+        transport = FakeTransport(raw({"status": "running", "progress": "unknown"}))
+        with self.assertRaises(gc.GenerationError) as caught:
+            gc.StudioEndpointClient("http://studio.local", transport=transport).task_status("abc")
+        self.assertTrue(caught.exception.retryable)
+        self.assertEqual("invalid_provider_response", caught.exception.error_type)
 
 
 if __name__ == "__main__":

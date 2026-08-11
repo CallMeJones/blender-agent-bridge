@@ -6,6 +6,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -28,7 +29,7 @@ class _StubClient:
         self.uploaded = []
         self.created = None
 
-    def upload_image(self, path):
+    def upload_image(self, path, *, expected_identity=None):
         if self.fail_on == "upload":
             raise generation_clients.GenerationError("upload boom")
         self.uploaded.append(path)
@@ -64,7 +65,7 @@ def _fake_download(url, destination, timeout=300):
     return 9
 
 
-def _run(tmp, views, *, client, collect=None, **args):
+def _run(tmp, views, *, client, collect=None, downloader=_fake_download, **args):
     from claude_blender import generation_job
 
     payload = {"views": views, "cache_dir": os.path.join(tmp, "cache")}
@@ -74,13 +75,190 @@ def _run(tmp, views, *, client, collect=None, **args):
         payload,
         api_key=API_KEY,
         client=client,
-        downloader=_fake_download,
+        downloader=downloader,
         poll_interval=0,
         progress_callback=collect.append if collect is not None else None,
     )
 
 
 class GenerationJobTests(unittest.TestCase):
+    def test_hosted_generation_download_rejects_file_and_private_urls(self):
+        from claude_blender import external_assets, generation_job
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            external_assets,
+            "DOWNLOAD_RETRY_COUNT",
+            0,
+        ), mock.patch.object(
+            external_assets,
+            "_online_access_error",
+            return_value=None,
+        ):
+            for index, url in enumerate(
+                (
+                    "file:///etc/passwd",
+                    "https://127.0.0.1/private.glb",
+                    "https://10.1.2.3/private.glb",
+                )
+            ):
+                with self.subTest(url=url), self.assertRaises(ValueError):
+                    generation_job._download(
+                        url,
+                        os.path.join(tmp, "rejected-%d.glb" % index),
+                        max_bytes=1024,
+                    )
+
+    def test_generation_download_surfaces_hardened_size_limit_failure(self):
+        from claude_blender import external_assets, generation_job
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            external_assets,
+            "download_external_file",
+            return_value={
+                "ok": False,
+                "message": "Download exceeded the 4-byte limit while streaming",
+                "error_type": "download_size_limit_exceeded",
+            },
+        ) as download:
+            with self.assertRaisesRegex(ValueError, "4-byte limit"):
+                generation_job._download(
+                    "https://cdn.example.test/model.glb",
+                    os.path.join(tmp, "model.glb"),
+                    max_bytes=4,
+                )
+        self.assertEqual(4, download.call_args.kwargs["max_download_bytes"])
+
+    def test_generated_payload_checks_supported_model_formats(self):
+        from claude_blender import generation_job
+
+        invalid = {
+            ".obj": b"<html>not an obj</html>",
+            ".fbx": b"not an fbx",
+            ".stl": b"not an stl",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            for suffix, payload in invalid.items():
+                path = os.path.join(tmp, "model%s" % suffix)
+                with open(path, "wb") as handle:
+                    handle.write(payload)
+                with self.subTest(suffix=suffix):
+                    self.assertTrue(generation_job._generated_mesh_payload_error(path))
+
+    def test_html_masquerading_as_glb_is_rejected_and_removed(self):
+        def html_download(_url, destination, _timeout=300):
+            with open(destination, "wb") as handle:
+                handle.write(b"<html>provider error</html>")
+            return {
+                "ok": True,
+                "size": os.path.getsize(destination),
+                "content_type": "text/html; charset=utf-8",
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = _run(
+                tmp,
+                _views(tmp, ["front"]),
+                client=_StubClient(),
+                downloader=html_download,
+            )
+            rejected_path = os.path.join(tmp, "cache", "generated.glb")
+            self.assertFalse(manifest["ok"])
+            self.assertIn("non-model content type", manifest["message"])
+            self.assertFalse(os.path.exists(rejected_path))
+
+    def test_same_origin_studio_artifact_receives_bearer_token(self):
+        from claude_blender import generation_job
+
+        response = mock.MagicMock()
+        response.__enter__.return_value = response
+        response.headers = {"Content-Length": "9"}
+        response.read.side_effect = [b"glTF-stub", b""]
+        opener = mock.MagicMock()
+        opener.open.return_value = response
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            generation_clients,
+            "build_no_redirect_opener",
+            return_value=opener,
+        ):
+            destination = os.path.join(tmp, "model.glb")
+            generation_job._download_studio_artifact(
+                "http://studio.local/api/files/model.glb",
+                destination,
+                endpoint="http://studio.local/api",
+                api_key="studio-secret",
+            )
+            request = opener.open.call_args.args[0]
+            self.assertEqual("Bearer studio-secret", request.get_header("Authorization"))
+            self.assertTrue(os.path.isfile(destination))
+
+    def test_cross_origin_studio_artifact_uses_unauthenticated_hosted_download(self):
+        from claude_blender import generation_job
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            generation_job,
+            "_download",
+            return_value={"ok": True, "path": "model.glb", "size": 9},
+        ) as download, mock.patch.object(
+            generation_clients,
+            "build_no_redirect_opener",
+        ) as opener:
+            generation_job._download_studio_artifact(
+                "https://cdn.example.test/model.glb?signature=one-time",
+                os.path.join(tmp, "model.glb"),
+                endpoint="http://studio.local/api",
+                api_key="studio-secret",
+            )
+        opener.assert_not_called()
+        download.assert_called_once()
+
+    def test_retryable_poll_failure_recovers_without_losing_task(self):
+        class RetryClient(_StubClient):
+            def __init__(self):
+                super().__init__()
+                self.polls = 0
+
+            def task_status(self, task_id):
+                self.polls += 1
+                if self.polls == 1:
+                    raise generation_clients.GenerationError(
+                        "rate limited",
+                        code=429,
+                        retryable=True,
+                        error_type="RateLimitExceeded",
+                    )
+                return super().task_status(task_id)
+
+        updates = []
+        with tempfile.TemporaryDirectory() as tmp:
+            client = RetryClient()
+            manifest = _run(
+                tmp,
+                _views(tmp, ["front"]),
+                client=client,
+                collect=updates,
+            )
+        self.assertTrue(manifest["ok"], manifest.get("message"))
+        self.assertEqual(2, client.polls)
+        self.assertEqual(1, manifest["generation"]["recovered_poll_failures"])
+        self.assertIn("poll_retry", [update.get("phase") for update in updates])
+
+    def test_non_retryable_poll_failure_preserves_structured_error(self):
+        class FailedClient(_StubClient):
+            def task_status(self, task_id):
+                raise generation_clients.GenerationError(
+                    "invalid input",
+                    code=400,
+                    retryable=False,
+                    error_type="InvalidImageError",
+                    doc_url="https://docs.meshy.ai/errors/input",
+                )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = _run(tmp, _views(tmp, ["front"]), client=FailedClient())
+        self.assertFalse(manifest["ok"])
+        self.assertEqual("InvalidImageError", manifest["provider_error"]["type"])
+        self.assertEqual("https://docs.meshy.ai/errors/input", manifest["provider_error"]["doc_url"])
+
     def test_single_view_uses_image_endpoint(self):
         with tempfile.TemporaryDirectory() as tmp:
             client = _StubClient()
@@ -140,6 +318,145 @@ class GenerationJobTests(unittest.TestCase):
         self.assertEqual([signed_url], downloaded)
         self.assertEqual("https://cdn.example/model.glb", manifest["source_url"])
 
+    def test_meshy_manifest_caches_provider_artifacts_without_signed_queries(self):
+        client = _StubClient(
+            statuses=[
+                {
+                    "status": "succeeded",
+                    "terminal": True,
+                    "succeeded": True,
+                    "progress": 100,
+                    "model_url": "https://cdn.example/model.glb?Signature=final",
+                    "artifact_urls": {
+                        "glb": "https://cdn.example/model.glb?Signature=final",
+                        "pre_remeshed_glb": "https://cdn.example/raw.glb?Signature=raw",
+                        "thumbnail_front": "https://cdn.example/front.png?Signature=front",
+                        "texture_0_base_color": "https://cdn.example/base.png?Signature=base",
+                    },
+                    "credits_consumed": 30,
+                    "expires_at": 123456,
+                    "preceding_tasks": 2,
+                }
+            ]
+        )
+
+        def download(url, destination, timeout=300):
+            with open(destination, "wb") as handle:
+                handle.write(b"\x89PNG\r\n\x1a\n" if destination.endswith(".png") else b"glTF-stub")
+            return {"ok": True, "size": os.path.getsize(destination), "sha256": "digest"}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            from claude_blender import generation_job
+
+            manifest = generation_job.run(
+                {"child_status_path": os.path.join(tmp, "s.json")},
+                {
+                    "views": _views(tmp, ["front"]),
+                    "cache_dir": os.path.join(tmp, "cache"),
+                    "provider": "meshy",
+                },
+                provider="meshy",
+                api_key=API_KEY,
+                client=client,
+                downloader=download,
+                poll_interval=0,
+            )
+            self.assertTrue(manifest["ok"], manifest.get("message"))
+            self.assertEqual(
+                {"model", "pre_remeshed_glb", "thumbnail_front", "texture_0_base_color"},
+                {entry["role"] for entry in manifest["downloaded_files"]},
+            )
+            self.assertEqual("https://cdn.example/raw.glb", manifest["generation"]["artifact_sources"]["pre_remeshed_glb"])
+            self.assertEqual(123456, manifest["generation"]["expires_at"])
+            self.assertEqual(2, manifest["generation"]["preceding_tasks"])
+            with open(manifest["manifest_path"], "r", encoding="utf-8") as handle:
+                persisted = handle.read()
+        self.assertNotIn("Signature=", persisted)
+
+    def test_auxiliary_artifacts_stop_at_the_aggregate_download_limit(self):
+        from claude_blender import generation_job
+
+        client = _StubClient(
+            statuses=[
+                {
+                    "status": "succeeded",
+                    "terminal": True,
+                    "succeeded": True,
+                    "progress": 100,
+                    "model_url": "https://cdn.example/model.glb",
+                    "artifact_urls": {
+                        "thumbnail_front": "https://cdn.example/front.png",
+                        "thumbnail_left": "https://cdn.example/left.png",
+                    },
+                }
+            ]
+        )
+
+        def download(_url, destination, _timeout=300):
+            with open(destination, "wb") as handle:
+                handle.write(b"glTF-stub")
+            return 9
+
+        original_limit = generation_job.MAX_GENERATION_DOWNLOAD_BYTES
+        try:
+            generation_job.MAX_GENERATION_DOWNLOAD_BYTES = 20
+            with tempfile.TemporaryDirectory() as tmp:
+                manifest = generation_job.run(
+                    {"child_status_path": os.path.join(tmp, "s.json")},
+                    {
+                        "views": _views(tmp, ["front"]),
+                        "cache_dir": os.path.join(tmp, "cache"),
+                        "provider": "meshy",
+                    },
+                    provider="meshy",
+                    api_key=API_KEY,
+                    client=client,
+                    downloader=download,
+                    poll_interval=0,
+                )
+                self.assertEqual(18, manifest["bytes"])
+                self.assertEqual(
+                    {"model", "thumbnail_front"},
+                    {entry["role"] for entry in manifest["downloaded_files"]},
+                )
+                self.assertFalse(os.path.exists(os.path.join(tmp, "cache", "meshy_thumbnail_left.png")))
+        finally:
+            generation_job.MAX_GENERATION_DOWNLOAD_BYTES = original_limit
+
+        self.assertTrue(manifest["ok"], manifest.get("message"))
+        self.assertIn("remaining generation job download limit", " ".join(manifest["generation"]["artifact_warnings"]))
+
+    def test_meshy_file_removed_after_balance_is_a_structured_upload_failure(self):
+        from claude_blender import generation_job
+
+        with tempfile.TemporaryDirectory() as tmp:
+            views = _views(tmp, ["front"])
+            image_path = views["front"]
+
+            def transport(_method, url, _headers, _body, _timeout):
+                self.assertTrue(url.endswith("/balance"))
+                os.remove(image_path)
+                return 200, json.dumps({"balance": 1000})
+
+            manifest = generation_job.run(
+                {"child_status_path": os.path.join(tmp, "s.json")},
+                {
+                    "views": views,
+                    "cache_dir": os.path.join(tmp, "cache"),
+                    "provider": "meshy",
+                },
+                provider="meshy",
+                api_key=API_KEY,
+                client=generation_clients.MeshyClient(API_KEY, transport=transport),
+                downloader=_fake_download,
+                poll_interval=0,
+            )
+
+        self.assertFalse(manifest["ok"])
+        self.assertFalse(manifest["uploaded"])
+        self.assertIn("Upload failed", manifest["message"])
+        self.assertEqual("invalid_local_input", manifest["provider_error"]["type"])
+
     def test_missing_image_fails_before_any_upload(self):
         with tempfile.TemporaryDirectory() as tmp:
             client = _StubClient()
@@ -179,6 +496,28 @@ class GenerationJobTests(unittest.TestCase):
             manifest = _run(tmp, _views(tmp, ["front"]), client=client)
         self.assertFalse(manifest["ok"])
         self.assertIn("failed", manifest["message"])
+
+    def test_failed_remote_status_distinguishes_invalid_input(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = _StubClient(
+                statuses=[
+                    {
+                        "status": "failed",
+                        "terminal": True,
+                        "succeeded": False,
+                        "error_message": "reference was rejected",
+                        "task_error": {
+                            "type": "invalid_input",
+                            "code": "image_too_complex",
+                            "message": "reference was rejected",
+                            "doc_url": "https://docs.meshy.ai/en/api/errors#image-too-complex",
+                        },
+                    }
+                ]
+            )
+            manifest = _run(tmp, _views(tmp, ["front"]), client=client)
+        self.assertEqual("invalid_input", manifest["failure_category"])
+        self.assertEqual("image_too_complex", manifest["task_error"]["code"])
 
     def test_progress_is_reported_through_the_callback(self):
         updates = []
@@ -434,11 +773,6 @@ class GenerationJobTests(unittest.TestCase):
         self.assertFalse(manifest["ok"])
         self.assertIn("does not contain a GLB payload", manifest["message"])
 
-
-if __name__ == "__main__":
-    unittest.main()
-
-
 class _BalanceClient(_StubClient):
     """A stub that can report an account balance, like the real client."""
 
@@ -509,3 +843,62 @@ class BalanceGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             manifest = _run(tmp, _views(tmp, ["front"]), client=_StubClient())
         self.assertTrue(manifest["ok"], manifest.get("message"))
+
+    def test_meshy_uses_the_configured_exact_cost_before_upload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = _BalanceClient(19.0)
+            manifest = _run(
+                tmp,
+                _views(tmp, ["front"]),
+                client=client,
+                provider="meshy",
+                meshy_options={"should_texture": False},
+            )
+        self.assertFalse(manifest["ok"])
+        self.assertEqual(20.0, manifest["credits_required"])
+        self.assertEqual([], client.uploaded)
+
+    def test_meshy_ultra_8k_requires_forty_credits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = _BalanceClient(39.0)
+            manifest = _run(
+                tmp,
+                _views(tmp, ["front"]),
+                client=client,
+                provider="meshy",
+                meshy_options={"texture_resolution": "8k", "ultra_mode": True},
+            )
+        self.assertFalse(manifest["ok"])
+        self.assertEqual(40.0, manifest["credits_required"])
+        self.assertEqual([], client.uploaded)
+
+    def test_tripo_p1_texture_requires_fifty_credits_before_upload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = _BalanceClient(49.0)
+            manifest = _run(
+                tmp,
+                _views(tmp, ["front"]),
+                client=client,
+                model="P1-20260311",
+                texture=True,
+            )
+        self.assertFalse(manifest["ok"])
+        self.assertEqual(50.0, manifest["credits_required"])
+        self.assertEqual([], client.uploaded)
+
+    def test_tripo_manifest_records_resolved_pricing_policy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = _run(
+                tmp,
+                _views(tmp, ["front"]),
+                client=_BalanceClient(50.0),
+                model="P1-20260311",
+                texture=True,
+            )
+        self.assertTrue(manifest["ok"], manifest.get("message"))
+        self.assertEqual(50.0, manifest["generation"]["estimated_credits"])
+        self.assertEqual("tripo-api-2026-06-03", manifest["generation"]["pricing_version"])
+
+
+if __name__ == "__main__":
+    unittest.main()

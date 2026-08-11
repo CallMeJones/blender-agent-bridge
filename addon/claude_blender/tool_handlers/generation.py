@@ -11,7 +11,15 @@ from __future__ import annotations
 import json
 import os
 
-from .. import asset_jobs, generation_clients, generation_providers, generation_spend, preferences
+from .. import (
+    asset_jobs,
+    generation_clients,
+    generation_meshy,
+    generation_providers,
+    generation_tripo,
+    generation_spend,
+    preferences,
+)
 from .support import _bounded_float, _bounded_int
 
 
@@ -90,13 +98,12 @@ def _triposr_job_options(args, prefs):
     }
 
 
-def _view_warnings(views):
+def _view_warnings(views, provider=""):
     """Say what a partial or uncalibrated view set will cost the result.
 
-    Slots are positional: a provider treats "left" as the left orthographic
-    view whatever the image actually shows. A mislabelled or 3/4 view produces
-    a worse model rather than an error, and a missing slot is invented rather
-    than omitted, so neither is visible in the job result.
+    Tripo uses fixed positional slots. Meshy 7 uses the front image as primary
+    conditioning and treats the remaining images as unordered supporting
+    angles. Both still need honest image labels for provenance and evaluation.
     """
 
     warnings = []
@@ -113,7 +120,14 @@ def _view_warnings(views):
                 "" if len(missing) == 1 else "s",
             )
         )
-    if len(supplied) > 1:
+    provider = str(provider or "").strip().lower()
+    if len(supplied) > 1 and provider == "meshy":
+        warnings.append(
+            "Meshy uses 'front' as the primary first image. Remaining images may be "
+            "different supporting angles in any order; their names are retained for "
+            "provenance and evaluation rather than sent as positional API slots."
+        )
+    elif len(supplied) > 1:
         warnings.append(
             "Views are positional slots, not labels: each image must be the orthographic "
             "view its slot names. A three-quarter image placed in 'left' degrades the "
@@ -332,6 +346,13 @@ def start_generation_job(context, args):
     provider = selection["selected"]
     provider_spec = generation_providers.PROVIDERS_BY_NAME[provider]
 
+    if provider == "meshy" and len(views) > 1 and "front" not in views:
+        return {
+            "ok": False,
+            "message": "Meshy multi-image generation requires a primary 'front' image",
+            "hint": "Put the primary/front reference in views.front; remaining angles may use the other view names in any order.",
+        }
+
     # A standing instruction outranks everything below it, including an
     # explicit confirm_paid. If the user said "no APIs, just scripts" an hour
     # ago, that is still true now whether or not it is still in context.
@@ -376,6 +397,24 @@ def start_generation_job(context, args):
     }
     if "texture" in args:
         job_args["texture"] = bool(args.get("texture"))
+    if provider == "meshy":
+        job_args["meshy_options"] = args.get("meshy_options")
+        try:
+            resolved = generation_meshy.resolve_job_policy(
+                job_args,
+                view_count=len(views),
+            )
+        except ValueError as error:
+            return {"ok": False, "message": str(error), "provider": provider}
+        job_args["meshy_options"] = resolved["options"]
+        job_args["estimated_cost"] = resolved["estimated_credits"]
+    if provider == "tripo":
+        try:
+            resolved = generation_tripo.resolve_job_policy(job_args)
+        except ValueError as error:
+            return {"ok": False, "message": str(error), "provider": provider}
+        job_args.update(resolved["options"])
+        job_args["estimated_cost"] = resolved["estimated_credits"]
     if provider == "triposr":
         job_args.update(_triposr_job_options(args, prefs))
     endpoint = _first_configured(environ, provider_spec.endpoint_env_vars)
@@ -399,7 +438,7 @@ def start_generation_job(context, args):
     # Carried on both the approval request and the started job: the cost of a
     # partial view set is worth stating before the user approves it, and worth
     # repeating once the mesh exists and looks wrong on the unseen side.
-    warnings = _view_warnings(views)
+    warnings = _view_warnings(views, provider)
     if warnings and isinstance(started, dict):
         started["view_warnings"] = warnings
     return started

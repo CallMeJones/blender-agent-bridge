@@ -380,7 +380,31 @@ def main():
         # is a deadlock, not a safeguard.
         generation_spend.clear_requests()
         request = generation_spend.request_approval(
-            "tripo", "fp-smoke", cost_note="About 30 Tripo credits.", view_count=2, title="Tripo AI"
+            "tripo",
+            "fp-smoke",
+            cost_note="About 30 Tripo credits.",
+            view_count=2,
+            title="Tripo AI",
+            reference_files=[
+                os.path.join("C:\\private", "front.png"),
+                os.path.join("C:\\downloads", "front.png"),
+            ],
+            reference_details=[
+                {
+                    "view": "front",
+                    "path": os.path.join("C:\\private", "front.png"),
+                    "bytes": 1024 * 1024,
+                    "format": "png",
+                    "sha256": "a" * 64,
+                },
+                {
+                    "view": "left",
+                    "path": os.path.join("C:\\downloads", "front.png"),
+                    "bytes": 2048,
+                    "format": "png",
+                    "sha256": "b" * 64,
+                },
+            ],
         )
         spend_layout = _FakeLayout()
         ui.CLAUDEBLENDER_PT_sidebar.draw(
@@ -389,6 +413,12 @@ def main():
         assert "Paid generation awaiting your approval" in spend_layout.labels, spend_layout.labels
         assert any("About 30 Tripo credits" in text for text in spend_layout.labels)
         assert any("Uploads 2 reference images" in text for text in spend_layout.labels)
+        assert "front: front.png" in spend_layout.labels, spend_layout.labels
+        assert "left: front.png" in spend_layout.labels, spend_layout.labels
+        assert "From: C:\\private" in spend_layout.labels, spend_layout.labels
+        assert "From: C:\\downloads" in spend_layout.labels, spend_layout.labels
+        assert "File size: 1.0 MiB" in spend_layout.labels, spend_layout.labels
+        assert "File size: 2.0 KiB" in spend_layout.labels, spend_layout.labels
         assert spend_layout.operators.count("claude_blender.decide_generation_spend") == 2
 
         assert "FINISHED" in bpy.ops.claude_blender.decide_generation_spend(

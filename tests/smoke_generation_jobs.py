@@ -17,7 +17,7 @@ import tempfile
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
-from claude_blender import asset_job_worker, asset_jobs  # noqa: E402
+from claude_blender import asset_job_worker, asset_jobs, generation_providers  # noqa: E402
 
 API_KEY = "tsk_job_secret_must_not_reach_disk"
 
@@ -72,6 +72,23 @@ check(
     "every provider has a worker",
     set(asset_jobs.JOB_PROVIDER_SPECS) == set(asset_job_worker.WORKER_DISPATCH),
     "%s vs %s" % (sorted(asset_jobs.JOB_PROVIDER_SPECS), sorted(asset_job_worker.WORKER_DISPATCH)),
+)
+implemented_generation = {
+    spec.name for spec in generation_providers.PROVIDER_SPECS if spec.job_implemented
+}
+registered_generation = set(asset_jobs.JOB_PROVIDER_SPECS) - {"poly_haven", "sketchfab"}
+check(
+    "planned executable generation providers match the job registry",
+    implemented_generation == registered_generation,
+    "%s vs %s" % (sorted(implemented_generation), sorted(registered_generation)),
+)
+check(
+    "generation spend policy comes from provider planning specs",
+    all(
+        asset_jobs.JOB_PROVIDER_SPECS[name]["spends_money"]
+        == generation_providers.is_paid_provider(name)
+        for name in registered_generation
+    ),
 )
 check("tripo registered", "tripo" in asset_jobs.JOB_PROVIDER_SPECS)
 check("catalog providers retained", {"poly_haven", "sketchfab"} <= set(asset_jobs.JOB_PROVIDER_SPECS))
@@ -245,6 +262,42 @@ generation_providers.probe_hardware = lambda **_kwargs: {
 }
 
 try:
+    meshy_untextured = generation_handler.start_generation_job(
+        bpy.context,
+        {
+            "provider": "meshy",
+            "views": {"front": image},
+            "meshy_options": {"should_texture": False},
+        },
+    )
+    check(
+        "Meshy untextured approval estimates 20 credits",
+        (meshy_untextured.get("spend_approval") or {}).get("estimated_credits") == 20,
+        str(meshy_untextured)[:180],
+    )
+    check(
+        "Meshy approval names the reference and preset",
+        (meshy_untextured.get("spend_approval") or {}).get("reference_files")
+        == [os.path.normpath(os.path.abspath(image))]
+        and (meshy_untextured.get("spend_approval") or {}).get("options_summary")
+        == "blender_working",
+        str(meshy_untextured.get("spend_approval")),
+    )
+    meshy_ultra = generation_handler.start_generation_job(
+        bpy.context,
+        {
+            "provider": "meshy",
+            "views": {"front": image},
+            "meshy_options": {"texture_resolution": "8k", "ultra_mode": True},
+        },
+    )
+    check(
+        "Meshy 8K Ultra approval estimates 40 credits",
+        (meshy_ultra.get("spend_approval") or {}).get("estimated_credits") == 40,
+        str(meshy_ultra)[:180],
+    )
+    generation_spend.clear_requests()
+
     first = generation_handler.start_generation_job(bpy.context, dict(JOB))
     check("naming a paid provider does not start it", first.get("ok") is False, str(first)[:90])
     check("refusal waits on the user", first.get("awaiting_user_approval") is True)
@@ -274,9 +327,15 @@ try:
 
     # A different job must not ride on this request.
     other = generation_handler.start_generation_job(
-        bpy.context, {"provider": "tripo", "views": {"front": image}, "model": "other"}
+        bpy.context,
+        {"provider": "tripo", "views": {"front": image}, "model": "P1-20260311"},
     )
     check("a different job raises its own request", other.get("ok") is False)
+    check(
+        "Tripo P1 textured approval estimates 50 credits",
+        (other.get("spend_approval") or {}).get("estimated_credits") == 50,
+        str(other.get("spend_approval")),
+    )
     check("requests are per job", len(generation_spend.pending_requests()) == 2)
 
     # The operator wiring is covered by smoke_ui_layout, which registers the
@@ -293,6 +352,18 @@ try:
     check(
         "the approval is single use",
         generation_handler.start_generation_job(bpy.context, dict(JOB)).get("ok") is False,
+    )
+    same_path_retry = generation_spend.pending_requests()[0]
+    with open(image, "ab") as handle:
+        handle.write(b"replacement")
+    replaced = generation_handler.start_generation_job(bpy.context, dict(JOB))
+    replaced_approval = replaced.get("spend_approval") or {}
+    check(
+        "replacing approved bytes at the same path requires a distinct approval",
+        replaced.get("awaiting_user_approval") is True
+        and replaced_approval.get("request_id") != same_path_retry.get("request_id")
+        and replaced_approval.get("fingerprint") != same_path_retry.get("fingerprint"),
+        str(replaced_approval),
     )
 
     generation_spend.clear_requests()

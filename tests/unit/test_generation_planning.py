@@ -123,6 +123,16 @@ class GenerationPlanningTests(unittest.TestCase):
         self.assertFalse(result["generation_provider_selection_required"])
         self.assertIn("scripts, bounded helpers, and the bridge tools", result["message"])
 
+    def test_meshy_and_tripo_multiview_guidance_are_provider_specific(self):
+        views = {"front": "front.png", "left": "left.png", "back": "back.png", "right": "right.png"}
+        meshy = " ".join(generation._view_warnings(views, "meshy"))
+        tripo = " ".join(generation._view_warnings(views, "tripo"))
+
+        self.assertIn("primary first image", meshy)
+        self.assertIn("any order", meshy)
+        self.assertNotIn("positional slots", meshy)
+        self.assertIn("positional slots", tripo)
+
 
 if __name__ == "__main__":
     unittest.main()

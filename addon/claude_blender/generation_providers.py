@@ -189,8 +189,7 @@ PROVIDER_SPECS = (
         supports_multiview=True,
         max_input_images=4,
         license_note="Commercial API; output rights governed by the vendor's terms.",
-        # Measured on a live v3 image-to-model job during evaluation.
-        cost_note="About 30 Tripo credits per image-to-model job.",
+        cost_note="Tripo credits vary by model and texturing; the exact configured estimate is shown before approval.",
         job_implemented=True,
     ),
     ProviderSpec(
@@ -202,7 +201,7 @@ PROVIDER_SPECS = (
         supports_multiview=True,
         max_input_images=4,
         license_note="Commercial API; output rights governed by the vendor's terms.",
-        cost_note="Charged per job against the account's Meshy credit balance.",
+        cost_note="Meshy credits vary by model, texturing, resolution, and Ultra mode; the exact configured estimate is shown before approval.",
         job_implemented=True,
     ),
 )

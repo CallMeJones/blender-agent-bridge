@@ -15,10 +15,47 @@ _VIEW_SLOTS = ("front", "left", "back", "right")
 
 _VIEWS_SCHEMA = {
     'type': 'object',
-    'description': 'Maps a view name to a local image path. Multi-view providers treat the '
-                   'names as positional slots, so a mislabelled view produces a worse model '
-                   'rather than an error. Supply "front" alone for single-image generation.',
+    'description': 'Maps a canonical view name to a local image path. Tripo treats multi-view names as fixed '
+                   'positional slots. Meshy uses front as the primary first image and accepts the remaining '
+                   'angles in any order. Supply front alone for single-image generation.',
     'properties': {name: {'type': 'string'} for name in _VIEW_SLOTS},
+    'additionalProperties': False,
+}
+
+_MESHY_OPTIONS_SCHEMA = {
+    'type': 'object',
+    'description': 'Meshy-only generation controls. Defaults to blender_working, which requests a remeshed '
+                   'Blender-oriented GLB while preserving the raw pre-remesh model. Use raw_high_detail to '
+                   'retain the previous unremeshed behavior.',
+    'properties': {
+        'preset': {'type': 'string',
+                   'enum': ['raw_high_detail', 'blender_working', 'editable_quad'],
+                   'description': 'raw_high_detail: maximum raw triangles. blender_working: 100k triangle PBR '
+                                  'mesh plus raw source. editable_quad: 50k quad target plus raw source.'},
+        'ai_model': {'type': 'string',
+                     'enum': ['latest', 'meshy-7', 'meshy-6', 'meshy-5', 'meshy-t2']},
+        'model_type': {'type': 'string', 'enum': ['standard', 'smart-topology']},
+        'ultra_mode': {'type': 'boolean',
+                       'description': 'Single-image Meshy 7/latest only; adds five credits.'},
+        'should_texture': {'type': 'boolean'},
+        'enable_pbr': {'type': 'boolean'},
+        'texture_resolution': {'type': 'string', 'enum': ['2k', '4k', '8k']},
+        'should_remesh': {'type': 'boolean'},
+        'topology': {'type': 'string', 'enum': ['triangle', 'quad']},
+        'target_polycount': {'type': 'integer', 'minimum': 100, 'maximum': 300000},
+        'decimation_mode': {'type': 'string', 'enum': ['ultra', 'high', 'medium', 'low'],
+                            'description': 'Adaptive provider decimation. Cannot be combined with target_polycount.'},
+        'save_pre_remeshed_model': {'type': 'boolean'},
+        'image_enhancement': {'type': 'boolean'},
+        'remove_lighting': {'type': 'boolean',
+                            'description': 'Lighting removal. Single-image Meshy currently documents this for '
+                                           'meshy-6; multi-image also supports meshy-7/latest.'},
+        'auto_size': {'type': 'boolean'},
+        'origin_at': {'type': 'string', 'enum': ['bottom', 'center']},
+        'alpha_thumbnail': {'type': 'boolean'},
+        'multi_view_thumbnails': {'type': 'boolean',
+                                  'description': 'Cache front/right/back/left provider thumbnails; requires auto_size.'},
+    },
     'additionalProperties': False,
 }
 
@@ -140,6 +177,7 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
                                   'model': {'type': 'string'},
                                   'face_limit': {'type': 'integer', 'minimum': 0, 'maximum': 1000000},
                                   'texture': {'type': 'boolean'},
+                                  'meshy_options': _MESHY_OPTIONS_SCHEMA,
                                   'mc_resolution': {'type': 'integer',
                                                     'minimum': 16,
                                                     'maximum': 512,
@@ -194,6 +232,7 @@ SPECS = tuple(ToolSpec(**payload) for payload in [
                                                'model': {'type': 'string'},
                                                'face_limit': {'type': 'integer'},
                                                'texture': {'type': 'boolean'},
+                                               'meshy_options': _MESHY_OPTIONS_SCHEMA,
                                                'mc_resolution': {'type': 'integer'},
                                                'no_remove_bg': {'type': 'boolean'},
                                                'foreground_ratio': {'type': 'number'},

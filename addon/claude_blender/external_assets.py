@@ -521,7 +521,18 @@ def _response_download_size(response, *, partial_size, resumed):
     return partial_size + content_length if resumed else content_length
 
 
-def _download_size_failure(url, destination, partial_path, *, message, expected_size=0, attempts=0, resumed=False, http_status=0):
+def _download_size_failure(
+    url,
+    destination,
+    partial_path,
+    *,
+    message,
+    expected_size=0,
+    max_download_bytes=MAX_DOWNLOAD_BYTES,
+    attempts=0,
+    resumed=False,
+    http_status=0,
+):
     _remove_download_file(partial_path)
     _remove_download_file(destination)
     return {
@@ -531,7 +542,7 @@ def _download_size_failure(url, destination, partial_path, *, message, expected_
         "path": destination,
         "partial_path": partial_path,
         "expected_size": int(expected_size or 0),
-        "max_download_bytes": MAX_DOWNLOAD_BYTES,
+        "max_download_bytes": int(max_download_bytes),
         "attempts": attempts,
         "resumed": resumed,
         "http_status": http_status,
@@ -539,19 +550,56 @@ def _download_size_failure(url, destination, partial_path, *, message, expected_
     }
 
 
-def _download_file(url, destination, *, expected_md5="", expected_size=None, headers=None, timeout=60, progress_callback=None):
+def download_external_file(
+    url,
+    destination,
+    *,
+    expected_size=None,
+    headers=None,
+    timeout=60,
+    progress_callback=None,
+    max_download_bytes=None,
+):
+    """Download one public HTTPS artifact through the hardened asset transport."""
+
+    return _download_file(
+        url,
+        destination,
+        expected_size=expected_size,
+        headers=headers,
+        timeout=timeout,
+        progress_callback=progress_callback,
+        max_download_bytes=max_download_bytes,
+    )
+
+
+def _download_file(
+    url,
+    destination,
+    *,
+    expected_md5="",
+    expected_size=None,
+    headers=None,
+    timeout=60,
+    progress_callback=None,
+    max_download_bytes=None,
+):
     os.makedirs(os.path.dirname(destination), exist_ok=True)
     expected_size_value = _expected_size_int(expected_size)
     partial_path = f"{destination}.part"
-    if expected_size_value > MAX_DOWNLOAD_BYTES:
+    requested_limit = _expected_size_int(max_download_bytes)
+    download_limit = min(MAX_DOWNLOAD_BYTES, requested_limit) if requested_limit else MAX_DOWNLOAD_BYTES
+    if expected_size_value > download_limit:
         return _download_size_failure(
             url,
             destination,
             partial_path,
-            message=f"Expected download size exceeds the {MAX_DOWNLOAD_BYTES}-byte safety limit",
+            message=f"Expected download size exceeds the {download_limit}-byte safety limit",
             expected_size=expected_size_value,
+            max_download_bytes=download_limit,
         )
-    download_limit = min(MAX_DOWNLOAD_BYTES, expected_size_value) if expected_size_value else MAX_DOWNLOAD_BYTES
+    if expected_size_value:
+        download_limit = min(download_limit, expected_size_value)
     if os.path.exists(destination) and os.path.getsize(destination) > download_limit:
         _remove_download_file(destination)
     cached = _cached_file_valid(destination, expected_md5=expected_md5, expected_size=expected_size_value or None)
@@ -582,6 +630,7 @@ def _download_file(url, destination, *, expected_md5="", expected_size=None, hea
     resumed = False
     attempts = 0
     http_status = 0
+    content_type = ""
     max_attempts = max(1, DOWNLOAD_RETRY_COUNT + 1)
     for attempt in range(1, max_attempts + 1):
         attempts = attempt
@@ -599,6 +648,7 @@ def _download_file(url, destination, *, expected_md5="", expected_size=None, hea
             request = urllib.request.Request(str(url), headers=request_headers)
             with _urlopen_external(request, timeout=max(1, int(timeout or 60))) as response:
                 http_status = int(getattr(response, "status", 0) or response.getcode() or 0)
+                content_type = str(response.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
                 if partial_size and http_status == 206:
                     mode = "ab"
                     resumed = True
@@ -662,6 +712,7 @@ def _download_file(url, destination, *, expected_md5="", expected_size=None, hea
                 partial_path,
                 message=f"Download rejected for {destination}: {exc}",
                 expected_size=expected_size_value,
+                max_download_bytes=download_limit,
                 attempts=attempts,
                 resumed=resumed,
                 http_status=http_status,
@@ -720,6 +771,7 @@ def _download_file(url, destination, *, expected_md5="", expected_size=None, hea
         "attempts": attempts,
         "partial_path": partial_path,
         "http_status": http_status,
+        "content_type": content_type,
         "size": size,
         "md5": md5,
         "sha256": _sha256_file(destination),

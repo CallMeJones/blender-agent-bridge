@@ -19,22 +19,25 @@ import os
 import shutil
 import subprocess
 import time
+import urllib.parse
 import urllib.request
 
-from . import generation_clients, process_utils
+from . import (
+    external_assets,
+    generation_clients,
+    generation_meshy,
+    generation_references,
+    generation_tripo,
+    process_utils,
+)
 
 MANIFEST_NAME = "asset_manifest.json"
 POLL_INTERVAL_SECONDS = 5
 # A hosted task normally lands in a minute or two; this bounds a hung provider.
 MAX_POLL_SECONDS = 1800
-# Measured on a live v3 image-to-model job. Used only to refuse a job the
-# account plainly cannot afford, so erring high would block affordable work
-# and erring low would let it fail after upload; this is the observed figure.
-ESTIMATED_JOB_COST = 30.0
-ESTIMATED_PROVIDER_COSTS = {
-    "tripo": 30.0,
-    "meshy": 30.0,
-}
+MAX_CONSECUTIVE_POLL_FAILURES = 4
+POLL_RETRY_MAX_SECONDS = 15
+MAX_GENERATION_DOWNLOAD_BYTES = 8 * 1024 * 1024 * 1024
 
 
 def _bounded_int(value, default, *, minimum, maximum):
@@ -85,13 +88,110 @@ def _failure(cache_dir, message, *, provider="tripo", **extra):
     return manifest
 
 
-def _download(url, destination, timeout=300):
-    request = urllib.request.Request(url, method="GET")
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        payload = response.read()
-    with open(destination, "wb") as handle:
-        handle.write(payload)
-    return len(payload)
+def _download(url, destination, timeout=300, *, max_bytes=None):
+    result = external_assets.download_external_file(
+        url,
+        destination,
+        timeout=timeout,
+        max_download_bytes=max_bytes,
+    )
+    if not result.get("ok"):
+        raise ValueError(result.get("message") or "Generated artifact download failed")
+    return result
+
+
+def _url_origin(url):
+    parsed = urllib.parse.urlparse(str(url or ""))
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return ()
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    return parsed.scheme.lower(), parsed.hostname.lower(), int(port)
+
+
+def _download_studio_artifact(
+    url,
+    destination,
+    *,
+    endpoint,
+    api_key="",
+    timeout=300,
+    max_bytes=None,
+):
+    """Stream a local studio artifact without allowing an origin pivot."""
+
+    if _url_origin(url) != _url_origin(endpoint):
+        # A studio may hand off to a public signed CDN. That path receives the
+        # same DNS, redirect, HTTPS, and size protections as hosted providers.
+        return _download(url, destination, timeout=timeout, max_bytes=max_bytes)
+    request = urllib.request.Request(str(url), method="GET")
+    if str(api_key or "").strip():
+        request.add_header("Authorization", "Bearer %s" % str(api_key).strip())
+    opener = generation_clients.build_no_redirect_opener(
+        urllib.request.ProxyHandler({}),
+    )
+    partial = "%s.part" % destination
+    os.makedirs(os.path.dirname(destination), exist_ok=True)
+    requested_limit = int(max_bytes or 0)
+    download_limit = min(external_assets.MAX_DOWNLOAD_BYTES, requested_limit) if requested_limit else external_assets.MAX_DOWNLOAD_BYTES
+    size = 0
+    content_type = ""
+    try:
+        with opener.open(request, timeout=timeout) as response, open(partial, "wb") as handle:
+            content_type = str(response.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+            advertised = int(response.headers.get("Content-Length") or 0)
+            if advertised > download_limit:
+                raise ValueError("Studio artifact exceeds the download safety limit")
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > download_limit:
+                    raise ValueError("Studio artifact exceeded the download safety limit")
+                handle.write(chunk)
+        os.replace(partial, destination)
+    except Exception:
+        try:
+            os.remove(partial)
+        except OSError:
+            pass
+        raise
+    return {
+        "ok": True,
+        "path": destination,
+        "size": size,
+        "cached": False,
+        "content_type": content_type,
+    }
+
+
+def _download_size(result, destination=""):
+    if isinstance(result, dict):
+        size = int(result.get("size") or 0)
+    else:
+        size = int(result or 0)
+    if destination and os.path.isfile(destination):
+        size = max(size, os.path.getsize(destination))
+    return size
+
+
+def _strip_url_secret(url):
+    return str(url or "").split("?", 1)[0].split("#", 1)[0]
+
+
+def _generation_error_payload(error):
+    if hasattr(error, "as_dict"):
+        return error.as_dict()
+    return {"message": str(error)}
+
+
+def _task_error_category(task_error):
+    error_type = str((task_error or {}).get("type") or "").strip().lower()
+    if error_type == "invalid_input":
+        return "invalid_input"
+    if error_type in {"timeout", "service_unavailable", "server_error"}:
+        return "provider_failure"
+    return "provider_task_failure"
 
 
 def _tail(value, limit=4000):
@@ -143,20 +243,131 @@ def _find_generated_mesh(output_dir):
     return candidates[0] if candidates else ""
 
 
-def _generated_mesh_payload_error(path):
-    if os.path.splitext(path)[1].lower() != ".glb":
+def _generated_mesh_content_type_error(path, content_type):
+    content_type = str(content_type or "").split(";", 1)[0].strip().lower()
+    if not content_type or content_type in {"application/octet-stream", "binary/octet-stream"}:
         return ""
+    rejected = {
+        "application/json",
+        "application/xml",
+        "text/html",
+        "text/json",
+        "text/xml",
+    }
+    if content_type in rejected or content_type.startswith(("image/", "audio/", "video/")):
+        return "Generated %s artifact returned a non-model content type: %s" % (
+            os.path.splitext(path)[1].lower() or "model",
+            content_type,
+        )
+    return ""
+
+
+def _generated_mesh_payload_error(path):
+    suffix = os.path.splitext(path)[1].lower()
     try:
         with open(path, "rb") as handle:
-            magic = handle.read(4)
+            header = handle.read(4 * 1024 * 1024)
     except OSError as error:
-        return "Could not read generated GLB: %s" % error
-    if magic != b"glTF":
+        return "Could not read generated model: %s" % error
+    if not header:
+        return "Generated model payload is empty"
+    if suffix == ".glb" and not header.startswith(b"glTF"):
         return (
             "Generated file is named .glb but does not contain a GLB payload; "
             "the provider exporter likely wrote another format"
         )
+    if suffix == ".obj":
+        lines = (line.lstrip() for line in header.splitlines())
+        if b"\x00" in header or not any(line.startswith(b"v ") for line in lines):
+            return "Generated file is named .obj but does not contain an OBJ vertex payload"
+    if suffix == ".fbx":
+        stripped = header.lstrip(b"\xef\xbb\xbf\x00\t\r\n ")
+        if not (
+            header.startswith(b"Kaydara FBX Binary  \x00\x1a\x00")
+            or stripped.startswith(b"; FBX")
+        ):
+            return "Generated file is named .fbx but does not contain an FBX payload"
+    if suffix == ".stl":
+        size = os.path.getsize(path)
+        binary_size_valid = False
+        if len(header) >= 84:
+            triangle_count = int.from_bytes(header[80:84], "little")
+            binary_size_valid = size == 84 + triangle_count * 50
+        ascii_header = header.lstrip(b"\xef\xbb\xbf\t\r\n ").lower()
+        ascii_valid = ascii_header.startswith(b"solid") and b"facet" in ascii_header
+        if not (binary_size_valid or ascii_valid):
+            return "Generated file is named .stl but does not contain an STL payload"
     return ""
+
+
+def _remove_rejected_artifact(path):
+    for candidate in (path, "%s.part" % path):
+        try:
+            os.remove(candidate)
+        except OSError:
+            pass
+
+
+def _artifact_suffix(url, default):
+    suffix = os.path.splitext(urllib.parse.urlparse(str(url or "")).path)[1].lower()
+    return suffix if suffix in {".glb", ".png", ".jpg", ".jpeg"} else default
+
+
+def _artifact_candidates(status):
+    urls = status.get("artifact_urls") if isinstance(status.get("artifact_urls"), dict) else {}
+    candidates = []
+    seen = set()
+    for role, url in urls.items():
+        url = str(url or "")
+        if not url or url in seen or role == "glb":
+            continue
+        seen.add(url)
+        if role == "pre_remeshed_glb":
+            name = "generated_pre_remeshed.glb"
+        elif role == "thumbnail_url":
+            name = "meshy_thumbnail%s" % _artifact_suffix(url, ".png")
+        elif role == "alpha_thumbnail_url":
+            name = "meshy_thumbnail_alpha%s" % _artifact_suffix(url, ".png")
+        elif role.startswith("thumbnail_"):
+            name = "meshy_%s%s" % (role, _artifact_suffix(url, ".png"))
+        elif role.startswith("texture_"):
+            name = "meshy_%s%s" % (role, _artifact_suffix(url, ".png"))
+        else:
+            continue
+        candidates.append((str(role), url, name))
+    return candidates[:32]
+
+
+def _download_one(downloader, url, destination, *, provider, args, api_key="", max_bytes):
+    max_bytes = int(max_bytes)
+    if max_bytes <= 0:
+        raise ValueError("Generation job download safety limit reached")
+    if downloader is not None:
+        result = downloader(url, destination, int(args.get("timeout") or 300))
+    elif provider == "studio_endpoint":
+        result = _download_studio_artifact(
+            url,
+            destination,
+            endpoint=str(args.get("endpoint") or ""),
+            api_key=api_key,
+            timeout=int(args.get("timeout") or 300),
+            max_bytes=max_bytes,
+        )
+    else:
+        result = _download(
+            url,
+            destination,
+            timeout=int(args.get("timeout") or 300),
+            max_bytes=max_bytes,
+        )
+    if _download_size(result, destination) > max_bytes:
+        for path in (destination, "%s.part" % destination):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        raise ValueError("Artifact exceeds the remaining generation job download limit")
+    return result
 
 
 def _run_triposr(config, args, *, progress_callback=None):
@@ -404,7 +615,7 @@ def run(
     os.makedirs(cache_dir, exist_ok=True)
 
     api_key = str(api_key or "").strip()
-    if provider in ESTIMATED_PROVIDER_COSTS and not api_key:
+    if provider in {"tripo", "meshy"} and not api_key:
         return _failure(
             cache_dir,
             "No generation API key was supplied to the worker",
@@ -423,6 +634,26 @@ def run(
     if missing:
         return _failure(cache_dir, "Reference image not found: %s" % missing[0], provider=provider)
 
+    meshy_options = {}
+    meshy_policy = {}
+    tripo_policy = {}
+    try:
+        generation_references.validate_reference_images(
+            views,
+            provider=provider,
+            expected_identities=args.get("_reference_identities"),
+        )
+        if provider == "meshy":
+            meshy_policy = generation_meshy.resolve_job_policy(
+                args,
+                view_count=len(views),
+            )
+            meshy_options = meshy_policy["options"]
+        elif provider == "tripo":
+            tripo_policy = generation_tripo.resolve_job_policy(args)
+    except ValueError as error:
+        return _failure(cache_dir, str(error), provider=provider, uploaded=False)
+
     if client is None:
         try:
             client = _client_for_provider(provider, args, api_key=api_key)
@@ -434,10 +665,12 @@ def run(
     # and after their reference art has already been uploaded, which is the
     # worst order to discover it in. This runs in the worker subprocess, so
     # the request never touches Blender's main thread.
-    estimated_cost = _bounded_cost(
-        args.get("estimated_cost"),
-        ESTIMATED_PROVIDER_COSTS.get(provider, ESTIMATED_JOB_COST),
-    )
+    if provider == "meshy":
+        estimated_cost = meshy_policy["estimated_credits"]
+    elif provider == "tripo":
+        estimated_cost = tripo_policy["estimated_credits"]
+    else:
+        estimated_cost = _bounded_cost(args.get("estimated_cost"), 0.0)
     read_balance = getattr(client, "balance", None)
     try:
         available = read_balance() if callable(read_balance) else None
@@ -466,27 +699,44 @@ def run(
     try:
         for index, (name, path) in enumerate(sorted(views.items())):
             report(0.05 + 0.15 * (index / max(1, len(views))), "Uploading %s" % name, phase="upload")
-            tokens[name] = (client.upload_image(path), path)
+            tokens[name] = (
+                client.upload_image(
+                    path,
+                    expected_identity=(args.get("_reference_identities") or {}).get(name),
+                ),
+                path,
+            )
     except generation_clients.GenerationError as error:
-        return _failure(cache_dir, "Upload failed: %s" % error, provider=provider)
+        return _failure(
+            cache_dir,
+            "Upload failed: %s" % error,
+            provider=provider,
+            provider_error=_generation_error_payload(error),
+            uploaded=False,
+        )
 
     report(0.25, "Creating generation task", phase="submit")
     try:
+        create_options = {
+            "model": str(args.get("model") or ""),
+            "face_limit": int(args.get("face_limit") or 0),
+            "texture": args.get("texture") if "texture" in args else None,
+        }
+        if provider == "meshy":
+            create_options["meshy_options"] = meshy_options
+        elif provider == "tripo":
+            create_options.update(tripo_policy["options"])
         if len(tokens) > 1:
             task_id = client.create_multiview_task(
                 tokens,
-                model=str(args.get("model") or ""),
-                face_limit=int(args.get("face_limit") or 0),
-                texture=args.get("texture") if "texture" in args else None,
+                **create_options,
             )
         else:
             only_token, only_path = next(iter(tokens.values()))
             task_id = client.create_image_task(
                 only_token,
                 only_path,
-                model=str(args.get("model") or ""),
-                face_limit=int(args.get("face_limit") or 0),
-                texture=args.get("texture") if "texture" in args else None,
+                **create_options,
             )
     except generation_clients.GenerationError as error:
         return _failure(
@@ -494,6 +744,7 @@ def run(
             "Task creation failed: %s" % error,
             provider=provider,
             insufficient_credit=bool(getattr(error, "insufficient_credit", False)),
+            provider_error=_generation_error_payload(error),
         )
 
     task_kind = "multiview" if len(tokens) > 1 else "image"
@@ -507,12 +758,42 @@ def run(
 
     deadline = time.time() + MAX_POLL_SECONDS
     status = {}
+    consecutive_poll_failures = 0
+    recovered_poll_failures = 0
     while time.time() < deadline:
         time.sleep(poll_interval)
         try:
             status = client.task_status(task_id)
         except generation_clients.GenerationError as error:
-            return _failure(cache_dir, "Polling failed: %s" % error, provider=provider, task_id=task_id)
+            consecutive_poll_failures += 1
+            if not error.retryable or consecutive_poll_failures > MAX_CONSECUTIVE_POLL_FAILURES:
+                return _failure(
+                    cache_dir,
+                    "Polling failed after %d consecutive error(s): %s"
+                    % (consecutive_poll_failures, error),
+                    provider=provider,
+                    task_id=task_id,
+                    provider_error=_generation_error_payload(error),
+                    poll_failures=consecutive_poll_failures,
+                )
+            recovered_poll_failures += 1
+            retry_delay = min(
+                POLL_RETRY_MAX_SECONDS,
+                2 ** (consecutive_poll_failures - 1),
+            )
+            report(
+                0.3,
+                "Temporary provider polling error; retrying in %d second(s): %s"
+                % (retry_delay, error),
+                phase="poll_retry",
+                task_id=task_id,
+                task_kind=task_kind,
+                poll_failure=consecutive_poll_failures,
+            )
+            if poll_interval:
+                time.sleep(retry_delay)
+            continue
+        consecutive_poll_failures = 0
         remote = max(0, min(100, int(status.get("progress") or 0)))
         report(
             0.3 + 0.55 * (remote / 100.0),
@@ -533,12 +814,18 @@ def run(
 
     if not status.get("succeeded"):
         detail = str(status.get("error_message") or "").strip()
+        task_error = dict(status.get("task_error") or {})
         return _failure(
             cache_dir,
             "Generation ended with status %s%s"
             % (status.get("status"), ": %s" % detail if detail else ""),
             provider=provider,
             task_id=task_id,
+            task_error=task_error,
+            failure_category=_task_error_category(task_error),
+            expires_at=status.get("expires_at"),
+            preceding_tasks=status.get("preceding_tasks"),
+            credits_consumed=status.get("credits_consumed"),
         )
 
     model_url = str(status.get("model_url") or "")
@@ -557,12 +844,105 @@ def run(
         task_id=task_id,
         task_kind=task_kind,
     )
-    suffix = os.path.splitext(model_url.split("?", 1)[0])[1].lower() or ".glb"
+    suffix = os.path.splitext(urllib.parse.urlparse(model_url).path)[1].lower() or ".glb"
+    if suffix not in {".glb", ".obj", ".fbx", ".stl"}:
+        return _failure(
+            cache_dir,
+            "Provider returned an unsupported model artifact type: %s" % suffix,
+            provider=provider,
+            task_id=task_id,
+        )
+    if provider == "meshy" and suffix != ".glb":
+        return _failure(
+            cache_dir,
+            "Meshy returned a non-GLB artifact after a GLB-only request",
+            provider=provider,
+            task_id=task_id,
+        )
     destination = os.path.join(cache_dir, "generated%s" % suffix)
     try:
-        size = (downloader or _download)(model_url, destination)
+        primary_download = _download_one(
+            downloader,
+            model_url,
+            destination,
+            provider=provider,
+            args=args,
+            api_key=api_key,
+            max_bytes=MAX_GENERATION_DOWNLOAD_BYTES,
+        )
+        size = _download_size(primary_download, destination)
     except Exception as error:  # noqa: BLE001 - any download failure is reportable
         return _failure(cache_dir, "Model download failed: %s" % error, provider=provider, task_id=task_id)
+    payload_error = _generated_mesh_content_type_error(
+        destination,
+        primary_download.get("content_type", "") if isinstance(primary_download, dict) else "",
+    ) or _generated_mesh_payload_error(destination)
+    if payload_error:
+        _remove_rejected_artifact(destination)
+        return _failure(cache_dir, payload_error, provider=provider, task_id=task_id)
+
+    downloaded_files = [
+        {
+            "ok": True,
+            "path": destination,
+            "cached": bool(primary_download.get("cached", False)) if isinstance(primary_download, dict) else False,
+            "logical_path": os.path.basename(destination),
+            "role": "model",
+            "bytes": size,
+            "sha256": primary_download.get("sha256", "") if isinstance(primary_download, dict) else "",
+        }
+    ]
+    artifact_paths = {"model": destination}
+    artifact_sources = {"model": _strip_url_secret(model_url)}
+    if suffix == ".glb":
+        artifact_paths["glb"] = destination
+        artifact_sources["glb"] = _strip_url_secret(model_url)
+    artifact_warnings = []
+    total_download_bytes = size
+    for role, url, filename in _artifact_candidates(status):
+        remaining_bytes = MAX_GENERATION_DOWNLOAD_BYTES - total_download_bytes
+        if remaining_bytes <= 0:
+            artifact_warnings.append("Remaining artifacts skipped: generation job download safety limit reached")
+            break
+        artifact_path = os.path.join(cache_dir, filename)
+        try:
+            artifact_download = _download_one(
+                downloader,
+                url,
+                artifact_path,
+                provider=provider,
+                args=args,
+                api_key=api_key,
+                max_bytes=remaining_bytes,
+            )
+            artifact_size = _download_size(artifact_download, artifact_path)
+            if role == "pre_remeshed_glb":
+                payload_error = _generated_mesh_content_type_error(
+                    artifact_path,
+                    artifact_download.get("content_type", "")
+                    if isinstance(artifact_download, dict)
+                    else "",
+                ) or _generated_mesh_payload_error(artifact_path)
+                if payload_error:
+                    _remove_rejected_artifact(artifact_path)
+                    raise ValueError(payload_error)
+        except Exception as error:  # noqa: BLE001 - auxiliary artifacts are best-effort
+            artifact_warnings.append("%s download failed: %s" % (role, error))
+            continue
+        downloaded_files.append(
+            {
+                "ok": True,
+                "path": artifact_path,
+                "cached": bool(artifact_download.get("cached", False)) if isinstance(artifact_download, dict) else False,
+                "logical_path": filename,
+                "role": role,
+                "bytes": artifact_size,
+                "sha256": artifact_download.get("sha256", "") if isinstance(artifact_download, dict) else "",
+            }
+        )
+        artifact_paths[role] = artifact_path
+        artifact_sources[role] = _strip_url_secret(url)
+        total_download_bytes += artifact_size
 
     manifest = {
         "ok": True,
@@ -570,17 +950,38 @@ def run(
         "asset_id": task_id,
         "cache_dir": cache_dir,
         "import_file": destination,
-        "downloaded_files": [{"ok": True, "path": destination, "cached": False, "logical_path": os.path.basename(destination)}],
+        "downloaded_files": downloaded_files,
         "license": str(args.get("license_note") or "Commercial API; output rights governed by the vendor's terms."),
-        "source_url": model_url.split("?", 1)[0],
+        "source_url": _strip_url_secret(model_url),
         "generation": {
             "task_id": task_id,
-            "model": str(args.get("model") or ""),
+            "model": (
+                meshy_options.get("ai_model", "")
+                if provider == "meshy"
+                else str(args.get("model") or "")
+            ),
             "view_names": sorted(views),
             "view_count": len(views),
             "credits_consumed": status.get("credits_consumed"),
+            "estimated_credits": estimated_cost,
+            "pricing_version": (
+                meshy_policy.get("pricing_version", "")
+                if provider == "meshy"
+                else tripo_policy.get("pricing_version", "") if provider == "tripo" else ""
+            ),
+            "meshy_options": meshy_options if provider == "meshy" else {},
+            "artifacts": artifact_paths,
+            "artifact_sources": artifact_sources,
+            "artifact_warnings": artifact_warnings,
+            "created_at": status.get("created_at"),
+            "started_at": status.get("started_at"),
+            "finished_at": status.get("finished_at"),
+            "expires_at": status.get("expires_at"),
+            "preceding_tasks": status.get("preceding_tasks"),
+            "task_error": dict(status.get("task_error") or {}),
+            "recovered_poll_failures": recovered_poll_failures,
         },
-        "bytes": size,
+        "bytes": sum(int(entry.get("bytes") or 0) for entry in downloaded_files),
         "message": "Generated model cached from %d view(s)" % len(views),
     }
     report(

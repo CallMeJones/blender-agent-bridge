@@ -1111,6 +1111,30 @@ def _draw_pending_generation_spend(layout, context):
         box.label(text="%s -- %s" % (record["title"], record["cost_note"] or "cost unknown"))
         views = record.get("view_count") or 1
         box.label(text="Uploads %d reference image%s." % (views, "" if views == 1 else "s"))
+        if record.get("options_summary"):
+            box.label(text="Preset: %s" % record["options_summary"])
+        details = record.get("reference_details") or [
+            {"path": reference_path}
+            for reference_path in record.get("reference_files") or []
+        ]
+        for detail in details:
+            reference_path = str(detail.get("path") or "")
+            reference_path = str(reference_path)
+            filename = os.path.basename(reference_path) or reference_path
+            view = str(detail.get("view") or "").strip()
+            box.label(
+                text="%s: %s" % (view, filename) if view else filename,
+                icon="IMAGE_DATA",
+            )
+            directory = os.path.dirname(reference_path)
+            if directory:
+                if len(directory) > 46:
+                    directory = "%s...%s" % (directory[:21], directory[-22:])
+                box.label(text="From: %s" % directory)
+            byte_count = int(detail.get("bytes") or 0)
+            if byte_count:
+                size = "%.1f MiB" % (byte_count / (1024 * 1024)) if byte_count >= 1024 * 1024 else "%.1f KiB" % (byte_count / 1024)
+                box.label(text="File size: %s" % size)
         row = box.row(align=True)
         approve = row.operator(
             "claude_blender.decide_generation_spend", text="Approve", icon="CHECKMARK"

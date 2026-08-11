@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.5.5 - 2026-08-11
+
+### Generation
+
+- Live-proved paid Meshy multi-image generation with a four-view vehicle through Blender-side spend approval, provider polling, cached GLB import, and sanitized provenance. The real run consumed 30 credits and completed in 181 seconds with the front reference sent first and the remaining supporting angles accepted in any order.
+- Replaced Meshy's fixed 30-credit estimate with option-aware pricing for Meshy 5/6/7, Meshy T2 Smart Topology, 2K/4K/8K texturing, and Meshy 7 Ultra. The exact estimate, selected preset, and normalized reference paths now appear in Blender's single-use approval, and every cost/output option is bound to its fingerprint.
+- Replaced Tripo's fixed 30-credit estimate with model- and texture-aware pricing. P1 now gates at 40 credits untextured or 50 textured, supported earlier models gate at 20 or 30, invalid P1 face limits are rejected before approval, and the resolved estimate plus pricing-policy version survive in provenance.
+- Added strict Meshy presets and controls. `blender_working` is the recommended default with native remeshing, a 100,000-triangle target, PBR 4K textures, automatic sizing/origin, provider thumbnails, and preservation of the pre-remesh GLB; `editable_quad` requests a 50,000-face quad-dominant result; `raw_high_detail` keeps the previous unremeshed route.
+- Added Meshy 7 pinning, Meshy T2 single-image Smart Topology, Ultra validation, adaptive decimation, image enhancement and supported lighting removal, and provider-specific multi-image guidance. Tripo retains strict positional slots; Meshy 7 requires only the primary/front image first.
+- Hardened paid-provider recovery and artifacts: transient transport, 429, 5xx, and non-JSON server failures use bounded polling backoff; task error type/code/message/documentation links survive into failures; signed download queries are stripped; and final/pre-remesh GLBs, thumbnails, PBR maps, expiry, resolved options, and actual credit use are retained in the cache manifest.
+- Validate Meshy, Tripo, TripoSR, and studio references through one bounded reader before job creation, with provider-specific formats/counts, signature checks, 20 MiB per-image and 64 MiB aggregate limits. Paid approvals bind the SHA-256 identity and byte count rather than only the path, and upload revalidates the approved bytes. Generated downloads use HTTPS, DNS-pinning, private-host, redirect, and streaming protections plus an 8 GiB aggregate job limit.
+- Normalize malformed Tripo, Meshy, and studio response objects, balances, outputs, and progress into structured retryable provider failures instead of generic worker crashes.
+- Forward an optional studio bearer token to same-origin artifact downloads while keeping it off signed cross-origin CDN requests and refusing credential-bearing redirects.
+- Consolidate generation-provider payment classification under the planning registry, enforce planning/job/worker parity in Blender smoke coverage, centralize Meshy job-option translation without removing boundary revalidation, and expose the redirect-denial transport through a public helper.
+
 ### Reference modeling
 
 - Closed the remaining adaptive dual-contouring cross-cell residue by splitting disconnected face fans only after local topology refinement is exhausted. A connected multi-point sweep/subtract regression now stays manifold at maximum depths 7, 8, and 9 and matches uniform-mode component structure.
@@ -9,6 +24,10 @@
 ### UI
 
 - Refresh the Agent Bridge sidebar immediately after approving or revoking session script trust instead of waiting for the next mouse hover to trigger a redraw.
+
+### Live validation
+
+- Added a tracked, sanitized report and front/side/rear/top contact sheet for the paid Meshy vehicle run. The reconstruction is coherent and textured rather than a relief shell, but its 1.97-million-triangle raw mesh contains 1,754 disconnected components and needs retopology for production editing.
 
 ## 0.5.4 - 2026-08-10
 

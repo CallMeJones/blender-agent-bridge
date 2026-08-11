@@ -40,7 +40,27 @@ architecture is governed by
   be selected automatically.
 - Hosted Tripo and Meshy require a single-use spend decision in Blender. Agents
   can poll the exact request and observe Approve, Decline, expiry, or prior
-  consumption. Local TripoSR and the studio endpoint do not use the spend gate.
+  consumption. The decision is bound to resolved job controls and reference
+  content identity, so replacing a file at the same path requires reapproval.
+  Local TripoSR and the studio endpoint do not use the spend gate.
+- Tripo pricing is model- and texture-aware: P1 resolves to 40 credits
+  untextured or 50 textured, while supported earlier models resolve to 20 or
+  30. P1 face-limit constraints and the pricing-policy version are retained
+  across approval, balance preflight, submission, and provenance.
+- Meshy pricing and output policy are option-aware. Meshy 7, Meshy T2 Smart
+  Topology, Ultra, native remeshing/decimation, PBR texture resolution,
+  automatic scale/origin, pre-remesh preservation, and provider thumbnails are
+  validated before approval. The recommended `blender_working` preset avoids
+  importing the provider's maximum-density raw mesh as the only retained asset.
+- Hosted polling retries bounded transient failures and malformed provider
+  progress/response values become structured retryable failures. Meshy retains
+  structured task
+  errors plus final/pre-remesh models, thumbnails, PBR maps, resolved options,
+  expiry, and actual credit use. All generation references are type-, signature-,
+  count-, and size-validated with per-image and aggregate limits, then checked
+  against the approved SHA-256 identity at upload time. Artifact downloads
+  enforce HTTPS, redirect, DNS, destination, per-file streaming, and aggregate
+  job-size protections; studio tokens are forwarded only to same-origin files.
 - TripoSR has persistent runtime paths and tuning defaults, full process-tree
   cancellation, recovery, Z-up import normalization, optional texture baking,
   generated-asset cleanup, and front/side/top evaluation with contact sheets.
@@ -51,10 +71,10 @@ architecture is governed by
 
 ### Live provider evidence
 
-| Route | Implemented contract | Live evidence at `v0.5.4` |
+| Route | Implemented contract | Live evidence in the current tree |
 | --- | --- | --- |
 | Tripo | Hosted single-image and four-view generation, spend approval, polling, import, and sanitized provenance. | Single-view and paid multi-view generation/import are proven. |
-| Meshy | Hosted single-image and multi-image generation, balance preflight, provider cancellation, polling, import, and sanitized provenance. | Single-view generation/import plus provider-side cancellation and restart recovery are proven. Multi-image execution is not yet live-proven. |
+| Meshy | Hosted single-image and multi-image generation, balance preflight, provider cancellation, polling, import, and sanitized provenance. | Single-view generation/import, provider-side cancellation/recovery, and paid four-view vehicle generation/import are proven. The [tracked vehicle report](assets/meshy-vehicle-multiview-report.md) records the 30-credit run, topology, material, orientation, cleanup, and contact-sheet evidence. |
 | TripoSR | Direct local single-image process with persistent controls, cancellation/recovery, orientation normalization, texture baking, cleanup, and evaluation. | Generation, cancellation/recovery, textured and untextured imports, and non-character fan/teapot evaluation are proven. It remains a blockout route because one image cannot reveal hidden structure. |
 | Studio endpoint | Local/private-network HTTP or HTTPS contract with optional bearer token, one or more views, polling, optional balance, and shared import/provenance. | Contract and unit coverage pass. No real studio service has been supplied for a live run. |
 | Hunyuan3D / TRELLIS | Readiness strategy and hardware/runtime diagnostics only. | No launcher exists; neither is a runnable backend yet. |
@@ -87,9 +107,12 @@ architecture is governed by
 
 ### 1. Broaden non-character validation
 
-Add three deliberately different live subjects:
+Use three deliberately different live subjects. The first is complete:
 
-- a vehicle with thin structural features and repeated hard-surface parts;
+- **Done:** a four-view Meshy vehicle with thin structural features and
+  repeated hard-surface parts. The result is coherent and textured but has a
+  1.97-million-triangle, 1,754-component raw mesh; a non-destructive 15%
+  decimate preserves the visible form while leaving fragmentation unresolved.
 - a garment with open boundaries, folds, and no expectation of watertightness;
 - a larger asymmetric prop with meaningful unseen-side structure.
 
@@ -153,9 +176,11 @@ redaction, tests, and live evidence. Configuration-only readiness is not enough.
 
 ### Generation
 
-- Live-prove Meshy multi-image generation and compare its topology,
-  fragmentation, materials, and hidden-side structure with the existing
-  single-image evidence.
+- Preserve the Meshy multi-image vehicle regression evidence and use its dense,
+  fragmented topology as the baseline for future provider-quality comparisons.
+- Live-prove `blender_working` and `editable_quad` against that raw vehicle
+  baseline, including cardinal-thumbnail orientation checks and actual credit
+  reconciliation.
 - Live-prove the studio endpoint when a service exists.
 - Implement Hunyuan3D/TRELLIS only after choosing hardware and ownership.
 - Keep provider-side cancellation claims scoped accurately: Meshy deletion and
@@ -180,8 +205,11 @@ redaction, tests, and live evidence. Configuration-only readiness is not enough.
 ### Validation
 
 - Complete the separate-machine public-repository install.
-- Add vehicle, garment, and asymmetric-prop live evidence.
-- Add Meshy multi-image and studio-endpoint live evidence.
+- Add garment and asymmetric-prop live evidence; vehicle evidence is complete.
+- Add studio-endpoint live evidence; Meshy multi-image evidence is complete.
+- Fix isolated inspection renders so object transforms affect semantic
+  front/side/rear evidence. The vehicle run required baking a +90 degree Z
+  correction because object rotation alone produced byte-identical renders.
 - Keep future Blender versions in compatible-but-untested status until their own
   tagged smoke evidence exists. The continuous matrix remains 4.2, 4.5, and
   5.1.
@@ -193,6 +221,9 @@ redaction, tests, and live evidence. Configuration-only readiness is not enough.
 - MCP credential-forwarding generalization is not required by the current
   Blender-owned credential flow.
 - Hunyuan3D/TRELLIS direct launchers wait for hardware or service ownership.
+- Separate paid Meshy Remesh and Retexture jobs remain deferred. Each must have
+  its own exact, single-use spend approval and artifact/provenance contract;
+  generation approval must never authorize either follow-up charge.
 - F6 automatic sizing and broader F7 decomposition wait for subject evidence.
 - Sculpt repair loops and adaptive shape programs remain advanced tools, not
   primary launch claims, until their convergence and quality limits narrow.

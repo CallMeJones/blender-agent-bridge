@@ -1,6 +1,6 @@
 # Showcase Asset Provenance
 
-This notice covers the seven compressed Egypt dogfight images in this directory. They are documentation and demonstration media; they are not included in the packaged Blender extension ZIP and are not covered by the extension source code's `GPL-3.0-or-later` license.
+This notice covers the compressed demonstration media in this directory. They are documentation evidence, are not included in the packaged Blender extension ZIP, and are not covered by the extension source code's `GPL-3.0-or-later` license.
 
 ## Origin
 
@@ -17,6 +17,16 @@ Copyright in Michael's original render composition and bridge-produced documenta
 
 The files remain in the repository solely to document the bridge's historical test workflow. A future release may replace them with fully procedural or fully provenance-cleared showcase media. Trademarks and rights in depicted aircraft designs, source meshes, textures, or other third-party material remain with their respective owners.
 
+## Meshy Vehicle Evidence
+
+`meshy-vehicle-multiview-contact-sheet.jpg` is a compressed Blender inspection
+export from a paid Meshy multi-image generation run performed for this project
+on 2026-08-11. Its inputs were AI-generated, brand-free vehicle references
+created for the same test. The public report omits provider/task identifiers,
+signed URLs, credentials, local paths, the generated GLB, and the original
+references. The image and report are retained only as verifiable project
+documentation; no standalone stock-media license is granted.
+
 ## File Inventory
 
 | File | Bytes | SHA-256 | Purpose |
@@ -28,3 +38,4 @@ The files remain in the repository solely to document the bridge's historical te
 | `egypt-dogfight-wide.jpg` | 25,831 | `18eeb3cc8a1b8604f449c8ec36d79322c6704e5cb36987d703bc7c8d62ab5ac5` | Wide dogfight render |
 | `egypt-inspection-closeup.jpg` | 30,112 | `b2332f6c0d20e7df5aa4ea2232f485448da6c7758d9507d73213bfaace1a7cfc` | Object inspection close-up |
 | `egypt-workflow-strip.jpg` | 30,906 | `4ade95d409b1ddda8581d9118d2aec13a29f6c39c497ee0681fccbec59653fe9` | Planning/review workflow strip |
+| `meshy-vehicle-multiview-contact-sheet.jpg` | 101,481 | `9a68a0eec51c04d6fad849d666ae948017e38943213b769d41cb57c66c28713a` | Sanitized front/side/rear/top Meshy vehicle evidence |

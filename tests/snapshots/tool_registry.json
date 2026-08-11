@@ -14269,7 +14269,7 @@
           },
           "views": {
             "additionalProperties": false,
-            "description": "Maps a view name to a local image path. Multi-view providers treat the names as positional slots, so a mislabelled view produces a worse model rather than an error. Supply \"front\" alone for single-image generation.",
+            "description": "Maps a canonical view name to a local image path. Tripo treats multi-view names as fixed positional slots. Meshy uses front as the primary first image and accepts the remaining angles in any order. Supply front alone for single-image generation.",
             "properties": {
               "back": {
                 "type": "string"
@@ -17838,6 +17838,109 @@
             "minimum": 16,
             "type": "integer"
           },
+          "meshy_options": {
+            "additionalProperties": false,
+            "description": "Meshy-only generation controls. Defaults to blender_working, which requests a remeshed Blender-oriented GLB while preserving the raw pre-remesh model. Use raw_high_detail to retain the previous unremeshed behavior.",
+            "properties": {
+              "ai_model": {
+                "enum": [
+                  "latest",
+                  "meshy-7",
+                  "meshy-6",
+                  "meshy-5",
+                  "meshy-t2"
+                ],
+                "type": "string"
+              },
+              "alpha_thumbnail": {
+                "type": "boolean"
+              },
+              "auto_size": {
+                "type": "boolean"
+              },
+              "decimation_mode": {
+                "description": "Adaptive provider decimation. Cannot be combined with target_polycount.",
+                "enum": [
+                  "ultra",
+                  "high",
+                  "medium",
+                  "low"
+                ],
+                "type": "string"
+              },
+              "enable_pbr": {
+                "type": "boolean"
+              },
+              "image_enhancement": {
+                "type": "boolean"
+              },
+              "model_type": {
+                "enum": [
+                  "standard",
+                  "smart-topology"
+                ],
+                "type": "string"
+              },
+              "multi_view_thumbnails": {
+                "description": "Cache front/right/back/left provider thumbnails; requires auto_size.",
+                "type": "boolean"
+              },
+              "origin_at": {
+                "enum": [
+                  "bottom",
+                  "center"
+                ],
+                "type": "string"
+              },
+              "preset": {
+                "description": "raw_high_detail: maximum raw triangles. blender_working: 100k triangle PBR mesh plus raw source. editable_quad: 50k quad target plus raw source.",
+                "enum": [
+                  "raw_high_detail",
+                  "blender_working",
+                  "editable_quad"
+                ],
+                "type": "string"
+              },
+              "remove_lighting": {
+                "description": "Lighting removal. Single-image Meshy currently documents this for meshy-6; multi-image also supports meshy-7/latest.",
+                "type": "boolean"
+              },
+              "save_pre_remeshed_model": {
+                "type": "boolean"
+              },
+              "should_remesh": {
+                "type": "boolean"
+              },
+              "should_texture": {
+                "type": "boolean"
+              },
+              "target_polycount": {
+                "maximum": 300000,
+                "minimum": 100,
+                "type": "integer"
+              },
+              "texture_resolution": {
+                "enum": [
+                  "2k",
+                  "4k",
+                  "8k"
+                ],
+                "type": "string"
+              },
+              "topology": {
+                "enum": [
+                  "triangle",
+                  "quad"
+                ],
+                "type": "string"
+              },
+              "ultra_mode": {
+                "description": "Single-image Meshy 7/latest only; adds five credits.",
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
           "model": {
             "type": "string"
           },
@@ -17868,7 +17971,7 @@
           },
           "views": {
             "additionalProperties": false,
-            "description": "Maps a view name to a local image path. Multi-view providers treat the names as positional slots, so a mislabelled view produces a worse model rather than an error. Supply \"front\" alone for single-image generation.",
+            "description": "Maps a canonical view name to a local image path. Tripo treats multi-view names as fixed positional slots. Meshy uses front as the primary first image and accepts the remaining angles in any order. Supply front alone for single-image generation.",
             "properties": {
               "back": {
                 "type": "string"
@@ -33313,7 +33416,7 @@
           },
           "views": {
             "additionalProperties": false,
-            "description": "Maps a view name to a local image path. Multi-view providers treat the names as positional slots, so a mislabelled view produces a worse model rather than an error. Supply \"front\" alone for single-image generation.",
+            "description": "Maps a canonical view name to a local image path. Tripo treats multi-view names as fixed positional slots. Meshy uses front as the primary first image and accepts the remaining angles in any order. Supply front alone for single-image generation.",
             "properties": {
               "back": {
                 "type": "string"
@@ -33373,6 +33476,109 @@
             "minimum": 16,
             "type": "integer"
           },
+          "meshy_options": {
+            "additionalProperties": false,
+            "description": "Meshy-only generation controls. Defaults to blender_working, which requests a remeshed Blender-oriented GLB while preserving the raw pre-remesh model. Use raw_high_detail to retain the previous unremeshed behavior.",
+            "properties": {
+              "ai_model": {
+                "enum": [
+                  "latest",
+                  "meshy-7",
+                  "meshy-6",
+                  "meshy-5",
+                  "meshy-t2"
+                ],
+                "type": "string"
+              },
+              "alpha_thumbnail": {
+                "type": "boolean"
+              },
+              "auto_size": {
+                "type": "boolean"
+              },
+              "decimation_mode": {
+                "description": "Adaptive provider decimation. Cannot be combined with target_polycount.",
+                "enum": [
+                  "ultra",
+                  "high",
+                  "medium",
+                  "low"
+                ],
+                "type": "string"
+              },
+              "enable_pbr": {
+                "type": "boolean"
+              },
+              "image_enhancement": {
+                "type": "boolean"
+              },
+              "model_type": {
+                "enum": [
+                  "standard",
+                  "smart-topology"
+                ],
+                "type": "string"
+              },
+              "multi_view_thumbnails": {
+                "description": "Cache front/right/back/left provider thumbnails; requires auto_size.",
+                "type": "boolean"
+              },
+              "origin_at": {
+                "enum": [
+                  "bottom",
+                  "center"
+                ],
+                "type": "string"
+              },
+              "preset": {
+                "description": "raw_high_detail: maximum raw triangles. blender_working: 100k triangle PBR mesh plus raw source. editable_quad: 50k quad target plus raw source.",
+                "enum": [
+                  "raw_high_detail",
+                  "blender_working",
+                  "editable_quad"
+                ],
+                "type": "string"
+              },
+              "remove_lighting": {
+                "description": "Lighting removal. Single-image Meshy currently documents this for meshy-6; multi-image also supports meshy-7/latest.",
+                "type": "boolean"
+              },
+              "save_pre_remeshed_model": {
+                "type": "boolean"
+              },
+              "should_remesh": {
+                "type": "boolean"
+              },
+              "should_texture": {
+                "type": "boolean"
+              },
+              "target_polycount": {
+                "maximum": 300000,
+                "minimum": 100,
+                "type": "integer"
+              },
+              "texture_resolution": {
+                "enum": [
+                  "2k",
+                  "4k",
+                  "8k"
+                ],
+                "type": "string"
+              },
+              "topology": {
+                "enum": [
+                  "triangle",
+                  "quad"
+                ],
+                "type": "string"
+              },
+              "ultra_mode": {
+                "description": "Single-image Meshy 7/latest only; adds five credits.",
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
           "model": {
             "type": "string"
           },
@@ -33403,7 +33609,7 @@
           },
           "views": {
             "additionalProperties": false,
-            "description": "Maps a view name to a local image path. Multi-view providers treat the names as positional slots, so a mislabelled view produces a worse model rather than an error. Supply \"front\" alone for single-image generation.",
+            "description": "Maps a canonical view name to a local image path. Tripo treats multi-view names as fixed positional slots. Meshy uses front as the primary first image and accepts the remaining angles in any order. Supply front alone for single-image generation.",
             "properties": {
               "back": {
                 "type": "string"
@@ -33842,7 +34048,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "8dd5d30478a3c30e7053374cea0035c082e2f5bf2adaff67ac29f26ef199b8e7",
+  "registry_digest": "7d6c002eeb1f805edb2145ef461447f91f7595a29a6ab20c382705fcc04ac9f4",
   "schema_version": 1,
   "specs": [
     {
@@ -58536,7 +58742,7 @@
             },
             "views": {
               "additionalProperties": false,
-              "description": "Maps a view name to a local image path. Multi-view providers treat the names as positional slots, so a mislabelled view produces a worse model rather than an error. Supply \"front\" alone for single-image generation.",
+              "description": "Maps a canonical view name to a local image path. Tripo treats multi-view names as fixed positional slots. Meshy uses front as the primary first image and accepts the remaining angles in any order. Supply front alone for single-image generation.",
               "properties": {
                 "back": {
                   "type": "string"
@@ -58577,7 +58783,7 @@
           },
           "views": {
             "additionalProperties": false,
-            "description": "Maps a view name to a local image path. Multi-view providers treat the names as positional slots, so a mislabelled view produces a worse model rather than an error. Supply \"front\" alone for single-image generation.",
+            "description": "Maps a canonical view name to a local image path. Tripo treats multi-view names as fixed positional slots. Meshy uses front as the primary first image and accepts the remaining angles in any order. Supply front alone for single-image generation.",
             "properties": {
               "back": {
                 "type": "string"
@@ -58644,6 +58850,109 @@
             "mc_resolution": {
               "type": "integer"
             },
+            "meshy_options": {
+              "additionalProperties": false,
+              "description": "Meshy-only generation controls. Defaults to blender_working, which requests a remeshed Blender-oriented GLB while preserving the raw pre-remesh model. Use raw_high_detail to retain the previous unremeshed behavior.",
+              "properties": {
+                "ai_model": {
+                  "enum": [
+                    "latest",
+                    "meshy-7",
+                    "meshy-6",
+                    "meshy-5",
+                    "meshy-t2"
+                  ],
+                  "type": "string"
+                },
+                "alpha_thumbnail": {
+                  "type": "boolean"
+                },
+                "auto_size": {
+                  "type": "boolean"
+                },
+                "decimation_mode": {
+                  "description": "Adaptive provider decimation. Cannot be combined with target_polycount.",
+                  "enum": [
+                    "ultra",
+                    "high",
+                    "medium",
+                    "low"
+                  ],
+                  "type": "string"
+                },
+                "enable_pbr": {
+                  "type": "boolean"
+                },
+                "image_enhancement": {
+                  "type": "boolean"
+                },
+                "model_type": {
+                  "enum": [
+                    "standard",
+                    "smart-topology"
+                  ],
+                  "type": "string"
+                },
+                "multi_view_thumbnails": {
+                  "description": "Cache front/right/back/left provider thumbnails; requires auto_size.",
+                  "type": "boolean"
+                },
+                "origin_at": {
+                  "enum": [
+                    "bottom",
+                    "center"
+                  ],
+                  "type": "string"
+                },
+                "preset": {
+                  "description": "raw_high_detail: maximum raw triangles. blender_working: 100k triangle PBR mesh plus raw source. editable_quad: 50k quad target plus raw source.",
+                  "enum": [
+                    "raw_high_detail",
+                    "blender_working",
+                    "editable_quad"
+                  ],
+                  "type": "string"
+                },
+                "remove_lighting": {
+                  "description": "Lighting removal. Single-image Meshy currently documents this for meshy-6; multi-image also supports meshy-7/latest.",
+                  "type": "boolean"
+                },
+                "save_pre_remeshed_model": {
+                  "type": "boolean"
+                },
+                "should_remesh": {
+                  "type": "boolean"
+                },
+                "should_texture": {
+                  "type": "boolean"
+                },
+                "target_polycount": {
+                  "maximum": 300000,
+                  "minimum": 100,
+                  "type": "integer"
+                },
+                "texture_resolution": {
+                  "enum": [
+                    "2k",
+                    "4k",
+                    "8k"
+                  ],
+                  "type": "string"
+                },
+                "topology": {
+                  "enum": [
+                    "triangle",
+                    "quad"
+                  ],
+                  "type": "string"
+                },
+                "ultra_mode": {
+                  "description": "Single-image Meshy 7/latest only; adds five credits.",
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            },
             "model": {
               "type": "string"
             },
@@ -58667,7 +58976,7 @@
             },
             "views": {
               "additionalProperties": false,
-              "description": "Maps a view name to a local image path. Multi-view providers treat the names as positional slots, so a mislabelled view produces a worse model rather than an error. Supply \"front\" alone for single-image generation.",
+              "description": "Maps a canonical view name to a local image path. Tripo treats multi-view names as fixed positional slots. Meshy uses front as the primary first image and accepts the remaining angles in any order. Supply front alone for single-image generation.",
               "properties": {
                 "back": {
                   "type": "string"
@@ -58751,6 +59060,109 @@
             "minimum": 16,
             "type": "integer"
           },
+          "meshy_options": {
+            "additionalProperties": false,
+            "description": "Meshy-only generation controls. Defaults to blender_working, which requests a remeshed Blender-oriented GLB while preserving the raw pre-remesh model. Use raw_high_detail to retain the previous unremeshed behavior.",
+            "properties": {
+              "ai_model": {
+                "enum": [
+                  "latest",
+                  "meshy-7",
+                  "meshy-6",
+                  "meshy-5",
+                  "meshy-t2"
+                ],
+                "type": "string"
+              },
+              "alpha_thumbnail": {
+                "type": "boolean"
+              },
+              "auto_size": {
+                "type": "boolean"
+              },
+              "decimation_mode": {
+                "description": "Adaptive provider decimation. Cannot be combined with target_polycount.",
+                "enum": [
+                  "ultra",
+                  "high",
+                  "medium",
+                  "low"
+                ],
+                "type": "string"
+              },
+              "enable_pbr": {
+                "type": "boolean"
+              },
+              "image_enhancement": {
+                "type": "boolean"
+              },
+              "model_type": {
+                "enum": [
+                  "standard",
+                  "smart-topology"
+                ],
+                "type": "string"
+              },
+              "multi_view_thumbnails": {
+                "description": "Cache front/right/back/left provider thumbnails; requires auto_size.",
+                "type": "boolean"
+              },
+              "origin_at": {
+                "enum": [
+                  "bottom",
+                  "center"
+                ],
+                "type": "string"
+              },
+              "preset": {
+                "description": "raw_high_detail: maximum raw triangles. blender_working: 100k triangle PBR mesh plus raw source. editable_quad: 50k quad target plus raw source.",
+                "enum": [
+                  "raw_high_detail",
+                  "blender_working",
+                  "editable_quad"
+                ],
+                "type": "string"
+              },
+              "remove_lighting": {
+                "description": "Lighting removal. Single-image Meshy currently documents this for meshy-6; multi-image also supports meshy-7/latest.",
+                "type": "boolean"
+              },
+              "save_pre_remeshed_model": {
+                "type": "boolean"
+              },
+              "should_remesh": {
+                "type": "boolean"
+              },
+              "should_texture": {
+                "type": "boolean"
+              },
+              "target_polycount": {
+                "maximum": 300000,
+                "minimum": 100,
+                "type": "integer"
+              },
+              "texture_resolution": {
+                "enum": [
+                  "2k",
+                  "4k",
+                  "8k"
+                ],
+                "type": "string"
+              },
+              "topology": {
+                "enum": [
+                  "triangle",
+                  "quad"
+                ],
+                "type": "string"
+              },
+              "ultra_mode": {
+                "description": "Single-image Meshy 7/latest only; adds five credits.",
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
           "model": {
             "type": "string"
           },
@@ -58781,7 +59193,7 @@
           },
           "views": {
             "additionalProperties": false,
-            "description": "Maps a view name to a local image path. Multi-view providers treat the names as positional slots, so a mislabelled view produces a worse model rather than an error. Supply \"front\" alone for single-image generation.",
+            "description": "Maps a canonical view name to a local image path. Tripo treats multi-view names as fixed positional slots. Meshy uses front as the primary first image and accepts the remaining angles in any order. Supply front alone for single-image generation.",
             "properties": {
               "back": {
                 "type": "string"

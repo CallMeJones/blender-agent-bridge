@@ -12,7 +12,17 @@ import uuid
 
 import bpy
 
-from . import external_assets, generation_spend, process_utils, render_jobs, viewport_capture
+from . import (
+    external_assets,
+    generation_meshy,
+    generation_providers,
+    generation_references,
+    generation_spend,
+    generation_tripo,
+    process_utils,
+    render_jobs,
+    viewport_capture,
+)
 
 
 METADATA_FILENAME = "metadata.json"
@@ -280,7 +290,7 @@ def _redact_sketchfab(args):
 def _redact_generation(provider, args):
     views = args.get("views") if isinstance(args.get("views"), dict) else {}
     provider = str(provider or "tripo").strip().lower()
-    return {
+    result = {
         "provider": provider,
         "generation_kind": "multiview" if len(views) > 1 else "image",
         "view_names": sorted(str(name) for name in views),
@@ -301,6 +311,25 @@ def _redact_generation(provider, args):
         "cache_dir": str(args.get("cache_dir") or ""),
         "timeout": _bounded_int(args.get("timeout"), 120, minimum=1, maximum=300),
     }
+    if provider == "meshy":
+        result["meshy_options"] = dict(args.get("meshy_options") or {})
+        try:
+            resolved = generation_meshy.resolve_job_policy(
+                args,
+                view_count=len(views) or 1,
+            )
+        except ValueError:
+            resolved = {}
+        result["estimated_credits"] = resolved.get("estimated_credits")
+        result["pricing_version"] = resolved.get("pricing_version", "")
+    elif provider == "tripo":
+        try:
+            resolved = generation_tripo.resolve_job_policy(args)
+        except ValueError:
+            resolved = {}
+        result["estimated_credits"] = resolved.get("estimated_credits")
+        result["pricing_version"] = resolved.get("pricing_version", "")
+    return result
 
 
 def _validate_poly_haven(args):
@@ -336,6 +365,21 @@ def _validate_generation(provider, args):
         return "views must map at least one view name to an image path"
     if provider in {"tripo", "meshy"} and not str(args.get("api_key") or "").strip():
         return "api_key is required for %s generation jobs" % provider
+    if provider == "tripo":
+        try:
+            generation_tripo.normalize_job_options(args)
+        except ValueError as error:
+            return str(error)
+    if provider == "meshy":
+        try:
+            if len(views) > 1 and "front" not in views:
+                return "Meshy multi-image generation requires a primary 'front' image"
+            generation_meshy.normalize_job_options(
+                args,
+                view_count=len(views) or 1,
+            )
+        except ValueError as error:
+            return str(error)
     if provider == "triposr":
         supplied = [path for path in views.values() if str(path or "").strip()]
         if len(supplied) != 1:
@@ -349,8 +393,9 @@ def _validate_generation(provider, args):
     return ""
 
 
-# One entry per asset-source provider. Adding a source means adding a row here
-# plus a worker function, not editing branches in three places.
+# One entry per executable asset-source provider. Generation planning remains
+# inert in generation_providers; smoke coverage keeps its implemented set in
+# lockstep with this registry and the worker dispatch table.
 # Every provider states whether starting a job spends the user's money. It is
 # required rather than defaulted: a new provider must decide, because the one
 # that forgets is the one that quietly charges someone. A test asserts the key
@@ -379,39 +424,55 @@ JOB_PROVIDER_SPECS = {
         "validate": _validate_generation_for("tripo"),
         "redact": _redact_generation_for("tripo"),
         "secrets": (("api_key", ASSET_JOB_SECRET_TOKEN_ENV),),
-        "spends_money": True,
+        "spends_money": generation_providers.is_paid_provider("tripo"),
     },
     "meshy": {
         "validate": _validate_generation_for("meshy"),
         "redact": _redact_generation_for("meshy"),
         "secrets": (("api_key", ASSET_JOB_SECRET_TOKEN_ENV),),
-        "spends_money": True,
+        "spends_money": generation_providers.is_paid_provider("meshy"),
     },
     "studio_endpoint": {
         "validate": _validate_generation_for("studio_endpoint"),
         "redact": _redact_generation_for("studio_endpoint"),
         "secrets": (("api_key", ASSET_JOB_SECRET_TOKEN_ENV),),
-        "spends_money": False,
+        "spends_money": generation_providers.is_paid_provider("studio_endpoint"),
     },
     "triposr": {
         "validate": _validate_generation_for("triposr"),
         "redact": _redact_generation_for("triposr"),
         "secrets": (),
-        "spends_money": False,
+        "spends_money": generation_providers.is_paid_provider("triposr"),
     },
 }
 
 JOB_PROVIDER_NAMES = tuple(sorted(JOB_PROVIDER_SPECS))
 
 
-def _spend_notice(provider):
+def _spend_notice(provider, args=None):
     """Cost facts for a paid provider, however it is registered."""
 
-    try:
-        from . import generation_providers
-    except ImportError:  # pragma: no cover - direct-script imports inside Blender
-        import generation_providers
     notice = generation_providers.paid_provider_notice(provider)
+    normalized_provider = str(provider or "").strip().lower()
+    if notice and normalized_provider in {"meshy", "tripo"}:
+        views = (args or {}).get("views") or {}
+        if normalized_provider == "meshy":
+            resolved = generation_meshy.resolve_job_policy(
+                args or {},
+                view_count=len(views) or 1,
+            )
+        else:
+            resolved = generation_tripo.resolve_job_policy(args or {})
+        notice = dict(notice)
+        notice.update(
+            {
+                "estimated_credits": resolved["estimated_credits"],
+                "pricing_version": resolved["pricing_version"],
+                "cost_note": resolved["cost_note"],
+            }
+        )
+        if normalized_provider == "meshy":
+            notice["meshy_options"] = resolved["options"]
     if notice:
         return notice
     # A paid provider outside the generation table still gets gated; it just
@@ -428,7 +489,7 @@ def _spend_notice(provider):
 def _require_spend_approval(provider, args):
     """Return a refusal until a human approves this exact job, else None."""
 
-    notice = _spend_notice(provider)
+    notice = _spend_notice(provider, args)
     fingerprint = generation_spend.job_fingerprint(provider, args)
     state = generation_spend.approval_state(fingerprint)
     status = (state or {}).get("status")
@@ -461,6 +522,26 @@ def _require_spend_approval(provider, args):
         cost_note=notice.get("cost_note") or "",
         view_count=len((args or {}).get("views") or {}) or 1,
         title=notice.get("title") or provider,
+        reference_files=[
+            os.path.normpath(os.path.abspath(str(path)))
+            for path in ((args or {}).get("views") or {}).values()
+            if str(path or "").strip()
+        ],
+        reference_details=[
+            {
+                "view": str(name),
+                "path": str(identity.get("path") or ""),
+                "bytes": int(identity.get("bytes") or 0),
+                "format": str(identity.get("format") or ""),
+                "sha256": str(identity.get("sha256") or ""),
+            }
+            for name, identity in sorted(
+                ((args or {}).get("_reference_identities") or {}).items()
+            )
+            if isinstance(identity, dict)
+        ],
+        estimated_credits=notice.get("estimated_credits"),
+        options_summary=(notice.get("meshy_options") or {}).get("preset", ""),
     )
     return {
         "ok": False,
@@ -839,6 +920,15 @@ def start_external_asset_download(
     validation_error = spec["validate"](args)
     if validation_error:
         return {"ok": False, "message": validation_error}
+
+    if provider in generation_providers.PROVIDERS_BY_NAME:
+        try:
+            args["_reference_identities"] = generation_references.validate_reference_images(
+                args.get("views"),
+                provider=provider,
+            )
+        except ValueError as error:
+            return {"ok": False, "message": str(error)}
 
     # Every job of every kind passes through here, so this is the one place
     # the spend gate can sit and be certain nothing routes around it. Putting

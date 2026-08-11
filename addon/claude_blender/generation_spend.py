@@ -27,6 +27,8 @@ import threading
 import time
 import uuid
 
+from . import generation_references
+
 # Long enough to walk to Blender and read the request, short enough that an
 # approval cannot sit around authorising a job the user has forgotten about.
 APPROVAL_TTL_SECONDS = 600
@@ -44,13 +46,20 @@ _REQUESTS = {}
 def job_fingerprint(provider, args):
     """Identify one specific job, so approval cannot be reused for another."""
 
-    views = (args or {}).get("views") or {}
+    args = args or {}
+    views = args.get("views") or {}
     payload = {
         "provider": str(provider or "").strip().lower(),
-        "views": {str(name): str(path) for name, path in sorted(views.items())},
-        "model": str((args or {}).get("model") or ""),
-        "face_limit": int((args or {}).get("face_limit") or 0),
-        "texture": bool((args or {}).get("texture")) if "texture" in (args or {}) else None,
+        "views": generation_references.fingerprint_identities(
+            provider,
+            views,
+            supplied=args.get("_reference_identities"),
+        ),
+        "model": str(args.get("model") or ""),
+        "face_limit": int(args.get("face_limit") or 0),
+        "texture": bool(args.get("texture")) if "texture" in args else None,
+        "meshy_options": dict(args.get("meshy_options") or {}),
+        "estimated_cost": args.get("estimated_cost"),
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
@@ -62,7 +71,18 @@ def _expire_locked(now):
             record["status"] = STATUS_EXPIRED
 
 
-def request_approval(provider, fingerprint, *, cost_note="", view_count=1, title=""):
+def request_approval(
+    provider,
+    fingerprint,
+    *,
+    cost_note="",
+    view_count=1,
+    title="",
+    reference_files=None,
+    reference_details=None,
+    estimated_credits=None,
+    options_summary="",
+):
     """Record a pending request, or return the live one for this same job."""
 
     now = time.time()
@@ -75,6 +95,20 @@ def request_approval(provider, fingerprint, *, cost_note="", view_count=1, title
             ):
                 return dict(record)
         request_id = uuid.uuid4().hex[:12]
+        normalized_files = [str(name) for name in (reference_files or [])][:4]
+        normalized_details = []
+        for detail in (reference_details or [])[:4]:
+            if not isinstance(detail, dict):
+                continue
+            normalized_details.append(
+                {
+                    "view": str(detail.get("view") or ""),
+                    "path": str(detail.get("path") or ""),
+                    "bytes": max(0, int(detail.get("bytes") or 0)),
+                    "format": str(detail.get("format") or ""),
+                    "sha256": str(detail.get("sha256") or ""),
+                }
+            )
         record = {
             "request_id": request_id,
             "provider": str(provider or ""),
@@ -82,6 +116,10 @@ def request_approval(provider, fingerprint, *, cost_note="", view_count=1, title
             "fingerprint": fingerprint,
             "cost_note": str(cost_note or ""),
             "view_count": int(view_count),
+            "reference_files": normalized_files,
+            "reference_details": normalized_details,
+            "estimated_credits": estimated_credits,
+            "options_summary": str(options_summary or ""),
             "status": STATUS_PENDING,
             "created_at": now,
             "expires_at": now + APPROVAL_TTL_SECONDS,

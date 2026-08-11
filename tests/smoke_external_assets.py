@@ -566,6 +566,17 @@ def main():
             assert expected_size_failure["error_type"] == "download_size_limit_exceeded", expected_size_failure
             assert not os.path.exists(expected_size_path), expected_size_failure
             assert not os.path.exists(f"{expected_size_path}.part"), expected_size_failure
+
+            per_call_limit_path = os.path.join(cache_dir, "per-call-limit.bin")
+            per_call_limit_failure = external_assets._download_file(
+                "https://download.example.invalid/per-call-limit.bin",
+                per_call_limit_path,
+                max_download_bytes=4,
+            )
+            assert per_call_limit_failure["ok"] is False, per_call_limit_failure
+            assert per_call_limit_failure["max_download_bytes"] == 4, per_call_limit_failure
+            assert not os.path.exists(per_call_limit_path), per_call_limit_failure
+            assert not os.path.exists(f"{per_call_limit_path}.part"), per_call_limit_failure
         finally:
             external_assets._urlopen_external = original_urlopen
             external_assets.DOWNLOAD_RETRY_BACKOFF_SECONDS = original_backoff
