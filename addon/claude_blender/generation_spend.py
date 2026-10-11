@@ -27,7 +27,7 @@ import threading
 import time
 import uuid
 
-from . import generation_references
+from . import generation_references, retopology_policy
 
 # Long enough to walk to Blender and read the request, short enough that an
 # approval cannot sit around authorising a job the user has forgotten about.
@@ -61,6 +61,9 @@ def job_fingerprint(provider, args):
         "meshy_options": dict(args.get("meshy_options") or {}),
         "estimated_cost": args.get("estimated_cost"),
     }
+    if args.get("job_kind") == "retopology":
+        payload["job_kind"] = "retopology"
+        payload["retopology"] = retopology_policy.provider_options(provider, args)
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
 

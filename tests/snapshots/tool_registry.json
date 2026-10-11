@@ -1,5 +1,5 @@
 {
-  "catalog_tool_count": 240,
+  "catalog_tool_count": 251,
   "contracts": {
     "adaptive_remesh": {
       "description": "Adaptively refine sculpt topology by subdividing edges that exceed a bounded local target derived from edge length, semantic-region weight, and face curvature. Retains interpolated semantic point attributes, optionally relaxes spacing and projects vertices back to the source surface, and enforces input, per-pass, and result vertex limits. This is a form-preserving refinement pass; it does not decimate or promise production retopology.",
@@ -3353,6 +3353,43 @@
       "permissions": [
         "process:terminate"
       ],
+      "supports_headless": true
+    },
+    "cancel_retopology_job": {
+      "description": "Stop a local retopology worker and its process tree. Preserves source meshes and prevents incomplete results from being imported.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "files:write",
+        "process:terminate"
+      ],
+      "requires_live_preview": false,
       "supports_headless": true
     },
     "cancel_trusted_script_job": {
@@ -10229,6 +10266,75 @@
         "status_tool": "blender_bridge_status"
       }
     },
+    "evaluate_retopology_result": {
+      "description": "Compare an original and retopology result using bounded bidirectional world-space surface samples, topology/material reports and optional front/side/top previews. Reports sampling limits and character edge-loop review requirements; never certifies automatic output as animation-ready.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_renders": {
+            "type": "boolean"
+          },
+          "intended_use": {
+            "enum": [
+              "prop",
+              "character"
+            ],
+            "type": "string"
+          },
+          "max_deviation_ratio": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "sample_count": {
+            "maximum": 8192,
+            "minimum": 32,
+            "type": "integer"
+          },
+          "source_object_name": {
+            "type": "string"
+          },
+          "target_object_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_object_name",
+          "target_object_name"
+        ],
+        "type": "object"
+      },
+      "long_running": true,
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "files:write"
+      ],
+      "requires_live_preview": false,
+      "supports_headless": true,
+      "timeout_recovery": {
+        "message": "If inspection renders time out, check bridge status and visual evidence resources before retrying.",
+        "poll_after_seconds": 5,
+        "recoverable": true,
+        "status_tool": "blender_bridge_status"
+      },
+      "timeout_seconds": 180
+    },
     "finalize_execution_trace": {
       "description": "Finalize the active or named execution trace with an outcome, notes, and optional provider-reported token usage. Estimated trace payload tokens remain separate from reported model tokens.",
       "has_side_effects": true,
@@ -11715,6 +11821,42 @@
         "type": "object"
       }
     },
+    "get_provider_retopology_job_status": {
+      "description": "Poll a Meshy/Tripo retopology asset job and recover its task ID and cached manifest. Use cancel_external_asset_job to stop local work and request provider cancellation where supported. Do not resubmit an already-running paid request.",
+      "has_side_effects": false,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "files:read"
+      ],
+      "requires_live_preview": false,
+      "supports_headless": true
+    },
     "get_quality_benchmark_run": {
       "description": "Return a named benchmark run, or the latest run when run_id is omitted.",
       "has_side_effects": false,
@@ -11799,6 +11941,44 @@
         },
         "type": "object"
       }
+    },
+    "get_retopology_job_status": {
+      "description": "Poll local retopology job phase/progress, terminal outcome and topology, shape-deviation and texture-coverage reports. A timed-out client request does not stop the worker; keep polling the returned job_id.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "files:read",
+        "files:write",
+        "process:terminate"
+      ],
+      "requires_live_preview": false,
+      "supports_headless": true
     },
     "get_rig_pose_library_details": {
       "description": "Inspect rig-compatible pose-library/action candidates for an armature, including pose markers, matched bones/channels, frame ranges, and suggested apply calls. Use before applying production rig poses or clips.",
@@ -12433,6 +12613,96 @@
       "supports_headless": true,
       "timeout_seconds": 300
     },
+    "import_provider_retopology_job_result": {
+      "description": "Import a completed provider retopology candidate or cached Meshy generation format variant into live preview. preferred_format=fbx imports Meshy quad faces instead of the triangulated GLB when a cached FBX exists. Missing requested formats fail explicitly. Original scene models stay intact; compare before committing preview.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "preferred_format": {
+            "enum": [
+              "auto",
+              "fbx",
+              "glb"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
+    },
+    "import_retopology_job_result": {
+      "description": "Append a completed local remesh/bake result as new objects and materials with packed textures through live preview. Repeated imports reuse the current scene's existing result. Never replaces the source; review the result, then commit or revert preview.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
+    },
     "import_sketchfab_model": {
       "description": "Synchronous fallback: use a Sketchfab API token to cache a downloadable model archive and import the extracted GLTF/GLB file into Blender preview. For normal client workflows, use start_external_asset_download, poll get_external_asset_job_status, then start_external_asset_import_job.",
       "has_side_effects": true,
@@ -12746,6 +13016,43 @@
       "permissions": [
         "scene:read"
       ],
+      "supports_headless": true
+    },
+    "inspect_retopology_source": {
+      "description": "Inspect mesh density, actual triangle/quad counts, surface islands, open/nonmanifold edges, UVs, textures and rig risks before retopology. Read-only; works for Meshy, Tripo and other meshes.",
+      "has_side_effects": false,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read"
+      ],
+      "requires_live_preview": false,
       "supports_headless": true
     },
     "inspect_scene": {
@@ -14806,6 +15113,65 @@
       ],
       "requires_live_preview": true,
       "requires_user_path": true
+    },
+    "prepare_retopology_copy": {
+      "description": "Create independent static working meshes and material copies while preserving the originals. Captures the evaluated current pose, removes loose/degenerate geometry, merges near-coincident vertices and recalculates normals. Surface islands are kept by default. Preview-safe; rig and shape keys are not transferred.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "merge_distance_ratio": {
+            "maximum": 0.01,
+            "minimum": 0,
+            "type": "number"
+          },
+          "min_component_faces": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "name_suffix": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "shade_smooth": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": true,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "scene:mutate",
+        "preview:write"
+      ],
+      "requires_live_preview": true,
+      "supports_headless": true
     },
     "prune_external_asset_cache": {
       "description": "Preview or delete old/excess external asset cache directories by age or total size. Dry-run by default.",
@@ -18185,6 +18551,90 @@
       ],
       "supports_headless": true
     },
+    "start_provider_retopology_job": {
+      "description": "Request Meshy Remesh or Tripo v3 retopology for an existing provider task or public HTTPS model URL. Runs through the same exact-job Blender UI spend approval and background asset workers as generation. Meshy quad output uses FBX plus a GLB companion; Tripo GLB output stores triangles. No agent flag grants paid approval. Poll get_generation_approval_status, then repeat this exact call once approved; poll the returned asset job and import a new candidate.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "bake": {
+            "type": "boolean"
+          },
+          "model_url": {
+            "type": "string"
+          },
+          "poll_timeout_seconds": {
+            "maximum": 7200,
+            "minimum": 30,
+            "type": "integer"
+          },
+          "provider": {
+            "enum": [
+              "meshy",
+              "tripo"
+            ],
+            "type": "string"
+          },
+          "retopology_model": {
+            "enum": [
+              "v3.0",
+              "v2.0",
+              "v1.0"
+            ],
+            "type": "string"
+          },
+          "smart_uv": {
+            "type": "boolean"
+          },
+          "source_task_id": {
+            "type": "string"
+          },
+          "target_faces": {
+            "maximum": 2000000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "timeout": {
+            "maximum": 300,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "topology": {
+            "enum": [
+              "quad",
+              "triangle"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "network:read",
+        "network:write",
+        "files:write"
+      ],
+      "requires_live_preview": false,
+      "supports_headless": true
+    },
     "start_quality_benchmark_run": {
       "description": "Start a versioned benchmark run and its execution trace. Reference-model tasks require an explicit reference URI or local path.",
       "has_side_effects": true,
@@ -18353,6 +18803,252 @@
         "status_tool": "blender_bridge_status"
       },
       "timeout_seconds": 30
+    },
+    "start_retopology_bake_job": {
+      "description": "Rebake a source mesh's base color, tangent normal, roughness, metallic and HDR emission onto a separate target mesh in background Blender. Outputs a new target copy with packed textures, a UV atlas and measured projection coverage. Original source and target remain untouched. Supports a Principled BSDF connected directly to the material output, including ordinary Meshy/Tripo GLB imports. Shader groups/mixes are rejected; opacity, transmission and coat need manual review.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "cage_extrusion_ratio": {
+            "maximum": 0.2,
+            "minimum": 0,
+            "type": "number"
+          },
+          "intended_use": {
+            "enum": [
+              "prop",
+              "character"
+            ],
+            "type": "string"
+          },
+          "map_types": {
+            "items": {
+              "enum": [
+                "base_color",
+                "normal",
+                "roughness",
+                "metallic",
+                "emission"
+              ],
+              "type": "string"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "type": "array"
+          },
+          "margin": {
+            "maximum": 64,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "max_deviation_ratio": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "ray_distance_ratio": {
+            "maximum": 1,
+            "minimum": 1e-05,
+            "type": "number"
+          },
+          "resolution": {
+            "maximum": 4096,
+            "minimum": 16,
+            "type": "integer"
+          },
+          "samples": {
+            "maximum": 256,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "source_object_name": {
+            "type": "string"
+          },
+          "target_object_name": {
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "maximum": 7200,
+            "minimum": 30,
+            "type": "integer"
+          },
+          "uv_mode": {
+            "enum": [
+              "smart_project",
+              "existing"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_object_name",
+          "target_object_name"
+        ],
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "files:write",
+        "process:spawn"
+      ],
+      "requires_live_preview": false,
+      "supports_headless": true
+    },
+    "start_retopology_job": {
+      "description": "Snapshot one to eight source meshes without changing the scene, then run cleanup, QuadriFlow quad remeshing or triangle-budget decimation, optional surface projection and PBR rebaking in a supervised background Blender process. target_faces is per object and approximate. Defaults to baked 1024px PBR maps; no cloud API required. Poll status and explicitly import the result for preview. Does not transfer rigs or shape keys.",
+      "has_side_effects": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "bake_textures": {
+            "type": "boolean"
+          },
+          "cage_extrusion_ratio": {
+            "maximum": 0.2,
+            "minimum": 0,
+            "type": "number"
+          },
+          "intended_use": {
+            "enum": [
+              "prop",
+              "character"
+            ],
+            "type": "string"
+          },
+          "map_types": {
+            "items": {
+              "enum": [
+                "base_color",
+                "normal",
+                "roughness",
+                "metallic",
+                "emission"
+              ],
+              "type": "string"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "type": "array"
+          },
+          "margin": {
+            "maximum": 64,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "max_deviation_ratio": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "merge_distance_ratio": {
+            "maximum": 0.01,
+            "minimum": 0,
+            "type": "number"
+          },
+          "method": {
+            "enum": [
+              "quadriflow",
+              "decimate"
+            ],
+            "type": "string"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "preserve_boundary": {
+            "type": "boolean"
+          },
+          "preserve_sharp": {
+            "type": "boolean"
+          },
+          "project_to_source": {
+            "type": "boolean"
+          },
+          "ray_distance_ratio": {
+            "maximum": 1,
+            "minimum": 1e-05,
+            "type": "number"
+          },
+          "resolution": {
+            "maximum": 4096,
+            "minimum": 16,
+            "type": "integer"
+          },
+          "samples": {
+            "maximum": 256,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "seed": {
+            "maximum": 1000000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "target_faces": {
+            "maximum": 100000,
+            "minimum": 50,
+            "type": "integer"
+          },
+          "timeout_seconds": {
+            "maximum": 7200,
+            "minimum": 30,
+            "type": "integer"
+          },
+          "use_symmetry": {
+            "type": "boolean"
+          },
+          "uv_mode": {
+            "enum": [
+              "smart_project",
+              "existing"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "mutates_scene": false,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "permissions": [
+        "scene:read",
+        "files:write",
+        "process:spawn"
+      ],
+      "requires_live_preview": false,
+      "supports_headless": true
     },
     "start_trusted_script_job": {
       "authorization_model": "blender_run_script_equivalent",
@@ -33777,6 +34473,458 @@
         "type": "object"
       },
       "name": "get_generation_job_status"
+    },
+    {
+      "description": "Inspect mesh density, actual triangle/quad counts, surface islands, open/nonmanifold edges, UVs, textures and rig risks before retopology. Read-only; works for Meshy, Tripo and other meshes.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "name": "inspect_retopology_source"
+    },
+    {
+      "description": "Create independent static working meshes and material copies while preserving the originals. Captures the evaluated current pose, removes loose/degenerate geometry, merges near-coincident vertices and recalculates normals. Surface islands are kept by default. Preview-safe; rig and shape keys are not transferred.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "merge_distance_ratio": {
+            "maximum": 0.01,
+            "minimum": 0,
+            "type": "number"
+          },
+          "min_component_faces": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "name_suffix": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "shade_smooth": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "name": "prepare_retopology_copy"
+    },
+    {
+      "description": "Compare an original and retopology result using bounded bidirectional world-space surface samples, topology/material reports and optional front/side/top previews. Reports sampling limits and character edge-loop review requirements; never certifies automatic output as animation-ready.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_renders": {
+            "type": "boolean"
+          },
+          "intended_use": {
+            "enum": [
+              "prop",
+              "character"
+            ],
+            "type": "string"
+          },
+          "max_deviation_ratio": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "sample_count": {
+            "maximum": 8192,
+            "minimum": 32,
+            "type": "integer"
+          },
+          "source_object_name": {
+            "type": "string"
+          },
+          "target_object_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_object_name",
+          "target_object_name"
+        ],
+        "type": "object"
+      },
+      "name": "evaluate_retopology_result"
+    },
+    {
+      "description": "Snapshot one to eight source meshes without changing the scene, then run cleanup, QuadriFlow quad remeshing or triangle-budget decimation, optional surface projection and PBR rebaking in a supervised background Blender process. target_faces is per object and approximate. Defaults to baked 1024px PBR maps; no cloud API required. Poll status and explicitly import the result for preview. Does not transfer rigs or shape keys.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "bake_textures": {
+            "type": "boolean"
+          },
+          "cage_extrusion_ratio": {
+            "maximum": 0.2,
+            "minimum": 0,
+            "type": "number"
+          },
+          "intended_use": {
+            "enum": [
+              "prop",
+              "character"
+            ],
+            "type": "string"
+          },
+          "map_types": {
+            "items": {
+              "enum": [
+                "base_color",
+                "normal",
+                "roughness",
+                "metallic",
+                "emission"
+              ],
+              "type": "string"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "type": "array"
+          },
+          "margin": {
+            "maximum": 64,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "max_deviation_ratio": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "merge_distance_ratio": {
+            "maximum": 0.01,
+            "minimum": 0,
+            "type": "number"
+          },
+          "method": {
+            "enum": [
+              "quadriflow",
+              "decimate"
+            ],
+            "type": "string"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "preserve_boundary": {
+            "type": "boolean"
+          },
+          "preserve_sharp": {
+            "type": "boolean"
+          },
+          "project_to_source": {
+            "type": "boolean"
+          },
+          "ray_distance_ratio": {
+            "maximum": 1,
+            "minimum": 1e-05,
+            "type": "number"
+          },
+          "resolution": {
+            "maximum": 4096,
+            "minimum": 16,
+            "type": "integer"
+          },
+          "samples": {
+            "maximum": 256,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "seed": {
+            "maximum": 1000000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "target_faces": {
+            "maximum": 100000,
+            "minimum": 50,
+            "type": "integer"
+          },
+          "timeout_seconds": {
+            "maximum": 7200,
+            "minimum": 30,
+            "type": "integer"
+          },
+          "use_symmetry": {
+            "type": "boolean"
+          },
+          "uv_mode": {
+            "enum": [
+              "smart_project",
+              "existing"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "start_retopology_job"
+    },
+    {
+      "description": "Rebake a source mesh's base color, tangent normal, roughness, metallic and HDR emission onto a separate target mesh in background Blender. Outputs a new target copy with packed textures, a UV atlas and measured projection coverage. Original source and target remain untouched. Supports a Principled BSDF connected directly to the material output, including ordinary Meshy/Tripo GLB imports. Shader groups/mixes are rejected; opacity, transmission and coat need manual review.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "cage_extrusion_ratio": {
+            "maximum": 0.2,
+            "minimum": 0,
+            "type": "number"
+          },
+          "intended_use": {
+            "enum": [
+              "prop",
+              "character"
+            ],
+            "type": "string"
+          },
+          "map_types": {
+            "items": {
+              "enum": [
+                "base_color",
+                "normal",
+                "roughness",
+                "metallic",
+                "emission"
+              ],
+              "type": "string"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "type": "array"
+          },
+          "margin": {
+            "maximum": 64,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "max_deviation_ratio": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "ray_distance_ratio": {
+            "maximum": 1,
+            "minimum": 1e-05,
+            "type": "number"
+          },
+          "resolution": {
+            "maximum": 4096,
+            "minimum": 16,
+            "type": "integer"
+          },
+          "samples": {
+            "maximum": 256,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "source_object_name": {
+            "type": "string"
+          },
+          "target_object_name": {
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "maximum": 7200,
+            "minimum": 30,
+            "type": "integer"
+          },
+          "uv_mode": {
+            "enum": [
+              "smart_project",
+              "existing"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_object_name",
+          "target_object_name"
+        ],
+        "type": "object"
+      },
+      "name": "start_retopology_bake_job"
+    },
+    {
+      "description": "Poll local retopology job phase/progress, terminal outcome and topology, shape-deviation and texture-coverage reports. A timed-out client request does not stop the worker; keep polling the returned job_id.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_retopology_job_status"
+    },
+    {
+      "description": "Stop a local retopology worker and its process tree. Preserves source meshes and prevents incomplete results from being imported.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "name": "cancel_retopology_job"
+    },
+    {
+      "description": "Append a completed local remesh/bake result as new objects and materials with packed textures through live preview. Repeated imports reuse the current scene's existing result. Never replaces the source; review the result, then commit or revert preview.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "name": "import_retopology_job_result"
+    },
+    {
+      "description": "Request Meshy Remesh or Tripo v3 retopology for an existing provider task or public HTTPS model URL. Runs through the same exact-job Blender UI spend approval and background asset workers as generation. Meshy quad output uses FBX plus a GLB companion; Tripo GLB output stores triangles. No agent flag grants paid approval. Poll get_generation_approval_status, then repeat this exact call once approved; poll the returned asset job and import a new candidate.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "bake": {
+            "type": "boolean"
+          },
+          "model_url": {
+            "type": "string"
+          },
+          "poll_timeout_seconds": {
+            "maximum": 7200,
+            "minimum": 30,
+            "type": "integer"
+          },
+          "provider": {
+            "enum": [
+              "meshy",
+              "tripo"
+            ],
+            "type": "string"
+          },
+          "retopology_model": {
+            "enum": [
+              "v3.0",
+              "v2.0",
+              "v1.0"
+            ],
+            "type": "string"
+          },
+          "smart_uv": {
+            "type": "boolean"
+          },
+          "source_task_id": {
+            "type": "string"
+          },
+          "target_faces": {
+            "maximum": 2000000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "timeout": {
+            "maximum": 300,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "topology": {
+            "enum": [
+              "quad",
+              "triangle"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider"
+        ],
+        "type": "object"
+      },
+      "name": "start_provider_retopology_job"
+    },
+    {
+      "description": "Poll a Meshy/Tripo retopology asset job and recover its task ID and cached manifest. Use cancel_external_asset_job to stop local work and request provider cancellation where supported. Do not resubmit an already-running paid request.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_provider_retopology_job_status"
+    },
+    {
+      "description": "Import a completed provider retopology candidate or cached Meshy generation format variant into live preview. preferred_format=fbx imports Meshy quad faces instead of the triangulated GLB when a cached FBX exists. Missing requested formats fail explicitly. Original scene models stay intact; compare before committing preview.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "preferred_format": {
+            "enum": [
+              "auto",
+              "fbx",
+              "glb"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "name": "import_provider_retopology_job_result"
     }
   ],
   "domains": {
@@ -33983,6 +35131,19 @@
       "record_model_quality_repair",
       "get_model_quality_review"
     ],
+    "retopology": [
+      "inspect_retopology_source",
+      "prepare_retopology_copy",
+      "evaluate_retopology_result",
+      "start_retopology_job",
+      "start_retopology_bake_job",
+      "get_retopology_job_status",
+      "cancel_retopology_job",
+      "import_retopology_job_result",
+      "start_provider_retopology_job",
+      "get_provider_retopology_job_status",
+      "import_provider_retopology_job_result"
+    ],
     "rigging_simulation": [
       "get_rigging_details",
       "get_shape_key_details",
@@ -34048,7 +35209,7 @@
       "organize_scene_for_production"
     ]
   },
-  "registry_digest": "7d6c002eeb1f805edb2145ef461447f91f7595a29a6ab20c382705fcc04ac9f4",
+  "registry_digest": "5a42e672d6e95eb9551e227e4a35f22468a1c3a54a85cc1449591000e3833403",
   "schema_version": 1,
   "specs": [
     {
@@ -59612,7 +60773,835 @@
         "type": "object"
       },
       "owner": "generation"
+    },
+    {
+      "contract": {
+        "has_side_effects": false,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read"
+        ],
+        "requires_live_preview": false,
+        "supports_headless": true
+      },
+      "description": "Inspect mesh density, actual triangle/quad counts, surface islands, open/nonmanifold edges, UVs, textures and rig risks before retopology. Read-only; works for Meshy, Tripo and other meshes.",
+      "exposure": "catalog",
+      "groups": [
+        "retopology",
+        "model_quality",
+        "external_assets"
+      ],
+      "handler_key": "inspect_retopology_source",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "name": "inspect_retopology_source",
+      "order": 1930,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "retopology"
+    },
+    {
+      "contract": {
+        "has_side_effects": true,
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Create independent static working meshes and material copies while preserving the originals. Captures the evaluated current pose, removes loose/degenerate geometry, merges near-coincident vertices and recalculates normals. Surface islands are kept by default. Preview-safe; rig and shape keys are not transferred.",
+      "exposure": "catalog",
+      "groups": [
+        "retopology",
+        "model_quality",
+        "external_assets"
+      ],
+      "handler_key": "prepare_retopology_copy",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "merge_distance_ratio": {
+            "maximum": 0.01,
+            "minimum": 0,
+            "type": "number"
+          },
+          "min_component_faces": {
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "name_suffix": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "shade_smooth": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "name": "prepare_retopology_copy",
+      "order": 1931,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "retopology"
+    },
+    {
+      "contract": {
+        "has_side_effects": true,
+        "long_running": true,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read",
+          "files:write"
+        ],
+        "requires_live_preview": false,
+        "supports_headless": true,
+        "timeout_recovery": {
+          "message": "If inspection renders time out, check bridge status and visual evidence resources before retrying.",
+          "poll_after_seconds": 5,
+          "recoverable": true,
+          "status_tool": "blender_bridge_status"
+        },
+        "timeout_seconds": 180
+      },
+      "description": "Compare an original and retopology result using bounded bidirectional world-space surface samples, topology/material reports and optional front/side/top previews. Reports sampling limits and character edge-loop review requirements; never certifies automatic output as animation-ready.",
+      "exposure": "catalog",
+      "groups": [
+        "retopology",
+        "model_quality",
+        "external_assets"
+      ],
+      "handler_key": "evaluate_retopology_result",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "include_renders": {
+            "type": "boolean"
+          },
+          "intended_use": {
+            "enum": [
+              "prop",
+              "character"
+            ],
+            "type": "string"
+          },
+          "max_deviation_ratio": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "sample_count": {
+            "maximum": 8192,
+            "minimum": 32,
+            "type": "integer"
+          },
+          "source_object_name": {
+            "type": "string"
+          },
+          "target_object_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_object_name",
+          "target_object_name"
+        ],
+        "type": "object"
+      },
+      "name": "evaluate_retopology_result",
+      "order": 1932,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "retopology"
+    },
+    {
+      "contract": {
+        "has_side_effects": true,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read",
+          "files:write",
+          "process:spawn"
+        ],
+        "requires_live_preview": false,
+        "supports_headless": true
+      },
+      "description": "Snapshot one to eight source meshes without changing the scene, then run cleanup, QuadriFlow quad remeshing or triangle-budget decimation, optional surface projection and PBR rebaking in a supervised background Blender process. target_faces is per object and approximate. Defaults to baked 1024px PBR maps; no cloud API required. Poll status and explicitly import the result for preview. Does not transfer rigs or shape keys.",
+      "exposure": "catalog",
+      "groups": [
+        "retopology",
+        "model_quality",
+        "external_assets"
+      ],
+      "handler_key": "start_retopology_job",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "bake_textures": {
+            "type": "boolean"
+          },
+          "cage_extrusion_ratio": {
+            "maximum": 0.2,
+            "minimum": 0,
+            "type": "number"
+          },
+          "intended_use": {
+            "enum": [
+              "prop",
+              "character"
+            ],
+            "type": "string"
+          },
+          "map_types": {
+            "items": {
+              "enum": [
+                "base_color",
+                "normal",
+                "roughness",
+                "metallic",
+                "emission"
+              ],
+              "type": "string"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "type": "array"
+          },
+          "margin": {
+            "maximum": 64,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "max_deviation_ratio": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "merge_distance_ratio": {
+            "maximum": 0.01,
+            "minimum": 0,
+            "type": "number"
+          },
+          "method": {
+            "enum": [
+              "quadriflow",
+              "decimate"
+            ],
+            "type": "string"
+          },
+          "object_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "preserve_boundary": {
+            "type": "boolean"
+          },
+          "preserve_sharp": {
+            "type": "boolean"
+          },
+          "project_to_source": {
+            "type": "boolean"
+          },
+          "ray_distance_ratio": {
+            "maximum": 1,
+            "minimum": 1e-05,
+            "type": "number"
+          },
+          "resolution": {
+            "maximum": 4096,
+            "minimum": 16,
+            "type": "integer"
+          },
+          "samples": {
+            "maximum": 256,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "seed": {
+            "maximum": 1000000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "target_faces": {
+            "maximum": 100000,
+            "minimum": 50,
+            "type": "integer"
+          },
+          "timeout_seconds": {
+            "maximum": 7200,
+            "minimum": 30,
+            "type": "integer"
+          },
+          "use_symmetry": {
+            "type": "boolean"
+          },
+          "uv_mode": {
+            "enum": [
+              "smart_project",
+              "existing"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "start_retopology_job",
+      "order": 1933,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "retopology"
+    },
+    {
+      "contract": {
+        "has_side_effects": true,
+        "mutates_scene": false,
+        "permissions": [
+          "scene:read",
+          "files:write",
+          "process:spawn"
+        ],
+        "requires_live_preview": false,
+        "supports_headless": true
+      },
+      "description": "Rebake a source mesh's base color, tangent normal, roughness, metallic and HDR emission onto a separate target mesh in background Blender. Outputs a new target copy with packed textures, a UV atlas and measured projection coverage. Original source and target remain untouched. Supports a Principled BSDF connected directly to the material output, including ordinary Meshy/Tripo GLB imports. Shader groups/mixes are rejected; opacity, transmission and coat need manual review.",
+      "exposure": "catalog",
+      "groups": [
+        "retopology",
+        "model_quality",
+        "external_assets"
+      ],
+      "handler_key": "start_retopology_bake_job",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "cage_extrusion_ratio": {
+            "maximum": 0.2,
+            "minimum": 0,
+            "type": "number"
+          },
+          "intended_use": {
+            "enum": [
+              "prop",
+              "character"
+            ],
+            "type": "string"
+          },
+          "map_types": {
+            "items": {
+              "enum": [
+                "base_color",
+                "normal",
+                "roughness",
+                "metallic",
+                "emission"
+              ],
+              "type": "string"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "type": "array"
+          },
+          "margin": {
+            "maximum": 64,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "max_deviation_ratio": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "ray_distance_ratio": {
+            "maximum": 1,
+            "minimum": 1e-05,
+            "type": "number"
+          },
+          "resolution": {
+            "maximum": 4096,
+            "minimum": 16,
+            "type": "integer"
+          },
+          "samples": {
+            "maximum": 256,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "source_object_name": {
+            "type": "string"
+          },
+          "target_object_name": {
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "maximum": 7200,
+            "minimum": 30,
+            "type": "integer"
+          },
+          "uv_mode": {
+            "enum": [
+              "smart_project",
+              "existing"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_object_name",
+          "target_object_name"
+        ],
+        "type": "object"
+      },
+      "name": "start_retopology_bake_job",
+      "order": 1934,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "retopology"
+    },
+    {
+      "contract": {
+        "has_side_effects": true,
+        "mutates_scene": false,
+        "permissions": [
+          "files:read",
+          "files:write",
+          "process:terminate"
+        ],
+        "requires_live_preview": false,
+        "supports_headless": true
+      },
+      "description": "Poll local retopology job phase/progress, terminal outcome and topology, shape-deviation and texture-coverage reports. A timed-out client request does not stop the worker; keep polling the returned job_id.",
+      "exposure": "catalog",
+      "groups": [
+        "retopology",
+        "model_quality",
+        "external_assets"
+      ],
+      "handler_key": "get_retopology_job_status",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_retopology_job_status",
+      "order": 1935,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "retopology"
+    },
+    {
+      "contract": {
+        "has_side_effects": true,
+        "mutates_scene": false,
+        "permissions": [
+          "files:write",
+          "process:terminate"
+        ],
+        "requires_live_preview": false,
+        "supports_headless": true
+      },
+      "description": "Stop a local retopology worker and its process tree. Preserves source meshes and prevents incomplete results from being imported.",
+      "exposure": "catalog",
+      "groups": [
+        "retopology",
+        "model_quality",
+        "external_assets"
+      ],
+      "handler_key": "cancel_retopology_job",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "name": "cancel_retopology_job",
+      "order": 1936,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "retopology"
+    },
+    {
+      "contract": {
+        "has_side_effects": true,
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Append a completed local remesh/bake result as new objects and materials with packed textures through live preview. Repeated imports reuse the current scene's existing result. Never replaces the source; review the result, then commit or revert preview.",
+      "exposure": "catalog",
+      "groups": [
+        "retopology",
+        "model_quality",
+        "external_assets"
+      ],
+      "handler_key": "import_retopology_job_result",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "name": "import_retopology_job_result",
+      "order": 1937,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "retopology"
+    },
+    {
+      "contract": {
+        "has_side_effects": true,
+        "mutates_scene": false,
+        "permissions": [
+          "network:read",
+          "network:write",
+          "files:write"
+        ],
+        "requires_live_preview": false,
+        "supports_headless": true
+      },
+      "description": "Request Meshy Remesh or Tripo v3 retopology for an existing provider task or public HTTPS model URL. Runs through the same exact-job Blender UI spend approval and background asset workers as generation. Meshy quad output uses FBX plus a GLB companion; Tripo GLB output stores triangles. No agent flag grants paid approval. Poll get_generation_approval_status, then repeat this exact call once approved; poll the returned asset job and import a new candidate.",
+      "exposure": "catalog",
+      "groups": [
+        "retopology",
+        "model_quality",
+        "external_assets"
+      ],
+      "handler_key": "start_provider_retopology_job",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "bake": {
+            "type": "boolean"
+          },
+          "model_url": {
+            "type": "string"
+          },
+          "poll_timeout_seconds": {
+            "maximum": 7200,
+            "minimum": 30,
+            "type": "integer"
+          },
+          "provider": {
+            "enum": [
+              "meshy",
+              "tripo"
+            ],
+            "type": "string"
+          },
+          "retopology_model": {
+            "enum": [
+              "v3.0",
+              "v2.0",
+              "v1.0"
+            ],
+            "type": "string"
+          },
+          "smart_uv": {
+            "type": "boolean"
+          },
+          "source_task_id": {
+            "type": "string"
+          },
+          "target_faces": {
+            "maximum": 2000000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "timeout": {
+            "maximum": 300,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "topology": {
+            "enum": [
+              "quad",
+              "triangle"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider"
+        ],
+        "type": "object"
+      },
+      "name": "start_provider_retopology_job",
+      "order": 1938,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "retopology"
+    },
+    {
+      "contract": {
+        "has_side_effects": false,
+        "mutates_scene": false,
+        "permissions": [
+          "files:read"
+        ],
+        "requires_live_preview": false,
+        "supports_headless": true
+      },
+      "description": "Poll a Meshy/Tripo retopology asset job and recover its task ID and cached manifest. Use cancel_external_asset_job to stop local work and request provider cancellation where supported. Do not resubmit an already-running paid request.",
+      "exposure": "catalog",
+      "groups": [
+        "retopology",
+        "model_quality",
+        "external_assets"
+      ],
+      "handler_key": "get_provider_retopology_job_status",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_provider_retopology_job_status",
+      "order": 1939,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "retopology"
+    },
+    {
+      "contract": {
+        "has_side_effects": true,
+        "mutates_scene": true,
+        "permissions": [
+          "scene:read",
+          "scene:mutate",
+          "preview:write"
+        ],
+        "requires_live_preview": true,
+        "supports_headless": true
+      },
+      "description": "Import a completed provider retopology candidate or cached Meshy generation format variant into live preview. preferred_format=fbx imports Meshy quad faces instead of the triangulated GLB when a cached FBX exists. Missing requested formats fail explicitly. Original scene models stay intact; compare before committing preview.",
+      "exposure": "catalog",
+      "groups": [
+        "retopology",
+        "model_quality",
+        "external_assets"
+      ],
+      "handler_key": "import_provider_retopology_job_result",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "preferred_format": {
+            "enum": [
+              "auto",
+              "fbx",
+              "glb"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "type": "object"
+      },
+      "name": "import_provider_retopology_job_result",
+      "order": 1940,
+      "output_schema": {
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "description": "Human-readable status or error message",
+            "type": "string"
+          },
+          "ok": {
+            "description": "Whether the tool completed successfully",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "owner": "retopology"
     }
   ],
-  "tool_count": 241
+  "tool_count": 252
 }

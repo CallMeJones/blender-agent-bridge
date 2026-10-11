@@ -1109,10 +1109,10 @@ def _draw_pending_generation_spend(layout, context):
     box.label(text="Paid generation awaiting your approval", icon="ERROR")
     for record in pending:
         box.label(text="%s -- %s" % (record["title"], record["cost_note"] or "cost unknown"))
-        views = record.get("view_count") or 1
-        box.label(text="Uploads %d reference image%s." % (views, "" if views == 1 else "s"))
+        views = record.get("view_count", 1)
+        box.label(text="Uses an existing model." if views == 0 else "Uploads %d reference image%s." % (views, "" if views == 1 else "s"))
         if record.get("options_summary"):
-            box.label(text="Preset: %s" % record["options_summary"])
+            box.label(text="Options: %s" % record["options_summary"])
         details = record.get("reference_details") or [
             {"path": reference_path}
             for reference_path in record.get("reference_files") or []

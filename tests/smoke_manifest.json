@@ -2,6 +2,38 @@
   "schema_version": 1,
   "tests": [
     {
+      "name": "smoke_retopology_providers",
+      "file": "tests/smoke_retopology_providers.py",
+      "environment": "blender",
+      "lanes": ["core", "release"],
+      "timeout_seconds": 300,
+      "success": "smoke_retopology_providers: ok"
+    },
+    {
+      "name": "smoke_retopology_baking",
+      "file": "tests/smoke_retopology_baking.py",
+      "environment": "blender",
+      "lanes": ["core", "release"],
+      "timeout_seconds": 420,
+      "success": "smoke_retopology_baking: ok"
+    },
+    {
+      "name": "smoke_retopology_jobs",
+      "file": "tests/smoke_retopology_jobs.py",
+      "environment": "blender",
+      "lanes": ["core", "release"],
+      "timeout_seconds": 360,
+      "success": "smoke_retopology_jobs: ok"
+    },
+    {
+      "name": "smoke_retopology_cleanup",
+      "file": "tests/smoke_retopology_cleanup.py",
+      "environment": "blender",
+      "lanes": ["core", "release"],
+      "timeout_seconds": 180,
+      "success": "smoke_retopology_cleanup: ok"
+    },
+    {
       "name": "smoke_adaptive_manifold",
       "file": "tests/smoke_adaptive_manifold.py",
       "environment": "blender",

@@ -313,6 +313,11 @@ def _artifact_suffix(url, default):
     return suffix if suffix in {".glb", ".png", ".jpg", ".jpeg"} else default
 
 
+def validate_generated_model_file(path, *, content_type=""):
+    """Shared signature/content-type validation for downloaded model artifacts."""
+    return _generated_mesh_content_type_error(path, content_type) or _generated_mesh_payload_error(path)
+
+
 def _artifact_candidates(status):
     urls = status.get("artifact_urls") if isinstance(status.get("artifact_urls"), dict) else {}
     candidates = []
@@ -324,6 +329,8 @@ def _artifact_candidates(status):
         seen.add(url)
         if role == "pre_remeshed_glb":
             name = "generated_pre_remeshed.glb"
+        elif role == "fbx":
+            name = "generated_quads.fbx"
         elif role == "thumbnail_url":
             name = "meshy_thumbnail%s" % _artifact_suffix(url, ".png")
         elif role == "alpha_thumbnail_url":
@@ -916,7 +923,7 @@ def run(
                 max_bytes=remaining_bytes,
             )
             artifact_size = _download_size(artifact_download, artifact_path)
-            if role == "pre_remeshed_glb":
+            if role in {"pre_remeshed_glb", "fbx"}:
                 payload_error = _generated_mesh_content_type_error(
                     artifact_path,
                     artifact_download.get("content_type", "")

@@ -20,6 +20,7 @@ _TOOL_REGISTRY_RELOAD_ORDER = (
     "tool_registry.domains.quality_observability",
     "tool_registry.domains.external_assets",
     "tool_registry.domains.generation",
+    "tool_registry.domains.retopology",
     "tool_registry.domains.scripts_transactions",
     "tool_registry",
 )
@@ -38,6 +39,7 @@ _TOOL_HANDLER_RELOAD_ORDER = (
     "tool_handlers.quality_observability",
     "tool_handlers.external_assets",
     "tool_handlers.generation",
+    "tool_handlers.retopology",
     "tool_handlers.scripts_transactions",
 )
 
@@ -117,6 +119,10 @@ _MODULE_NAMES = (
     "reference_surface_fitting",
     "semantic_sculpt",
     "adaptive_remesh",
+    "retopology",
+    "retopology_policy",
+    "retopology_baking",
+    "retopology_jobs",
     "reference_benchmark_scene",
     "autosave",
     "lab_parity",
@@ -125,6 +131,7 @@ _MODULE_NAMES = (
     "trusted_script_jobs",
     "external_assets",
     "generation_job",
+    "retopology_providers",
     "asset_provider_execution",
     "asset_jobs",
     "project_files",
@@ -149,6 +156,7 @@ _MODULE_NAMES = (
 _PERSISTENT_MODULES = ("session_credentials",)
 _EXTERNAL_RUNTIME_MODULES = (
     "asset_job_worker", "bridge_client", "connection_diagnostics", "mcp_server",
+    "retopology_worker",
     "mcp_runtime", "mcp_runtime.server", "tool_catalog", "tool_registry.report",
     "triposr_compat_runner",
 )

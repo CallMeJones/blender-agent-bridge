@@ -32,6 +32,11 @@ def _download_sketchfab(config, args, credentials, progress_callback):
 
 def _generate_provider(provider):
     def generate(config, args, credentials, progress_callback):
+        if args.get("job_kind") == "retopology":
+            from . import retopology_providers
+            return retopology_providers.run(config, args, provider=provider, api_key=credentials.get("token", ""),
+                                            progress_callback=progress_callback,
+                                            is_cancelled=config.get("_is_cancelled", lambda: False))
         from . import generation_job
 
         return generation_job.run(
@@ -73,7 +78,8 @@ def execute(config, args, *, credentials, progress_callback=None, is_cancelled=l
     if provider in {"poly_haven", "sketchfab"}:
         default = 120 if provider == "sketchfab" else 60
         clean_args["timeout"] = max(1, min(300, int(clean_args.get("timeout") or default)))
-    result = worker(config, clean_args, dict(credentials), progress)
+    worker_config = dict(config, _is_cancelled=is_cancelled) if clean_args.get("job_kind") == "retopology" else config
+    result = worker(worker_config, clean_args, dict(credentials), progress)
     if is_cancelled():
         return dict(result, ok=False, cancelled=True, message="External asset job cancelled")
     return result

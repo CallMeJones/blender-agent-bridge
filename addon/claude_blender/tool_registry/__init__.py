@@ -16,6 +16,7 @@ from .domains import (
     quality_observability,
     external_assets,
     generation,
+    retopology,
     scripts_transactions,
 )
 
@@ -33,6 +34,7 @@ DOMAIN_MODULES = (
     quality_observability,
     external_assets,
     generation,
+    retopology,
     scripts_transactions,
 )
 

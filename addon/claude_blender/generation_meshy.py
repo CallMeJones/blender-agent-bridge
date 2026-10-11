@@ -351,6 +351,8 @@ def request_options(options, *, view_count=1):
     body["should_remesh"] = bool(options["should_remesh"])
     if options["should_remesh"]:
         body["topology"] = options["topology"]
+        if options["topology"] == "quad":
+            body["target_formats"] = ["glb", "fbx"]
         body["save_pre_remeshed_model"] = bool(options["save_pre_remeshed_model"])
         if options.get("decimation_mode"):
             body["decimation_mode"] = DECIMATION_MODE_VALUES[options["decimation_mode"]]

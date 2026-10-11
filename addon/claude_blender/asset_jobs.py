@@ -22,6 +22,7 @@ from . import (
     generation_spend,
     generation_tripo,
     process_utils,
+    retopology_policy,
     viewport_capture,
 )
 
@@ -277,6 +278,11 @@ def _redact_sketchfab(args):
 
 
 def _redact_generation(provider, args):
+    if args.get("job_kind") == "retopology":
+        policy = retopology_policy.provider_options(provider, args)
+        return {"provider": provider, "job_kind": "retopology", "retopology_options": policy["payload"],
+                "estimated_credits": policy["estimated_credits"], "pricing_version": policy["pricing_version"],
+                "api_key_supplied": bool(args.get("api_key"))}
     views = args.get("views") if isinstance(args.get("views"), dict) else {}
     provider = str(provider or "tripo").strip().lower()
     result = {
@@ -347,6 +353,14 @@ def _redact_generation_for(provider):
 
 def _validate_generation(provider, args):
     provider = str(provider or "tripo").strip().lower()
+    if args.get("job_kind") == "retopology":
+        try:
+            retopology_policy.provider_options(provider, args)
+        except ValueError as error:
+            return str(error)
+        if not str(args.get("api_key") or "").strip():
+            return f"api_key is required for {provider} retopology jobs"
+        return ""
     views = args.get("views")
     if not isinstance(views, dict) or not any(
         str(entry or "").strip() for entry in views.values()
@@ -443,6 +457,12 @@ def _spend_notice(provider, args=None):
 
     notice = generation_providers.paid_provider_notice(provider)
     normalized_provider = str(provider or "").strip().lower()
+    if (args or {}).get("job_kind") == "retopology":
+        policy = retopology_policy.provider_options(normalized_provider, args)
+        return {"provider": normalized_provider, "title": f"{normalized_provider.title()} Retopology", "paid": True,
+                "estimated_credits": policy["estimated_credits"], "pricing_version": policy["pricing_version"],
+                "cost_note": policy["cost_note"], "uploads_reference_images": False,
+                "options_summary": f"{policy['topology']}, {policy['target_faces']} faces; source: {policy['source_task_id'] or policy['model_url']}"}
     if notice and normalized_provider in {"meshy", "tripo"}:
         views = (args or {}).get("views") or {}
         if normalized_provider == "meshy":
@@ -509,7 +529,7 @@ def _require_spend_approval(provider, args):
         provider,
         fingerprint,
         cost_note=notice.get("cost_note") or "",
-        view_count=len((args or {}).get("views") or {}) or 1,
+        view_count=0 if args.get("job_kind") == "retopology" else len((args or {}).get("views") or {}) or 1,
         title=notice.get("title") or provider,
         reference_files=[
             os.path.normpath(os.path.abspath(str(path)))
@@ -530,7 +550,7 @@ def _require_spend_approval(provider, args):
             if isinstance(identity, dict)
         ],
         estimated_credits=notice.get("estimated_credits"),
-        options_summary=(notice.get("meshy_options") or {}).get("preset", ""),
+        options_summary=notice.get("options_summary") or (notice.get("meshy_options") or {}).get("preset", ""),
     )
     return {
         "ok": False,
@@ -541,9 +561,9 @@ def _require_spend_approval(provider, args):
         "poll_after_seconds": 2,
         "client_guidance": (
             "Poll get_generation_approval_status with this request_id every 2 seconds. Do not ask the user to report "
-            "their click. If approved, call start_generation_job once with the exact same arguments; if declined or "
+            "their click. If approved, call %s once with the exact same arguments; if declined or "
             "expired, stop."
-        ),
+        ) % ("start_provider_retopology_job" if args.get("job_kind") == "retopology" else "start_generation_job"),
         "message": (
             "%s costs money and cannot start until the user approves it in Blender. %s%s "
             "Tell them the cost, ask them to click Approve or Decline in the Agent Bridge sidebar, then poll "
@@ -880,7 +900,11 @@ def start_external_asset_download(
     if validation_error:
         return {"ok": False, "message": validation_error}
 
-    if provider in generation_providers.PROVIDERS_BY_NAME:
+    if args.get("job_kind") == "retopology":
+        refusal = generation_providers.policy_refusal(provider)
+        if refusal:
+            return {"ok": False, "message": refusal, "policy_blocked": True}
+    elif provider in generation_providers.PROVIDERS_BY_NAME:
         try:
             args["_reference_identities"] = generation_references.validate_reference_images(
                 args.get("views"),

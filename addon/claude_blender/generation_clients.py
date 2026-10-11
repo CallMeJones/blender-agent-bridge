@@ -34,7 +34,7 @@ import urllib.parse
 import urllib.request
 import uuid
 
-from . import generation_meshy, generation_references, generation_tripo
+from . import generation_meshy, generation_references, generation_tripo, retopology_policy
 
 TRIPO_BASE_URL = "https://openapi.tripo3d.ai/v3"
 TRIPO_DEFAULT_MODEL = generation_tripo.DEFAULT_MODEL
@@ -348,7 +348,7 @@ def _meshy_artifact_urls(payload):
     artifacts = {}
     model_urls = payload.get("model_urls")
     if isinstance(model_urls, dict):
-        for key in ("glb", "pre_remeshed_glb"):
+        for key in ("glb", "fbx", "pre_remeshed_glb"):
             value = model_urls.get(key)
             if isinstance(value, str) and value:
                 artifacts[key] = value
@@ -542,6 +542,15 @@ class TripoClient:
             raise GenerationError("%s returned no task_id" % path)
         return task_id
 
+    def create_retopology_task(self, **options):
+        policy = retopology_policy.provider_options("tripo", options)
+        data = self._request("POST", "mesh/decimate", body=json.dumps(policy["payload"]).encode("utf-8"),
+                             content_type="application/json", label="retopology")
+        task_id = str(data.get("task_id") or data.get("id") or "")
+        if not task_id:
+            raise GenerationError("Tripo retopology returned no task_id")
+        return task_id
+
     def task_status(self, task_id):
         data = self._request("GET", "tasks/%s" % task_id, label="task status")
         status = str(data.get("status") or "unknown").lower()
@@ -732,6 +741,16 @@ class MeshyClient:
         self._task_paths[task_id] = "multi-image-to-3d"
         return task_id
 
+    def create_remesh_task(self, **options):
+        policy = retopology_policy.provider_options("meshy", options)
+        data = self._request("POST", "remesh", body=json.dumps(policy["payload"]).encode("utf-8"),
+                             content_type="application/json", label="remesh")
+        task_id = str(data.get("result") or data.get("task_id") or data.get("id") or "")
+        if not task_id:
+            raise GenerationError("Meshy remesh returned no task_id")
+        self._task_paths[task_id] = "remesh"
+        return task_id
+
     def task_status(self, task_id):
         path = self._task_path(task_id)
         data = self._request("GET", "%s/%s" % (path, task_id), label="task status")
@@ -759,6 +778,8 @@ class MeshyClient:
 
     def _task_path(self, task_id, task_kind=""):
         kind = str(task_kind or "").strip().lower().replace("-", "_")
+        if kind in {"remesh", "retopology"}:
+            return "remesh"
         if kind in {"multiview", "multi_image", "multiimage"}:
             return "multi-image-to-3d"
         if kind in {"image", "single_image", "single"}:
@@ -777,7 +798,7 @@ class MeshyClient:
             "ok": True,
             "provider": "meshy",
             "task_id": task_id,
-            "task_kind": "multiview" if path == "multi-image-to-3d" else "image",
+            "task_kind": "remesh" if path == "remesh" else "multiview" if path == "multi-image-to-3d" else "image",
             "message": "Meshy task cancelled at the provider",
         }
 
