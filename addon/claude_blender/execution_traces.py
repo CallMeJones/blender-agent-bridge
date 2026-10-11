@@ -335,6 +335,7 @@ def record_tool_call(
     result=None,
     duration_ms=None,
     contract=None,
+    operation_id="",
 ):
     trace_id = _active_trace_id()
     if not trace_id or str(tool_name or "") in _TRACE_CONTROL_TOOLS:
@@ -344,6 +345,7 @@ def record_tool_call(
     summary = _result_summary(result if isinstance(result, dict) else {})
     data = {
         "call_id": call_id,
+        "operation_id": str(operation_id or ""),
         "tool_name": str(tool_name or ""),
         "arguments": traced_arguments,
         "result": summary,

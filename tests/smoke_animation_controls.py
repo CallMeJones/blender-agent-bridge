@@ -67,7 +67,7 @@ def _snapshot(scene, cube):
 
 def _action_frames(action):
     frames = []
-    for fcurve in live_preview._iter_action_fcurves(action):
+    for fcurve in live_preview.iter_action_fcurves(action):
         frames.extend(round(float(point.co.x), 4) for point in fcurve.keyframe_points)
     return sorted(set(frames))
 
@@ -75,7 +75,7 @@ def _action_frames(action):
 def _cycle_modifier_count(action):
     return sum(
         1
-        for fcurve in live_preview._iter_action_fcurves(action)
+        for fcurve in live_preview.iter_action_fcurves(action)
         for modifier in fcurve.modifiers
         if modifier.type == "CYCLES"
     )
@@ -86,7 +86,7 @@ def _action_state(action):
         "frames": _action_frames(action),
         "interpolations": [
             point.interpolation
-            for fcurve in live_preview._iter_action_fcurves(action)
+            for fcurve in live_preview.iter_action_fcurves(action)
             for point in fcurve.keyframe_points
         ],
         "cycle_modifiers": _cycle_modifier_count(action),
@@ -94,7 +94,7 @@ def _action_state(action):
 
 
 def _assert_interpolation(action, interpolation, easing=None):
-    for fcurve in live_preview._iter_action_fcurves(action):
+    for fcurve in live_preview.iter_action_fcurves(action):
         for point in fcurve.keyframe_points:
             assert point.interpolation == interpolation, (action.name, point.interpolation)
             if easing:
@@ -114,7 +114,7 @@ def main():
     scene.frame_set(1)
     existing_action = cube.animation_data.action
     existing_action.name = "Agent Bridge Existing Animation Action"
-    for fcurve in live_preview._iter_action_fcurves(existing_action):
+    for fcurve in live_preview.iter_action_fcurves(existing_action):
         for point in fcurve.keyframe_points:
             point.interpolation = "LINEAR"
     initial = _snapshot(scene, cube)
@@ -146,7 +146,7 @@ def main():
         _execute(context, "retime_actions", {"action_names": [existing_action.name], "frame_start": 3, "frame_end": 63})
         assert _action_frames(existing_action) == [3.0, 63.0]
         _execute(context, "add_action_cycles", {"action_names": [existing_action.name], "replace_existing": True})
-        assert _cycle_modifier_count(existing_action) == len(live_preview._iter_action_fcurves(existing_action))
+        assert _cycle_modifier_count(existing_action) == len(live_preview.iter_action_fcurves(existing_action))
 
         turntable = _execute(
             context,
@@ -188,7 +188,7 @@ def main():
                 "replace_existing": True,
             },
         )
-        assert _cycle_modifier_count(turntable_action) == len(live_preview._iter_action_fcurves(turntable_action))
+        assert _cycle_modifier_count(turntable_action) == len(live_preview.iter_action_fcurves(turntable_action))
 
         _execute(
             context,

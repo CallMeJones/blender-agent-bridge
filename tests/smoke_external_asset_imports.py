@@ -242,10 +242,6 @@ def main():
     fixture_server = None
     fixture_thread = None
     os.environ[asset_jobs.ASSET_JOB_MODE_ENV] = "thread"
-    external_assets._fetch_json = _fake_fetch_json
-    external_assets._fetch_json_with_headers = _fake_fetch_json_with_headers
-    external_assets._download_file = _fake_download_file
-    external_assets._import_model_file = _fake_import_model_file
     try:
         online_worker_command = asset_jobs._asset_worker_command(
             "blender",
@@ -260,6 +256,10 @@ def main():
             "asset-worker.py",
         ], online_worker_command
         claude_blender.register()
+        external_assets._fetch_json = _fake_fetch_json
+        external_assets._fetch_json_with_headers = _fake_fetch_json_with_headers
+        external_assets._download_file = _fake_download_file
+        external_assets._import_model_file = _fake_import_model_file
 
         heavy_findings = generation_handlers._topology_findings(
             1_464_206,

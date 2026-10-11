@@ -54,7 +54,7 @@ MATERIAL_PALETTES = {
 }
 
 def _coerce_vector(value, fallback):
-    return live_preview._coerce_vector(value, fallback)
+    return live_preview.coerce_vector(value, fallback)
 
 def _coerce_color(value, fallback=(1.0, 1.0, 1.0, 1.0)):
     values = list(value) if value is not None else list(fallback)
@@ -63,110 +63,13 @@ def _coerce_color(value, fallback=(1.0, 1.0, 1.0, 1.0)):
         result.append(fallback[len(result)])
     return tuple(float(component) for component in result)
 
-def _record_shader_material(material):
-    transaction = live_preview.begin()
-    key = f"material:{material.name}:shader"
-    if key in transaction["before_state"]:
-        return
-    principled = _find_node(material, "BSDF_PRINCIPLED")
-    sockets = {}
-    if principled:
-        for socket_name in ("Base Color", "Metallic", "Roughness", "Alpha", "Emission Color", "Emission Strength"):
-            socket = principled.inputs.get(socket_name)
-            if socket and hasattr(socket, "default_value"):
-                sockets[socket_name] = _socket_value(socket.default_value)
-    node_names = []
-    links = []
-    material_tree = blender_compat.node_tree(material)
-    if material_tree:
-        node_names = [node.name for node in material_tree.nodes]
-        links = [
-            {
-                "from_node": link.from_node.name,
-                "from_socket": {
-                    "name": link.from_socket.name,
-                    "identifier": getattr(link.from_socket, "identifier", link.from_socket.name),
-                },
-                "to_node": link.to_node.name,
-                "to_socket": {
-                    "name": link.to_socket.name,
-                    "identifier": getattr(link.to_socket, "identifier", link.to_socket.name),
-                },
-            }
-            for link in material_tree.links
-        ]
-    transaction["before_state"][key] = {
-        "kind": "shader_material",
-        "material_name": material.name,
-        "use_nodes": blender_compat.node_tree_enabled(material),
-        "diffuse_color": tuple(float(component) for component in material.diffuse_color),
-        "blend_method": getattr(material, "blend_method", None),
-        "surface_render_method": getattr(material, "surface_render_method", None),
-        "principled_socket_values": sockets,
-        "node_names": node_names,
-        "links": links,
-    }
-    transaction["changed_data_blocks"].append(material.name)
+from .live_preview import record_shader_material as _record_shader_material
 
-def _record_scene_render(scene):
-    transaction = live_preview.begin()
-    key = f"scene:{scene.name}:render_settings"
-    if key in transaction["before_state"]:
-        return
-    view_settings = getattr(scene, "view_settings", None)
-    cycles = getattr(scene, "cycles", None)
-    eevee = getattr(scene, "eevee", None)
-    transaction["before_state"][key] = {
-        "kind": "scene_render_settings",
-        "scene_name": scene.name,
-        "engine": scene.render.engine,
-        "resolution_x": int(scene.render.resolution_x),
-        "resolution_y": int(scene.render.resolution_y),
-        "pixel_aspect_x": float(scene.render.pixel_aspect_x),
-        "pixel_aspect_y": float(scene.render.pixel_aspect_y),
-        "fps": int(scene.render.fps),
-        "frame_start": int(scene.frame_start),
-        "frame_end": int(scene.frame_end),
-        "frame_current": int(scene.frame_current),
-        "film_transparent": bool(scene.render.film_transparent),
-        "view_transform": getattr(view_settings, "view_transform", None),
-        "look": getattr(view_settings, "look", None),
-        "exposure": getattr(view_settings, "exposure", None),
-        "gamma": getattr(view_settings, "gamma", None),
-        "cycles_samples": getattr(cycles, "samples", None),
-        "cycles_preview_samples": getattr(cycles, "preview_samples", None),
-        "cycles_use_denoising": getattr(cycles, "use_denoising", None),
-        "eevee_taa_render_samples": getattr(eevee, "taa_render_samples", None),
-        "eevee_taa_samples": getattr(eevee, "taa_samples", None),
-    }
-    transaction["changed_data_blocks"].append(scene.name)
+from .live_preview import record_scene_render as _record_scene_render
 
-def _record_camera_settings(camera_obj):
-    transaction = live_preview.begin()
-    data = camera_obj.data if camera_obj and camera_obj.type == "CAMERA" else None
-    if data is None:
-        return
-    key = f"camera:{data.name}:settings"
-    if key in transaction["before_state"]:
-        return
-    transaction["before_state"][key] = {
-        "kind": "camera_settings",
-        "camera_name": data.name,
-        "lens": float(data.lens),
-        "sensor_width": float(data.sensor_width),
-        "use_dof": bool(data.dof.use_dof),
-        "focus_object": data.dof.focus_object.name if data.dof.focus_object else None,
-        "aperture_fstop": float(data.dof.aperture_fstop),
-    }
-    transaction["changed_data_blocks"].append(camera_obj.name)
+from .live_preview import record_camera_settings as _record_camera_settings
 
-def _socket_value(value):
-    if isinstance(value, (int, float, bool, str)) or value is None:
-        return value
-    try:
-        return tuple(float(component) for component in value)
-    except TypeError:
-        return value
+from .preview_snapshots import _socket_value
 
 def _set_socket_value(socket, value):
     if not socket or not hasattr(socket, "default_value"):
@@ -193,7 +96,7 @@ def _set_action_interpolation(action, interpolation="LINEAR"):
     interpolation = str(interpolation or "LINEAR").upper()
     if interpolation not in KEYFRAME_INTERPOLATIONS:
         interpolation = "LINEAR"
-    for fcurve in live_preview._iter_action_fcurves(action):
+    for fcurve in live_preview.iter_action_fcurves(action):
         for point in fcurve.keyframe_points:
             point.interpolation = interpolation
 
@@ -201,11 +104,7 @@ def _axis_index(axis):
     axis = str(axis or "Z").upper()
     return {"X": 0, "Y": 1, "Z": 2}.get(axis, 2), axis if axis in {"X", "Y", "Z"} else "Z"
 
-def _find_node(material, node_type):
-    tree = blender_compat.node_tree(material)
-    if tree is None:
-        return None
-    return next((node for node in tree.nodes if node.type == node_type), None)
+from .preview_snapshots import _find_node
 
 def _ensure_principled_material(material):
     tree = blender_compat.ensure_node_tree(material)
@@ -229,9 +128,9 @@ def _material_for_color(name, color):
     material = bpy.data.materials.get(name)
     if material is None:
         material = bpy.data.materials.new(name)
-        live_preview._record_created_id("material", material.name)
+        live_preview.record_created_id("material", material.name)
     else:
-        live_preview._record_material(material)
+        live_preview.record_material(material)
     rgba = (
         float(color[0]),
         float(color[1]),
@@ -292,8 +191,8 @@ def _create_cube_object(context, name, location, scale, material=None):
     obj.scale = scale
     if material:
         obj.data.materials.append(material)
-    live_preview._record_created_id("object", obj.name)
-    live_preview._record_created_id("mesh", obj.data.name)
+    live_preview.record_created_id("object", obj.name)
+    live_preview.record_created_id("mesh", obj.data.name)
     return obj
 
 def _create_curve_line(context, name, points, bevel_depth, material=None):
@@ -308,8 +207,8 @@ def _create_curve_line(context, name, points, bevel_depth, material=None):
     context.scene.collection.objects.link(obj)
     if material:
         curve.materials.append(material)
-    live_preview._record_created_id("object", obj.name)
-    live_preview._record_created_id("curve", curve.name)
+    live_preview.record_created_id("object", obj.name)
+    live_preview.record_created_id("curve", curve.name)
     return obj
 
 def _create_empty_target(context, name, location, *, display_size=0.4):
@@ -318,7 +217,7 @@ def _create_empty_target(context, name, location, *, display_size=0.4):
     empty.empty_display_size = max(0.01, float(display_size))
     empty.location = _coerce_vector(location, (0.0, 0.0, 0.0))
     context.scene.collection.objects.link(empty)
-    live_preview._record_created_id("object", empty.name)
+    live_preview.record_created_id("object", empty.name)
     return empty
 
 def _track_to_target(obj, target):
@@ -327,7 +226,7 @@ def _track_to_target(obj, target):
     constraint.target = target
     constraint.track_axis = "TRACK_NEGATIVE_Z"
     constraint.up_axis = "UP_Y"
-    live_preview._record_created_constraint(obj, constraint)
+    live_preview.record_created_constraint(obj, constraint)
     return constraint
 
 def _create_area_light(context, name, location, *, energy, size, color, target=None):
@@ -340,8 +239,8 @@ def _create_area_light(context, name, location, *, energy, size, color, target=N
     if hasattr(obj, "visible_camera"):
         obj.visible_camera = False
     context.scene.collection.objects.link(obj)
-    live_preview._record_created_id("object", obj.name)
-    live_preview._record_created_id("light", data.name)
+    live_preview.record_created_id("object", obj.name)
+    live_preview.record_created_id("light", data.name)
     if target is not None:
         _track_to_target(obj, target)
     return obj
@@ -397,12 +296,12 @@ def _prepare_transform_action_for_edit(obj):
     action = obj.animation_data.action if obj.animation_data and obj.animation_data.action else None
     if action:
         transaction = live_preview.current_transaction()
-        if transaction and f"created:action:{action.name}" in transaction.get("before_state", {}):
+        if transaction and live_preview.has_snapshot(transaction, f"created:action:{action.name}"):
             return action, False
-        live_preview._record_object_animation(obj)
-        live_preview._record_action_edit(action)
+        live_preview.record_object_animation(obj)
+        live_preview.record_action_edit(action)
         return action, False
-    return live_preview._assign_preview_action(obj), True
+    return live_preview.assign_preview_action(obj), True
 
 def _link_object_like_source(context, source, duplicate):
     collections = list(source.users_collection)

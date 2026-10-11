@@ -9,40 +9,19 @@ import time
 import traceback
 import uuid
 
-from . import external_assets
+from . import asset_provider_execution, external_assets, job_runtime
 
 
 ASSET_JOB_SECRET_TOKEN_ENV = "BLENDER_AGENT_BRIDGE_ASSET_JOB_API_TOKEN"
 ASSET_JOB_SECRET_PASSWORD_ENV = "BLENDER_AGENT_BRIDGE_ASSET_JOB_MODEL_PASSWORD"
-STATUS_REPLACE_ATTEMPTS = 6
-STATUS_REPLACE_INITIAL_DELAY_SECONDS = 0.01
+STATUS_REPLACE_ATTEMPTS = job_runtime.STATUS_REPLACE_ATTEMPTS
+STATUS_REPLACE_INITIAL_DELAY_SECONDS = job_runtime.STATUS_REPLACE_INITIAL_DELAY_SECONDS
 
 
-def _replace_status_file(temp_path, path):
-    delay = STATUS_REPLACE_INITIAL_DELAY_SECONDS
-    for attempt in range(STATUS_REPLACE_ATTEMPTS):
-        try:
-            os.replace(temp_path, path)
-            return
-        except PermissionError:
-            if attempt + 1 >= STATUS_REPLACE_ATTEMPTS:
-                raise
-            time.sleep(delay)
-            delay *= 2
+_replace_status_file = job_runtime.replace_status_file
 
 
-def _write_json(path, payload):
-    temp_path = f"{path}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
-    try:
-        with open(temp_path, "w", encoding="utf-8", newline="\n") as handle:
-            json.dump(payload, handle, indent=2, sort_keys=True, default=str)
-        _replace_status_file(temp_path, path)
-    finally:
-        if os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-            except OSError:
-                pass
+_write_json = job_runtime.write_json
 
 
 def _read_json(path):
@@ -115,62 +94,20 @@ def _progress_callback(config, update):
     _write_status(config, "running", **status_update)
 
 
-def _download_poly_haven(config, args):
-    return external_assets.download_poly_haven_asset(
-        asset_id=str(args.get("asset_id") or ""),
-        asset_type=str(args.get("asset_type") or ""),
-        resolution=str(args.get("resolution") or "2k"),
-        file_format=str(args.get("file_format") or ""),
-        map_types=args.get("map_types") if isinstance(args.get("map_types"), list) else None,
-        include_dependencies=bool(args.get("include_dependencies", True)),
-        cache_dir=str(args.get("cache_dir") or ""),
-        timeout=int(args.get("timeout") or 60),
-        progress_callback=lambda update: _progress_callback(config, update),
-    )
-
-
-def _download_sketchfab(config, args):
-    return external_assets.download_sketchfab_model(
-        uid=str(args.get("uid") or ""),
-        api_token=os.environ.get(ASSET_JOB_SECRET_TOKEN_ENV, ""),
-        token_env_var=str(args.get("token_env_var") or external_assets.SKETCHFAB_TOKEN_ENV_VAR),
-        model_password=os.environ.get(ASSET_JOB_SECRET_PASSWORD_ENV, ""),
-        cache_dir=str(args.get("cache_dir") or ""),
-        timeout=int(args.get("timeout") or 120),
-        progress_callback=lambda update: _progress_callback(config, update),
-        provenance=dict(args.get("provenance") or {}),
-    )
-
-
-def _generate_provider(provider):
-    def generate(config, args):
-        from . import generation_job
-
-        return generation_job.run(
-            config,
-            args,
-            provider=provider,
+def _provider_adapter(provider):
+    def execute(config, args):
+        return asset_provider_execution.execute(
+            dict(config, provider=provider), args,
+            credentials={"token": os.environ.get(ASSET_JOB_SECRET_TOKEN_ENV, ""),
+                         "password": os.environ.get(ASSET_JOB_SECRET_PASSWORD_ENV, "")},
             progress_callback=lambda update: _progress_callback(config, update),
-            # The key never appears in the on-disk config; asset_jobs passes it
-            # through the child environment for every credential-bearing
-            # generation provider.
-            api_key=os.environ.get(ASSET_JOB_SECRET_TOKEN_ENV, ""),
-            poll_interval=0 if provider == "triposr" else generation_job.POLL_INTERVAL_SECONDS,
         )
+    return execute
 
-    return generate
 
-
-# Provider name -> worker. One row per asset source; the branches that used to
-# live in run() are gone.
-WORKER_DISPATCH = {
-    "poly_haven": _download_poly_haven,
-    "sketchfab": _download_sketchfab,
-    "tripo": _generate_provider("tripo"),
-    "meshy": _generate_provider("meshy"),
-    "studio_endpoint": _generate_provider("studio_endpoint"),
-    "triposr": _generate_provider("triposr"),
-}
+WORKER_DISPATCH = {name: _provider_adapter(name) for name in asset_provider_execution.WORKER_DISPATCH}
+_download_poly_haven = WORKER_DISPATCH["poly_haven"]
+_download_sketchfab = WORKER_DISPATCH["sketchfab"]
 
 
 def run(config):

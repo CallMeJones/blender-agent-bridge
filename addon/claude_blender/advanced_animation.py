@@ -32,57 +32,15 @@ from .advanced_support import (
 
 
 
-def _record_shape_keys(obj):
-    transaction = live_preview.begin()
-    key = f"object:{obj.name}:shape_keys"
-    if key in transaction["before_state"]:
-        return
-    keys = obj.data.shape_keys if obj.type == "MESH" and obj.data else None
-    animation_data = getattr(keys, "animation_data", None) if keys else None
-    action = animation_data.action if animation_data else None
-    transaction["before_state"][key] = {
-        "kind": "shape_keys",
-        "object_name": obj.name,
-        "had_shape_keys": keys is not None,
-        "key_blocks": [
-            {
-                "name": block.name,
-                "value": float(block.value),
-                "slider_min": float(block.slider_min),
-                "slider_max": float(block.slider_max),
-            }
-            for block in list(keys.key_blocks)
-        ]
-        if keys
-        else [],
-        "had_animation_data": animation_data is not None,
-        "action_name": action.name if action else None,
-    }
-    transaction["changed_data_blocks"].append(obj.name)
+from .live_preview import record_shape_keys as _record_shape_keys
 
-def _record_material_node_tree_animation(material):
-    node_tree = blender_compat.node_tree(material)
-    if node_tree is None:
-        return
-    transaction = live_preview.begin()
-    key = f"material:{material.name}:node_tree_animation"
-    if key in transaction["before_state"]:
-        return
-    animation_data = node_tree.animation_data
-    action = animation_data.action if animation_data else None
-    transaction["before_state"][key] = {
-        "kind": "material_node_tree_animation",
-        "material_name": material.name,
-        "had_animation_data": animation_data is not None,
-        "action_name": action.name if action else None,
-    }
-    transaction["changed_data_blocks"].append(material.name)
+from .live_preview import record_material_node_tree_animation as _record_material_node_tree_animation
 
 def _assign_material_node_tree_preview_action(material):
     _record_material_node_tree_animation(material)
     action = bpy.data.actions.new(name=f"{material.name} Agent Bridge Material Preview Action")
     material.node_tree.animation_data_create().action = action
-    live_preview._record_created_id("action", action.name)
+    live_preview.record_created_id("action", action.name)
     return action
 
 def create_shape_key(context, *, object_name="", key_name="Agent Bridge Shape", value=0.0, label="Create shape key"):
@@ -108,7 +66,7 @@ def create_shape_key(context, *, object_name="", key_name="Agent Bridge Shape", 
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"{'Created' if created else 'Updated'} shape key {key.name} on {obj.name}",
@@ -133,7 +91,7 @@ def animate_shape_key(
     if obj is None or obj.type != "MESH":
         return {"ok": False, "message": "A mesh object is required for shape key animation"}
     transaction = live_preview.begin(label)
-    live_preview._record_scene_timeline(context.scene)
+    live_preview.record_scene_timeline(context.scene)
     _record_shape_keys(obj)
     if obj.data.shape_keys is None:
         if not create_if_missing:
@@ -159,8 +117,8 @@ def animate_shape_key(
     keys = obj.data.shape_keys
     action = keys.animation_data.action if keys.animation_data else None
     if action:
-        live_preview._record_created_id("action", action.name)
-        live_preview._set_linear_interpolation(action)
+        live_preview.record_created_id("action", action.name)
+        live_preview.set_linear_interpolation(action)
     context.scene.frame_set(frame_start)
     transaction["applied_steps"].append(
         {
@@ -173,7 +131,7 @@ def animate_shape_key(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Animated shape key {key.name} on {obj.name}",
@@ -206,12 +164,12 @@ def animate_object_bounce(
 
     transaction = live_preview.begin(label, context)
     scene = context.scene
-    live_preview._record_scene_timeline(scene)
+    live_preview.record_scene_timeline(scene)
     scene.frame_start = min(scene.frame_start, frame_start)
     scene.frame_end = max(scene.frame_end, frame_end)
 
-    live_preview._record_object_transform(obj)
-    action = live_preview._assign_preview_action(obj)
+    live_preview.record_object_transform(obj)
+    action = live_preview.assign_preview_action(obj)
     base_location = [float(value) for value in obj.location]
     span = frame_end - frame_start
     keyed_frames = []
@@ -236,7 +194,7 @@ def animate_object_bounce(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Animated bounce on {obj.name} over {cycles} cycle(s)",
@@ -274,12 +232,12 @@ def create_progressive_bounce_animation(
 
     transaction = live_preview.begin(label, context)
     scene = context.scene
-    live_preview._record_scene_timeline(scene)
+    live_preview.record_scene_timeline(scene)
     scene.frame_start = min(scene.frame_start, frame_start)
     scene.frame_end = max(scene.frame_end, frame_end)
 
-    live_preview._record_object_transform(obj)
-    action = live_preview._assign_preview_action(obj)
+    live_preview.record_object_transform(obj)
+    action = live_preview.assign_preview_action(obj)
     base_location = [float(value) for value in obj.location]
     base_scale = [float(value) for value in obj.scale]
     span = frame_end - frame_start
@@ -313,7 +271,7 @@ def create_progressive_bounce_animation(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Animated progressive bounce on {obj.name} over {cycles} cycle(s)",
@@ -335,9 +293,9 @@ def _resolve_animation_material(context, material_name="", object_name="", creat
         material = obj.active_material or (obj.data.materials[0] if len(obj.data.materials) else None)
     if material is None and create_if_missing:
         material = bpy.data.materials.new(str(material_name or "Agent Bridge Animated Material"))
-        live_preview._record_created_id("material", material.name)
+        live_preview.record_created_id("material", material.name)
         if has_material_slots:
-            live_preview._record_object_materials(obj)
+            live_preview.record_object_materials(obj)
             obj.data.materials.append(material)
     return material, obj
 
@@ -397,7 +355,7 @@ def animate_material_property(
     material, obj = _resolve_animation_material(context, material_name, object_name, create_if_missing)
     if material is None:
         return {"ok": False, "message": "Material not found for animation"}
-    live_preview._record_scene_timeline(context.scene)
+    live_preview.record_scene_timeline(context.scene)
     context.scene.frame_start = min(context.scene.frame_start, frame_start)
     context.scene.frame_end = max(context.scene.frame_end, frame_end)
     _record_shader_material(material)
@@ -438,7 +396,7 @@ def animate_material_property(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Animated {property_key} on material {material.name}",
@@ -449,48 +407,15 @@ def animate_material_property(
         "transaction_id": transaction["id"],
     }
 
-def _record_light_settings(light_obj):
-    data = light_obj.data if light_obj and light_obj.type == "LIGHT" else None
-    if data is None:
-        return
-    transaction = live_preview.begin()
-    key = f"light:{data.name}:settings"
-    if key in transaction["before_state"]:
-        return
-    transaction["before_state"][key] = {
-        "kind": "light_settings",
-        "light_data_name": data.name,
-        "energy": float(data.energy),
-        "color": tuple(float(component) for component in data.color),
-        "shadow_soft_size": float(getattr(data, "shadow_soft_size", 0.0)),
-        "spot_size": float(getattr(data, "spot_size", 0.0)),
-        "spot_blend": float(getattr(data, "spot_blend", 0.0)),
-    }
-    transaction["changed_data_blocks"].append(data.name)
+from .live_preview import record_light_settings as _record_light_settings
 
-def _record_light_data_animation(light_obj):
-    data = light_obj.data if light_obj and light_obj.type == "LIGHT" else None
-    if data is None:
-        return
-    transaction = live_preview.begin()
-    key = f"light:{data.name}:animation"
-    if key in transaction["before_state"]:
-        return
-    animation_data = data.animation_data
-    action = animation_data.action if animation_data else None
-    transaction["before_state"][key] = {
-        "kind": "light_data_animation",
-        "light_data_name": data.name,
-        "had_animation_data": animation_data is not None,
-        "action_name": action.name if action else None,
-    }
-    transaction["changed_data_blocks"].append(data.name)
+from .live_preview import record_light_data_animation as _record_light_data_animation
 
 def _assign_light_preview_action(light_obj):
     _record_light_data_animation(light_obj)
     action = bpy.data.actions.new(name=f"{light_obj.name} Agent Bridge Light Preview Action")
     light_obj.data.animation_data_create().action = action
-    live_preview._record_created_id("action", action.name)
+    live_preview.record_created_id("action", action.name)
     return action
 
 def _light_animation_value(current, value):
@@ -541,7 +466,7 @@ def animate_light_property(
 
     transaction = live_preview.begin(label, context)
     scene = context.scene
-    live_preview._record_scene_timeline(scene)
+    live_preview.record_scene_timeline(scene)
     scene.frame_start = min(scene.frame_start, frame_start)
     scene.frame_end = max(scene.frame_end, frame_end)
     _record_light_settings(light_obj)
@@ -566,7 +491,7 @@ def animate_light_property(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Animated {data_path} on light {light_obj.name}",
@@ -606,17 +531,17 @@ def create_follow_path_animation(
         return {"ok": False, "message": f"Follow path target is not a curve: {path_obj.name}"}
 
     scene = context.scene
-    live_preview._record_scene_timeline(scene)
+    live_preview.record_scene_timeline(scene)
     scene.frame_start = min(scene.frame_start, frame_start)
     scene.frame_end = max(scene.frame_end, frame_end)
-    live_preview._record_object_transform(obj)
-    action = live_preview._assign_preview_action(obj)
+    live_preview.record_object_transform(obj)
+    action = live_preview.assign_preview_action(obj)
     constraint = obj.constraints.new(type="FOLLOW_PATH")
     constraint.name = constraint_name or "Agent Bridge Follow Path"
     constraint.target = path_obj
     constraint.use_curve_follow = bool(follow_curve)
     constraint.use_fixed_location = True
-    live_preview._record_created_constraint(obj, constraint)
+    live_preview.record_created_constraint(obj, constraint)
     constraint.offset_factor = 0.0
     constraint.keyframe_insert(data_path="offset_factor", frame=frame_start)
     constraint.offset_factor = 1.0
@@ -635,7 +560,7 @@ def create_follow_path_animation(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Animated {obj.name} along path {path_obj.name}",
@@ -734,8 +659,8 @@ def set_action_interpolation(
     transaction = live_preview.begin(label, context)
     changed = []
     for action in actions:
-        live_preview._record_action_edit(action)
-        for fcurve in live_preview._iter_action_fcurves(action):
+        live_preview.record_action_edit(action)
+        for fcurve in live_preview.iter_action_fcurves(action):
             for point in fcurve.keyframe_points:
                 point.interpolation = interpolation
                 if easing and hasattr(point, "easing"):
@@ -746,7 +671,7 @@ def set_action_interpolation(
         {"type": "set_action_interpolation", "label": label, "actions": changed, "interpolation": interpolation, "easing": easing}
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Updated interpolation on {len(changed)} action(s)",
@@ -759,7 +684,7 @@ def set_action_interpolation(
 def _action_frame_span(action):
     frames = [
         float(point.co.x)
-        for fcurve in live_preview._iter_action_fcurves(action)
+        for fcurve in live_preview.iter_action_fcurves(action)
         for point in fcurve.keyframe_points
     ]
     if not frames:
@@ -806,15 +731,15 @@ def retime_actions(
             "missing_object_names": missing_objects,
         }
     transaction = live_preview.begin(label, context)
-    live_preview._record_scene_timeline(context.scene)
+    live_preview.record_scene_timeline(context.scene)
     context.scene.frame_start = min(context.scene.frame_start, frame_start)
     context.scene.frame_end = max(context.scene.frame_end, frame_end)
     changed = []
     for action, span in retime_plan:
         old_start, old_end = span
         scale = (frame_end - frame_start) / (old_end - old_start)
-        live_preview._record_action_edit(action)
-        for fcurve in live_preview._iter_action_fcurves(action):
+        live_preview.record_action_edit(action)
+        for fcurve in live_preview.iter_action_fcurves(action):
             for point in fcurve.keyframe_points:
                 old_x = float(point.co.x)
                 new_x = frame_start + (old_x - old_start) * scale
@@ -839,7 +764,7 @@ def retime_actions(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": bool(changed),
         "message": f"Retimed {len(changed)} action(s)",
@@ -879,7 +804,7 @@ def add_action_cycles(
     cycles_plan = []
     for action in actions:
         fcurves_to_change = []
-        for fcurve in live_preview._iter_action_fcurves(action):
+        for fcurve in live_preview.iter_action_fcurves(action):
             existing = [modifier for modifier in list(fcurve.modifiers) if modifier.type == "CYCLES"]
             if existing and not replace_existing:
                 continue
@@ -897,7 +822,7 @@ def add_action_cycles(
     transaction = live_preview.begin(label, context)
     changed = []
     for action, fcurves_to_change in cycles_plan:
-        live_preview._record_action_edit(action)
+        live_preview.record_action_edit(action)
         fcurve_count = 0
         for fcurve, existing in fcurves_to_change:
             for modifier in existing:
@@ -912,7 +837,7 @@ def add_action_cycles(
         {"type": "add_action_cycles", "label": label, "actions": changed, "mode_before": mode_before, "mode_after": mode_after}
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": bool(changed),
         "message": f"Added cycles to {len(changed)} action(s)",
@@ -991,13 +916,13 @@ def clear_animation(
     cleared = []
     for obj in objects:
         if include_object_animation and obj.animation_data:
-            live_preview._record_object_animation(obj)
+            live_preview.record_object_animation(obj)
             obj.animation_data_clear()
             cleared.append({"object": obj.name, "target": "object"})
         if include_data_animation and getattr(obj, "data", None) and obj.data.animation_data:
             collection = _data_collection_for_object(obj)
             if collection:
-                live_preview._record_id_animation(obj.data, collection)
+                live_preview.record_id_animation(obj.data, collection)
                 obj.data.animation_data_clear()
                 cleared.append({"object": obj.name, "target": "data"})
         if include_shape_key_animation and obj.type == "MESH" and obj.data and obj.data.shape_keys and obj.data.shape_keys.animation_data:
@@ -1010,7 +935,7 @@ def clear_animation(
                 if not material:
                     continue
                 if material.animation_data:
-                    live_preview._record_id_animation(material, "materials")
+                    live_preview.record_id_animation(material, "materials")
                     material.animation_data_clear()
                     cleared.append({"object": obj.name, "target": f"material:{material.name}"})
                 material_tree = blender_compat.node_tree(material)
@@ -1020,7 +945,7 @@ def clear_animation(
                     cleared.append({"object": obj.name, "target": f"material_node_tree:{material.name}"})
     transaction["applied_steps"].append({"type": "clear_animation", "label": label, "cleared": cleared})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Cleared {len(cleared)} animation target(s)",
@@ -1043,7 +968,7 @@ def set_animation_preview_range(
         return error
     scene = context.scene
     transaction = live_preview.begin(label, context)
-    live_preview._record_scene_playback(scene)
+    live_preview.record_scene_playback(scene)
     scene.use_preview_range = bool(use_preview_range)
     scene.frame_preview_start = frame_start
     scene.frame_preview_end = frame_end
@@ -1053,7 +978,7 @@ def set_animation_preview_range(
         {"type": "set_animation_preview_range", "label": label, "frame_start": frame_start, "frame_end": frame_end, "use_preview_range": bool(use_preview_range)}
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {"ok": True, "message": f"Set preview range to {frame_start}-{frame_end}", "transaction_id": transaction["id"]}
 
 def create_turntable_animation(
@@ -1076,11 +1001,11 @@ def create_turntable_animation(
     axis_index, axis = _axis_index(axis)
     transaction = live_preview.begin(label, context)
     scene = context.scene
-    live_preview._record_scene_timeline(scene)
+    live_preview.record_scene_timeline(scene)
     scene.frame_start = min(scene.frame_start, frame_start)
     scene.frame_end = max(scene.frame_end, frame_end)
-    live_preview._record_object_transform(obj)
-    action = live_preview._assign_preview_action(obj)
+    live_preview.record_object_transform(obj)
+    action = live_preview.assign_preview_action(obj)
     base_rotation = [float(value) for value in obj.rotation_euler]
     obj.rotation_euler = base_rotation
     obj.keyframe_insert(data_path="rotation_euler", frame=frame_start)
@@ -1090,8 +1015,8 @@ def create_turntable_animation(
     obj.keyframe_insert(data_path="rotation_euler", frame=frame_end)
     _set_action_interpolation(action, "LINEAR")
     if add_cycles:
-        live_preview._record_action_edit(action)
-        for fcurve in live_preview._iter_action_fcurves(action):
+        live_preview.record_action_edit(action)
+        for fcurve in live_preview.iter_action_fcurves(action):
             modifier = fcurve.modifiers.new(type="CYCLES")
             modifier.mode_before = "NONE"
             modifier.mode_after = "REPEAT"
@@ -1100,7 +1025,7 @@ def create_turntable_animation(
         {"type": "create_turntable_animation", "label": label, "object": obj.name, "axis": axis, "revolutions": float(revolutions)}
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {"ok": True, "message": f"Created turntable animation for {obj.name}", "object": obj.name, "action": action.name, "transaction_id": transaction["id"]}
 
 def create_pulse_animation(
@@ -1122,11 +1047,11 @@ def create_pulse_animation(
     frame_mid = int(round((frame_start + frame_end) / 2))
     transaction = live_preview.begin(label, context)
     scene = context.scene
-    live_preview._record_scene_timeline(scene)
+    live_preview.record_scene_timeline(scene)
     scene.frame_start = min(scene.frame_start, frame_start)
     scene.frame_end = max(scene.frame_end, frame_end)
-    live_preview._record_object_transform(obj)
-    action = live_preview._assign_preview_action(obj)
+    live_preview.record_object_transform(obj)
+    action = live_preview.assign_preview_action(obj)
     base_scale = [float(value) for value in obj.scale]
     obj.scale = base_scale
     obj.keyframe_insert(data_path="scale", frame=frame_start)
@@ -1153,7 +1078,7 @@ def create_pulse_animation(
         {"type": "create_pulse_animation", "label": label, "object": obj.name, "scale_factor": float(scale_factor), "material_action": material_action}
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {"ok": True, "message": f"Created pulse animation for {obj.name}", "object": obj.name, "action": action.name, "material_action": material_action, "transaction_id": transaction["id"]}
 
 def create_reveal_animation(
@@ -1175,11 +1100,11 @@ def create_reveal_animation(
         return error
     transaction = live_preview.begin(label, context)
     scene = context.scene
-    live_preview._record_scene_timeline(scene)
+    live_preview.record_scene_timeline(scene)
     scene.frame_start = min(scene.frame_start, frame_start)
     scene.frame_end = max(scene.frame_end, frame_end)
-    live_preview._record_object_transform(obj)
-    action = live_preview._assign_preview_action(obj)
+    live_preview.record_object_transform(obj)
+    action = live_preview.assign_preview_action(obj)
     base_scale = [float(value) for value in obj.scale]
     obj.scale = [value * float(scale_start) for value in base_scale]
     obj.keyframe_insert(data_path="scale", frame=frame_start)
@@ -1204,7 +1129,7 @@ def create_reveal_animation(
         {"type": "create_reveal_animation", "label": label, "object": obj.name, "material_action": material_action}
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {"ok": True, "message": f"Created reveal animation for {obj.name}", "object": obj.name, "action": action.name, "material_action": material_action, "transaction_id": transaction["id"]}
 
 def create_staggered_motion(
@@ -1234,7 +1159,7 @@ def create_staggered_motion(
     delta = _coerce_vector(location_delta, (0.0, 0.0, 1.0))
     transaction = live_preview.begin(label, context)
     scene = context.scene
-    live_preview._record_scene_timeline(scene)
+    live_preview.record_scene_timeline(scene)
     end_frame = frame_start + (len(objects) - 1) * frame_step + duration
     scene.frame_start = min(scene.frame_start, frame_start)
     scene.frame_end = max(scene.frame_end, end_frame)
@@ -1242,8 +1167,8 @@ def create_staggered_motion(
     for index, obj in enumerate(objects):
         start = frame_start + index * frame_step
         end = start + duration
-        live_preview._record_object_transform(obj)
-        action = live_preview._assign_preview_action(obj)
+        live_preview.record_object_transform(obj)
+        action = live_preview.assign_preview_action(obj)
         start_location = [float(value) for value in obj.location]
         end_location = [start_location[0] + delta[0], start_location[1] + delta[1], start_location[2] + delta[2]]
         obj.location = start_location
@@ -1257,7 +1182,7 @@ def create_staggered_motion(
         {"type": "create_staggered_motion", "label": label, "objects": animated, "location_delta": list(delta)}
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {"ok": True, "message": f"Created staggered motion for {len(animated)} object(s)", "objects": animated, "missing_object_names": missing, "transaction_id": transaction["id"]}
 
 TRANSFORM_PATHS = ("location", "rotation_euler", "scale")
@@ -1271,7 +1196,7 @@ def _normalize_transform_paths(paths=None, *, action=None):
     if normalized:
         return normalized
     if action:
-        for fcurve in live_preview._iter_action_fcurves(action):
+        for fcurve in live_preview.iter_action_fcurves(action):
             if fcurve.data_path in TRANSFORM_PATHS and fcurve.data_path not in normalized:
                 normalized.append(fcurve.data_path)
     return normalized
@@ -1280,7 +1205,7 @@ def _fcurves_for_path(action, path):
     result = {}
     if not action:
         return result
-    for fcurve in live_preview._iter_action_fcurves(action):
+    for fcurve in live_preview.iter_action_fcurves(action):
         if fcurve.data_path == path:
             result[int(fcurve.array_index)] = fcurve
     return result
@@ -1296,7 +1221,7 @@ def _evaluate_transform_path(action, path, frame, fallback):
 
 def _action_keyframes_for_paths(action, paths):
     frames = set()
-    for fcurve in live_preview._iter_action_fcurves(action) if action else []:
+    for fcurve in live_preview.iter_action_fcurves(action) if action else []:
         if fcurve.data_path not in paths:
             continue
         frames.update(int(round(point.co.x)) for point in fcurve.keyframe_points)
@@ -1347,13 +1272,13 @@ def add_breakdown_pose(
 
     transaction = live_preview.begin(label, context)
     scene = context.scene
-    live_preview._record_scene_timeline(scene)
+    live_preview.record_scene_timeline(scene)
     scene.frame_start = min(scene.frame_start, frame)
     scene.frame_end = max(scene.frame_end, frame)
     interpolation = str(interpolation or "CONSTANT").upper()
     keyed = []
     for obj in objects:
-        live_preview._record_object_transform(obj)
+        live_preview.record_object_transform(obj)
         action, created_action = _prepare_transform_action_for_edit(obj)
         explicit = {}
         if location is not None:
@@ -1408,7 +1333,7 @@ def add_breakdown_pose(
     scene.frame_set(frame)
     transaction["applied_steps"].append({"type": "add_breakdown_pose", "label": label, "objects": keyed, "frame": frame})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Added breakdown pose at frame {frame} for {len(keyed)} object(s)",
@@ -1437,13 +1362,13 @@ def set_pose_hold(
 
     transaction = live_preview.begin(label, context)
     scene = context.scene
-    live_preview._record_scene_timeline(scene)
+    live_preview.record_scene_timeline(scene)
     scene.frame_start = min(scene.frame_start, frame)
     scene.frame_end = max(scene.frame_end, hold_frame)
     interpolation = str(interpolation or "CONSTANT").upper()
     held = []
     for obj in objects:
-        live_preview._record_object_transform(obj)
+        live_preview.record_object_transform(obj)
         action, created_action = _prepare_transform_action_for_edit(obj)
         active_paths = _normalize_transform_paths(paths, action=action) or list(TRANSFORM_PATHS)
         keyed_paths = []
@@ -1471,7 +1396,7 @@ def set_pose_hold(
     scene.frame_set(frame)
     transaction["applied_steps"].append({"type": "set_pose_hold", "label": label, "objects": held, "frame": frame, "hold_frame": hold_frame})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Set {hold_frames}-frame hold from frame {frame} for {len(held)} object(s)",
@@ -1528,8 +1453,8 @@ def create_motion_arc(
         arc_obj = bpy.data.objects.new(f"{name_prefix} {obj.name}", curve)
         context.scene.collection.objects.link(arc_obj)
         curve.materials.append(material)
-        live_preview._record_created_id("curve", curve.name)
-        live_preview._record_created_id("object", arc_obj.name)
+        live_preview.record_created_id("curve", curve.name)
+        live_preview.record_created_id("object", arc_obj.name)
         arcs.append(
             {
                 "source_object": obj.name,
@@ -1544,7 +1469,7 @@ def create_motion_arc(
         )
     transaction["applied_steps"].append({"type": "create_motion_arc", "label": label, "arcs": arcs})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Created {len(arcs)} motion arc(s)",
@@ -1601,13 +1526,13 @@ def block_key_poses(
     interpolation = str(interpolation or "CONSTANT").upper()
     transaction = live_preview.begin(label, context)
     scene = context.scene
-    live_preview._record_scene_timeline(scene)
+    live_preview.record_scene_timeline(scene)
     scene.frame_start = min(scene.frame_start, frame_start)
     scene.frame_end = max(scene.frame_end, frame_end)
     blocked = []
     for obj in objects:
-        live_preview._record_object_transform(obj)
-        action = live_preview._assign_preview_action(obj)
+        live_preview.record_object_transform(obj)
+        action = live_preview.assign_preview_action(obj)
         base_location = [float(value) for value in obj.location]
         base_rotation = [float(value) for value in obj.rotation_euler]
         base_scale = [float(value) for value in obj.scale]
@@ -1652,7 +1577,7 @@ def block_key_poses(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Blocked {len(pose_items)} key pose(s) for {len(blocked)} object(s)",
@@ -1681,26 +1606,26 @@ def create_camera_dolly_animation(
         return {"ok": False, "message": f"Object is not a camera: {camera.name}"}
     transaction = live_preview.begin(label, context)
     if camera is None:
-        live_preview._record_scene_camera(scene)
+        live_preview.record_scene_camera(scene)
         data = bpy.data.cameras.new("Agent Bridge Dolly Camera Data")
         camera = bpy.data.objects.new("Agent Bridge Dolly Camera", object_data=data)
         scene.collection.objects.link(camera)
         scene.camera = camera
-        live_preview._record_created_id("object", camera.name)
-        live_preview._record_created_id("camera", data.name)
+        live_preview.record_created_id("object", camera.name)
+        live_preview.record_created_id("camera", data.name)
     target = bpy.data.objects.get(str(target_name or "")) if target_name else None
     start = int(frame_start or scene.frame_start)
     end = int(frame_end or scene.frame_end)
     if end < start:
         start, end = end, start
-    live_preview._record_scene_timeline(scene)
-    live_preview._record_object_transform(camera)
+    live_preview.record_scene_timeline(scene)
+    live_preview.record_object_transform(camera)
     _record_camera_settings(camera)
     scene.frame_start = min(scene.frame_start, start)
     scene.frame_end = max(scene.frame_end, end)
     if start_location is not None:
         camera.location = _coerce_vector(start_location, camera.location)
-    action = live_preview._assign_preview_action(camera)
+    action = live_preview.assign_preview_action(camera)
     camera.keyframe_insert(data_path="location", frame=start)
     if target and not any(constraint.type == "TRACK_TO" and constraint.target == target for constraint in camera.constraints):
         constraint = camera.constraints.new(type="TRACK_TO")
@@ -1708,7 +1633,7 @@ def create_camera_dolly_animation(
         constraint.track_axis = "TRACK_NEGATIVE_Z"
         constraint.up_axis = "UP_Y"
         constraint.target = target
-        live_preview._record_created_constraint(camera, constraint)
+        live_preview.record_created_constraint(camera, constraint)
     if end_location is None:
         base = Vector(camera.location)
         if target:
@@ -1723,10 +1648,10 @@ def create_camera_dolly_animation(
     _set_action_interpolation(action, interpolation)
     lens_action_name = ""
     if lens_start is not None or lens_end is not None:
-        live_preview._record_id_animation(camera.data, "cameras")
+        live_preview.record_id_animation(camera.data, "cameras")
         lens_action = bpy.data.actions.new(name=f"{camera.name} Agent Bridge Lens Preview Action")
         camera.data.animation_data_create().action = lens_action
-        live_preview._record_created_id("action", lens_action.name)
+        live_preview.record_created_id("action", lens_action.name)
         if lens_start is not None:
             camera.data.lens = max(1.0, min(1000.0, float(lens_start)))
         camera.data.keyframe_insert(data_path="lens", frame=start)
@@ -1747,7 +1672,7 @@ def create_camera_dolly_animation(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Created camera dolly animation for {camera.name}",

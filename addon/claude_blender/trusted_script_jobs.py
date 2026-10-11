@@ -10,6 +10,8 @@ import uuid
 
 import bpy
 
+from . import job_runtime, process_utils
+
 from . import script_runner, user_paths
 
 
@@ -52,13 +54,7 @@ def _metadata_path(job_id):
     return os.path.join(_job_dir(job_id), METADATA_FILENAME)
 
 
-def _write_json(path, payload):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    temp_path = f"{path}.tmp"
-    with open(temp_path, "w", encoding="utf-8", newline="\n") as handle:
-        json.dump(payload, handle, indent=2, sort_keys=True, ensure_ascii=True)
-    os.replace(temp_path, path)
-    return path
+_write_json = job_runtime.write_json
 
 
 def _read_json(path, default=None):
@@ -69,47 +65,10 @@ def _read_json(path, default=None):
         return default
 
 
-def _child_env():
-    env = dict(os.environ)
-    for key in ("BLENDER_BRIDGE_TOKEN", "BLENDER_BRIDGE_URL"):
-        env.pop(key, None)
-    return env
+_child_env = job_runtime.child_environment
 
 
-def _pid_alive(pid):
-    try:
-        pid = int(pid)
-    except (TypeError, ValueError):
-        return False
-    if pid <= 0:
-        return False
-    if os.name == "nt":
-        try:
-            import ctypes
-            from ctypes import wintypes
-
-            handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
-            if not handle:
-                return False
-            try:
-                exit_code = wintypes.DWORD()
-                return bool(
-                    ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
-                    and exit_code.value == 259
-                )
-            finally:
-                ctypes.windll.kernel32.CloseHandle(handle)
-        except Exception:
-            return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False
-    return True
+_pid_alive = job_runtime.pid_alive
 
 
 def _log_tail(path, max_bytes=8192):
@@ -262,6 +221,7 @@ def start_job(
         "ok": True,
         "available": True,
         "job_id": job_id,
+        "operation_id": job_runtime.current_operation_id(),
         "job_name": str(job_name or intent or "Trusted script job")[:160],
         "intent": str(intent or "")[:4000],
         "expected_changes": str(expected_changes or "")[:4000],
@@ -318,7 +278,7 @@ def start_job(
             stdout=log_handle,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            **process_utils.process_group_kwargs(),
             env=_child_env(),
         )
         log_handle.close()
@@ -457,14 +417,10 @@ def cancel_job(job_id):
         handle.write("cancel requested\n")
     process = _PROCESSES.get(job_id)
     if process is not None and process.poll() is None:
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=5)
-        _PROCESSES.pop(job_id, None)
-    process_still_alive = process is None and _pid_alive(metadata.get("pid"))
+        process_utils.terminate_process_tree(process)
+        if process.poll() is not None:
+            _PROCESSES.pop(job_id, None)
+    process_still_alive = process.poll() is None if process is not None else _pid_alive(metadata.get("pid"))
     final_status = "cancel_requested" if process_still_alive else "cancelled"
     metadata.update(
         {
@@ -607,7 +563,7 @@ def unregister():
     for process in list(_PROCESSES.values()):
         if process.poll() is None:
             try:
-                process.terminate()
+                process_utils.terminate_process_tree(process)
             except Exception:
                 pass
     _PROCESSES.clear()

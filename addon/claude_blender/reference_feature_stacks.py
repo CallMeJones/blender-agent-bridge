@@ -152,7 +152,7 @@ def _create_curve(
     created_objects,
 ):
     curve = bpy.data.curves.new(f"{_safe_label(name, 'Reference Feature Curve')} Data", "CURVE")
-    live_preview._record_created_id("curve", curve.name)
+    live_preview.record_created_id("curve", curve.name)
     curve.dimensions = "3D"
     curve.bevel_depth = max(0.0, float(bevel_depth))
     spline = curve.splines.new("POLY")
@@ -163,7 +163,7 @@ def _create_curve(
         curve.materials.append(material)
     obj = bpy.data.objects.new(_safe_label(name, "Reference Feature Curve"), curve)
     context.scene.collection.objects.link(obj)
-    live_preview._record_created_id("object", obj.name)
+    live_preview.record_created_id("object", obj.name)
     obj["reference_feature_stack"] = True
     obj["reference_feature_role"] = str(metadata.get("feature_role") or "")
     obj["reference_part_name"] = str(metadata.get("part_name") or "")
@@ -190,7 +190,7 @@ def _finish_stack(context, operation, *, label, stack_kind, graph_collection, pa
     )
     transaction = live_preview.finish_isolated(operation)
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return transaction
 
 

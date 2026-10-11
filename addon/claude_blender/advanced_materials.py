@@ -256,7 +256,7 @@ def create_shader_material(
     created = material is None
     if material is None:
         material = bpy.data.materials.new(name or "Agent Bridge Shader Material")
-        live_preview._record_created_id("material", material.name)
+        live_preview.record_created_id("material", material.name)
     else:
         _record_shader_material(material)
 
@@ -292,7 +292,7 @@ def create_shader_material(
         for obj in context.selected_objects:
             if obj.type != "MESH" or obj.data is None:
                 continue
-            live_preview._record_object_materials(obj)
+            live_preview.record_object_materials(obj)
             if obj.material_slots:
                 obj.material_slots[0].material = material
             else:
@@ -310,7 +310,7 @@ def create_shader_material(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"{'Created' if created else 'Updated'} shader material {material.name}",
@@ -337,7 +337,7 @@ def _load_preview_image(path, *, colorspace):
     before_names = set(bpy.data.images.keys())
     image = bpy.data.images.load(path, check_existing=True)
     if image.name not in before_names:
-        live_preview._record_created_id("image", image.name)
+        live_preview.record_created_id("image", image.name)
     else:
         _record_image_settings(image)
     try:
@@ -346,17 +346,7 @@ def _load_preview_image(path, *, colorspace):
         pass
     return image
 
-def _record_image_settings(image):
-    transaction = live_preview.begin()
-    key = f"image:{image.name}:settings"
-    if key in transaction["before_state"]:
-        return
-    transaction["before_state"][key] = {
-        "kind": "image_settings",
-        "image_name": image.name,
-        "colorspace": getattr(image.colorspace_settings, "name", ""),
-    }
-    transaction["changed_data_blocks"].append(image.name)
+from .live_preview import record_image_settings as _record_image_settings
 
 def _principled_socket(principled, names):
     for name in names:
@@ -541,7 +531,7 @@ def create_image_texture_material(
     created = material is None
     if material is None:
         material = bpy.data.materials.new(name or "Agent Bridge Image Texture Material")
-        live_preview._record_created_id("material", material.name)
+        live_preview.record_created_id("material", material.name)
     else:
         _record_shader_material(material)
 
@@ -786,7 +776,7 @@ def create_image_texture_material(
         for obj in objects:
             if obj.type != "MESH" or obj.data is None:
                 continue
-            live_preview._record_object_materials(obj)
+            live_preview.record_object_materials(obj)
             if obj.material_slots:
                 obj.material_slots[0].material = material
             else:
@@ -806,7 +796,7 @@ def create_image_texture_material(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"{'Created' if created else 'Updated'} image texture material {material.name}",
@@ -1331,7 +1321,7 @@ def repair_material_setup(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     post_inspection = inspect_material_setup(
         context,
         material_names=[item["material"] for item in repaired],
@@ -1659,7 +1649,7 @@ def bake_maps(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     ok = bool(baked_maps) and all(item.get("available") for item in baked_maps) and not issues and not missing
     return {
         "ok": ok,
@@ -1773,7 +1763,7 @@ def create_procedural_texture_material(
     created = material is None
     if material is None:
         material = bpy.data.materials.new(name or "Agent Bridge Procedural Texture Material")
-        live_preview._record_created_id("material", material.name)
+        live_preview.record_created_id("material", material.name)
     else:
         _record_shader_material(material)
 
@@ -1833,7 +1823,7 @@ def create_procedural_texture_material(
             }
         )
         live_preview.redraw(context)
-        live_preview._mark_pending(context, label)
+        live_preview.mark_pending(context, label)
         return {
             "ok": True,
             "message": f"{'Created' if created else 'Updated'} procedural texture material {material.name}",
@@ -1931,7 +1921,7 @@ def create_procedural_texture_material(
         for obj in objects:
             if obj.type != "MESH" or obj.data is None:
                 continue
-            live_preview._record_object_materials(obj)
+            live_preview.record_object_materials(obj)
             if obj.material_slots:
                 obj.material_slots[0].material = material
             else:
@@ -1950,7 +1940,7 @@ def create_procedural_texture_material(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"{'Created' if created else 'Updated'} procedural texture material {material.name}",
@@ -2282,7 +2272,7 @@ def mark_uv_seams(
             skipped.append({"object": obj.name, "reasons": blockers})
             continue
         mesh = obj.data
-        live_preview._record_mesh_data_snapshot(obj)
+        live_preview.record_mesh_data_snapshot(obj)
         mesh.update(calc_edges=True)
         seams_before = sum(1 for edge in mesh.edges if edge.use_seam)
         cleared = 0
@@ -2353,7 +2343,7 @@ def mark_uv_seams(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Updated UV seams on {len(changed)} mesh object(s)",
@@ -2453,7 +2443,7 @@ def uv_unwrap(
             skipped.append({"object": obj.name, "reasons": blockers})
             continue
         mesh = obj.data
-        live_preview._record_mesh_data_snapshot(obj)
+        live_preview.record_mesh_data_snapshot(obj)
         layer_name = str(uv_map_name or "Agent Bridge UVs").strip() or "Agent Bridge UVs"
         existing = mesh.uv_layers.get(layer_name)
         replaced = False
@@ -2512,7 +2502,7 @@ def uv_unwrap(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Created or updated UV maps on {len(changed)} mesh object(s)",
@@ -2611,7 +2601,7 @@ def add_geometry_nodes_modifier(
     created_group = group is None
     if group is None:
         group = bpy.data.node_groups.new(node_group_name or "Agent Bridge Geometry Nodes", "GeometryNodeTree")
-        live_preview._record_created_id("node_group", group.name)
+        live_preview.record_created_id("node_group", group.name)
         template_key, warnings = _build_geometry_node_template(group, template)
     else:
         template_key = str(template or "passthrough").strip().lower().replace("-", "_").replace(" ", "_")
@@ -2622,7 +2612,7 @@ def add_geometry_nodes_modifier(
     for obj in targets:
         modifier = obj.modifiers.new(name or "Agent Bridge Geometry Nodes", "NODES")
         modifier.node_group = group
-        live_preview._record_created_modifier(obj, modifier)
+        live_preview.record_created_modifier(obj, modifier)
         changed.append(obj.name)
     transaction["applied_steps"].append(
         {
@@ -2636,7 +2626,7 @@ def add_geometry_nodes_modifier(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Added Geometry Nodes modifier to {len(changed)} mesh object(s)",
@@ -2661,7 +2651,7 @@ def add_window_materials(
     material = bpy.data.materials.get(material_name)
     if material is None:
         material = bpy.data.materials.new(material_name)
-        live_preview._record_created_id("material", material.name)
+        live_preview.record_created_id("material", material.name)
     else:
         _record_shader_material(material)
     rgba = (
@@ -2684,7 +2674,7 @@ def add_window_materials(
     for obj in context.scene.objects:
         lowered = obj.name.lower()
         if obj.type == "MESH" and any(word in lowered for word in ("window", "glass", "windshield")):
-            live_preview._record_object_materials(obj)
+            live_preview.record_object_materials(obj)
             if obj.material_slots:
                 obj.material_slots[0].material = material
             else:
@@ -2732,7 +2722,7 @@ def add_window_materials(
         {"type": "add_window_materials", "label": label, "material": material.name, "assigned": assigned, "created": created}
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Prepared window material {material.name}",
@@ -2790,7 +2780,7 @@ def create_material_palette(
     if assign_to_selected:
         for index, obj in enumerate(selected_for_assignment):
             material = materials[index % len(materials)]
-            live_preview._record_object_materials(obj)
+            live_preview.record_object_materials(obj)
             obj.data.materials.clear()
             obj.data.materials.append(material)
             assigned.append({"object": obj.name, "material": material.name})
@@ -2806,7 +2796,7 @@ def create_material_palette(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Created {len(materials)} material palette entries",

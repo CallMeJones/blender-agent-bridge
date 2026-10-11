@@ -16,6 +16,8 @@ import time
 import urllib.parse
 import urllib.request
 import zipfile
+import threading
+from contextlib import contextmanager
 
 try:
     import bpy
@@ -336,12 +338,39 @@ def _urlopen_external(request, *, timeout):
     return opener.open(request, timeout=timeout)
 
 
+_network_context = threading.local()
+
+
+@contextmanager
+def network_access_scope(policy, *, sketchfab_auth=None):
+    """Use main-thread authorization captured before launching network work."""
+    previous = getattr(_network_context, "policy", None)
+    previous_auth = getattr(_network_context, "sketchfab_auth", None)
+    _network_context.policy = policy
+    _network_context.sketchfab_auth = sketchfab_auth
+    try:
+        yield
+    finally:
+        _network_context.policy = previous
+        _network_context.sketchfab_auth = previous_auth
+
+
+def capture_network_policy():
+    if threading.current_thread() is not threading.main_thread():
+        # Workers must receive a captured authorization; never inspect bpy from
+        # a background thread, including a worker surviving an add-on reload.
+        return (False, True)
+    return (bpy is None or bool(getattr(bpy.app, "online_access", True)),
+            bpy is not None and bool(getattr(bpy.app, "online_access_overriden", False)))
+
+
 def _online_access_error(provider="external asset", url=""):
     if _is_loopback_url(url):
         return None
-    if bpy is None or bool(getattr(bpy.app, "online_access", True)):
+    policy = getattr(_network_context, "policy", None)
+    allowed, overridden = policy if policy is not None else capture_network_policy()
+    if allowed:
         return None
-    overridden = bool(getattr(bpy.app, "online_access_overriden", False))
     if overridden:
         message = f"{provider} download requires online access, but Blender was started in offline mode."
     else:
@@ -1272,26 +1301,26 @@ def _require_blender():
 def _record_created_image(image):
     if live_preview is None or image is None:
         return
-    live_preview._record_created_id("image", image.name)
+    live_preview.record_created_id("image", image.name)
 
 
 def _record_created_data_for_object(obj):
     if live_preview is None or obj is None:
         return
-    live_preview._record_created_id("object", obj.name)
+    live_preview.record_created_id("object", obj.name)
     data = getattr(obj, "data", None)
     if data is None:
         return
     if obj.type == "MESH":
-        live_preview._record_created_id("mesh", data.name)
+        live_preview.record_created_id("mesh", data.name)
     elif obj.type in {"CURVE", "FONT"}:
-        live_preview._record_created_id("curve", data.name)
+        live_preview.record_created_id("curve", data.name)
     elif obj.type == "CAMERA":
-        live_preview._record_created_id("camera", data.name)
+        live_preview.record_created_id("camera", data.name)
     elif obj.type == "LIGHT":
-        live_preview._record_created_id("light", data.name)
+        live_preview.record_created_id("light", data.name)
     elif obj.type == "ARMATURE":
-        live_preview._record_created_id("armature", data.name)
+        live_preview.record_created_id("armature", data.name)
 
 
 def _existing_names(collection):
@@ -1391,15 +1420,9 @@ def _apply_hdri_world(context, manifest, *, label="Import Poly Haven HDRI"):
         return {"ok": False, "message": "No HDRI/image file was cached", "manifest": manifest}
     transaction = live_preview.begin(label, context)
     scene = context.scene
-    key = f"scene:{scene.name}:world"
-    if key not in transaction["before_state"]:
-        transaction["before_state"][key] = {
-            "kind": "scene_world",
-            "scene_name": scene.name,
-            "world_name": scene.world.name if scene.world else None,
-        }
+    live_preview.record_scene_world(scene)
     world = bpy.data.worlds.new(f"Poly Haven {manifest.get('asset_id', 'HDRI')} World")
-    live_preview._record_created_id("world", world.name)
+    live_preview.record_created_id("world", world.name)
     scene.world = world
     node_tree = blender_compat.ensure_node_tree(world)
     if node_tree is None:
@@ -1425,7 +1448,7 @@ def _apply_hdri_world(context, manifest, *, label="Import Poly Haven HDRI"):
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     manifest["import_status"] = "imported"
     manifest["imported_world"] = world.name
     manifest["imported_images"] = [image.name]
@@ -1491,7 +1514,7 @@ def _apply_texture_material(context, manifest, *, target_object_name="", label="
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     manifest["import_status"] = "imported"
     manifest["imported_materials"] = [helper_result["material"]]
     manifest["imported_images"] = imported_images
@@ -1697,7 +1720,7 @@ def _apply_import_orientation_normalization(manifest, imported_objects):
         rotation_delta = Euler(tuple(float(value) for value in delta), "XYZ").to_matrix().to_4x4()
     for obj in targets:
         if rotation_applied:
-            live_preview._record_object_transform(obj)
+            live_preview.record_object_transform(obj)
             origin = obj.matrix_world.translation.copy()
             obj.matrix_world = (
                 Matrix.Translation(origin)
@@ -1774,7 +1797,7 @@ def _apply_model_import(context, manifest, *, label="Import external model", all
             obj[ASSET_SOURCE_URL_PROPERTY] = str(manifest.get("source_url") or "")
     orientation_normalization = _apply_import_orientation_normalization(manifest, imported_objects)
     for name in imported_meshes:
-        live_preview._record_created_id("mesh", name)
+        live_preview.record_created_id("mesh", name)
     for kind, names in (
         ("curve", imported_curves),
         ("armature", imported_armatures),
@@ -1785,11 +1808,11 @@ def _apply_model_import(context, manifest, *, label="Import external model", all
         ("node_group", imported_node_groups),
     ):
         for name in names:
-            live_preview._record_created_id(kind, name)
+            live_preview.record_created_id(kind, name)
     for name in imported_materials:
-        live_preview._record_created_id("material", name)
+        live_preview.record_created_id("material", name)
     for name in imported_images:
-        live_preview._record_created_id("image", name)
+        live_preview.record_created_id("image", name)
     transaction["applied_steps"].append(
         {
             "type": "import_external_asset",
@@ -1816,7 +1839,7 @@ def _apply_model_import(context, manifest, *, label="Import external model", all
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     manifest["import_status"] = "imported"
     manifest["imported_objects"] = imported_objects
     manifest["imported_meshes"] = imported_meshes
@@ -1951,6 +1974,10 @@ def _auth_header_from_token(
     token = str(api_token or "").strip()
     if token:
         return _api_token_authorization_header(token), "argument"
+
+    captured = getattr(_network_context, "sketchfab_auth", None)
+    if captured is not None:
+        return captured
 
     token, env_name, blocked, _candidates = _first_env_token(
         token_env_var,

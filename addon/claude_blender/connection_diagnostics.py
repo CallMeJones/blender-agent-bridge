@@ -765,7 +765,8 @@ def run_connection_diagnostics(
     checks.append(_socket_check(parsed, port, timeout, socket_connector))
 
     if server is None:
-        from .mcp_server import BlenderMCPServer, BridgeClient
+        from .mcp_server import BlenderMCPServer
+        from .bridge_client import BridgeClient
 
         client_factory = bridge_client_factory or BridgeClient
         bridge_client = bridge_client or client_factory(

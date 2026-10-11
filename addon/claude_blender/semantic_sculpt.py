@@ -419,7 +419,7 @@ def define_semantic_sculpt_regions(
     operation = live_preview.begin_isolated(label, context)
     transaction = operation["transaction"]
     try:
-        live_preview._record_mesh_data_snapshot(obj)
+        live_preview.record_mesh_data_snapshot(obj)
         summaries = []
         for attribute_name in sorted(attributes_to_delete):
             attribute = obj.data.attributes.get(attribute_name)
@@ -442,7 +442,7 @@ def define_semantic_sculpt_regions(
         )
         transaction = live_preview.finish_isolated(operation)
         live_preview.redraw(context)
-        live_preview._mark_pending(context, label)
+        live_preview.mark_pending(context, label)
         return {
             "ok": True,
             "message": (
@@ -718,7 +718,7 @@ def apply_semantic_sculpt(
     isolated = live_preview.begin_isolated(label, context)
     transaction = isolated["transaction"]
     try:
-        live_preview._record_mesh_data_snapshot(obj)
+        live_preview.record_mesh_data_snapshot(obj)
         _write_points(obj, deformed)
         transaction["applied_steps"].append(
             {
@@ -731,7 +731,7 @@ def apply_semantic_sculpt(
         )
         transaction = live_preview.finish_isolated(isolated)
         live_preview.redraw(context)
-        live_preview._mark_pending(context, label)
+        live_preview.mark_pending(context, label)
         return {
             "ok": True,
             "message": f"Applied {operation} sculpt field to {obj.name}",
@@ -964,7 +964,7 @@ def apply_form_aware_sculpt(
     isolated = live_preview.begin_isolated(label, context)
     transaction = isolated["transaction"]
     try:
-        live_preview._record_mesh_data_snapshot(obj)
+        live_preview.record_mesh_data_snapshot(obj)
         _write_points(obj, deformed)
         transaction["applied_steps"].append(
             {
@@ -977,7 +977,7 @@ def apply_form_aware_sculpt(
         )
         transaction = live_preview.finish_isolated(isolated)
         live_preview.redraw(context)
-        live_preview._mark_pending(context, label)
+        live_preview.mark_pending(context, label)
         return {
             "ok": True,
             "message": f"Applied {operation} form-aware sculpt field to {obj.name}",
@@ -1239,7 +1239,7 @@ def apply_screen_space_sculpt(
     isolated = live_preview.begin_isolated(label, context)
     transaction = isolated["transaction"]
     try:
-        live_preview._record_mesh_data_snapshot(obj)
+        live_preview.record_mesh_data_snapshot(obj)
         _write_points(obj, deformed)
         transaction["applied_steps"].append(
             {
@@ -1253,7 +1253,7 @@ def apply_screen_space_sculpt(
         )
         transaction = live_preview.finish_isolated(isolated)
         live_preview.redraw(context)
-        live_preview._mark_pending(context, label)
+        live_preview.mark_pending(context, label)
         return {
             "ok": True,
             "message": f"Applied {len(normalized_controls)} screen-space sculpt control(s) to {obj.name}",
@@ -1403,7 +1403,7 @@ def optimize_screen_space_sculpt(
     trials = []
     best = None
     try:
-        live_preview._record_mesh_data_snapshot(obj)
+        live_preview.record_mesh_data_snapshot(obj)
         for strength in candidates:
             _write_points(obj, original)
             deformed, effective_weights, volume = _screen_deformation(
@@ -1517,7 +1517,7 @@ def optimize_screen_space_sculpt(
         )
         transaction = live_preview.finish_isolated(isolated)
         live_preview.redraw(context)
-        live_preview._mark_pending(context, label)
+        live_preview.mark_pending(context, label)
         return {
             "ok": True,
             "message": f"Selected strength {best['strength']:.4g} from {len(trials)} measured sculpt trial(s)",

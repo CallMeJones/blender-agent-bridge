@@ -17,9 +17,10 @@ import bpy
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(ROOT, "addon"))
 
-bpy.ops.preferences.addon_enable(module="bl_ext.user_default.claude_blender")
-from bl_ext.user_default.claude_blender import shape_program as sp  # noqa: E402
-from bl_ext.user_default.claude_blender import shape_program_adaptive as spa  # noqa: E402
+import claude_blender
+claude_blender.register()
+from claude_blender import shape_program as sp  # noqa: E402
+from claude_blender import shape_program_adaptive as spa  # noqa: E402
 
 failures = []
 

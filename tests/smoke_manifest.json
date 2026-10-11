@@ -1,0 +1,542 @@
+{
+  "schema_version": 1,
+  "tests": [
+    {
+      "name": "smoke_adaptive_manifold",
+      "file": "tests/smoke_adaptive_manifold.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 600,
+      "success": "smoke_adaptive_manifold: ok"
+    },
+    {
+      "name": "smoke_advanced_helpers",
+      "file": "tests/smoke_advanced_helpers.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_advanced_helpers: ok"
+    },
+    {
+      "name": "smoke_agent_tools",
+      "file": "tests/smoke_agent_tools.py",
+      "environment": "blender",
+      "lanes": [
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_agent_tools: ok"
+    },
+    {
+      "name": "smoke_animation_controls",
+      "file": "tests/smoke_animation_controls.py",
+      "environment": "blender",
+      "lanes": [
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_animation_controls: ok"
+    },
+    {
+      "name": "smoke_animation_helpers",
+      "file": "tests/smoke_animation_helpers.py",
+      "environment": "blender",
+      "lanes": [
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_animation_helpers: ok"
+    },
+    {
+      "name": "smoke_audit_log",
+      "file": "tests/smoke_audit_log.py",
+      "environment": "python",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_audit_log: ok"
+    },
+    {
+      "name": "smoke_bridge_protocol_validation",
+      "file": "tests/smoke_bridge_protocol_validation.py",
+      "environment": "python",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_bridge_protocol_validation: ok"
+    },
+    {
+      "name": "smoke_bridge_server",
+      "file": "tests/smoke_bridge_server.py",
+      "environment": "blender",
+      "lanes": [
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_bridge_server: ok"
+    },
+    {
+      "name": "smoke_bridge_worker_lane",
+      "file": "tests/smoke_bridge_worker_lane.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_bridge_worker_lane: ok"
+    },
+    {
+      "name": "smoke_build_extension_zip",
+      "file": "tests/smoke_build_extension_zip.py",
+      "environment": "python",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_build_extension_zip: ok"
+    },
+    {
+      "name": "smoke_client_profile_routing",
+      "file": "tests/smoke_client_profile_routing.py",
+      "environment": "python",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_client_profile_routing: ok"
+    },
+    {
+      "name": "smoke_context_budget",
+      "file": "tests/smoke_context_budget.py",
+      "environment": "python",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_context_budget: ok"
+    },
+    {
+      "name": "smoke_context_docs",
+      "file": "tests/smoke_context_docs.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_context_docs: ok"
+    },
+    {
+      "name": "smoke_context_planner",
+      "file": "tests/smoke_context_planner.py",
+      "environment": "blender",
+      "lanes": [
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_context_planner: ok"
+    },
+    {
+      "name": "smoke_extension_repository",
+      "file": "tests/smoke_extension_repository.py",
+      "environment": "python",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_extension_repository: ok"
+    },
+    {
+      "name": "smoke_external_asset_imports",
+      "file": "tests/smoke_external_asset_imports.py",
+      "environment": "blender",
+      "lanes": [
+        "release"
+      ],
+      "timeout_seconds": 600,
+      "success": "smoke_external_asset_imports: ok"
+    },
+    {
+      "name": "smoke_external_assets",
+      "file": "tests/smoke_external_assets.py",
+      "environment": "python",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_external_assets: ok"
+    },
+    {
+      "name": "smoke_external_assets_live",
+      "file": "tests/smoke_external_assets_live.py",
+      "environment": "python",
+      "lanes": [
+        "live"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_external_assets_live: ok",
+      "reason": "Uses live external provider services; excluded from deterministic checks."
+    },
+    {
+      "name": "smoke_full_tool_inventory",
+      "file": "tests/smoke_full_tool_inventory.py",
+      "environment": "blender",
+      "lanes": [
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_full_tool_inventory: ok"
+    },
+    {
+      "name": "smoke_generated_manifest_evaluation",
+      "file": "tests/smoke_generated_manifest_evaluation.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_generated_manifest_evaluation: ok"
+    },
+    {
+      "name": "smoke_generation_jobs",
+      "file": "tests/smoke_generation_jobs.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_generation_jobs: ok"
+    },
+    {
+      "name": "smoke_helper_routing",
+      "file": "tests/smoke_helper_routing.py",
+      "environment": "python",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_helper_routing: ok"
+    },
+    {
+      "name": "smoke_job_supervision",
+      "file": "tests/smoke_job_supervision.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 120,
+      "success": "smoke_job_supervision: ok"
+    },
+    {
+      "name": "smoke_live_helpers",
+      "file": "tests/smoke_live_helpers.py",
+      "environment": "blender",
+      "lanes": [
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_live_helpers: ok"
+    },
+    {
+      "name": "smoke_mcp_server",
+      "file": "tests/smoke_mcp_server.py",
+      "environment": "python",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_mcp_server: ok"
+    },
+    {
+      "name": "smoke_modeling_quality_gate",
+      "file": "tests/smoke_modeling_quality_gate.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_modeling_quality_gate: ok"
+    },
+    {
+      "name": "smoke_presentation_helpers",
+      "file": "tests/smoke_presentation_helpers.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_presentation_helpers: ok"
+    },
+    {
+      "name": "smoke_preview_atomicity",
+      "file": "tests/smoke_preview_atomicity.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_preview_atomicity: ok"
+    },
+    {
+      "name": "smoke_project_files",
+      "file": "tests/smoke_project_files.py",
+      "environment": "blender",
+      "lanes": [
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_project_files: ok"
+    },
+    {
+      "name": "smoke_published_release_identity",
+      "file": "tests/smoke_published_release_identity.py",
+      "environment": "python",
+      "lanes": [
+        "publication"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_published_release_identity: ok",
+      "reason": "Checks deployed release URLs after publication; needs network and published artifacts."
+    },
+    {
+      "name": "smoke_quality_observability",
+      "file": "tests/smoke_quality_observability.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_quality_observability: ok"
+    },
+    {
+      "name": "smoke_reference_image_intake",
+      "file": "tests/smoke_reference_image_intake.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_reference_image_intake: ok"
+    },
+    {
+      "name": "smoke_reference_part_graph",
+      "file": "tests/smoke_reference_part_graph.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_reference_part_graph: ok"
+    },
+    {
+      "name": "smoke_release_artifact_identity",
+      "file": "tests/smoke_release_artifact_identity.py",
+      "environment": "python",
+      "lanes": [
+        "artifacts"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_release_artifact_identity: ok",
+      "reason": "Run after build_extension_repository.py --build-zip creates dist and public artifacts."
+    },
+    {
+      "name": "smoke_release_consistency",
+      "file": "tests/smoke_release_consistency.py",
+      "environment": "python",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_release_consistency: local metadata ok"
+    },
+    {
+      "name": "smoke_reload_lifecycle",
+      "file": "tests/smoke_reload_lifecycle.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_reload_lifecycle: ok"
+    },
+    {
+      "name": "smoke_render_jobs",
+      "file": "tests/smoke_render_jobs.py",
+      "environment": "blender",
+      "lanes": [
+        "release"
+      ],
+      "timeout_seconds": 600,
+      "success": "smoke_render_jobs: ok"
+    },
+    {
+      "name": "smoke_safe_editing_helpers",
+      "file": "tests/smoke_safe_editing_helpers.py",
+      "environment": "blender",
+      "lanes": [
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_safe_editing_helpers: ok"
+    },
+    {
+      "name": "smoke_script_analysis",
+      "file": "tests/smoke_script_analysis.py",
+      "environment": "python",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_script_analysis: ok"
+    },
+    {
+      "name": "smoke_script_analysis_bypass",
+      "file": "tests/smoke_script_analysis_bypass.py",
+      "environment": "python",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_script_analysis_bypass: ok"
+    },
+    {
+      "name": "smoke_script_runner",
+      "file": "tests/smoke_script_runner.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_script_runner: ok"
+    },
+    {
+      "name": "smoke_semantic_sculpt",
+      "file": "tests/smoke_semantic_sculpt.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_semantic_sculpt: ok"
+    },
+    {
+      "name": "smoke_shape_program",
+      "file": "tests/smoke_shape_program.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_shape_program: ok"
+    },
+    {
+      "name": "smoke_tool_contract_inventory",
+      "file": "tests/smoke_tool_contract_inventory.py",
+      "environment": "python",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_tool_contract_inventory: ok"
+    },
+    {
+      "name": "smoke_tool_selection",
+      "file": "tests/smoke_tool_selection.py",
+      "environment": "blender",
+      "lanes": [
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_tool_selection: ok"
+    },
+    {
+      "name": "smoke_triposr_baked_import",
+      "file": "tests/smoke_triposr_baked_import.py",
+      "environment": "blender",
+      "lanes": [
+        "fixture"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_triposr_baked_import: ok",
+      "reason": "Requires an explicitly supplied real texture-baked TripoSR manifest and installed extension."
+    },
+    {
+      "name": "smoke_trusted_script_jobs",
+      "file": "tests/smoke_trusted_script_jobs.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 600,
+      "success": "smoke_trusted_script_jobs: ok"
+    },
+    {
+      "name": "smoke_ui_layout",
+      "file": "tests/smoke_ui_layout.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_ui_layout: ok"
+    },
+    {
+      "name": "smoke_user_functionality_pov",
+      "file": "tests/smoke_user_functionality_pov.py",
+      "environment": "blender",
+      "lanes": [
+        "core",
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_user_functionality_pov: ok"
+    },
+    {
+      "name": "smoke_world_model",
+      "file": "tests/smoke_world_model.py",
+      "environment": "blender",
+      "lanes": [
+        "release"
+      ],
+      "timeout_seconds": 300,
+      "success": "smoke_world_model: ok"
+    }
+  ]
+}

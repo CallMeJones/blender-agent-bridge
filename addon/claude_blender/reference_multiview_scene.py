@@ -223,8 +223,8 @@ def _create_view_camera(
     camera.location = location
     camera_rotation = Matrix((right, up, -forward)).transposed()
     camera.rotation_euler = camera_rotation.to_euler()
-    live_preview._record_created_id("object", camera.name)
-    live_preview._record_created_id("camera", data.name)
+    live_preview.record_created_id("object", camera.name)
+    live_preview.record_created_id("camera", data.name)
     camera["reference_guide_kind"] = "camera"
     camera["reference_guide_name"] = f"{view_name}_camera"
     camera["reference_view_name"] = view_name
@@ -262,8 +262,8 @@ def _create_connector(collection, name, start, end, landmark_name, view_name):
     spline.points[1].co = (*end, 1.0)
     obj = bpy.data.objects.new(name, curve)
     collection.objects.link(obj)
-    live_preview._record_created_id("object", obj.name)
-    live_preview._record_created_id("curve", curve.name)
+    live_preview.record_created_id("object", obj.name)
+    live_preview.record_created_id("curve", curve.name)
     obj.display_type = "WIRE"
     obj.hide_render = True
     obj["reference_guide_kind"] = "reconstruction_ray"
@@ -306,7 +306,7 @@ def create_multiview_reference_guides(
     )
     transaction = live_preview.begin(label, context)
     previous_step_count = len(transaction.get("applied_steps", []))
-    previous_before_keys = set(transaction.get("before_state", {}))
+    previous_before_keys = set(live_preview.snapshot_keys(transaction))
     previous_changed_data_blocks = list(
         transaction.get("changed_data_blocks", [])
     )
@@ -329,7 +329,7 @@ def create_multiview_reference_guides(
             _safe_name(collection_name, "Multi-View Reference Guides")
         )
         context.scene.collection.children.link(master)
-        live_preview._record_created_id("collection", master.name)
+        live_preview.record_created_id("collection", master.name)
         master["reference_multiview_guides"] = True
         master["reference_guide_subject"] = str(subject or "reference model")
 
@@ -518,7 +518,7 @@ def create_multiview_reference_guides(
                 None,
             )
             master.objects.link(empty)
-            live_preview._record_created_id("object", empty.name)
+            live_preview.record_created_id("object", empty.name)
             empty.empty_display_type = "SPHERE"
             empty.empty_display_size = max(
                 0.01,
@@ -590,7 +590,7 @@ def create_multiview_reference_guides(
         )
         active_camera = bpy.data.objects.get(active_result["camera"])
         if active_camera is not None:
-            live_preview._record_scene_camera(context.scene)
+            live_preview.record_scene_camera(context.scene)
             context.scene.camera = active_camera
         if match_render_aspect:
             resolution = reference_guides._reference_render_resolution(
@@ -654,7 +654,7 @@ def create_multiview_reference_guides(
             }
         )
         live_preview.redraw(context)
-        live_preview._mark_pending(context, label)
+        live_preview.mark_pending(context, label)
         return {
             "ok": True,
             "message": (
@@ -684,9 +684,9 @@ def create_multiview_reference_guides(
             :previous_step_count
         ]
         transaction["changed_data_blocks"] = previous_changed_data_blocks
-        for key in list(transaction.get("before_state", {})):
+        for key in list(live_preview.snapshot_keys(transaction)):
             if key not in previous_before_keys:
-                transaction["before_state"].pop(key, None)
+                live_preview.discard_snapshot(transaction, key)
         if not had_pending_transaction:
             try:
                 live_preview.revert(context)

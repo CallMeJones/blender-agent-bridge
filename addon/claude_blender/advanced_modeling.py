@@ -61,14 +61,14 @@ def create_text_object(
     obj.rotation_euler = _coerce_vector(rotation, (0.0, 0.0, 0.0))
     obj.scale = _coerce_vector(scale, (1.0, 1.0, 1.0))
     context.scene.collection.objects.link(obj)
-    live_preview._record_created_id("object", obj.name)
-    live_preview._record_created_id("curve", curve.name)
+    live_preview.record_created_id("object", obj.name)
+    live_preview.record_created_id("curve", curve.name)
     if color is not None:
         material = _material_for_color(material_name or f"{obj.name} Material", color)
         curve.materials.append(material)
     transaction["applied_steps"].append({"type": "create_text_object", "label": label, "object": obj.name})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {"ok": True, "message": f"Created text object {obj.name}", "object": obj.name, "transaction_id": transaction["id"]}
 
 def create_curve_path(
@@ -96,14 +96,14 @@ def create_curve_path(
     spline.use_cyclic_u = bool(cyclic)
     obj = bpy.data.objects.new(name or "Agent Bridge Curve", curve)
     context.scene.collection.objects.link(obj)
-    live_preview._record_created_id("object", obj.name)
-    live_preview._record_created_id("curve", curve.name)
+    live_preview.record_created_id("object", obj.name)
+    live_preview.record_created_id("curve", curve.name)
     if color is not None:
         material = _material_for_color(material_name or f"{obj.name} Material", color)
         curve.materials.append(material)
     transaction["applied_steps"].append({"type": "create_curve_path", "label": label, "object": obj.name})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {"ok": True, "message": f"Created curve path {obj.name}", "object": obj.name, "transaction_id": transaction["id"]}
 
 MODELING_SEED_MODIFIER_TYPES = {"ARRAY", "BOOLEAN", "MIRROR", "NODES", "SCREW", "SKIN", "SOLIDIFY"}
@@ -416,22 +416,22 @@ def apply_procedural_array_stack(
     changed = []
     for obj in meshes:
         array = obj.modifiers.new(f"{name_prefix} Array", "ARRAY")
-        live_preview._record_created_modifier(obj, array)
+        live_preview.record_created_modifier(obj, array)
         array.count = max(1, min(1000, int(count or 1)))
         array.relative_offset_displace = _coerce_vector(relative_offset, (1.25, 0.0, 0.0))
         bevel = obj.modifiers.new(f"{name_prefix} Bevel", "BEVEL")
-        live_preview._record_created_modifier(obj, bevel)
+        live_preview.record_created_modifier(obj, bevel)
         bevel.width = max(0.0, min(10.0, float(bevel_width or 0.0)))
         bevel.segments = max(1, min(32, int(bevel_segments or 1)))
         modifiers = [array.name, bevel.name]
         if add_weighted_normals:
             weighted = obj.modifiers.new(f"{name_prefix} Weighted Normals", "WEIGHTED_NORMAL")
-            live_preview._record_created_modifier(obj, weighted)
+            live_preview.record_created_modifier(obj, weighted)
             modifiers.append(weighted.name)
         changed.append({"object": obj.name, "modifiers": modifiers})
     transaction["applied_steps"].append({"type": "apply_procedural_array_stack", "label": label, "objects": changed})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Applied procedural array stack to {len(changed)} mesh object(s)",
@@ -754,9 +754,9 @@ def _forget_recorded_created_id(transaction, kind, name):
     if not transaction or not name:
         return
     key = f"created:{kind}:{name}"
-    if key not in transaction.get("before_state", {}):
+    if not live_preview.has_snapshot(transaction, key):
         return
-    transaction["before_state"].pop(key, None)
+    live_preview.discard_snapshot(transaction, key)
     try:
         transaction.get("changed_data_blocks", []).remove(name)
     except ValueError:
@@ -834,7 +834,7 @@ def edit_mesh(
                 had_pending = bool(pending and pending.get("status") == "pending")
                 transaction = live_preview.begin(label, context)
                 opened_transaction = not had_pending
-            live_preview._record_mesh_data_snapshot(obj)
+            live_preview.record_mesh_data_snapshot(obj)
             bm.to_mesh(mesh)
             mesh.update()
             changed.append(
@@ -865,7 +865,7 @@ def edit_mesh(
 
     transaction["applied_steps"].append({"type": "edit_mesh", "label": label, "operation": operation, "objects": changed})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Applied {operation} to {len(changed)} mesh object(s)",
@@ -911,13 +911,13 @@ def curve_to_mesh(
             mesh.name = f"{prefix}{obj.name} Mesh"
             mesh_obj = bpy.data.objects.new(f"{prefix}{obj.name}", mesh)
             mesh_obj.matrix_world = obj.matrix_world.copy()
-            live_preview._record_created_id("object", mesh_obj.name)
+            live_preview.record_created_id("object", mesh_obj.name)
             recorded_ids.append(("object", mesh_obj.name))
-            live_preview._record_created_id("mesh", mesh.name)
+            live_preview.record_created_id("mesh", mesh.name)
             recorded_ids.append(("mesh", mesh.name))
             _link_object_like_source(context, obj, mesh_obj)
             if hide_original:
-                live_preview._record_object_visibility(obj)
+                live_preview.record_object_visibility(obj)
                 obj.hide_set(True)
                 obj.hide_viewport = True
                 obj.hide_render = True
@@ -944,7 +944,7 @@ def curve_to_mesh(
 
     transaction["applied_steps"].append({"type": "curve_to_mesh", "label": label, "created": created})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Converted {len(created)} curve/text object(s) to mesh copies",
@@ -1034,7 +1034,7 @@ def boolean_op(
     applied_solver = solver
     for cutter in cutters:
         modifier = target.modifiers.new(f"{prefix} {operation.title()} {cutter.name}", "BOOLEAN")
-        live_preview._record_created_modifier(target, modifier)
+        live_preview.record_created_modifier(target, modifier)
         if hasattr(modifier, "operand_type"):
             modifier.operand_type = "OBJECT"
         modifier.operation = operation
@@ -1054,7 +1054,7 @@ def boolean_op(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Added {len(modifiers)} {operation.lower()} Boolean modifier(s) to {target.name}",
@@ -1103,7 +1103,7 @@ def mirror_model(
     changed = []
     for obj in meshes:
         modifier = obj.modifiers.new(str(name or "Agent Bridge Mirror"), "MIRROR")
-        live_preview._record_created_modifier(obj, modifier)
+        live_preview.record_created_modifier(obj, modifier)
         modifier.use_axis = axis
         modifier.use_bisect_axis = bisect
         modifier.use_bisect_flip_axis = flip
@@ -1124,7 +1124,7 @@ def mirror_model(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Added Mirror modifier to {len(changed)} mesh object(s)",
@@ -1179,7 +1179,7 @@ def symmetrize_model(
     changed = []
     for obj in meshes:
         modifier = obj.modifiers.new(str(name or "Agent Bridge Symmetry"), "MIRROR")
-        live_preview._record_created_modifier(obj, modifier)
+        live_preview.record_created_modifier(obj, modifier)
         modifier.use_axis = tuple(use_axis)
         modifier.use_bisect_axis = tuple(bisect_axis)
         modifier.use_bisect_flip_axis = tuple(flip_axis)
@@ -1198,7 +1198,7 @@ def symmetrize_model(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Added symmetry Mirror modifier to {len(changed)} mesh object(s)",
@@ -1231,7 +1231,7 @@ def solidify_model(
     changed = []
     for obj in meshes:
         modifier = obj.modifiers.new(str(name or "Agent Bridge Solidify"), "SOLIDIFY")
-        live_preview._record_created_modifier(obj, modifier)
+        live_preview.record_created_modifier(obj, modifier)
         modifier.thickness = thickness
         modifier.offset = offset
         if hasattr(modifier, "use_even_offset"):
@@ -1248,7 +1248,7 @@ def solidify_model(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Added Solidify modifier to {len(changed)} mesh object(s)",
@@ -1292,7 +1292,7 @@ def screw_model(
     changed = []
     for obj in meshes:
         modifier = obj.modifiers.new(str(name or "Agent Bridge Screw"), "SCREW")
-        live_preview._record_created_modifier(obj, modifier)
+        live_preview.record_created_modifier(obj, modifier)
         modifier.axis = axis_name
         modifier.angle = angle
         modifier.screw_offset = screw_offset
@@ -1320,7 +1320,7 @@ def screw_model(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Added Screw modifier to {len(changed)} mesh object(s)",

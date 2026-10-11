@@ -322,8 +322,8 @@ def fit_surface_to_multiview_references(
     operation = live_preview.begin_isolated(label, context)
     transaction = operation["transaction"]
     try:
-        live_preview._record_mesh_data_snapshot(obj)
-        live_preview._record_id_property(
+        live_preview.record_mesh_data_snapshot(obj)
+        live_preview.record_id_property(
             "object",
             obj.name,
             "reference_multiview_fit_metadata_json",
@@ -398,7 +398,7 @@ def fit_surface_to_multiview_references(
         )
         transaction = live_preview.finish_isolated(operation)
         live_preview.redraw(context)
-        live_preview._mark_pending(context, label)
+        live_preview.mark_pending(context, label)
         return {
             "ok": True,
             "changed": True,

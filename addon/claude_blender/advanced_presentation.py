@@ -29,17 +29,7 @@ from .advanced_materials import (
 
 
 
-def _record_mesh_smoothing(mesh):
-    transaction = live_preview.begin()
-    key = f"mesh:{mesh.name}:smoothing"
-    if key in transaction["before_state"]:
-        return
-    transaction["before_state"][key] = {
-        "kind": "mesh_smoothing",
-        "mesh_name": mesh.name,
-        "polygon_smooth": [bool(poly.use_smooth) for poly in mesh.polygons],
-    }
-    transaction["changed_data_blocks"].append(mesh.name)
+from .live_preview import record_mesh_smoothing as _record_mesh_smoothing
 
 def _axis_rotation(axis):
     axis = str(axis or "Y").upper()
@@ -61,8 +51,8 @@ def _create_text_label(context, name, text, location, *, size=0.2, rotation=(0.0
     context.scene.collection.objects.link(obj)
     if material:
         curve.materials.append(material)
-    live_preview._record_created_id("object", obj.name)
-    live_preview._record_created_id("curve", curve.name)
+    live_preview.record_created_id("object", obj.name)
+    live_preview.record_created_id("curve", curve.name)
     return obj
 
 def _create_wheel_parts(context, *, name, location, radius, thickness, axis, tire_material, rim_material):
@@ -79,8 +69,8 @@ def _create_wheel_parts(context, *, name, location, radius, thickness, axis, tir
     tire.name = f"{name} Tire"
     tire.data.name = f"{tire.name} Mesh"
     tire.data.materials.append(tire_material)
-    live_preview._record_created_id("object", tire.name)
-    live_preview._record_created_id("mesh", tire.data.name)
+    live_preview.record_created_id("object", tire.name)
+    live_preview.record_created_id("mesh", tire.data.name)
 
     bpy.ops.mesh.primitive_cylinder_add(
         vertices=48,
@@ -93,8 +83,8 @@ def _create_wheel_parts(context, *, name, location, radius, thickness, axis, tir
     rim.name = f"{name} Rim"
     rim.data.name = f"{rim.name} Mesh"
     rim.data.materials.append(rim_material)
-    live_preview._record_created_id("object", rim.name)
-    live_preview._record_created_id("mesh", rim.data.name)
+    live_preview.record_created_id("object", rim.name)
+    live_preview.record_created_id("mesh", rim.data.name)
 
     return [tire, rim]
 
@@ -110,11 +100,11 @@ def shade_smooth_selected(context, *, add_weighted_normals=True, label="Shade sm
             polygon.use_smooth = True
         if add_weighted_normals and obj.modifiers.get("Agent Bridge Weighted Normals") is None:
             modifier = obj.modifiers.new("Agent Bridge Weighted Normals", "WEIGHTED_NORMAL")
-            live_preview._record_created_modifier(obj, modifier)
+            live_preview.record_created_modifier(obj, modifier)
         changed.append(obj.name)
     transaction["applied_steps"].append({"type": "shade_smooth_selected", "label": label, "objects": changed})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {"ok": True, "message": f"Smoothed {len(changed)} mesh object(s)", "objects": changed, "transaction_id": transaction["id"]}
 
 def add_bevel_and_subsurf(
@@ -135,19 +125,19 @@ def add_bevel_and_subsurf(
         bevel = obj.modifiers.new("Agent Bridge Detail Bevel", "BEVEL")
         bevel.width = max(0.0, min(10.0, float(bevel_width)))
         bevel.segments = max(1, min(16, int(bevel_segments)))
-        live_preview._record_created_modifier(obj, bevel)
+        live_preview.record_created_modifier(obj, bevel)
         if int(subsurf_levels) > 0:
             subsurf = obj.modifiers.new("Agent Bridge Detail Subdivision", "SUBSURF")
             subsurf.levels = max(0, min(3, int(subsurf_levels)))
             subsurf.render_levels = max(0, min(3, int(subsurf_levels)))
-            live_preview._record_created_modifier(obj, subsurf)
+            live_preview.record_created_modifier(obj, subsurf)
         if weighted_normals:
             normals = obj.modifiers.new("Agent Bridge Weighted Normals", "WEIGHTED_NORMAL")
-            live_preview._record_created_modifier(obj, normals)
+            live_preview.record_created_modifier(obj, normals)
         changed.append(obj.name)
     transaction["applied_steps"].append({"type": "add_bevel_and_subsurf", "label": label, "objects": changed})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {"ok": True, "message": f"Added bevel/detail modifiers to {len(changed)} mesh object(s)", "objects": changed, "transaction_id": transaction["id"]}
 
 def create_wheel_assembly(
@@ -179,7 +169,7 @@ def create_wheel_assembly(
         {"type": "create_wheel_assembly", "label": label, "objects": [obj.name for obj in objects]}
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {"ok": True, "message": f"Created wheel assembly {name}", "objects": [obj.name for obj in objects], "transaction_id": transaction["id"]}
 
 def add_panel_seams(
@@ -238,7 +228,7 @@ def add_panel_seams(
         )
     transaction["applied_steps"].append({"type": "add_panel_seams", "label": label, "target": target.name, "objects": created})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {"ok": True, "message": f"Added panel seams around {target.name}", "objects": created, "transaction_id": transaction["id"]}
 
 def add_dimension_callouts(
@@ -331,7 +321,7 @@ def add_dimension_callouts(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Added dimension callouts for {target.name}",
@@ -463,7 +453,7 @@ def prepare_imported_asset_presentation(
                     continue
                 if obj.material_slots:
                     continue
-                live_preview._record_object_materials(obj)
+                live_preview.record_object_materials(obj)
                 obj.data.materials.append(material)
                 assigned.append({"object": obj.name, "material": material.name})
 
@@ -534,7 +524,7 @@ def prepare_imported_asset_presentation(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     warnings = list(stage_result.get("warnings") or [])
     return {
         "ok": True,
@@ -590,9 +580,9 @@ def organize_scene_for_production(
         if collection is None:
             collection = bpy.data.collections.new(collection_name)
             context.scene.collection.children.link(collection)
-            live_preview._record_created_id("collection", collection.name)
+            live_preview.record_created_id("collection", collection.name)
         collections[collection_name] = collection
-        live_preview._record_object_collections(obj)
+        live_preview.record_object_collections(obj)
         if collection.objects.get(obj.name) is None:
             collection.objects.link(obj)
         linked.append({"object": obj.name, "collection": collection.name})
@@ -605,7 +595,7 @@ def organize_scene_for_production(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Linked {len(linked)} object(s) into production collections",

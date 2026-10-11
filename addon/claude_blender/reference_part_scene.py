@@ -188,7 +188,7 @@ def create_reference_part_graph(
     try:
         part_collection = bpy.data.collections.new(_safe_label(name, "Reference Part Graph"))
         context.scene.collection.children.link(part_collection)
-        live_preview._record_created_id("collection", part_collection.name)
+        live_preview.record_created_id("collection", part_collection.name)
         part_collection["reference_part_graph"] = True
         part_collection["reference_source_guide_collection"] = source_collection.name
         _set_json_prop(part_collection, PART_GRAPH_METADATA_PROP, graph)
@@ -204,7 +204,7 @@ def create_reference_part_graph(
                 empty.empty_display_size = max(0.025, min(part["radii"]) * 0.75)
                 empty.location = part["center"]
                 part_collection.objects.link(empty)
-                live_preview._record_created_id("object", empty.name)
+                live_preview.record_created_id("object", empty.name)
                 empty["reference_part_marker"] = True
                 empty["reference_part_name"] = part["name"]
                 empty["reference_part_role"] = part["role"]
@@ -222,7 +222,7 @@ def create_reference_part_graph(
         )
         transaction = live_preview.finish_isolated(operation)
         live_preview.redraw(context)
-        live_preview._mark_pending(context, label)
+        live_preview.mark_pending(context, label)
         return {
             "ok": True,
             "message": f"Created reference part graph with {len(graph['parts'])} part(s)",
@@ -367,7 +367,7 @@ def build_part_aware_base_mesh(
         )
         transaction = live_preview.finish_isolated(operation)
         live_preview.redraw(context)
-        live_preview._mark_pending(context, label)
+        live_preview.mark_pending(context, label)
         return {
             "ok": True,
             "message": f"Built part-aware base mesh from {len(parts)} part(s)",

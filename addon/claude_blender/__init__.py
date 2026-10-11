@@ -43,6 +43,17 @@ _TOOL_HANDLER_RELOAD_ORDER = (
 
 _MODULE_NAMES = (
     "blender_compat",
+    "response_controls",
+    "schema_validation",
+    "tool_surface",
+    "operation_queue",
+    "job_runtime",
+    "process_utils",
+    "credential_store",
+    "generation_clients",
+    "reference_image_masks",
+    "reference_image_intake",
+    "preview_snapshots",
     "build_info",
     "user_paths",
     "properties",
@@ -64,6 +75,7 @@ _MODULE_NAMES = (
     "helper_routing",
     "animation_brief",
     "animation_analysis",
+    "animation_workflow",
     "presentation_support",
     "workflow_planning",
     "two_d_inspection",
@@ -109,12 +121,15 @@ _MODULE_NAMES = (
     "autosave",
     "lab_parity",
     "render_jobs",
-    "process_utils",
     "generation_spend",
     "trusted_script_jobs",
+    "external_assets",
+    "generation_job",
+    "asset_provider_execution",
     "asset_jobs",
     "project_files",
     "bridge_protocol",
+    "execution_lanes",
     "bridge_server",
     "docs_index",
     "agent_tools",
@@ -124,9 +139,33 @@ _MODULE_NAMES = (
     "handler_runtime",
     "animation_runtime",
     "tool_dispatcher",
+    "script_execution",
     "script_runner",
     "ui",
 )
+
+# Each shipped Python module has exactly one lifecycle owner. These modules do
+# not belong to the in-Blender reload loop; tests enforce inventory completeness.
+_PERSISTENT_MODULES = ("session_credentials",)
+_EXTERNAL_RUNTIME_MODULES = (
+    "asset_job_worker", "bridge_client", "connection_diagnostics", "mcp_server",
+    "mcp_runtime", "mcp_runtime.server", "tool_catalog", "tool_registry.report",
+    "triposr_compat_runner",
+)
+_PACKAGE_MODULES = ("__init__", "tool_handlers", "tool_registry.domains")
+_EXECUTOR_MODULES = ("tool_executor",)
+
+
+def module_lifecycle_inventory():
+    groups = {
+        "reloadable": (*_TOOL_REGISTRY_RELOAD_ORDER, *_MODULE_NAMES,
+                       *_TOOL_HANDLER_RELOAD_ORDER, *_EXECUTOR_MODULES),
+        "persistent": _PERSISTENT_MODULES,
+        "external_runtime": _EXTERNAL_RUNTIME_MODULES,
+        "package": _PACKAGE_MODULES,
+    }
+    return {name: kind for kind, names in groups.items() for name in names}
+
 
 _modules = []
 

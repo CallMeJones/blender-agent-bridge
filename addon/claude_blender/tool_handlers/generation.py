@@ -41,7 +41,10 @@ def _generation_environ(context):
 
 
 def get_generation_provider_diagnostics(context, args):
-    environ = _generation_environ(context)
+    return diagnostics_from_environment(args, _generation_environ(context))
+
+
+def diagnostics_from_environment(args, environ):
     # The probe result is cached per interpreter, so the default path costs
     # nothing after the first call; refresh_hardware forces a re-probe when a
     # user has just installed torch or switched interpreters.
@@ -518,6 +521,10 @@ def get_generation_approval_status(_context, args):
 
 
 def cancel_provider_generation_task(context, asset_job):
+    return cancel_provider_task(asset_job, _generation_environ(context))
+
+
+def cancel_provider_task(asset_job, environ):
     """Cancel supported hosted tasks without persisting provider credentials."""
 
     asset_job = asset_job if isinstance(asset_job, dict) else {}
@@ -527,7 +534,6 @@ def cancel_provider_generation_task(context, asset_job):
         return {}
 
     spec = generation_providers.PROVIDERS_BY_NAME.get(provider)
-    environ = _generation_environ(context)
     api_key = _first_configured(environ, getattr(spec, "credential_env_vars", ()) or ())
     if not api_key:
         return {
@@ -621,27 +627,27 @@ def cleanup_generated_asset(context, args):
             "modifiers": [],
         }
         if shade_smooth:
-            live_preview._record_mesh_data_snapshot(obj)
+            live_preview.record_mesh_data_snapshot(obj)
             for polygon in obj.data.polygons:
                 polygon.use_smooth = True
             entry["shade_smooth"] = True
 
         if add_weighted_normals:
             modifier = obj.modifiers.new("Agent Bridge Generated Weighted Normals", "WEIGHTED_NORMAL")
-            live_preview._record_created_modifier(obj, modifier)
+            live_preview.record_created_modifier(obj, modifier)
             if hasattr(modifier, "keep_sharp"):
                 modifier.keep_sharp = True
             entry["modifiers"].append({"name": modifier.name, "type": modifier.type})
 
         if decimate_ratio < 0.999:
             modifier = obj.modifiers.new("Agent Bridge Generated Decimate", "DECIMATE")
-            live_preview._record_created_modifier(obj, modifier)
+            live_preview.record_created_modifier(obj, modifier)
             modifier.ratio = decimate_ratio
             entry["modifiers"].append({"name": modifier.name, "type": modifier.type, "ratio": decimate_ratio})
 
         if remesh_voxel_size > 0:
             modifier = obj.modifiers.new("Agent Bridge Generated Voxel Remesh", "REMESH")
-            live_preview._record_created_modifier(obj, modifier)
+            live_preview.record_created_modifier(obj, modifier)
             if hasattr(modifier, "mode"):
                 modifier.mode = "VOXEL"
             if hasattr(modifier, "voxel_size"):
@@ -670,7 +676,7 @@ def cleanup_generated_asset(context, args):
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": "Prepared generated asset cleanup for %d mesh object(s)" % len(meshes),

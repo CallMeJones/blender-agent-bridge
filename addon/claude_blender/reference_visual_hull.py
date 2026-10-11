@@ -309,7 +309,7 @@ def _create_multiview_surface(
     stage = "mesh"
     try:
         mesh = bpy.data.meshes.new(f"{_safe_label(object_name, 'Reference Visual Hull')} Mesh")
-        live_preview._record_created_id("mesh", mesh.name)
+        live_preview.record_created_id("mesh", mesh.name)
         mesh.from_pydata(result["vertices"], [], result["faces"])
         mesh.validate(verbose=False)
         mesh.update(calc_edges=True)
@@ -318,7 +318,7 @@ def _create_multiview_surface(
         for polygon in mesh.polygons:
             polygon.use_smooth = True
         obj = bpy.data.objects.new(_safe_label(object_name, "Reference Visual Hull"), mesh)
-        live_preview._record_created_id("object", obj.name)
+        live_preview.record_created_id("object", obj.name)
         context.scene.collection.objects.link(obj)
         stage = "material"
         material = _material_for_color(
@@ -365,7 +365,7 @@ def _create_multiview_surface(
         )
         transaction = live_preview.finish_isolated(operation)
         live_preview.redraw(context)
-        live_preview._mark_pending(context, label)
+        live_preview.mark_pending(context, label)
         return {
             "ok": True,
             "message": (

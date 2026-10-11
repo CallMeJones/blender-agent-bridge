@@ -33,95 +33,14 @@ jobs:
       - name: Run conventional unit tests
         run: python -m unittest discover -s tests\unit -p "test_*.py" -v
 
-      - name: Compile MCP bridge modules
-        run: >
-          python -m py_compile
-          addon\claude_blender\mcp_server.py
-          addon\claude_blender\bridge_protocol.py
-          addon\claude_blender\bridge_server.py
-          addon\claude_blender\audit_log.py
-          addon\claude_blender\connection_diagnostics.py
-          addon\claude_blender\depth_fields.py
-          addon\claude_blender\fur_groom.py
-          addon\claude_blender\reference_benchmark_scene.py
-          addon\claude_blender\reference_benchmarks.py
-          addon\claude_blender\reference_blockout.py
-          addon\claude_blender\reference_comparison.py
-          addon\claude_blender\reference_depth.py
-          addon\claude_blender\reference_fitting.py
-          addon\claude_blender\reference_forms.py
-          addon\claude_blender\reference_guides.py
-          addon\claude_blender\reference_metrics.py
-          addon\claude_blender\reference_multiview.py
-          addon\claude_blender\reference_multiview_scene.py
-          addon\claude_blender\reference_scene.py
-          addon\claude_blender\reference_surface_fitting.py
-          addon\claude_blender\reference_visual_hull.py
-          addon\claude_blender\sculpt_fields.py
-          addon\claude_blender\semantic_sculpt.py
-          addon\claude_blender\adaptive_remesh.py
-          addon\claude_blender\visual_hull.py
-          addon\claude_blender\script_analysis.py
-          scripts\build_extension_zip.py
-          scripts\build_extension_repository.py
-          scripts\build_mcpb.py
-          scripts\installed_extension_startup.py
-          scripts\installed_extension_live_smoke.py
-          scripts\live_workflow_sweep.py
-          scripts\reference_benchmark_regression.py
-          tests\smoke_audit_log.py
-          tests\smoke_build_extension_zip.py
-          tests\smoke_extension_repository.py
-          tests\smoke_helper_routing.py
-          tests\smoke_client_profile_routing.py
-          tests\smoke_release_artifact_identity.py
-          tests\smoke_published_release_identity.py
-          tests\smoke_release_consistency.py
-          tests\smoke_script_analysis.py
-          tests\smoke_mcp_server.py
-          tests\smoke_tool_contract_inventory.py
+      - name: Compile source modules
+        run: python -m compileall -q addon scripts tests
 
-      - name: Run audit log smoke test
-        run: python tests\smoke_audit_log.py
-
-      - name: Run bridge protocol validation smoke test
-        run: python tests\smoke_bridge_protocol_validation.py
-
-      - name: Run script analysis smoke test
-        run: python tests\smoke_script_analysis.py
-
-      - name: Run script analysis bypass probe
-        run: python tests\smoke_script_analysis_bypass.py
-
-      - name: Run helper routing smoke test
-        run: python tests\smoke_helper_routing.py
-
-      - name: Run context budget smoke test
-        run: python tests\smoke_context_budget.py
-
-      - name: Run external asset smoke test
-        run: python tests\smoke_external_assets.py
-
-      - name: Run provider-shaped offline routing regression gate
-        run: python tests\smoke_client_profile_routing.py
+      - name: Run deterministic Python smoke manifest
+        run: python scripts/run_smoke_suite.py --lane release --environment python
 
       - name: Run offline reference-modeling benchmark regression gate
-        run: python scripts\reference_benchmark_regression.py
-
-      - name: Run extension build smoke test
-        run: python tests\smoke_build_extension_zip.py
-
-      - name: Run extension repository smoke test
-        run: python tests\smoke_extension_repository.py
-
-      - name: Run release consistency smoke test
-        run: python tests\smoke_release_consistency.py
-
-      - name: Run stdio MCP smoke test
-        run: python tests\smoke_mcp_server.py
-
-      - name: Run tool contract inventory smoke test
-        run: python tests\smoke_tool_contract_inventory.py
+        run: python scripts/reference_benchmark_regression.py
 
       - name: Build blender-bridge wheel and source distribution
         run: python -m build
@@ -181,7 +100,7 @@ jobs:
           --repository-url https://callmejones.github.io/blender-agent-bridge/index.json
 
       - name: Verify release and Pages archive identity
-        run: python tests\smoke_release_artifact_identity.py
+        run: python scripts/run_smoke_suite.py --lane artifacts --environment python
 
       - name: Upload Python-built smoke archive
         uses: actions/upload-artifact@v7
@@ -253,53 +172,12 @@ jobs:
       - name: Show Blender version
         run: ./blender/blender --version
 
-      - name: Run Blender smoke suite (complete suite on tags)
+      - name: Run Blender smoke manifest (complete suite on tags)
         run: |
           set -euo pipefail
-          tests=(
-            smoke_advanced_helpers
-            smoke_presentation_helpers
-            smoke_script_runner
-            smoke_quality_observability
-            smoke_semantic_sculpt
-            smoke_trusted_script_jobs
-            smoke_context_docs
-            smoke_generation_jobs
-            smoke_ui_layout
-          )
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            tests=(
-              smoke_advanced_helpers
-              smoke_agent_tools
-              smoke_animation_controls
-              smoke_animation_helpers
-              smoke_bridge_server
-              smoke_context_docs
-              smoke_context_planner
-              smoke_external_asset_imports
-              smoke_full_tool_inventory
-              smoke_generation_jobs
-              smoke_live_helpers
-              smoke_project_files
-              smoke_presentation_helpers
-              smoke_render_jobs
-              smoke_safe_editing_helpers
-              smoke_semantic_sculpt
-              smoke_script_runner
-              smoke_quality_observability
-              smoke_trusted_script_jobs
-              smoke_tool_selection
-              smoke_ui_layout
-              smoke_world_model
-            )
-          fi
-          for t in "${tests[@]}"; do
-            echo "::group::$t"
-            out=$(xvfb-run -a ./blender/blender --background --factory-startup --python-exit-code 1 --python "tests/$t.py" 2>&1) || { echo "$out"; echo "::endgroup::"; exit 1; }
-            echo "$out"
-            echo "$out" | grep -q "$t: ok" || { echo "MISSING SUCCESS SENTINEL for $t"; echo "::endgroup::"; exit 1; }
-            echo "::endgroup::"
-          done
+          lane=core
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then lane=release; fi
+          xvfb-run -a python3 scripts/run_smoke_suite.py --lane "$lane" --environment blender --blender "$GITHUB_WORKSPACE/blender/blender"
 
       - name: Run clean installed-extension live smoke for tags
         if: startsWith(github.ref, 'refs/tags/v')

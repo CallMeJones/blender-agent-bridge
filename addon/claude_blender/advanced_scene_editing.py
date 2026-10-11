@@ -59,14 +59,14 @@ def create_empty(
     obj.rotation_euler = _coerce_vector(rotation, (0.0, 0.0, 0.0))
     obj.scale = _coerce_vector(scale, (1.0, 1.0, 1.0))
     context.scene.collection.objects.link(obj)
-    live_preview._record_created_id("object", obj.name)
+    live_preview.record_created_id("object", obj.name)
     if select_new:
         bpy.ops.object.select_all(action="DESELECT")
         obj.select_set(True)
         context.view_layer.objects.active = obj
     transaction["applied_steps"].append({"type": "create_empty", "label": label, "object": obj.name})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {"ok": True, "message": f"Created empty {obj.name}", "object": obj.name, "transaction_id": transaction["id"]}
 
 def set_object_visibility(
@@ -88,7 +88,7 @@ def set_object_visibility(
     changed = []
     warnings = []
     for obj in objects:
-        live_preview._record_object_visibility(obj)
+        live_preview.record_object_visibility(obj)
         if hide_viewport is not None:
             value = bool(hide_viewport)
             obj.hide_viewport = value
@@ -103,7 +103,7 @@ def set_object_visibility(
         changed.append(obj.name)
     transaction["applied_steps"].append({"type": "set_object_visibility", "label": label, "objects": changed})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Updated visibility for {len(changed)} object(s)",
@@ -142,7 +142,7 @@ def set_object_display(
     transaction = live_preview.begin(label, context)
     changed = []
     for obj in objects:
-        live_preview._record_object_display(obj)
+        live_preview.record_object_display(obj)
         if display_type:
             obj.display_type = display_type if display_type in OBJECT_DISPLAY_TYPES else "TEXTURED"
         if show_name is not None:
@@ -161,7 +161,7 @@ def set_object_display(
         changed.append(obj.name)
     transaction["applied_steps"].append({"type": "set_object_display", "label": label, "objects": changed})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {"ok": True, "message": f"Updated display settings for {len(changed)} object(s)", "objects": changed, "missing_object_names": missing, "transaction_id": transaction["id"]}
 
 def duplicate_selected_objects(
@@ -194,10 +194,10 @@ def duplicate_selected_objects(
         duplicate.location.y += float(offset[1])
         duplicate.location.z += float(offset[2])
         _link_object_like_source(context, obj, duplicate)
-        live_preview._record_created_id("object", duplicate.name)
+        live_preview.record_created_id("object", duplicate.name)
         data_kind = _created_data_kind(duplicate)
         if data_kind and duplicate.data and duplicate.data is not obj.data:
-            live_preview._record_created_id(data_kind, duplicate.data.name)
+            live_preview.record_created_id(data_kind, duplicate.data.name)
         if select_new:
             duplicate.select_set(True)
             context.view_layer.objects.active = duplicate
@@ -212,7 +212,7 @@ def duplicate_selected_objects(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Duplicated {len(created)} object(s)",
@@ -262,10 +262,10 @@ def parent_selected_to_empty(
     empty.empty_display_size = 1.0
     empty.location = location
     context.scene.collection.objects.link(empty)
-    live_preview._record_created_id("object", empty.name)
+    live_preview.record_created_id("object", empty.name)
     for obj in selected:
-        live_preview._record_object_parent(obj)
-        live_preview._record_object_transform(obj)
+        live_preview.record_object_parent(obj)
+        live_preview.record_object_transform(obj)
         world_matrix = obj.matrix_world.copy()
         obj.parent = empty
         if keep_transform:
@@ -283,7 +283,7 @@ def parent_selected_to_empty(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Parented {len(selected)} object(s) to {empty.name}",
@@ -318,7 +318,7 @@ def align_selected_objects(context, *, axis="Z", mode="ACTIVE", value=None, labe
 
     transaction = live_preview.begin(label, context)
     for obj in selected:
-        live_preview._record_object_transform(obj)
+        live_preview.record_object_transform(obj)
         obj.location[axis_index] = target
     transaction["applied_steps"].append(
         {
@@ -331,7 +331,7 @@ def align_selected_objects(context, *, axis="Z", mode="ACTIVE", value=None, labe
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Aligned {len(selected)} object(s) on {axis}",
@@ -365,7 +365,7 @@ def distribute_selected_objects(
     for index, obj in enumerate(ordered):
         factor = index / max(1, len(ordered) - 1)
         position = start + (end - start) * factor
-        live_preview._record_object_transform(obj)
+        live_preview.record_object_transform(obj)
         obj.location[axis_index] = position
         positions[obj.name] = position
     transaction["applied_steps"].append(
@@ -379,7 +379,7 @@ def distribute_selected_objects(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Distributed {len(ordered)} object(s) on {axis}",

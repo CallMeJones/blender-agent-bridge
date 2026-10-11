@@ -501,6 +501,10 @@ def load_into_session():
     if not is_available():
         return loaded
     for name in session_credentials.CREDENTIAL_NAMES:
+        if session_credentials.session_credential(name):
+            # A runtime credential may be newer than its saved OS-store value.
+            # Register/reload must preserve the current session's choice.
+            continue
         value = load_credential(name)
         if value:
             session_credentials.set_session_credential(name, value)

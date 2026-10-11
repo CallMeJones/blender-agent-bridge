@@ -101,7 +101,7 @@ def _snapshot(scene, cube, camera, light):
 
 def _action_keyframes(action):
     frames = []
-    for fcurve in live_preview._iter_action_fcurves(action):
+    for fcurve in live_preview.iter_action_fcurves(action):
         frames.extend(round(point.co.x, 4) for point in fcurve.keyframe_points)
     return sorted(set(frames))
 
@@ -1251,8 +1251,8 @@ def main():
         rig_subject.name = "Agent Bridge Rig Repair Subject"
         rig_subject.data.name = "Agent Bridge Rig Repair Subject Mesh"
         rig_subject.parent = rig
-        live_preview._record_created_id("object", rig_subject.name)
-        live_preview._record_created_id("mesh", rig_subject.data.name)
+        live_preview.record_created_id("object", rig_subject.name)
+        live_preview.record_created_id("mesh", rig_subject.data.name)
         context.view_layer.update()
         rig_details = _execute(context, "get_rigging_details", {"object_names": [rig.name], "max_objects": 1})
         rig_armature = next(item for item in rig_details["objects"] if item["name"] == rig.name)
@@ -1300,7 +1300,7 @@ def main():
         assert [item["tool"] for item in rig_loop["executed_operations"]] == ["get_rigging_details", "set_rig_pose_hold"], rig_loop
         assert rig_loop["pending_preview"] is True, rig_loop
         assert rig.animation_data and rig.animation_data.action, rig_loop
-        rig_fcurve_paths = {fcurve.data_path for fcurve in live_preview._iter_action_fcurves(rig.animation_data.action)}
+        rig_fcurve_paths = {fcurve.data_path for fcurve in live_preview.iter_action_fcurves(rig.animation_data.action)}
         assert 'pose.bones["CTRL_Main"].location' in rig_fcurve_paths, rig_loop
         assert 'pose.bones["CTRL_Main"].rotation_quaternion' in rig_fcurve_paths, rig_loop
         assert rig_loop["executed_operations"][1]["result"]["bones"][0]["paths"] == ["location", "rotation_quaternion"], rig_loop
@@ -1368,7 +1368,7 @@ def main():
         ikfk_rig.data["left_arm_space_switch"] = 0
         ikfk_rig.data["parent"] = 1
         pose_action = bpy.data.actions.new("Agent Bridge IKFK Repair Pose Library")
-        live_preview._record_created_id("action", pose_action.name)
+        live_preview.record_created_id("action", pose_action.name)
         pose_marker = pose_action.pose_markers.new("Left Hand Contact Repair")
         pose_marker.frame = 10
         ikfk_rig.animation_data_create().action = pose_action
@@ -1383,8 +1383,8 @@ def main():
         ikfk_subject.name = "Agent Bridge IKFK Repair Subject"
         ikfk_subject.data.name = "Agent Bridge IKFK Repair Subject Mesh"
         ikfk_subject.parent = ikfk_rig
-        live_preview._record_created_id("object", ikfk_subject.name)
-        live_preview._record_created_id("mesh", ikfk_subject.data.name)
+        live_preview.record_created_id("object", ikfk_subject.name)
+        live_preview.record_created_id("mesh", ikfk_subject.data.name)
         context.view_layer.update()
         ikfk_brief = {
             "contract_id": "anim-ikfk-repair-smoke",
@@ -1520,12 +1520,12 @@ def main():
             "offset_rig_limb_controls",
             "set_rig_pose_hold",
         ], ikfk_loop
-        ikfk_fcurve_paths = {fcurve.data_path for fcurve in live_preview._iter_action_fcurves(ikfk_rig.animation_data.action)}
+        ikfk_fcurve_paths = {fcurve.data_path for fcurve in live_preview.iter_action_fcurves(ikfk_rig.animation_data.action)}
         assert '["IK_FK_Arm_L"]' in ikfk_fcurve_paths, ikfk_loop
         assert 'pose.bones["CTRL_IK_Hand"]["IK_FK_local"]' in ikfk_fcurve_paths, ikfk_loop
         assert 'pose.bones["CTRL_IK_Hand"].location' in ikfk_fcurve_paths, ikfk_loop
         assert 'pose.bones["CTRL_Pole_Elbow"].location' in ikfk_fcurve_paths, ikfk_loop
-        ikfk_data_fcurve_paths = {fcurve.data_path for fcurve in live_preview._iter_action_fcurves(ikfk_rig.data.animation_data.action)}
+        ikfk_data_fcurve_paths = {fcurve.data_path for fcurve in live_preview.iter_action_fcurves(ikfk_rig.data.animation_data.action)}
         assert '["left_arm_space_switch"]' in ikfk_data_fcurve_paths, ikfk_loop
         clip_result = _execute(
             context,
@@ -1543,7 +1543,7 @@ def main():
         assert ikfk_rig.animation_data.action.name == clip_result["applied_action"], clip_result
         clip_frames = sorted(
             round(point.co.x)
-            for fcurve in live_preview._iter_action_fcurves(ikfk_rig.animation_data.action)
+            for fcurve in live_preview.iter_action_fcurves(ikfk_rig.animation_data.action)
             for point in fcurve.keyframe_points
         )
         assert clip_frames[0] == 20 and clip_frames[-1] == 28, clip_result
@@ -1564,7 +1564,7 @@ def main():
         assert partial_clip_result["source_frame_end"] == 10.0, partial_clip_result
         partial_clip_frames = sorted(
             round(point.co.x)
-            for fcurve in live_preview._iter_action_fcurves(ikfk_rig.animation_data.action)
+            for fcurve in live_preview.iter_action_fcurves(ikfk_rig.animation_data.action)
             for point in fcurve.keyframe_points
         )
         assert partial_clip_frames[0] == 40 and partial_clip_frames[-1] == 44, partial_clip_result

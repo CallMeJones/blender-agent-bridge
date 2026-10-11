@@ -12,6 +12,8 @@ import uuid
 
 import bpy
 
+from . import job_runtime, asset_provider_execution
+
 from . import (
     external_assets,
     generation_meshy,
@@ -20,7 +22,6 @@ from . import (
     generation_spend,
     generation_tripo,
     process_utils,
-    render_jobs,
     viewport_capture,
 )
 
@@ -140,19 +141,7 @@ def _log_path(job_dir):
     return os.path.join(job_dir, LOG_FILENAME)
 
 
-def _write_json(path, payload):
-    temp_path = f"{path}.{threading.get_ident()}.{uuid.uuid4().hex}.tmp"
-    try:
-        with open(temp_path, "w", encoding="utf-8", newline="\n") as handle:
-            json.dump(payload, handle, indent=2, sort_keys=True, default=str)
-        os.replace(temp_path, path)
-    finally:
-        if os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-            except OSError:
-                pass
-    return path
+_write_json = job_runtime.write_json
 
 
 def _read_json(path):
@@ -218,7 +207,7 @@ def _provider_secrets(provider):
 def _child_env(args, provider=""):
     """Hand secrets to the worker through the environment, never through the config file."""
 
-    env = render_jobs._child_env()
+    env = job_runtime.child_environment()
     secrets = _provider_secrets(provider) if provider else (
         ("api_token", ASSET_JOB_SECRET_TOKEN_ENV),
         ("model_password", ASSET_JOB_SECRET_PASSWORD_ENV),
@@ -652,7 +641,7 @@ def _update_metadata(metadata_path, **updates):
         return metadata
 
 
-def _run_download_job(job_id, provider, args, metadata_path):
+def _run_download_job(job_id, provider, args, metadata_path, network_policy=None):
     try:
         _update_metadata(
             metadata_path,
@@ -675,46 +664,16 @@ def _run_download_job(job_id, provider, args, metadata_path):
             def progress_callback(update):
                 _update_metadata(metadata_path, **_progress_metadata(update))
 
-            if provider == "poly_haven":
-                manifest = external_assets.download_poly_haven_asset(
-                    asset_id=str(args.get("asset_id") or ""),
-                    asset_type=str(args.get("asset_type") or ""),
-                    resolution=str(args.get("resolution") or "2k"),
-                    file_format=str(args.get("file_format") or ""),
-                    map_types=args.get("map_types") if isinstance(args.get("map_types"), list) else None,
-                    include_dependencies=bool(args.get("include_dependencies", True)),
-                    cache_dir=str(args.get("cache_dir") or ""),
-                    timeout=_bounded_int(args.get("timeout"), 60, minimum=1, maximum=300),
-                    progress_callback=progress_callback,
-                )
-            elif provider == "sketchfab":
-                manifest = external_assets.download_sketchfab_model(
-                    uid=str(args.get("uid") or ""),
-                    api_token=str(args.get("api_token") or ""),
-                    token_env_var=str(args.get("token_env_var") or external_assets.SKETCHFAB_TOKEN_ENV_VAR),
-                    model_password=str(args.get("model_password") or ""),
-                    cache_dir=str(args.get("cache_dir") or ""),
-                    timeout=_bounded_int(args.get("timeout"), 120, minimum=1, maximum=300),
-                    progress_callback=progress_callback,
-                    provenance=dict(args.get("provenance") or {}),
-                )
-            elif provider in {"tripo", "meshy", "studio_endpoint", "triposr"}:
-                from . import generation_job
-
-                manifest = generation_job.run(
-                    {
-                        "job_id": job_id,
-                        "provider": provider,
-                        "child_status_path": _child_status_path(os.path.dirname(metadata_path)),
-                    },
+            with external_assets.network_access_scope(network_policy):
+                manifest = asset_provider_execution.execute(
+                    {"job_id": job_id, "provider": provider,
+                     "child_status_path": _child_status_path(os.path.dirname(metadata_path))},
                     args,
-                    provider=provider,
+                    credentials={"token": str(args.get("api_key") or args.get("api_token") or ""),
+                                 "password": str(args.get("model_password") or "")},
                     progress_callback=progress_callback,
-                    api_key=str(args.get("api_key") or ""),
-                    poll_interval=0 if provider == "triposr" else generation_job.POLL_INTERVAL_SECONDS,
+                    is_cancelled=lambda: _is_cancel_requested(job_id),
                 )
-            else:
-                manifest = {"ok": False, "message": f"Unsupported external asset provider: {provider}"}
         except Exception as exc:
             manifest = {"ok": False, "message": f"External asset job failed: {type(exc).__name__}: {exc}"}
 
@@ -954,6 +913,7 @@ def start_external_asset_download(
         "available": True,
         "status": "starting",
         "job_id": job_id,
+        "operation_id": job_runtime.current_operation_id(),
         "job_name": str(job_name or "")[:120],
         "note": str(note or "")[:1000],
         "provider": provider,
@@ -1007,9 +967,12 @@ def start_external_asset_download(
     _write_metadata(metadata_path, metadata)
 
     if worker_type == "in_process_thread":
+        thread_args = dict(args)
+        if provider in {"poly_haven", "sketchfab"}:
+            thread_args["cache_dir"] = str(thread_args.get("cache_dir") or external_assets._default_cache_dir())
         thread = threading.Thread(
             target=_run_download_job,
-            args=(job_id, provider, dict(args), metadata_path),
+            args=(job_id, provider, thread_args, metadata_path, external_assets.capture_network_policy()),
             name=f"BlenderAgentBridgeAssetJob-{job_id}",
             daemon=True,
         )
@@ -1145,7 +1108,7 @@ def external_asset_job_status(job_id, *, context=None, preferred_dir=None, captu
             status = "cancelled" if effective_cancel_requested else "failed"
             latest["message"] = latest.get("message") or f"External asset worker exited with code {returncode}"
         elif stored_status in {"starting", "running", "cancelling"}:
-            if latest.get("pid") and render_jobs._pid_alive(latest.get("pid")):
+            if latest.get("pid") and job_runtime.pid_alive(latest.get("pid")):
                 status = "cancelling" if effective_cancel_requested else "running"
                 latest["message"] = latest.get("message") or "External asset worker still running (recovered across bridge session)"
             else:
@@ -1187,6 +1150,12 @@ def cancel_external_asset_job(
     remote_cancellation=None,
 ):
     metadata = external_asset_job_status(job_id, context=context, preferred_dir=preferred_dir, capture_dir=capture_dir)
+    return cancel_prepared_asset_job(metadata, remote_cancellation=remote_cancellation)
+
+
+def cancel_prepared_asset_job(metadata, *, remote_cancellation=None):
+    """Cancel a captured job without consulting Blender state or preferences."""
+    job_id = str(metadata.get("job_id") or "")
     if not metadata.get("available"):
         return {"ok": False, "message": metadata.get("message", "External asset job was not found"), "asset_job": metadata}
     status = str(metadata.get("status") or "")
@@ -1294,6 +1263,7 @@ def start_external_asset_import_job(
         "available": True,
         "status": "queued",
         "job_id": import_job_id,
+        "operation_id": job_runtime.current_operation_id(),
         "source_asset_job_id": source_job_id,
         "operation": "import_result",
         "created_at": time.time(),

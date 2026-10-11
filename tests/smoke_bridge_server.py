@@ -285,10 +285,16 @@ def main():
         assert invalid_args["result"]["ok"] is False, invalid_args
         assert "Invalid arguments" in invalid_args["result"]["message"], invalid_args
         assert any("job_id" in item for item in invalid_args["result"]["schema_errors"]), invalid_args
+        invalid_container = _request_with_pump(
+            lambda: _post(base + "/tool", {"name": "commit_preview", "arguments": []})
+        )
+        assert not invalid_container["ok"], invalid_container
+        assert "expected object" in invalid_container["result"]["schema_errors"][0], invalid_container
         unknown_name = "secret scene text must not persist"
         unknown_tool = _request_with_pump(
             lambda: _post(base + "/tool", {"name": unknown_name, "arguments": {}})
         )
+        assert unknown_tool.pop("operation_id"), unknown_tool
         assert unknown_tool == {
             "ok": False,
             "result": {
@@ -299,6 +305,40 @@ def main():
         }, unknown_tool
         assert unknown_name not in json.dumps(bridge_server._active_operation_status()), unknown_tool
         assert unknown_name not in json.dumps(bridge_server._last_operation_status()), unknown_tool
+        # Stable operation IDs deduplicate transport retries and recover results
+        # without waiting for the Blender timer.
+        from claude_blender import tool_dispatcher
+        original_list = tool_dispatcher.TOOL_FUNCTIONS["list_scene_objects"]
+        calls = []
+        def counted_list(context, arguments):
+            calls.append(1)
+            return original_list(context, arguments)
+        tool_dispatcher.TOOL_FUNCTIONS["list_scene_objects"] = counted_list
+        try:
+            payload = {"name": "list_scene_objects", "arguments": {}, "operation_id": "http-dedup-fixture"}
+            first = _request_with_pump(lambda: _post(base + "/tool", payload))
+            second = _request_with_pump(lambda: _post(base + "/tool", payload))
+            assert first == second and len(calls) == 1, (first, second, calls)
+            recovered = _get(base + "/operation?operation_id=http-dedup-fixture")
+            assert recovered["state"] == "completed" and recovered["result"]["ok"], recovered
+            original_timeout = bridge_server._tool_timeout_seconds
+            bridge_server._tool_timeout_seconds = lambda _name: 0.02
+            try:
+                expired = dict(payload, operation_id="http-expired-fixture")
+                try:
+                    _post(base + "/tool", expired)  # Deliberately do not pump.
+                    raise AssertionError("Expected timeout")
+                except urllib.error.HTTPError as error:
+                    assert error.code == 504
+                    failure = json.loads(error.read())
+                    assert not failure["result"]["request_may_still_be_running"], failure
+                bridge_server._process_requests()
+                assert len(calls) == 1, calls
+                assert _get(base + "/operation?operation_id=http-expired-fixture")["state"] == "expired"
+            finally:
+                bridge_server._tool_timeout_seconds = original_timeout
+        finally:
+            tool_dispatcher.TOOL_FUNCTIONS["list_scene_objects"] = original_list
         too_large_status, too_large_body = _post_declared_too_large(base + "/tool")
         assert too_large_status == 413, (too_large_status, too_large_body)
 

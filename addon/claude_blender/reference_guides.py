@@ -212,10 +212,10 @@ def _create_reference_plane(
     mesh.update()
     obj = bpy.data.objects.new(name, mesh)
     context.scene.collection.objects.link(obj)
-    live_preview._record_created_id("object", obj.name)
-    live_preview._record_created_id("mesh", mesh.name)
+    live_preview.record_created_id("object", obj.name)
+    live_preview.record_created_id("mesh", mesh.name)
     material = bpy.data.materials.new(f"{name} Material")
-    live_preview._record_created_id("material", material.name)
+    live_preview.record_created_id("material", material.name)
     material.diffuse_color = (1.0, 1.0, 1.0, max(0.0, min(1.0, float(alpha))))
     material.use_nodes = True
     material.blend_method = "BLEND"
@@ -223,7 +223,7 @@ def _create_reference_plane(
     nodes = material.node_tree.nodes
     bsdf = nodes.get("Principled BSDF")
     if image is not None and image_owned_by_preview:
-        live_preview._record_created_id("image", image.name)
+        live_preview.record_created_id("image", image.name)
     if bsdf:
         if "Alpha" in bsdf.inputs:
             bsdf.inputs["Alpha"].default_value = material.diffuse_color[3]
@@ -245,8 +245,8 @@ def _create_poly_curve_object(context, *, name, points, material, bevel_depth, c
     spline.use_cyclic_u = bool(cyclic)
     obj = bpy.data.objects.new(name, curve)
     context.scene.collection.objects.link(obj)
-    live_preview._record_created_id("object", obj.name)
-    live_preview._record_created_id("curve", curve.name)
+    live_preview.record_created_id("object", obj.name)
+    live_preview.record_created_id("curve", curve.name)
     if material:
         curve.materials.append(material)
     return obj
@@ -410,7 +410,7 @@ def create_reference_modeling_guides(
     transaction = live_preview.begin(label, context)
     collection = bpy.data.collections.new(_safe_label(collection_name, "Reference Modeling Guides"))
     context.scene.collection.children.link(collection)
-    live_preview._record_created_id("collection", collection.name)
+    live_preview.record_created_id("collection", collection.name)
     collection["reference_modeling_guides"] = True
     collection["reference_guide_subject"] = str(subject or "reference model")
     _set_json_prop(
@@ -484,7 +484,7 @@ def create_reference_modeling_guides(
         empty.empty_display_size = max(0.01, float(item.get("size", 0.045) or 0.045))
         empty.location = location
         context.scene.collection.objects.link(empty)
-        live_preview._record_created_id("object", empty.name)
+        live_preview.record_created_id("object", empty.name)
         move_to_collection(empty)
         normalized = normalize(point)
         empty["reference_landmark_name"] = name
@@ -641,7 +641,7 @@ def create_reference_modeling_guides(
     if not any([image_plane, created_landmarks, created_curves, created_masses, created_measurements]):
         created_collection_name = collection.name
         bpy.data.collections.remove(collection)
-        transaction["before_state"].pop(f"created:collection:{created_collection_name}", None)
+        live_preview.discard_snapshot(transaction, f"created:collection:{created_collection_name}")
         if created_collection_name in transaction.get("changed_data_blocks", []):
             transaction["changed_data_blocks"].remove(created_collection_name)
         if not had_pending_transaction:
@@ -674,7 +674,7 @@ def create_reference_modeling_guides(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Created reference modeling guides in {collection.name}",
@@ -726,10 +726,10 @@ def _create_reference_guide_camera(
     camera.location = location
     camera.rotation_euler = (target - location).to_track_quat("-Z", "Y").to_euler()
     collection.objects.link(camera)
-    live_preview._record_created_id("object", camera.name)
-    live_preview._record_created_id("camera", data.name)
+    live_preview.record_created_id("object", camera.name)
+    live_preview.record_created_id("camera", data.name)
     if activate_camera:
-        live_preview._record_scene_camera(context.scene)
+        live_preview.record_scene_camera(context.scene)
         context.scene.camera = camera
 
     camera["reference_guide_kind"] = "camera"
@@ -1011,7 +1011,7 @@ def create_reference_guides_from_annotations(
             }
         )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     result.update(
         {
             "message": (

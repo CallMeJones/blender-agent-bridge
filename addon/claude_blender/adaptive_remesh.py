@@ -180,7 +180,7 @@ def adaptive_remesh(
     bm = bmesh.new()
     pass_reports = []
     try:
-        live_preview._record_mesh_data_snapshot(obj)
+        live_preview.record_mesh_data_snapshot(obj)
         bm.from_mesh(obj.data)
         layers = _seed_region_layers(bm, obj, attribute_names)
         for pass_index in range(passes):
@@ -274,7 +274,7 @@ def adaptive_remesh(
         )
         transaction = live_preview.finish_isolated(operation)
         live_preview.redraw(context)
-        live_preview._mark_pending(context, label)
+        live_preview.mark_pending(context, label)
         return {
             "ok": True,
             "message": f"Adaptively refined {obj.name} from {before['vertices']} to {after['vertices']} vertices",

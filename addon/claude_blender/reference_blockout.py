@@ -237,13 +237,13 @@ def make_deformed_ellipsoid(
         rings=rings,
     )
     mesh = bpy.data.meshes.new(f"{name} Mesh")
-    live_preview._record_created_id("mesh", mesh.name)
+    live_preview.record_created_id("mesh", mesh.name)
     mesh.from_pydata(vertices, [], faces)
     mesh.update()
     for polygon in mesh.polygons:
         polygon.use_smooth = True
     obj = bpy.data.objects.new(name, mesh)
-    live_preview._record_created_id("object", obj.name)
+    live_preview.record_created_id("object", obj.name)
     (collection or context.collection or context.scene.collection).objects.link(
         obj
     )
@@ -286,13 +286,13 @@ def blend_soft_forms(
     obj = None
     try:
         mesh = bpy.data.meshes.new(f"{name} Mesh")
-        live_preview._record_created_id("mesh", mesh.name)
+        live_preview.record_created_id("mesh", mesh.name)
         mesh.from_pydata(vertices, [], faces)
         mesh.update()
         for polygon in mesh.polygons:
             polygon.use_smooth = True
         obj = bpy.data.objects.new(name, mesh)
-        live_preview._record_created_id("object", obj.name)
+        live_preview.record_created_id("object", obj.name)
         (
             collection or context.collection or context.scene.collection
         ).objects.link(obj)
@@ -505,7 +505,7 @@ def create_reference_blockout(
         )
         transaction = live_preview.finish_isolated(operation)
         live_preview.redraw(context)
-        live_preview._mark_pending(context, label)
+        live_preview.mark_pending(context, label)
         return {
             "ok": True,
             "message": (

@@ -549,13 +549,13 @@ def main():
         assert live_preview.current_transaction() is None, blocked_shape_key_edit
 
         cube_topology_before_failed_snapshot = (len(cube.data.vertices), len(cube.data.edges), len(cube.data.polygons))
-        original_record_mesh_data_snapshot = live_preview._record_mesh_data_snapshot
+        original_record_mesh_data_snapshot = live_preview.record_mesh_data_snapshot
 
         def _fail_record_mesh_data_snapshot(obj):
             raise RuntimeError("forced mesh snapshot failure")
 
         try:
-            live_preview._record_mesh_data_snapshot = _fail_record_mesh_data_snapshot
+            live_preview.record_mesh_data_snapshot = _fail_record_mesh_data_snapshot
             failed_mesh_edit = json.loads(
                 tool_dispatcher.execute_tool(
                     context,
@@ -572,7 +572,7 @@ def main():
                 )
             )
         finally:
-            live_preview._record_mesh_data_snapshot = original_record_mesh_data_snapshot
+            live_preview.record_mesh_data_snapshot = original_record_mesh_data_snapshot
         assert failed_mesh_edit["ok"] is False, failed_mesh_edit
         assert failed_mesh_edit["objects"] == [], failed_mesh_edit
         assert "forced mesh snapshot failure" in failed_mesh_edit["skipped"][0]["reason"], failed_mesh_edit
@@ -580,13 +580,13 @@ def main():
         transaction = live_preview.current_transaction()
         assert transaction is None or transaction.get("status") != "pending", transaction
 
-        original_record_created_id = live_preview._record_created_id
+        original_record_created_id = live_preview.record_created_id
 
         def _fail_record_created_id(kind, name):
             raise RuntimeError("forced recorder failure")
 
         try:
-            live_preview._record_created_id = _fail_record_created_id
+            live_preview.record_created_id = _fail_record_created_id
             failed_curve = json.loads(
                 tool_dispatcher.execute_tool(
                     context,
@@ -595,7 +595,7 @@ def main():
                 )
             )
         finally:
-            live_preview._record_created_id = original_record_created_id
+            live_preview.record_created_id = original_record_created_id
         assert failed_curve["ok"] is False, failed_curve
         assert not any(obj.name.startswith("Agent Bridge Failed Convert ") for obj in bpy.data.objects), failed_curve
         assert not any(mesh.name.startswith("Agent Bridge Failed Convert ") for mesh in bpy.data.meshes), failed_curve
@@ -611,7 +611,7 @@ def main():
             return original_record_created_id(kind, name)
 
         try:
-            live_preview._record_created_id = _fail_second_record_created_id
+            live_preview.record_created_id = _fail_second_record_created_id
             failed_second_record_curve = json.loads(
                 tool_dispatcher.execute_tool(
                     context,
@@ -620,7 +620,7 @@ def main():
                 )
             )
         finally:
-            live_preview._record_created_id = original_record_created_id
+            live_preview.record_created_id = original_record_created_id
         assert failed_second_record_curve["ok"] is False, failed_second_record_curve
         assert not any(obj.name.startswith("Agent Bridge Half Recorded ") for obj in bpy.data.objects), failed_second_record_curve
         assert not any(mesh.name.startswith("Agent Bridge Half Recorded ") for mesh in bpy.data.meshes), failed_second_record_curve

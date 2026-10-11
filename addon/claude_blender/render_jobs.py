@@ -13,6 +13,8 @@ import uuid
 
 import bpy
 
+from . import job_runtime, process_utils
+
 from . import viewport_capture
 
 
@@ -49,51 +51,10 @@ PREVIEW_INTENT_TERMS = {
 _PROCESSES = {}
 
 
-def _child_env():
-    """Environment for background Blender child processes with bridge secrets removed."""
-    env = dict(os.environ)
-    for key in ("BLENDER_BRIDGE_TOKEN", "BLENDER_BRIDGE_URL"):
-        env.pop(key, None)
-    return env
+_child_env = job_runtime.child_environment
 
 
-def _pid_alive(pid):
-    """Best-effort cross-platform check that a process id is still running."""
-    try:
-        pid = int(pid)
-    except (TypeError, ValueError):
-        return False
-    if pid <= 0:
-        return False
-    if os.name == "nt":
-        try:
-            import ctypes
-            from ctypes import wintypes
-
-            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-            STILL_ACTIVE = 259
-            kernel32 = ctypes.windll.kernel32
-            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
-            if not handle:
-                return False
-            try:
-                exit_code = wintypes.DWORD()
-                if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
-                    return False
-                return exit_code.value == STILL_ACTIVE
-            finally:
-                kernel32.CloseHandle(handle)
-        except Exception:
-            return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False
-    return True
+_pid_alive = job_runtime.pid_alive
 
 
 def _safe_id(value, fallback="render-job"):
@@ -155,12 +116,7 @@ def _child_status_path(job_dir):
     return os.path.join(job_dir, CHILD_STATUS_FILENAME)
 
 
-def _write_json(path, payload):
-    temp_path = f"{path}.tmp"
-    with open(temp_path, "w", encoding="utf-8", newline="\n") as handle:
-        json.dump(payload, handle, indent=2, sort_keys=True)
-    os.replace(temp_path, path)
-    return path
+_write_json = job_runtime.write_json
 
 
 def _read_json(path):
@@ -619,6 +575,7 @@ def start_render_job(
         "available": True,
         "status": "starting",
         "job_id": render_job_id,
+        "operation_id": job_runtime.current_operation_id(),
         "job_name": str(job_name or "")[:120],
         "note": str(note or "")[:1000],
         "created_at": time.time(),
@@ -704,14 +661,13 @@ def start_render_job(
             handle.write(_child_script_text(config))
         command = [blender_binary, "--background", "--factory-startup", blend_path, "--python", script_path]
         log_handle = open(log_path, "w", encoding="utf-8", newline="\n")
-        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         process = subprocess.Popen(
             command,
             cwd=job_dir,
             stdout=log_handle,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
-            creationflags=creationflags,
+            **process_utils.process_group_kwargs(),
             env=_child_env(),
         )
         log_handle.close()
@@ -785,13 +741,13 @@ def render_job_status(job_id, *, context=None, preferred_dir=None, capture_dir=N
     message = str(metadata.get("message") or "")
     process_running = process is not None and returncode is None
 
-    if child_status:
+    if child_status and status != "cancelled":
         status = str(child_status.get("status") or status)
         message = str(child_status.get("message") or message)
         for key in ("render_phase", "video_path", "video_size_bytes"):
             if key in child_status:
                 metadata[key] = child_status[key]
-    if process_running:
+    if process_running and status != "cancelled":
         status = "running"
     elif returncode == 0 and status not in {"completed", "failed", "cancelled"}:
         status = "completed"
@@ -1010,14 +966,13 @@ def assemble_render_job_video(
             handle.write(_assembly_script_text(config))
         command = [blender_binary, "--background", "--factory-startup", "--python", script_path]
         log_handle = open(log_path, "w", encoding="utf-8", newline="\n")
-        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         process = subprocess.Popen(
             command,
             cwd=job_dir,
             stdout=log_handle,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
-            creationflags=creationflags,
+            **process_utils.process_group_kwargs(),
             env=_child_env(),
         )
         log_handle.close()
@@ -1093,12 +1048,11 @@ def cancel_render_job(job_id, *, context=None, preferred_dir=None, capture_dir=N
         return {"ok": False, "message": "Render job process is not tracked by this Blender bridge session", "render_job": metadata}
     if process.poll() is not None:
         return {"ok": True, "message": "Render job is already stopped", "render_job": metadata}
-    process.terminate()
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        process.kill()
-    metadata.update({"status": "cancelled", "completed_at": time.time(), "message": "Render job cancelled"})
+    returncode = process_utils.terminate_process_tree(process)
+    if returncode is None:
+        return {"ok": False, "message": "Render process has not stopped; poll its status", "render_job": metadata}
+    _PROCESSES.pop(job_id, None)
+    metadata.update({"status": "cancelled", "returncode": returncode, "completed_at": time.time(), "message": "Render job cancelled"})
     _write_json(metadata["metadata_path"], metadata)
     return {"ok": True, "message": "Render job cancelled", "render_job": metadata}
 
@@ -1205,7 +1159,7 @@ def unregister():
     for process in list(_PROCESSES.values()):
         if process.poll() is None:
             try:
-                process.terminate()
+                process_utils.terminate_process_tree(process)
             except Exception:
                 pass
     _PROCESSES.clear()

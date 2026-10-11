@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
 import os
-import queue
 import threading
 import time
 import urllib.parse
@@ -22,8 +22,10 @@ from . import (
     build_info,
     context_bundle,
     execution_traces,
+    execution_lanes,
     inspection_render,
     lab_parity,
+    operation_queue,
     playblast_capture,
     preferences,
     quality_benchmarks,
@@ -68,7 +70,7 @@ class _RequestTooLarge(Exception):
 
 _server = None
 _thread = None
-_requests = queue.Queue()
+_requests = operation_queue.OperationQueue()
 _timer_registered = False
 _lock = threading.Lock()
 _operation_lock = threading.Lock()
@@ -182,7 +184,8 @@ def _operation_snapshot(operation):
         "elapsed_seconds": int(round(elapsed)),
         "timeout_seconds": timeout_seconds,
         "request_may_still_be_running": bool(operation.get("request_may_still_be_running", True)),
-        "result_may_be_lost_after_client_timeout": True,
+        "result_may_be_lost_after_client_timeout": not bool(operation.get("operation_id")),
+        "operation_id": str(operation.get("operation_id") or ""),
         "duration_hint": str(operation.get("duration_hint") or ""),
         "recovery": dict(operation.get("recovery") or {}),
     }
@@ -206,13 +209,14 @@ def _last_operation_status():
         return _operation_snapshot(dict(_last_operation))
 
 
-def _begin_active_operation(name, args, timeout_seconds):
+def _begin_active_operation(name, args, timeout_seconds, operation_id=""):
     global _active_operation
     try:
         contract = bridge_protocol.normalized_tool_contract(str(name or ""))
     except Exception:
         contract = {}
     operation = {
+        "operation_id": operation_id,
         "tool": str(name or ""),
         "started_at": time.time(),
         "started_monotonic": time.monotonic(),
@@ -752,7 +756,7 @@ def _execute_tool(payload):
     args = payload.get("arguments")
     if args is None:
         args = payload.get("input")
-    if not isinstance(args, dict):
+    if args is None:
         args = {}
     if name not in bridge_protocol.TOOL_CONTRACTS:
         return {
@@ -778,47 +782,59 @@ def _execute_tool(payload):
                     "schema_errors": schema_errors[:32],
                 },
             }
-    ok = False
-    result = {}
     started_at = time.perf_counter()
-    _begin_active_operation(name, args, _tool_timeout_seconds(name))
+    plan = execution_lanes.prepare(bpy.context, name, args)
+    if plan is not None:
+        return operation_queue.DeferredCall(
+            plan.work,
+            lambda value: _complete_tool(payload, args, plan.finish(value), started_at),
+        )
+    _begin_active_operation(name, args, _tool_timeout_seconds(name), payload.get("operation_id", ""))
+    response = {}
     try:
         result_text = tool_dispatcher.execute_tool(bpy.context, name, args)
         try:
             result = json.loads(result_text)
         except json.JSONDecodeError:
             result = {"ok": True, "text": result_text}
-        result = response_controls.apply_response_controls(name, args, result)
-        ok = bool(result.get("ok", True))
-        try:
-            contract = bridge_protocol.normalized_tool_contract(name)
-            audit_log.append_event(
-                "bridge_tool_call",
-                source="bridge",
-                tool_name=name,
-                ok=ok,
-                risk_level=contract.get("risk_level", ""),
-                mutates_scene=bool(contract.get("mutates_scene", False)),
-                requires_approval=bool(contract.get("requires_approval", False)),
-                arguments=audit_log.summarize_arguments(args),
-            )
-        except Exception:
-            pass
-        try:
-            execution_traces.record_tool_call(
-                layer="bridge",
-                tool_name=name,
-                arguments=args,
-                result=result,
-                duration_ms=(time.perf_counter() - started_at) * 1000.0,
-                contract=bridge_protocol.normalized_tool_contract(name),
-            )
-        except Exception:
-            pass
-        return {"ok": ok, "result": result}
+        response = _complete_tool(payload, args, result, started_at)
+        return response
     finally:
-        message = result.get("message", "") if isinstance(result, dict) else ""
-        _finish_active_operation(name, ok=ok, message=message)
+        result = response.get("result", {})
+        _finish_active_operation(name, ok=response.get("ok", False), message=result.get("message", ""))
+
+
+def _complete_tool(payload, args, result, started_at):
+    name = str(payload.get("name") or "")
+    result = response_controls.apply_response_controls(name, args, result)
+    ok = bool(result.get("ok", True))
+    try:
+        contract = bridge_protocol.normalized_tool_contract(name)
+        audit_log.append_event(
+            "bridge_tool_call",
+            source="bridge",
+            tool_name=name,
+            ok=ok,
+            risk_level=contract.get("risk_level", ""),
+            mutates_scene=bool(contract.get("mutates_scene", False)),
+            requires_approval=bool(contract.get("requires_approval", False)),
+            arguments=audit_log.summarize_arguments(args),
+        )
+    except Exception:
+        pass
+    try:
+        execution_traces.record_tool_call(
+            layer="bridge",
+            operation_id=payload.get("operation_id", ""),
+            tool_name=name,
+            arguments=args,
+            result=result,
+            duration_ms=(time.perf_counter() - started_at) * 1000.0,
+            contract=bridge_protocol.normalized_tool_contract(name),
+        )
+    except Exception:
+        pass
+    return {"ok": ok, "result": result}
 
 
 def _tool_timeout_seconds(name):
@@ -830,7 +846,8 @@ def _tool_timeout_seconds(name):
     return max(REQUEST_TIMEOUT_SECONDS, timeout + REQUEST_TIMEOUT_GRACE_SECONDS)
 
 
-def _timeout_payload(name, timeout):
+def _timeout_payload(name, timeout, operation_id=""):
+    operation = _requests.status(operation_id) if operation_id else None
     name = str(name or "")
     render_like = any(term in name for term in ("render", "playblast", "thumbnail"))
     active = _active_operation_status()
@@ -842,15 +859,18 @@ def _timeout_payload(name, timeout):
             "ok": False,
             "code": "bridge_main_thread_timeout",
             "message": (
+                "Operation expired or was cancelled before execution; no queued scene work will run. "
+                if operation and operation["state"] in {"expired", "cancelled"} else
                 f"Blender did not finish tool '{name or '(unknown)'}' within {int(timeout)}s. "
-                "The operation may still be running on Blender's main thread; wait for Blender to become responsive, "
-                "then call blender_bridge_status or get_visual_evidence_resources. For long renders/playblasts, "
-                "use start_render_job and poll get_render_job_status instead of blocking preview/render tools."
+                "Query blender_bridge_status with operation_id to recover its retained state and result. "
+                "Do not resubmit an ambiguous mutation with a new ID."
             ),
             "tool": name,
             "timeout_seconds": int(timeout),
-            "request_may_still_be_running": True,
-            "result_may_be_lost_after_client_timeout": True,
+            "request_may_still_be_running": operation is None or operation["state"] == "running",
+            "result_may_be_lost_after_client_timeout": operation is None,
+            "operation_id": operation_id,
+            "operation": operation,
             "recoverable": True,
             "poll_after_seconds": int(recovery.get("poll_after_seconds") or 5),
             "status_tool": str(recovery.get("status_tool") or "blender_bridge_status"),
@@ -863,30 +883,14 @@ def _timeout_payload(name, timeout):
     }
 
 
-def _call_on_main(fn, timeout=REQUEST_TIMEOUT_SECONDS):
-    event = threading.Event()
-    request = {"fn": fn, "event": event, "result": None, "error": None}
-    _requests.put(request)
-    if not event.wait(timeout=float(timeout)):
-        raise TimeoutError("Timed out waiting for Blender main thread")
-    if request["error"] is not None:
-        raise request["error"]
-    return request["result"]
+def _call_on_main(fn, timeout=REQUEST_TIMEOUT_SECONDS, *, operation_id=None, signature=""):
+    request = _requests.submit(fn, timeout, operation_id=operation_id, signature=signature)
+    return _requests.wait(request, timeout)
 
 
 def _process_requests():
     global _timer_registered
-    while True:
-        try:
-            request = _requests.get_nowait()
-        except queue.Empty:
-            break
-        try:
-            request["result"] = request["fn"]()
-        except Exception as exc:
-            request["error"] = exc
-        finally:
-            request["event"].set()
+    _requests.pump()
     if is_running() or not _requests.empty():
         return 0.05
     _timer_registered = False
@@ -1019,6 +1023,12 @@ class _BridgeHandler(BaseHTTPRequestHandler):
                                 "A render, playblast, script, or manual Blender operation may still be running."
                             ),
                         )
+            elif parsed.path == "/operation":
+                operation = _requests.status((query.get("operation_id") or [""])[0])
+                if operation is None:
+                    self._send_error(404, "Operation not retained; do not automatically retry an ambiguous mutation")
+                else:
+                    self._send(200, {"ok": True, **operation})
             elif parsed.path == "/tools":
                 self._send(200, {"ok": True, "tools": _tool_definitions()})
             elif parsed.path == "/contracts":
@@ -1051,10 +1061,15 @@ class _BridgeHandler(BaseHTTPRequestHandler):
             if parsed.path == "/tool":
                 tool_name = str(payload.get("name") or "") if isinstance(payload, dict) else ""
                 timeout = _tool_timeout_seconds(tool_name)
-                self._send(200, _call_on_main(lambda: _execute_tool(payload), timeout=timeout))
+                operation_id = payload.get("operation_id")
+                signature = hashlib.sha256(_json_bytes({"name": tool_name, "arguments": payload.get("arguments", payload.get("input", {}))})).hexdigest()
+                request = _requests.submit(lambda: _execute_tool(payload), timeout, operation_id=operation_id, signature=signature)
+                payload["operation_id"] = request.operation_id
+                result = _requests.wait(request, timeout)
+                self._send(200, {**result, "operation_id": request.operation_id})
             else:
                 self._send_error(404, f"Unknown endpoint: {parsed.path}")
-        except TimeoutError:
+        except operation_queue.OperationTimeout as exc:
             tool_name = str(payload.get("name") or "") if isinstance(payload, dict) else ""
             try:
                 audit_log.append_event(
@@ -1067,11 +1082,15 @@ class _BridgeHandler(BaseHTTPRequestHandler):
                 )
             except Exception:
                 pass
-            self._send(504, _timeout_payload(tool_name, _tool_timeout_seconds(tool_name)))
+            self._send(504, _timeout_payload(tool_name, _tool_timeout_seconds(tool_name), exc.operation_id))
+        except operation_queue.AdmissionError as exc:
+            self._send_error(503, str(exc))
         except _RequestTooLarge as exc:
             self._send_error(413, str(exc))
         except json.JSONDecodeError as exc:
             self._send_error(400, f"Invalid JSON: {exc}")
+        except ValueError as exc:
+            self._send_error(400, str(exc))
         except Exception as exc:
             self._send_error(500, f"{type(exc).__name__}: {exc}")
 
@@ -1098,6 +1117,7 @@ def start_bridge(*, host=DEFAULT_HOST, port=DEFAULT_PORT, auth_token=""):
         server = ThreadingHTTPServer((DEFAULT_HOST, int(port)), _BridgeHandler)
         server.auth_token = str(auth_token or "")
         thread = threading.Thread(target=server.serve_forever, name="BlenderAgentBridge", daemon=True)
+        _requests.open()
         thread.start()
         _server = server
         _thread = thread
@@ -1113,6 +1133,7 @@ def stop_bridge():
         thread = _thread
         _server = None
         _thread = None
+        _requests.close()
     if server:
         server.shutdown()
         server.server_close()

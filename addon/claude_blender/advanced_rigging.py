@@ -27,17 +27,17 @@ from .advanced_support import (
 
 
 def _prepare_id_action_for_edit(data_block, collection_name):
-    live_preview._record_id_animation(data_block, collection_name)
+    live_preview.record_id_animation(data_block, collection_name)
     action = data_block.animation_data.action if data_block.animation_data and data_block.animation_data.action else None
     if action:
         transaction = live_preview.current_transaction()
-        if not (transaction and f"created:action:{action.name}" in transaction.get("before_state", {})):
-            live_preview._record_action_edit(action)
+        if not (transaction and live_preview.has_snapshot(transaction, f"created:action:{action.name}")):
+            live_preview.record_action_edit(action)
         return action, False
     animation_data = data_block.animation_data_create()
     action = bpy.data.actions.new(f"{data_block.name} Agent Bridge Property Preview Action")
     animation_data.action = action
-    live_preview._record_created_id("action", action.name)
+    live_preview.record_created_id("action", action.name)
     return action, True
 
 RIG_POSE_PATHS = ("location", "rotation_euler", "rotation_quaternion", "rotation_axis_angle", "scale")
@@ -84,7 +84,7 @@ def _action_frame_range(action):
     frames = sorted(
         {
             float(point.co.x)
-            for fcurve in (live_preview._iter_action_fcurves(action) if action else [])
+            for fcurve in (live_preview.iter_action_fcurves(action) if action else [])
             for point in getattr(fcurve, "keyframe_points", [])
         }
     )
@@ -118,7 +118,7 @@ def _pose_action_channels(action, armature, *, bone_names=None, paths=None):
     requested_paths = {path for path in requested_paths if path in RIG_POSE_PATHS}
     channels = {}
     bones_seen = set()
-    for fcurve in live_preview._iter_action_fcurves(action):
+    for fcurve in live_preview.iter_action_fcurves(action):
         bone_name, path = _parse_pose_bone_data_path(fcurve.data_path)
         if not bone_name or path not in RIG_POSE_PATHS:
             continue
@@ -288,10 +288,10 @@ def _resolve_pose_marker_source_action(armature, *, action_name="", pose_marker=
 def _prepare_rig_application_action(armature, source_action=None):
     current_action = armature.animation_data.action if armature.animation_data and armature.animation_data.action else None
     if source_action is not None and current_action == source_action:
-        live_preview._record_object_animation(armature)
+        live_preview.record_object_animation(armature)
         action = bpy.data.actions.new(name=f"{armature.name} Agent Bridge Rig Pose Preview Action")
         armature.animation_data_create().action = action
-        live_preview._record_created_id("action", action.name)
+        live_preview.record_created_id("action", action.name)
         return action, True
     return _prepare_transform_action_for_edit(armature)
 
@@ -371,14 +371,14 @@ def set_rig_pose_hold(
 
     transaction = live_preview.begin(label, context)
     scene = context.scene
-    live_preview._record_scene_timeline(scene)
+    live_preview.record_scene_timeline(scene)
     scene.frame_start = min(scene.frame_start, frame)
     scene.frame_end = max(scene.frame_end, hold_frame)
     scene.frame_set(frame)
     action, created_action = _prepare_transform_action_for_edit(armature)
     keyed = []
     for pose_bone in pose_bones:
-        live_preview._record_pose_bone_transform(armature, pose_bone)
+        live_preview.record_pose_bone_transform(armature, pose_bone)
         keyed_paths = []
         values_by_path = {}
         active_paths = _normalize_rig_pose_paths(paths, pose_bone=pose_bone)
@@ -415,7 +415,7 @@ def set_rig_pose_hold(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Set {hold_frames}-frame rig hold from frame {frame} for {len(keyed)} control bone(s)",
@@ -528,13 +528,13 @@ def set_rig_custom_property_keyframes(
     keyed = []
     actions = set()
     scene = context.scene
-    live_preview._record_scene_timeline(scene)
+    live_preview.record_scene_timeline(scene)
     scene.frame_start = min(scene.frame_start, frame)
     scene.frame_end = max(scene.frame_end, hold_frame)
     scene.frame_set(frame)
 
     for owner, owner_type, owner_name, property_name, value in prepared:
-        live_preview._record_id_property(
+        live_preview.record_id_property(
             owner_type,
             owner_name,
             property_name,
@@ -579,7 +579,7 @@ def set_rig_custom_property_keyframes(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Keyed {len(keyed)} rig custom propert{'y' if len(keyed) == 1 else 'ies'}",
@@ -634,7 +634,7 @@ def apply_rig_pose_from_action(
 
     transaction = live_preview.begin(label, context)
     scene = context.scene
-    live_preview._record_scene_timeline(scene)
+    live_preview.record_scene_timeline(scene)
     if key_pose:
         scene.frame_start = min(scene.frame_start, target_frame)
         scene.frame_end = max(scene.frame_end, hold_frame)
@@ -649,7 +649,7 @@ def apply_rig_pose_from_action(
         pose_bone = armature.pose.bones.get(bone_name)
         if not pose_bone:
             continue
-        live_preview._record_pose_bone_transform(armature, pose_bone)
+        live_preview.record_pose_bone_transform(armature, pose_bone)
         keyed_paths = []
         values_by_path = {}
         paths_for_bone = sorted(path for (candidate_bone, path) in channels if candidate_bone == bone_name)
@@ -692,7 +692,7 @@ def apply_rig_pose_from_action(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Applied rig pose from action {action.name} to {len(applied)} bone(s)",
@@ -790,12 +790,12 @@ def apply_rig_action_clip(
 
     transaction = live_preview.begin(label, context)
     scene = context.scene
-    live_preview._record_scene_timeline(scene)
-    live_preview._record_object_animation(armature)
+    live_preview.record_scene_timeline(scene)
+    live_preview.record_object_animation(armature)
     applied_action = source_action.copy()
     applied_action.name = f"{armature.name} {source_action.name} Applied Preview"
-    live_preview._record_created_id("action", applied_action.name)
-    for fcurve in live_preview._iter_action_fcurves(applied_action):
+    live_preview.record_created_id("action", applied_action.name)
+    for fcurve in live_preview.iter_action_fcurves(applied_action):
         for point in getattr(fcurve, "keyframe_points", []):
             for attr in ("co", "handle_left", "handle_right"):
                 vec = getattr(point, attr)
@@ -819,7 +819,7 @@ def apply_rig_action_clip(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Applied action clip {source_action.name} to {armature.name}",
@@ -881,7 +881,7 @@ def offset_rig_limb_controls(
     hold_frame = frame + hold_frames
     transaction = live_preview.begin(label, context)
     scene = context.scene
-    live_preview._record_scene_timeline(scene)
+    live_preview.record_scene_timeline(scene)
     scene.frame_start = min(scene.frame_start, frame)
     scene.frame_end = max(scene.frame_end, hold_frame)
     property_result = {}
@@ -906,7 +906,7 @@ def offset_rig_limb_controls(
         if not pose_bone:
             missing.append(bone_name)
             continue
-        live_preview._record_pose_bone_transform(armature, pose_bone)
+        live_preview.record_pose_bone_transform(armature, pose_bone)
         if action is None:
             action, created_action = _prepare_transform_action_for_edit(armature)
         keyed_paths = []
@@ -970,7 +970,7 @@ def offset_rig_limb_controls(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     ok = bool(applied or property_result.get("ok"))
     return {
         "ok": ok,
@@ -1005,10 +1005,10 @@ def add_particle_system_to_selected(
     changed = []
     for obj in selected:
         modifier = obj.modifiers.new(name or "Agent Bridge Particles", "PARTICLE_SYSTEM")
-        live_preview._record_created_modifier(obj, modifier)
+        live_preview.record_created_modifier(obj, modifier)
         settings = modifier.particle_system.settings
         settings.name = f"{modifier.name} Settings"
-        live_preview._record_created_id("particle_settings", settings.name)
+        live_preview.record_created_id("particle_settings", settings.name)
         settings.count = max(1, min(20000, int(count)))
         settings.frame_start = float(frame_start)
         settings.frame_end = float(frame_end)
@@ -1017,7 +1017,7 @@ def add_particle_system_to_selected(
         changed.append(obj.name)
     transaction["applied_steps"].append({"type": "add_particle_system", "label": label, "objects": changed})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Added particle system to {len(changed)} mesh object(s)",
@@ -1518,8 +1518,8 @@ def create_directional_fur_curves(
             context.scene.collection.objects.link(curve_obj)
             curve_obj.parent = obj
             curve_obj.matrix_parent_inverse = obj.matrix_world.inverted_safe()
-            live_preview._record_created_id("object", curve_obj.name)
-            live_preview._record_created_id("curve", curve.name)
+            live_preview.record_created_id("object", curve_obj.name)
+            live_preview.record_created_id("curve", curve.name)
             curve_obj["agent_bridge_fur_source_object"] = obj.name
             curve_obj["agent_bridge_fur_flow_direction"] = [
                 float(value)
@@ -1572,7 +1572,7 @@ def create_directional_fur_curves(
     transaction["applied_steps"].append({"type": "create_directional_fur_curves", "label": label, "created": created})
     transaction = live_preview.finish_isolated(operation)
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Created directional fur curve guides for {len(created)} mesh object(s)",
@@ -1600,11 +1600,11 @@ def create_basic_armature(
     obj.name = name or "Agent Bridge Armature"
     obj.data.name = f"{obj.name} Data"
     obj.show_in_front = bool(show_in_front)
-    live_preview._record_created_id("object", obj.name)
-    live_preview._record_created_id("armature", obj.data.name)
+    live_preview.record_created_id("object", obj.name)
+    live_preview.record_created_id("armature", obj.data.name)
     transaction["applied_steps"].append({"type": "create_basic_armature", "label": label, "object": obj.name})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {"ok": True, "message": f"Created armature {obj.name}", "object": obj.name, "transaction_id": transaction["id"]}
 
 def add_copy_transform_constraint(
@@ -1632,13 +1632,13 @@ def add_copy_transform_constraint(
         constraint.name = name or f"Agent Bridge {constraint_type.title()}"
         constraint.target = target
         constraint.influence = max(0.0, min(1.0, float(influence)))
-        live_preview._record_created_constraint(obj, constraint)
+        live_preview.record_created_constraint(obj, constraint)
         changed.append(obj.name)
     transaction["applied_steps"].append(
         {"type": "add_copy_transform_constraint", "label": label, "target": target.name, "objects": changed}
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {"ok": True, "message": f"Added {constraint_type} constraint to {len(changed)} object(s)", "transaction_id": transaction["id"]}
 
 def add_cloth_simulation_to_selected(
@@ -1668,7 +1668,7 @@ def add_cloth_simulation_to_selected(
     changed = []
     for obj in meshes:
         modifier = obj.modifiers.new(name or "Agent Bridge Cloth", "CLOTH")
-        live_preview._record_created_modifier(obj, modifier)
+        live_preview.record_created_modifier(obj, modifier)
         settings = modifier.settings
         set_if_present(settings, "quality", max(1, min(30, int(quality or 1))))
         set_if_present(settings, "mass", max(0.001, min(1000.0, float(mass or 0.001))))
@@ -1679,7 +1679,7 @@ def add_cloth_simulation_to_selected(
         changed.append({"object": obj.name, "modifier": modifier.name})
     transaction["applied_steps"].append({"type": "add_cloth_simulation_to_selected", "label": label, "objects": changed})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": f"Added cloth simulation to {len(changed)} mesh object(s)",

@@ -498,7 +498,7 @@ def _action_for_object(obj):
 
 
 def _iter_fcurves(action):
-    return live_preview._iter_action_fcurves(action) if action else []
+    return live_preview.iter_action_fcurves(action) if action else []
 
 
 def _find_fcurve(action, data_path, index):

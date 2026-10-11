@@ -194,8 +194,8 @@ def _apply_part_weight_vertex_groups(
     warnings = []
     group_names = _unique_group_names(parts, name_prefix)
     for obj in meshes:
-        live_preview._record_object_vertex_groups(obj)
-        live_preview._record_id_property(
+        live_preview.record_object_vertex_groups(obj)
+        live_preview.record_id_property(
             "object",
             obj.name,
             PART_VERTEX_GROUPS_METADATA_PROP,
@@ -353,7 +353,7 @@ def create_part_weight_vertex_groups(
         )
         transaction = live_preview.finish_isolated(operation)
         live_preview.redraw(context)
-        live_preview._mark_pending(context, label)
+        live_preview.mark_pending(context, label)
         result.update(
             {
                 "part_graph_collection": collection.name,
@@ -508,7 +508,7 @@ def create_fur_flow_field_from_parts(
     if vertex_group_operation is not None:
         transaction = live_preview.finish_isolated(vertex_group_operation)
         live_preview.redraw(context)
-        live_preview._mark_pending(context, label)
+        live_preview.mark_pending(context, label)
         result["transaction_id"] = transaction["id"]
     return result
 

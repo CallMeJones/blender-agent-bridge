@@ -97,63 +97,13 @@ RENDER_PASS_ALIASES = {
 
 AOV_TYPES = {"COLOR", "VALUE"}
 
-def _view_layer_render_state(view_layer):
-    pass_flags = {}
-    rna = getattr(view_layer, "bl_rna", None)
-    if view_layer is not None and rna is not None:
-        for prop in rna.properties:
-            identifier = getattr(prop, "identifier", "")
-            if identifier.startswith("use_pass_") or identifier in {"pass_alpha_threshold", "pass_cryptomatte_depth"}:
-                try:
-                    value = getattr(view_layer, identifier)
-                except Exception:
-                    continue
-                if isinstance(value, bool):
-                    pass_flags[identifier] = bool(value)
-                elif isinstance(value, (int, float)):
-                    pass_flags[identifier] = value
-    aovs = []
-    for aov in list(getattr(view_layer, "aovs", []) or []):
-        aovs.append({"name": str(getattr(aov, "name", "")), "type": str(getattr(aov, "type", "COLOR"))})
-    return {"pass_flags": pass_flags, "aovs": aovs}
+from .preview_snapshots import _view_layer_render_state
 
-def _record_view_layer_render_outputs(scene, view_layer):
-    transaction = live_preview.begin()
-    key = f"scene:{scene.name}:view_layer:{view_layer.name}:render_outputs"
-    if key in transaction["before_state"]:
-        return
-    state = _view_layer_render_state(view_layer)
-    transaction["before_state"][key] = {
-        "kind": "view_layer_render_outputs",
-        "scene_name": scene.name,
-        "view_layer_name": view_layer.name,
-        "pass_flags": state["pass_flags"],
-        "aovs": state["aovs"],
-    }
-    transaction["changed_data_blocks"].append(f"{scene.name}:{view_layer.name}")
+from .live_preview import record_view_layer_render_outputs as _record_view_layer_render_outputs
 
-def _record_world_background(world):
-    transaction = live_preview.begin()
-    key = f"world:{world.name}:background"
-    if key in transaction["before_state"]:
-        return
-    transaction["before_state"][key] = {
-        "kind": "world_background",
-        "world_name": world.name,
-        "color": tuple(float(component) for component in world.color),
-    }
-    transaction["changed_data_blocks"].append(world.name)
+from .live_preview import record_world_background as _record_world_background
 
-def _record_scene_world(scene):
-    transaction = live_preview.begin()
-    key = f"scene:{scene.name}:world"
-    if key in transaction["before_state"]:
-        return
-    transaction["before_state"][key] = {
-        "kind": "scene_world",
-        "scene_name": scene.name,
-        "world_name": scene.world.name if scene.world else None,
-    }
+from .live_preview import record_scene_world as _record_scene_world
 
 def _valid_render_engines(scene):
     """Available render engine identifiers, or empty set when introspection fails."""
@@ -310,7 +260,7 @@ def set_render_settings(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": "Updated render settings",
@@ -472,7 +422,7 @@ def configure_render_outputs(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": True,
         "message": "Configured render outputs",
@@ -517,7 +467,7 @@ def set_camera_settings(
         data.dof.aperture_fstop = max(0.1, min(128.0, float(aperture_fstop)))
     transaction["applied_steps"].append({"type": "set_camera_settings", "label": label, "camera": camera.name})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {"ok": True, "message": f"Updated camera settings for {camera.name}", "camera": camera.name, "transaction_id": transaction["id"]}
 
 def set_world_background(context, *, color, label="Set world background"):
@@ -525,7 +475,7 @@ def set_world_background(context, *, color, label="Set world background"):
     world = context.scene.world or bpy.data.worlds.new("Agent Bridge World")
     if context.scene.world is None:
         context.scene.world = world
-        live_preview._record_created_id("world", world.name)
+        live_preview.record_created_id("world", world.name)
     transaction = live_preview.begin(label)
     _record_world_background(world)
     values = list(color)
@@ -536,7 +486,7 @@ def set_world_background(context, *, color, label="Set world background"):
     )
     transaction["applied_steps"].append({"type": "set_world_background", "label": label, "world": world.name})
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {"ok": True, "message": f"Updated world background {world.name}", "transaction_id": transaction["id"]}
 
 def create_studio_product_stage(
@@ -630,7 +580,7 @@ def create_studio_product_stage(
 
     camera_name = ""
     if camera:
-        live_preview._record_scene_camera(context.scene)
+        live_preview.record_scene_camera(context.scene)
         data = bpy.data.cameras.new(name=f"{stage_name} Camera")
         data.lens = 70.0
         data.dof.use_dof = True
@@ -639,8 +589,8 @@ def create_studio_product_stage(
         camera_obj = bpy.data.objects.new(name=f"{stage_name} Camera", object_data=data)
         camera_obj.location = (center_x - max_dim * 1.8, min_y - max_dim * 2.2, center_z + max_dim * 1.0)
         context.scene.collection.objects.link(camera_obj)
-        live_preview._record_created_id("object", camera_obj.name)
-        live_preview._record_created_id("camera", data.name)
+        live_preview.record_created_id("object", camera_obj.name)
+        live_preview.record_created_id("camera", data.name)
         _track_to_target(camera_obj, target_empty)
         context.scene.camera = camera_obj
         camera_name = camera_obj.name
@@ -657,7 +607,7 @@ def create_studio_product_stage(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     lighting_warning = _existing_light_warning(existing_lights, len(lights), source="the studio product stage")
     return {
         "ok": True,
@@ -727,7 +677,7 @@ def apply_lighting_preset(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     lighting_warning = _existing_light_warning(existing_lights, len(lights), source="the lighting preset")
     return {
         "ok": True,
@@ -810,7 +760,7 @@ def create_product_turntable_setup(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     return {
         "ok": bool(animation_result.get("ok") and orbit_result.get("ok") and (not create_stage or stage_result.get("ok"))),
         "message": f"Created product turntable setup for {target.name}",
@@ -977,7 +927,7 @@ def create_lookdev_turntable_review(
         }
     )
     live_preview.redraw(context)
-    live_preview._mark_pending(context, label)
+    live_preview.mark_pending(context, label)
     setup_ok = (not (create_turntable or create_stage)) or bool(setup_result.get("ok"))
     evidence_ok = (not capture_inspection) or bool(validation.get("ok"))
     return {

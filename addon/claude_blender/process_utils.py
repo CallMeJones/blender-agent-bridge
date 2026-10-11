@@ -39,6 +39,8 @@ def _windows_descendant_pids(root_pid):
     th32cs_snapprocess = 0x00000002
     invalid_handle_value = ctypes.c_void_p(-1).value
     kernel32 = ctypes.windll.kernel32
+    kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
 
     class PROCESSENTRY32(ctypes.Structure):
         _fields_ = [
@@ -54,6 +56,8 @@ def _windows_descendant_pids(root_pid):
             ("szExeFile", ctypes.c_char * 260),
         ]
 
+    kernel32.Process32First.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32)]
+    kernel32.Process32Next.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32)]
     snapshot = kernel32.CreateToolhelp32Snapshot(th32cs_snapprocess, 0)
     if snapshot in (0, invalid_handle_value):
         return []
@@ -166,18 +170,25 @@ def terminate_process_tree(process, timeout=5):
             _windows_terminate_pid(pid)
         _windows_wait_for_pids(descendant_pids, timeout)
     else:
+        # Every caller launches with process_group_kwargs. Never signal the
+        # caller's own group if a foreign/non-isolated handle slips through.
+        group = os.getpgid(process.pid)
+        if group != process.pid:
+            raise ValueError("Refusing to terminate a process without its own job group")
         try:
-            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+            os.killpg(group, signal.SIGTERM)
         except (OSError, ProcessLookupError):
             pass
 
     result = _wait_for_exit(process, timeout)
-    if result is not None:
+    if result is not None and os.name == "nt":
         return result
 
     if os.name != "nt":
         try:
-            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+            # The parent may already have exited while a descendant ignored
+            # SIGTERM. Its isolated group must still be escalated.
+            os.killpg(group, signal.SIGKILL)
         except (OSError, ProcessLookupError):
             pass
     try:

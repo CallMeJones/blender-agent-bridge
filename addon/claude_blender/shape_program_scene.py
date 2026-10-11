@@ -48,7 +48,7 @@ def _set_program_metadata(obj, result):
 
 def _record_program_metadata(obj):
     for property_name in _PROGRAM_PROPERTIES:
-        live_preview._record_id_property("object", obj.name, property_name)
+        live_preview.record_id_property("object", obj.name, property_name)
 
 
 def _write_mesh(mesh, result):
@@ -177,10 +177,10 @@ def compile_shape_program(
     try:
         name = _safe_label(object_name, result["program"]["name"])
         mesh = bpy.data.meshes.new(f"{name} Mesh")
-        live_preview._record_created_id("mesh", mesh.name)
+        live_preview.record_created_id("mesh", mesh.name)
         _write_mesh(mesh, result)
         obj = bpy.data.objects.new(name, mesh)
-        live_preview._record_created_id("object", obj.name)
+        live_preview.record_created_id("object", obj.name)
         (context.collection or context.scene.collection).objects.link(obj)
         resolved_material_name = (
             _safe_label(material_name, "")
@@ -210,7 +210,7 @@ def compile_shape_program(
         )
         transaction = live_preview.finish_isolated(operation)
         live_preview.redraw(context)
-        live_preview._mark_pending(context, label)
+        live_preview.mark_pending(context, label)
         return {
             "ok": True,
             "message": (
@@ -360,8 +360,8 @@ def update_shape_program(
     operation = live_preview.begin_isolated(label, context)
     transaction = operation["transaction"]
     try:
-        live_preview._record_mesh_data_snapshot(obj)
-        live_preview._record_object_vertex_groups(obj)
+        live_preview.record_mesh_data_snapshot(obj)
+        live_preview.record_object_vertex_groups(obj)
         _record_program_metadata(obj)
         for group in list(obj.vertex_groups):
             obj.vertex_groups.remove(group)
@@ -379,7 +379,7 @@ def update_shape_program(
         )
         transaction = live_preview.finish_isolated(operation)
         live_preview.redraw(context)
-        live_preview._mark_pending(context, label)
+        live_preview.mark_pending(context, label)
         warnings = []
         if cleared_groups:
             warnings.append(
