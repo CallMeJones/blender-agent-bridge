@@ -8,7 +8,7 @@ import bpy
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "addon"))
 import claude_blender
-from claude_blender import job_runtime, preferences, retopology_jobs, tool_dispatcher
+from claude_blender import inspection_render, job_runtime, preferences, retopology_jobs, tool_dispatcher, user_paths
 
 
 def call(name, args=None):
@@ -30,8 +30,20 @@ old_preferences = preferences.get_preferences
 with tempfile.TemporaryDirectory(prefix="bab-retopology-") as cache:
     preferences.get_preferences = lambda _context: type("Prefs", (), {"capture_cache_dir": cache})()
     try:
+        long_name = "generated_" + "x" * 100
+        image_ids = {
+            inspection_render._object_view_image_id(name, view)
+            for name in (long_name + "first", long_name + "second")
+            for view in ("front", "side", "top")
+        }
+        assert len(image_ids) == 6 and all(len(value) <= 80 for value in image_ids)
+        deep_render_dir = str(Path(cache) / ("r" * max(1, 203 - len(cache) - 1)))
+        paths = {inspection_render._render_image_path(deep_render_dir, value, platform="nt") for value in image_ids}
+        assert len(paths) == 6 and all(not user_paths.path_budget_exceeded(path, platform="nt") for path in paths)
+        assert all(Path(path).parent == Path(deep_render_dir) for path in paths)
         bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16)
         source = bpy.context.object
+        source.name = "tripo_node_3423e540-1db9-4b17-afb0-a3e3db3955b2"
         original = ([tuple(v.co) for v in source.data.vertices], [tuple(f.vertices) for f in source.data.polygons])
         baseline = {kind: set(getattr(bpy.data, kind).keys()) for kind in ("objects", "meshes", "materials", "images")}
         for method in ("decimate", "quadriflow"):
@@ -50,6 +62,8 @@ with tempfile.TemporaryDirectory(prefix="bab-retopology-") as cache:
                 engine = bpy.context.scene.render.engine
                 camera = bpy.context.scene.camera
                 bpy.context.scene.render.engine = "BLENDER_WORKBENCH"
+                render_cache = str(Path(cache) / ("r" * max(1, 105 - len(cache) - 1)))
+                preferences.get_preferences = lambda _context: type("Prefs", (), {"capture_cache_dir": render_cache})()
                 rendered = call("evaluate_retopology_result", {"source_object_name": source.name, "target_object_name": target.name,
                                                               "include_renders": True})
                 assert rendered["ok"] and len(rendered["previews"]) == 2, rendered
@@ -57,6 +71,7 @@ with tempfile.TemporaryDirectory(prefix="bab-retopology-") as cache:
                     assert preview["ok"] and len(preview["inspection_render"]["images"]) == 4, preview
                     assert all(Path(image["path"]).is_file() for image in preview["inspection_render"]["images"])
                 assert bpy.context.scene.camera == camera
+                preferences.get_preferences = lambda _context: type("Prefs", (), {"capture_cache_dir": cache})()
                 bpy.context.scene.render.engine = engine
             assert call("import_retopology_job_result", {"job_id": started["job_id"]})["objects"] == imported["objects"]
             assert call("revert_preview")["ok"]

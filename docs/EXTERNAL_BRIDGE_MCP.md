@@ -197,12 +197,13 @@ The legacy `BLENDER_MCP_FULL_TOOL_LIST=1` flag remains supported and maps to `fu
 
 `tools/list`, `resources/list`, `resources/templates/list`, and `prompts/list` support cursor pagination. Gateway discovery carries only the five entry-point schemas and essential risk/routing annotations. `get_blender_tool_schema` returns any selected helper's complete canonical input/output schemas and safety annotations; those contracts remain in force regardless of top-level exposure.
 
-The repository also ships two progressively disclosed client skills:
+The repository also ships three progressively disclosed client skills:
 
 - `skills/blender-bridge` teaches the five-tool gateway, preview/trust contract, and recovery workflow.
 - `skills/blender-reference-modeling` teaches visual decomposition, durable blind evidence scoring, bounded repair, and pending-preview completion without category builders or canned geometry.
+- `skills/blender-retopology` teaches source-preserving topology decisions for generated props and characters, deliberate reconstruction, geometry/appearance review and the limits of automatic output. Its pump script is an asset-specific worked example, not a universal builder.
 
-Clients with skill support can load those bodies and references only when relevant. Other MCP clients can request the equivalent `blender_bridge_workflow` and `reference_modeling_workflow` prompts through `prompts/get`. Skills and prompts guide clients, while current helper schemas, Blender-side validation, routing, and preview controls remain the correctness boundary.
+Clients with skill support can load those bodies and references only when relevant. The MCPB archive includes the skill folders; automatic discovery depends on the host's skill support. Other MCP clients can request the equivalent `blender_bridge_workflow`, `reference_modeling_workflow` and `retopology_reconstruction_workflow` prompts through `prompts/get`. Skills and prompts guide clients, while current helper schemas, Blender-side validation, routing, and preview controls remain the correctness boundary.
 
 Every MCP client can discover `evaluate_reference_model_benchmark` through `search_blender_tools`, fetch its canonical schema, and invoke it through the gateway. The helper renders through the calibrated guide camera, publishes mask and redline resources, and evaluates versioned `blockout`, `refined`, or `review` metric profiles. Only the latest non-overridden evaluation can satisfy a running reference benchmark; custom thresholds are diagnostic only.
 

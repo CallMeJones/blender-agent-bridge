@@ -23,6 +23,12 @@ class RepositorySkillTests(unittest.TestCase):
                 "evidence-review.md",
                 "repair-loop.md",
             ),
+            "blender-retopology": (
+                "hard-surface.md",
+                "characters.md",
+                "evidence.md",
+                "pump-study.md",
+            ),
         }
         for skill_name, references in expected.items():
             skill_dir = SKILLS_ROOT / skill_name

@@ -264,7 +264,8 @@ def evaluate_result(context, *, source_object_name, target_object_name, sample_c
                              "tolerance_ratio": max_deviation_ratio, "shape_passed": shape_passed,
                              "face_reduction_ratio": 1 - len(bf) / len(af), "face_count_basis": "evaluated_mesh"},
               "findings": findings, "animation_ready": False,
-              "limitations": ["Sampled distances are not an exhaustive Hausdorff distance or self-intersection test"]}
+              "limitations": ["Sampled distances are not an exhaustive Hausdorff distance or self-intersection test",
+                              "Passing surface tolerance does not prove small-feature, silhouette, shading or texture fidelity; compare renders"]}
     if include_renders:
         from . import inspection_render, preferences
         capture_dir = getattr(preferences.get_preferences(context), "capture_cache_dir", None)

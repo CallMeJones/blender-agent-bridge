@@ -159,8 +159,20 @@ def _dpapi_transform(function_name, payload):
             pass
 
 
-def _credential_path(name):
-    return os.path.join(user_paths.user_data_dir("credentials"), "%s.dpapi" % name)
+def _credential_path(name, *, create=True):
+    return os.path.join(user_paths.user_data_dir("credentials", create=create), "%s.dpapi" % name)
+
+
+def _windows_credential_paths(name):
+    """Keep credentials saved before Windows path shortening readable."""
+
+    paths = [_credential_path(name, create=False)]
+    extension_root = user_paths._extension_user_root()
+    if extension_root:
+        previous = os.path.join(extension_root, "credentials", "%s.dpapi" % name)
+        if os.path.normcase(os.path.abspath(previous)) != os.path.normcase(os.path.abspath(paths[0])):
+            paths.append(previous)
+    return paths
 
 
 def _windows_store(name, value):
@@ -174,8 +186,8 @@ def _windows_store(name, value):
 
 
 def _windows_load(name):
-    path = _credential_path(name)
-    if not os.path.isfile(path):
+    path = next((path for path in _windows_credential_paths(name) if os.path.isfile(path)), "")
+    if not path:
         return ""
     try:
         with open(path, "rb") as handle:
@@ -187,14 +199,16 @@ def _windows_load(name):
 
 
 def _windows_delete(name):
-    path = _credential_path(name)
-    if not os.path.isfile(path):
-        return False
-    try:
-        os.remove(path)
-    except OSError:
-        return False
-    return True
+    removed = False
+    for path in _windows_credential_paths(name):
+        try:
+            os.remove(path)
+            removed = True
+        except FileNotFoundError:
+            continue
+        except OSError:
+            return False
+    return removed
 
 
 # --------------------------------------------------------------------------

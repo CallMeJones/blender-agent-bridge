@@ -8,7 +8,7 @@ import bpy
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "addon"))
 import claude_blender
-from claude_blender import blender_compat, preferences, retopology_jobs, tool_dispatcher
+from claude_blender import blender_compat, preferences, retopology_baking, retopology_jobs, tool_dispatcher
 
 
 def call(name, args=None):
@@ -31,6 +31,31 @@ with tempfile.TemporaryDirectory(prefix="bab-retopology-bake-") as cache:
     preferences.get_preferences = lambda _context: type("Prefs", (), {"capture_cache_dir": cache})()
     try:
         source = bpy.data.objects["Cube"]
+        # A fractional pack margin must produce the same pixel gutter at each
+        # resolution. Cube faces are separate, axis-aligned square charts.
+        probe = source.copy()
+        probe.data = source.data.copy()
+        bpy.context.scene.collection.objects.link(probe)
+        retopology_baking._activate(probe)
+        for resolution in (64, 128):
+            retopology_baking._prepare_atlas_uvs(probe, resolution, 2)
+            uv = probe.data.uv_layers.active.data
+            boxes = []
+            for face in probe.data.polygons:
+                points = [uv[i].uv for i in face.loop_indices]
+                boxes.append((min(p.x for p in points), min(p.y for p in points),
+                              max(p.x for p in points), max(p.y for p in points)))
+            gaps = []
+            for index, a in enumerate(boxes):
+                for b in boxes[index + 1:]:
+                    dx = max(b[0] - a[2], a[0] - b[2], 0)
+                    dy = max(b[1] - a[3], a[1] - b[3], 0)
+                    gaps.append((dx * dx + dy * dy) ** .5)
+            assert abs(min(gaps) * resolution - 4) < .01, (resolution, gaps)
+            assert all(-1e-5 <= value <= 1 + 1e-5 for box in boxes for value in box), boxes
+        probe_mesh = probe.data
+        bpy.data.objects.remove(probe, do_unlink=True)
+        bpy.data.meshes.remove(probe_mesh)
         mat = bpy.data.materials.new("Bake source PBR")
         tree = blender_compat.ensure_node_tree(mat)
         shader = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
@@ -54,13 +79,18 @@ with tempfile.TemporaryDirectory(prefix="bab-retopology-bake-") as cache:
                     [tuple(loop.uv) for uv in source.data.uv_layers for loop in uv.data])
         baseline = {kind: set(getattr(bpy.data, kind).keys()) for kind in ("objects", "meshes", "materials", "images")}
         started = call("start_retopology_bake_job", {"source_object_name": source.name, "target_object_name": target.name,
-                                                    "resolution": 64, "samples": 1,
+                                                    "resolution": 64, "samples": 1, "margin": 1,
                                                     "map_types": ["base_color", "normal", "roughness", "metallic", "emission"]})
         assert started["ok"], started
         job = wait(started["job_id"])
         assert job["status"] == "completed", job
         baked = job["report"]["results"][0]["bake"]
         assert baked["coverage"]["fraction"] > .98, baked
+        atlas = baked["atlas"]
+        assert atlas["used_pixels"] == baked["coverage"]["expected_pixels"]
+        assert atlas["total_pixels"] == 64 * 64 and atlas["excludes_padding"]
+        assert atlas["utilization_fraction"] > .45, atlas
+        assert atlas["packing_margin_pixels"] == 1, atlas
         assert len(baked["maps"]) == 5 and all(Path(m["path"]).is_file() for m in baked["maps"]), baked
         imported = call("import_retopology_job_result", {"job_id": started["job_id"]})
         assert imported["ok"], imported
@@ -87,6 +117,21 @@ with tempfile.TemporaryDirectory(prefix="bab-retopology-bake-") as cache:
         assert call("revert_preview")["ok"]
         for kind, names in baseline.items():
             assert set(getattr(bpy.data, kind).keys()) == names, kind
+        # A tiny existing chart can have perfect ray coverage while wasting
+        # nearly the whole texture. Report the independent quality warning.
+        for layer in target.data.uv_layers:
+            for loop in layer.data:
+                loop.uv *= .1
+        started = call("start_retopology_bake_job", {"source_object_name": source.name, "target_object_name": target.name,
+                                                    "resolution": 128, "samples": 1, "margin": 0,
+                                                    "map_types": ["base_color"], "uv_mode": "existing"})
+        job = wait(started["job_id"])
+        assert job["status"] == "completed", job
+        sparse = job["report"]["results"][0]["bake"]
+        assert sparse["coverage"]["fraction"] > .98, sparse
+        assert 0 < sparse["atlas"]["utilization_fraction"] < .025, sparse
+        assert sparse["atlas"]["packing"] == "existing"
+        assert any("UV atlas" in warning for warning in sparse["warnings"]), sparse
         # Default all-in-one remesh + rebake uses the same background pipeline.
         started = call("start_retopology_job", {"object_names": [source.name], "method": "decimate", "target_faces": 50,
                                                "resolution": 32, "samples": 1})

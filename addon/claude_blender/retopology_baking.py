@@ -74,6 +74,27 @@ def _emission_material(material, channel=None, *, white=False):
     return copied
 
 
+def _prepare_atlas_uvs(target, resolution, margin):
+    """Pack charts with room for each island's bake dilation, measured in pixels."""
+    while target.data.uv_layers:
+        target.data.uv_layers.remove(target.data.uv_layers[0])
+    target.data.uv_layers.new(name="Retopology UV")
+    bpy.ops.object.mode_set(mode="EDIT")
+    try:
+        bpy.ops.mesh.select_all(action="SELECT")
+        if "FINISHED" not in bpy.ops.uv.smart_project(angle_limit=1.1519173, island_margin=0):
+            raise RuntimeError("UV projection did not finish")
+        bpy.ops.uv.select_all(action="SELECT")
+        # FRACTION is a margin on each side of a chart: two charts have a
+        # 2 * margin pixel gap. Unlike SCALED, it survives final atlas scaling.
+        if "FINISHED" not in bpy.ops.uv.pack_islands(
+                rotate=True, rotate_method="ANY", scale=True, margin_method="FRACTION",
+                margin=float(margin) / resolution, shape_method="CONCAVE"):
+            raise RuntimeError("UV packing did not finish")
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+
 def bake_atlas(source, target, output_dir, *, resolution=1024, map_types=None, samples=16,
                margin=8, ray_distance_ratio=0.05, cage_extrusion_ratio=0.01, uv_mode="smart_project",
                progress=None):
@@ -85,15 +106,7 @@ def bake_atlas(source, target, output_dir, *, resolution=1024, map_types=None, s
     _activate(target)
     if uv_mode == "smart_project":
         # The new UV atlas intentionally replaces UVs that topology changes invalidated.
-        while target.data.uv_layers:
-            target.data.uv_layers.remove(target.data.uv_layers[0])
-        target.data.uv_layers.new(name="Retopology UV")
-        bpy.ops.object.mode_set(mode="EDIT")
-        try:
-            bpy.ops.mesh.select_all(action="SELECT")
-            bpy.ops.uv.smart_project(angle_limit=1.1519173, island_margin=0.02)
-        finally:
-            bpy.ops.object.mode_set(mode="OBJECT")
+        _prepare_atlas_uvs(target, resolution, margin)
     if not target.data.uv_layers:
         raise ValueError("Target needs a UV map before rebaking")
     if not source.data.materials:
@@ -208,7 +221,13 @@ def bake_atlas(source, target, output_dir, *, resolution=1024, map_types=None, s
             if channel == "emission" and shader.inputs.get("Emission Strength"):
                 shader.inputs["Emission Strength"].default_value = 1.0
     coverage = covered / expected if expected else 0.0
+    atlas_pixels = resolution * resolution
+    utilization = expected / atlas_pixels
     warnings = ["Projection coverage is below 98%; inspect rays/cage and close surfaces"] if coverage < .98 else []
+    if utilization < .25:
+        warnings.append("UV atlas uses less than 25% of texture pixels before padding; "
+                        "detail may be lost even with high projection coverage. "
+                        "Review chart count, pixel margin, resolution or an existing UV layout")
     for original in original_materials:
         for node in original.node_tree.nodes if original.node_tree else ():
             if node.type == "BSDF_PRINCIPLED":
@@ -218,4 +237,8 @@ def bake_atlas(source, target, output_dir, *, resolution=1024, map_types=None, s
                         warnings.append(f"{original.name}: {key} is not transferred by the PBR atlas; review this material manually")
     return {"maps": artifacts, "material": material.name, "uv_map": target.data.uv_layers.active.name,
             "coverage": {"expected_pixels": expected, "covered_pixels": covered, "fraction": coverage},
+            "atlas": {"used_pixels": expected, "total_pixels": atlas_pixels,
+                      "utilization_fraction": utilization, "excludes_padding": True,
+                      "packing": "concave_pixel_padding" if uv_mode == "smart_project" else "existing",
+                      "packing_margin_pixels": margin if uv_mode == "smart_project" else None},
             "warnings": warnings}

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from array import array
 import base64
+import hashlib
 import json
 import math
 import os
@@ -13,7 +14,7 @@ import uuid
 import bpy
 import mathutils
 
-from . import viewport_capture
+from . import user_paths, viewport_capture
 
 
 LATEST_INSPECTION_RENDER_METADATA_URI = "blender://inspection-renders/latest/metadata"
@@ -35,6 +36,23 @@ def _safe_id(value, fallback="item"):
     safe = "".join(char if char.isalnum() or char in {"-", "_", "."} else "_" for char in str(value or ""))
     safe = safe.strip("._")
     return safe[:80] or fallback
+
+
+def _object_view_image_id(object_name, view):
+    combined = f"{object_name}-{view}"
+    if len(combined) <= 80:
+        return _safe_id(combined)
+    digest = hashlib.sha256(str(object_name).encode("utf-8")).hexdigest()[:16]
+    prefix_budget = 80 - len(view) - len(digest) - 2
+    return f"{_safe_id(object_name)[:prefix_budget]}-{digest}-{view}"
+
+
+def _render_image_path(render_dir, image_id, *, platform=None):
+    path = os.path.join(render_dir, f"{image_id}.png")
+    if user_paths.path_budget_exceeded(path, platform=platform):
+        digest = hashlib.sha256(image_id.encode("utf-8")).hexdigest()[:16]
+        path = os.path.join(render_dir, f"{digest}.png")
+    return path
 
 
 def _render_id():
@@ -668,8 +686,8 @@ def capture_object_inspection_renders(
                     offset = mathutils.Vector((0.0, -1.0, 0.25))
                 camera.location = center + offset.normalized() * distance
                 _look_at(camera, center)
-                image_id = _safe_id(f"{obj.name}-{view}")
-                path = os.path.join(render_dir, f"{image_id}.png")
+                image_id = _object_view_image_id(obj.name, view)
+                path = _render_image_path(render_dir, image_id)
                 item = {
                     "image_id": image_id,
                     "object": obj.name,

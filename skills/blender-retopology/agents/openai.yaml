@@ -1,0 +1,4 @@
+interface:
+  display_name: "Retopology and Reconstruction"
+  short_description: "Build deliberate topology from generated meshes"
+  default_prompt: "Use $blender-retopology to inspect this generated model and improve its topology while preserving important shapes and appearance."

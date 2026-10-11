@@ -4,6 +4,9 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
+from pathlib import Path
+import base64
 
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -190,6 +193,54 @@ class WindowsDpapiTests(unittest.TestCase):
         forgotten = cs.forget_everything()
         self.assertIn(sc.TRIPO_API_KEY, forgotten)
         self.assertEqual([], cs.stored_credential_names())
+
+
+@unittest.skipUnless(WINDOWS, "DPAPI is the Windows backend")
+class WindowsCredentialPathCompatibilityTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="blender-credential-path-")
+        self.addCleanup(temporary.cleanup)
+        self.current = Path(temporary.name) / "short" / "tripo_api_key.dpapi"
+        self.previous_root = Path(temporary.name) / "extension"
+        self.previous = self.previous_root / "credentials" / "tripo_api_key.dpapi"
+        for patcher in (
+            mock.patch.object(cs, "_credential_path", return_value=str(self.current)),
+            mock.patch.object(cs.user_paths, "_extension_user_root", return_value=str(self.previous_root)),
+        ):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def write_key(self, path, value):
+        ciphertext = cs._dpapi_transform("CryptProtectData", value.encode())
+        self.assertTrue(ciphertext)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(base64.b64encode(ciphertext))
+
+    def test_old_extension_credential_survives_path_shortening(self):
+        self.write_key(self.previous, "tsk_previous")
+        written = self.previous.read_bytes()
+        self.assertEqual("tsk_previous", cs._windows_load(sc.TRIPO_API_KEY))
+        self.assertFalse(self.current.exists())
+        self.assertEqual(written, self.previous.read_bytes())
+
+    def test_current_credential_overrides_old_extension_value(self):
+        self.write_key(self.previous, "tsk_previous")
+        self.write_key(self.current, "tsk_current")
+        self.assertEqual("tsk_current", cs._windows_load(sc.TRIPO_API_KEY))
+
+    def test_invalid_current_value_does_not_resurrect_old_key(self):
+        self.write_key(self.previous, "tsk_previous")
+        self.current.parent.mkdir(parents=True, exist_ok=True)
+        self.current.write_bytes(b"invalid-ciphertext")
+        self.assertEqual("", cs._windows_load(sc.TRIPO_API_KEY))
+
+    def test_forgetting_removes_both_locations(self):
+        self.write_key(self.previous, "tsk_previous")
+        self.write_key(self.current, "tsk_current")
+        self.assertTrue(cs._windows_delete(sc.TRIPO_API_KEY))
+        self.assertFalse(self.current.exists())
+        self.assertFalse(self.previous.exists())
+        self.assertEqual("", cs._windows_load(sc.TRIPO_API_KEY))
 
 
 if __name__ == "__main__":

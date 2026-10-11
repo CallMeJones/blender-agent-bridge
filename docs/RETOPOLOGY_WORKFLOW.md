@@ -4,6 +4,8 @@ Use the retopology tools to inspect a generated mesh, clean an independent worki
 
 Both props and characters follow the same initial workflow. Character results still need deliberate joint and facial edge loops and deformation tests before rigging. Automatic quad output is a starting point; the tools always report `animation_ready: false`.
 
+For deliberate editable topology, use the repository's [Retopology and Reconstruction skill](../skills/blender-retopology/SKILL.md), invoked as `$blender-retopology` in hosts that support skills. It chooses between cleanup, reduction, remeshing, reconstruction and a hybrid approach, with separate hard-surface and character guidance. It reuses the current bridge tools; it does not add a universal semantic retopology solver. The [pump study](../skills/blender-retopology/references/pump-study.md) records both the useful geometry result and the rejected source bake.
+
 ## Inspect and clean a working copy
 
 1. Call `inspect_retopology_source` with the source `object_names`, or leave them out to inspect the selected meshes. The report includes actual triangles, quads and ngons, connected surface islands, loose geometry, boundary and nonmanifold edges, UV maps, image availability and rig or shape-key warnings.
@@ -41,6 +43,10 @@ Textures are baked by default at 1024 pixels with 16 Cycles CPU samples. The new
 
 Set `bake_textures: false` for a geometry-only first pass. You can later call `start_retopology_bake_job` with a `source_object_name` and distinct `target_object_name`. This creates another target copy and preserves both inputs, including the supplied target's shading. `uv_mode: "smart_project"` creates an atlas; `uv_mode: "existing"` requires a target UV map and keeps it.
 
+For detailed hard-surface props, compare a moderate reduction before trying a small fixed budget. Grilles, hose ribs, bolts and silhouette edges need geometry that normal maps cannot replace. Rebake from the original textured model so cleanup's recalculated normals do not become the detail reference. A real pump trial retained substantially more detail at 40,000 triangles from a 92,512-triangle source than at 10,000, using five 2048px maps and a four-pixel bake margin. This is an asset-specific example, not a universal budget.
+
+Smart-project atlases use concave packing with padding measured in texture pixels. Each island reserves the requested `margin` on its sides, leaving twice that distance between charts for bake dilation. The bake report's `atlas.utilization_fraction` measures occupied pixels before padding, separately from projection coverage. Utilization below 25% produces a warning; increasing resolution, reducing an excessive margin or using suitable existing UVs can retain more detail.
+
 The atlas extracts channels from a single Principled BSDF connected directly to the active material output. It supports linked image and procedural inputs to those channels. Surface shader groups or mixed surface shaders fail explicitly. Opacity, transmission and coat are not transferred; the bake report flags those material features for manual review.
 
 ## Poll, compare and keep a result
@@ -51,6 +57,8 @@ The atlas extracts channels from a single Principled BSDF connected directly to 
 4. Call `evaluate_retopology_result` with the original and imported object names. Set `include_renders: true` for front, side and top previews of each object, plus contact sheets. Inspect the result before committing the preview.
 
 Shape comparisons use bounded samples of vertices and face centers in both directions. The default tolerance is 2% of the source's bounding-box diagonal. The report includes maximum, mean and 95th-percentile distances and actual face reduction. These samples do not exhaustively prove surface equivalence or detect every self-intersection.
+
+A passing distance threshold does not prove small-feature, silhouette, shading or texture fidelity. Compare the renders and inspect important details before accepting the reduction. High projection coverage can still accompany a tiny, blurry UV atlas.
 
 Texture projection coverage compares a white source bake with the target's UV mask, so legitimate black textures do not count as missed rays. Coverage below 98% produces a warning. Adjust `ray_distance_ratio` and `cage_extrusion_ratio` cautiously and inspect close surfaces such as fingers, lips or overlapping clothing.
 

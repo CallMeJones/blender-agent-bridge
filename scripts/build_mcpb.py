@@ -148,6 +148,11 @@ def _write_stage(stage_root):
     )
     shutil.copy2(os.path.join(ROOT, "LICENSE"), os.path.join(stage_root, "LICENSE"))
     shutil.copy2(os.path.join(ROOT, "PRIVACY.md"), os.path.join(stage_root, "PRIVACY.md"))
+    shutil.copytree(
+        os.path.join(ROOT, "skills"),
+        os.path.join(stage_root, "skills"),
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
+    )
     _write_pyproject(stage_root)
     with open(os.path.join(stage_root, "manifest.json"), "w", encoding="utf-8", newline="\n") as handle:
         json.dump(build_manifest(), handle, indent=2, sort_keys=True)

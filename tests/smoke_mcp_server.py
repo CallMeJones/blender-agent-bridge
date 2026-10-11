@@ -2604,6 +2604,7 @@ def main():
         assert "advanced_animation_workflow" in prompt_names, prompts
         assert "external_asset_workflow" in prompt_names, prompts
         assert "reference_modeling_workflow" in prompt_names, prompts
+        assert "retopology_reconstruction_workflow" in prompt_names, prompts
         assert "trusted_script" in prompt_names, prompts
         assert "draft_approved_script" not in prompt_names, prompts
 
@@ -2669,6 +2670,32 @@ def main():
         assert "do not invent focal lengths" in reference_prompt_text, reference_prompt
         assert "ready_for_user_review, not committed or saved" in reference_prompt_text, reference_prompt
         assert "preview pending" in reference_prompt_text, reference_prompt
+        topology_prompt = _send(
+            proc,
+            {
+                "jsonrpc": "2.0", "id": 149, "method": "prompts/get",
+                "params": {"name": "retopology_reconstruction_workflow",
+                           "arguments": {"goal": "preserve the pipe bore with fewer faces",
+                                         "source_notes": "source=Pipe {original}; intended use=prop"}},
+            },
+        )
+        topology_text = topology_prompt["result"]["messages"][0]["content"]["text"]
+        assert "preserve the pipe bore with fewer faces" in topology_text, topology_prompt
+        assert "Pipe {original}" in topology_text, topology_prompt
+        assert "{source_notes}" not in topology_text, topology_prompt
+        missing_goal = _send(
+            proc,
+            {"jsonrpc": "2.0", "id": 150, "method": "prompts/get",
+             "params": {"name": "retopology_reconstruction_workflow", "arguments": {}}},
+        )
+        assert "error" in missing_goal, missing_goal
+        optional_notes = _send(
+            proc,
+            {"jsonrpc": "2.0", "id": 151, "method": "prompts/get",
+             "params": {"name": "retopology_reconstruction_workflow", "arguments": {"goal": "inspect"}}},
+        )
+        assert "result" in optional_notes, optional_notes
+        assert "{source_notes}" not in optional_notes["result"]["messages"][0]["content"]["text"]
         animation_prompt = _send(
             proc,
             {

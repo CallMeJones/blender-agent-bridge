@@ -562,6 +562,43 @@ PROMPTS = {
             "explicitly chooses commit_preview or revert_preview."
         ),
     },
+    "retopology_reconstruction_workflow": {
+        "name": "retopology_reconstruction_workflow",
+        "title": "Retopology and Reconstruction",
+        "description": "Improve existing generated meshes with deliberate topology, preserved source data and geometry/appearance evidence.",
+        "arguments": [
+            {"name": "goal", "description": "The topology improvement goal and intended use.", "required": True},
+            {"name": "source_notes", "description": "Optional source object names and fidelity requirements.", "required": False},
+        ],
+        "template": (
+            "Improve this existing Blender mesh: {goal}\nSource notes: {source_notes}\n\n"
+            "Check blender_bridge_status. Search compactly with search_blender_tools and include_schemas=false, "
+            "fetch each selected get_blender_tool_schema, then invoke through invoke_blender_tool. Inspect the "
+            "actual source with inspect_retopology_source and matched shaded/wireframe views. Choose cleanup, "
+            "reduction, remeshing, reconstruction or a hybrid from its geometry and intended use. Preserve original "
+            "mesh, transforms, UVs, materials and images; prepare_retopology_copy makes independent static copies "
+            "but does not transfer rigs or shape keys. Do not discard islands or fill intentional openings blindly. "
+            "For hard-surface reconstruction, derive a measured part plan from this source: sparse flat panels, "
+            "loops at changes in curvature, real openings and named editable parts. Do not use a canned subject "
+            "recipe or treat an authored approximation as exact surface equivalence. For characters, plan joint "
+            "and facial loops and require actual rig/weight and pose/expression evidence before claiming deformation "
+            "readiness; automatic retopology evaluation reports animation_ready=false. "
+            "Use start_retopology_job for local remeshing/reduction, usually geometry-only first, poll "
+            "get_retopology_job_status and import a completed candidate with import_retopology_job_result. "
+            "Reuse job IDs after timeouts; do not submit duplicate work. Hosted retopology requires the existing "
+            "exact-job Blender spend approval; this prompt grants none. Under active trust, use a cohesive "
+            "reference-derived draft_script for authored work. It executes immediately with checkpoint protection, "
+            "not preview rollback. Use start_trusted_script_job for long copied-file work and respect its apply "
+            "approval. Evaluate with evaluate_retopology_result, matched views and local feature checks; bounded "
+            "global distance and quad counts can miss a lost small opening. Once geometry is useful, rebake from "
+            "the original textured source with start_retopology_bake_job and inspect its new copy, coverage, UV "
+            "atlas utilization, seams and closeups. Reject bad baked materials and disclose authored appearance "
+            "changes. For fidelity review use start_model_quality_review, fresh evidence packets and bounded "
+            "repair; passing means ready_for_user_review. Keep helper previews pending unless the user already "
+            "authorized their disposition. Save/export when requested and verify fresh reload and actual exported "
+            "geometry. Report retained/lost features, counts, appearance outcome and unresolved limitations."
+        ),
+    },
     "external_asset_workflow": {
         "name": "external_asset_workflow",
         "title": "Use Async External Asset Workflow",

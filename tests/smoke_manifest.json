@@ -2,6 +2,14 @@
   "schema_version": 1,
   "tests": [
     {
+      "name": "smoke_retopology_reconstruction",
+      "file": "tests/smoke_retopology_reconstruction.py",
+      "environment": "blender",
+      "lanes": ["core", "release"],
+      "timeout_seconds": 300,
+      "success": "smoke_retopology_reconstruction: ok"
+    },
+    {
       "name": "smoke_retopology_providers",
       "file": "tests/smoke_retopology_providers.py",
       "environment": "blender",
